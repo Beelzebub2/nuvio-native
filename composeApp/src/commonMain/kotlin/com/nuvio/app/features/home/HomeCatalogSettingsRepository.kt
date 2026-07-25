@@ -1,6 +1,8 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.ManagedAddon
+import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionRepository
 import kotlinx.coroutines.runBlocking
@@ -146,8 +148,14 @@ object HomeCatalogSettingsRepository {
         persist()
     }
 
-    fun syncCollections(collections: List<Collection>) {
+    fun syncCollections(
+        collections: List<Collection>,
+        addons: List<ManagedAddon> = AddonRepository.uiState.value.addons.enabledAddons(),
+    ) {
         ensureLoaded()
+        if (definitions.isEmpty()) {
+            definitions = buildHomeCatalogDefinitions(addons)
+        }
         collectionDefinitions = buildCollectionDefinitions(collections)
         normalizePreferences()
         enforcePinnedCollectionsAtTop()
