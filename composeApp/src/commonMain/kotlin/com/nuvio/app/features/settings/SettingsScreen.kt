@@ -1101,7 +1101,6 @@ private fun TabletSettingsScreen(
                             heroEnabled = homescreenHeroEnabled,
                             showCatalogType = homescreenShowCatalogType,
                             hideUnreleasedContent = homescreenHideUnreleasedContent,
-                            hideCatalogUnderline = homescreenHideCatalogUnderline,
                             items = homescreenItems,
                         )
                         SettingsPage.MetaScreen -> metaScreenSettingsContent(
