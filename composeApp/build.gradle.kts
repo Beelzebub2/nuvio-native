@@ -690,6 +690,36 @@ val buildMacosPlayerBridge = tasks.register<Exec>("buildMacosPlayerBridge") {
     commandLine(macosPlayerBridgeCommand)
 }
 
+// ---- Linux player bridge (system libmpv, X11 "wid" embedding) ----
+// Compiles a single JNI .so against the system libmpv + JDK JNI headers.
+// Requires a C++ toolchain, pkg-config, and libmpv development files on the
+// build host (all provided by the Nix dev shell).
+val isLinuxHost = System.getProperty("os.name").contains("linux", ignoreCase = true)
+val linuxPlayerBridgeSource = layout.projectDirectory.file("src/desktopMain/native/linux/player_bridge.cpp")
+val linuxPlayerBridgeOutput = layout.buildDirectory.file("native/linux/libplayer_bridge.so")
+val linuxPlayerBridgeJavaHome = providers.systemProperty("java.home").get()
+val linuxPlayerBridgeSourceFile = linuxPlayerBridgeSource.asFile
+val linuxPlayerBridgeOutputFile = linuxPlayerBridgeOutput.get().asFile
+val buildLinuxPlayerBridge = tasks.register<Exec>("buildLinuxPlayerBridge") {
+    notCompatibleWithConfigurationCache("Builds a host-local player bridge against system libmpv.")
+    enabled = isLinuxHost
+    inputs.file(linuxPlayerBridgeSourceFile)
+    outputs.file(linuxPlayerBridgeOutputFile)
+    val src = linuxPlayerBridgeSourceFile.absolutePath
+    val out = linuxPlayerBridgeOutputFile.absolutePath
+    val outParent = linuxPlayerBridgeOutputFile.parentFile
+    val jni = "$linuxPlayerBridgeJavaHome/include"
+    doFirst { outParent.mkdirs() }
+    commandLine(
+        "bash", "-c",
+        "c++ -std=c++17 -shared -fPIC -O2 " +
+            "-I'$jni' -I'$jni/linux' " +
+            "$(pkg-config --cflags mpv webkit2gtk-4.1 gtk+-3.0 x11 xcomposite xext) " +
+            "'$src' -o '$out' " +
+            "$(pkg-config --libs mpv webkit2gtk-4.1 gtk+-3.0 x11 xcomposite xext) -lpthread",
+    )
+}
+
 val windowsPlayerBridgeArch = when (System.getProperty("os.arch").lowercase()) {
     "aarch64", "arm64" -> "arm64"
     "x86" -> "x86"
@@ -937,6 +967,12 @@ tasks.withType<Jar>().configureEach {
             into("native/windows")
         }
     }
+    if (isLinuxHost && name == "desktopJar") {
+        dependsOn(buildLinuxPlayerBridge)
+        from(linuxPlayerBridgeOutput) {
+            into("native/linux")
+        }
+    }
 }
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
@@ -1167,6 +1203,7 @@ compose.desktop {
             "--add-opens=java.desktop/sun.lwawt=ALL-UNNAMED",
             "--add-opens=java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
             "--add-opens=java.desktop/sun.awt.windows=ALL-UNNAMED",
+            "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED",
             smokePlayerUrl?.takeIf { it.isNotBlank() }?.let { "-Dnuvio.desktop.smokePlayerUrl=$it" },
         )
 

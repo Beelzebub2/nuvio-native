@@ -1,0 +1,953 @@
+// Linux player bridge for Nuvio Desktop.
+//
+// Phase 1: embed libmpv into the host AWT Canvas's X11 window (via mpv's
+// "wid" option) and implement the playback/track/subtitle JNI surface the
+// Kotlin NativePlayerBridge declares. Playback state is polled by the
+// Kotlin side through the getter methods; the event sink is used only for
+// the (stubbed) webview control overlay, so Phase 1 forwards nothing.
+//
+// Parity note: addon/debrid streams reach this bridge already resolved to
+// a URL plus HTTP header lines. We forward headerLines verbatim to mpv's
+// http-header-fields, exactly like the macOS/Windows bridges, so header-
+// gated addons and debrid links behave identically.
+
+#include <jni.h>
+#include <mpv/client.h>
+
+#include <gtk/gtk.h>
+#include <gdk/gdkx.h>
+#include <webkit2/webkit2.h>
+#include <X11/Xlib.h>
+#include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/XShm.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#include <atomic>
+#include <clocale>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <functional>
+#include <mutex>
+#include <cstdlib>
+#include <string>
+#include <thread>
+#include <vector>
+
+// Diagnostic logging is opt-in via NUVIO_BRIDGE_DEBUG=1 so a normal run is quiet;
+// genuine errors always log via NUVIO_ERR.
+static bool nuvioDebug() {
+    static const bool on = std::getenv("NUVIO_BRIDGE_DEBUG") != nullptr;
+    return on;
+}
+#define NUVIO_ERR(...) do { fprintf(stderr, "[nuvio-bridge] " __VA_ARGS__); fputc('\n', stderr); fflush(stderr); } while (0)
+#define NUVIO_LOG(...) do { if (nuvioDebug()) { NUVIO_ERR(__VA_ARGS__); } } while (0)
+
+namespace {
+
+JavaVM *gVm = nullptr;
+
+struct Player {
+    mpv_handle *mpv = nullptr;
+    std::thread eventThread;
+    std::atomic<bool> running{false};
+    std::atomic<bool> ended{false};
+    jobject eventSink = nullptr;    // global ref, JS control events dispatch here
+    jmethodID eventMethod = nullptr; // onPlayerEvent(String, double)
+    // Phase 2: WebKitGTK controls overlay, all touched only on the GTK thread
+    GtkWidget *gtkWindow = nullptr;
+    WebKitWebView *webview = nullptr;
+    Window hostXid = 0;
+    Window overlayXid = 0;   // redirected controls window, read as a pixmap
+    guint updateTimer = 0;    // 200ms: state push + input raise
+    guint compositeTimer = 0; // fast: read overlay pixmap -> mpv overlay
+    bool overlayActive = true;   // controls currently visible/interacting
+    int fadeTicks = 0;           // extra composite ticks to render the fade-out
+    bool overlayPushed = false;  // an overlay is currently set on mpv
+    // MIT-SHM readback of the overlay pixmap (avoids per-frame X socket copies)
+    XShmSegmentInfo shmInfo{};
+    XImage *shmImg = nullptr;
+    int shmW = 0, shmH = 0;
+    std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
+};
+
+// ---- GTK thread ----------------------------------------------------------
+// GTK is not thread-safe: it is initialised on a dedicated thread that owns
+// the default main context + loop, and every GTK/WebKit call is marshalled
+// there via g_main_context_invoke.
+
+std::once_flag gGtkOnce;
+std::atomic<bool> gGtkReady{false};
+std::thread gGtkThread;
+
+void gtkThreadMain() {
+    gtk_init(nullptr, nullptr);
+    gGtkReady.store(true);
+    gtk_main();
+}
+
+void ensureGtk() {
+    std::call_once(gGtkOnce, [] {
+        gGtkThread = std::thread(gtkThreadMain);
+        gGtkThread.detach();
+        while (!gGtkReady.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    });
+}
+
+// Escape a UTF-8 string as a JS string literal (single-quoted).
+std::string jsLiteral(const std::string &s) {
+    std::string out = "'";
+    for (char c : s) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '\'': out += "\\'"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out.push_back(c);
+        }
+    }
+    out.push_back('\'');
+    return out;
+}
+
+void evalJs(WebKitWebView *webview, const std::string &script) {
+    if (!webview) return;
+    webkit_web_view_evaluate_javascript(webview, script.c_str(), -1, nullptr,
+                                        nullptr, nullptr, nullptr, nullptr);
+}
+
+// Run fn on the GTK thread and block until it completes.
+struct SyncCall {
+    std::function<void()> fn;
+    std::mutex m;
+    std::condition_variable cv;
+    bool done = false;
+};
+
+gboolean syncTrampoline(gpointer data) {
+    auto *s = static_cast<SyncCall *>(data);
+    s->fn();
+    {
+        std::lock_guard<std::mutex> lock(s->m);
+        s->done = true;
+    }
+    s->cv.notify_one();
+    return G_SOURCE_REMOVE;
+}
+
+void gtkSync(std::function<void()> fn) {
+    if (!gGtkReady.load()) return;
+    SyncCall s;
+    s.fn = std::move(fn);
+    g_main_context_invoke(nullptr, syncTrampoline, &s);
+    std::unique_lock<std::mutex> lock(s.m);
+    s.cv.wait(lock, [&] { return s.done; });
+}
+
+// ---- small helpers -------------------------------------------------------
+
+std::string jstringToUtf8(JNIEnv *env, jstring value) {
+    if (value == nullptr) return {};
+    const char *chars = env->GetStringUTFChars(value, nullptr);
+    std::string result = chars ? chars : "";
+    if (chars) env->ReleaseStringUTFChars(value, chars);
+    return result;
+}
+
+jstring utf8ToJstring(JNIEnv *env, const std::string &value) {
+    return env->NewStringUTF(value.c_str());
+}
+
+double mpvGetDouble(mpv_handle *mpv, const char *name) {
+    double out = 0.0;
+    if (mpv_get_property(mpv, name, MPV_FORMAT_DOUBLE, &out) < 0) return 0.0;
+    return out;
+}
+
+int64_t mpvGetInt(mpv_handle *mpv, const char *name) {
+    int64_t out = 0;
+    if (mpv_get_property(mpv, name, MPV_FORMAT_INT64, &out) < 0) return 0;
+    return out;
+}
+
+bool mpvGetFlag(mpv_handle *mpv, const char *name) {
+    int flag = 0;
+    if (mpv_get_property(mpv, name, MPV_FORMAT_FLAG, &flag) < 0) return false;
+    return flag != 0;
+}
+
+void mpvSetFlag(mpv_handle *mpv, const char *name, bool value) {
+    int flag = value ? 1 : 0;
+    mpv_set_property(mpv, name, MPV_FORMAT_FLAG, &flag);
+}
+
+void mpvSetDouble(mpv_handle *mpv, const char *name, double value) {
+    mpv_set_property(mpv, name, MPV_FORMAT_DOUBLE, &value);
+}
+
+// mpv http-header-fields wants a comma-separated list; commas and
+// backslashes inside a header value must be backslash-escaped.
+std::string joinHeaderFields(const std::vector<std::string> &headers) {
+    std::string joined;
+    for (size_t i = 0; i < headers.size(); ++i) {
+        if (i > 0) joined.push_back(',');
+        for (char c : headers[i]) {
+            if (c == '\\' || c == ',') joined.push_back('\\');
+            joined.push_back(c);
+        }
+    }
+    return joined;
+}
+
+Player *asPlayer(jlong handle) { return reinterpret_cast<Player *>(handle); }
+
+// ---- WebKitGTK controls overlay -----------------------------------------
+// The controls are the SAME shared HTML page macOS/Windows use. JS talks to
+// us via window.webkit.messageHandlers.player.postMessage({type,value}) — a
+// WebKit convention WebKitGTK implements natively — and we push state back
+// via window.playerControls()/window.playerUpdate(), identical to WKWebView.
+
+JNIEnv *attachGtkThread() {
+    JNIEnv *env = nullptr;
+    if (!gVm) return nullptr;
+    if (gVm->GetEnv((void **)&env, JNI_VERSION_1_6) == JNI_OK) return env;
+    if (gVm->AttachCurrentThread((void **)&env, nullptr) == JNI_OK) return env;
+    return nullptr;
+}
+
+// JS -> native: forward {type, value} to NativePlayerEventSink.onPlayerEvent.
+void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    if (!player->eventSink || !player->eventMethod) return;
+    JSCValue *msg = webkit_javascript_result_get_js_value(js);
+    if (!msg || !jsc_value_is_object(msg)) return;
+    JSCValue *typeV = jsc_value_object_get_property(msg, "type");
+    JSCValue *valV = jsc_value_object_get_property(msg, "value");
+    char *type = typeV ? jsc_value_to_string(typeV) : nullptr;
+    double value = (valV && jsc_value_is_number(valV)) ? jsc_value_to_double(valV) : 0.0;
+    // Track whether the controls chrome is on screen so we only pay the pixmap
+    // readback + overlay cost while it is actually visible. hideChrome means the
+    // chrome faded out; every other event (cursor/keep-visible/toggle/...) means
+    // it is up. cursorActivity also arrives while hidden (mouse woke the UI) and
+    // must re-activate compositing so the fade-in is actually shown.
+    if (type) {
+        if (strcmp(type, "hideChrome") == 0) {
+            player->overlayActive = false;
+            player->fadeTicks = 18;  // keep compositing ~0.5s to render the fade-out
+        } else {
+            player->overlayActive = true;
+            player->fadeTicks = 0;
+        }
+    }
+    JNIEnv *env = attachGtkThread();
+    if (env && type) {
+        jstring jtype = env->NewStringUTF(type);
+        env->CallVoidMethod(player->eventSink, player->eventMethod, jtype, (jdouble)value);
+        env->DeleteLocalRef(jtype);
+    }
+    if (type) g_free(type);
+    if (typeV) g_object_unref(typeV);
+    if (valV) g_object_unref(valV);
+}
+
+// Free the MIT-SHM readback buffer (safe to call with none allocated).
+void releaseShm(Player *player, Display *dpy) {
+    if (!player->shmImg) return;
+    if (dpy) XShmDetach(dpy, &player->shmInfo);
+    XDestroyImage(player->shmImg);
+    if (player->shmInfo.shmaddr) shmdt(player->shmInfo.shmaddr);
+    player->shmImg = nullptr;
+    player->shmInfo = XShmSegmentInfo{};
+    player->shmW = player->shmH = 0;
+}
+
+// Ensure a MIT-SHM XImage of exactly w*h exists for zero-copy pixmap readback.
+bool ensureShm(Player *player, Display *dpy, Visual *vis, int depth, int w, int h) {
+    if (player->shmImg && player->shmW == w && player->shmH == h) return true;
+    releaseShm(player, dpy);
+    XImage *img = XShmCreateImage(dpy, vis, depth, ZPixmap, nullptr, &player->shmInfo, w, h);
+    if (!img) return false;
+    player->shmInfo.shmid =
+        shmget(IPC_PRIVATE, (size_t)img->bytes_per_line * img->height, IPC_CREAT | 0600);
+    if (player->shmInfo.shmid < 0) { XDestroyImage(img); return false; }
+    player->shmInfo.shmaddr = img->data = (char *)shmat(player->shmInfo.shmid, nullptr, 0);
+    player->shmInfo.readOnly = False;
+    if (player->shmInfo.shmaddr == (char *)-1 || !XShmAttach(dpy, &player->shmInfo)) {
+        XDestroyImage(img);
+        shmctl(player->shmInfo.shmid, IPC_RMID, nullptr);
+        player->shmInfo = XShmSegmentInfo{};
+        return false;
+    }
+    XSync(dpy, False);
+    // Segment stays alive until XShmDetach + shmdt; mark for removal now so it is
+    // reclaimed even if the process dies.
+    shmctl(player->shmInfo.shmid, IPC_RMID, nullptr);
+    player->shmImg = img;
+    player->shmW = w;
+    player->shmH = h;
+    return true;
+}
+
+// Read the redirected controls window's pixmap (premultiplied BGRA) and hand it
+// to mpv as an OSD overlay, so mpv blends the HTML controls over the video in its
+// single window (XWayland won't alpha-blend sibling windows; mpv does the compose
+// that Core Animation / DWM do on macOS / Windows). Only runs while the chrome is
+// visible (plus a short fade-out grace) so normal watching pays nothing.
+void compositeOverlay(Player *player) {
+    if (!player->overlayXid || !player->mpv || !player->gtkWindow) return;
+    GdkWindow *gw = gtk_widget_get_window(player->gtkWindow);
+    if (!gw) return;
+    Display *dpy = GDK_WINDOW_XDISPLAY(gw);
+    // Also composite while loading (before the first frame, or during a rebuffer)
+    // so Nuvio's loading screen — poster, title, spinner — shows over mpv's black
+    // instead of a bare black screen. mpv is not decoding then, so it is free.
+    bool loading = !player->firstFrameShown.load() ||
+                   mpvGetFlag(player->mpv, "paused-for-cache");
+    bool active = loading || player->overlayActive || player->fadeTicks > 0;
+    if (!active) {
+        if (player->overlayPushed) {
+            const char *rm[] = {"overlay-remove", "0", nullptr};
+            mpv_command(player->mpv, rm);
+            player->overlayPushed = false;
+            releaseShm(player, dpy);
+        }
+        return;
+    }
+    // Track the host (video) size: on resize/fullscreen the host canvas changes
+    // size but the overlay does not, so the controls + their click hit-area drift
+    // out of alignment. Resize the overlay to match, then compose next tick.
+    XWindowAttributes hostWa;
+    if (XGetWindowAttributes(dpy, player->hostXid, &hostWa) && hostWa.width > 0 &&
+        hostWa.height > 0) {
+        XWindowAttributes ovWa0;
+        if (XGetWindowAttributes(dpy, player->overlayXid, &ovWa0) &&
+            (ovWa0.width != hostWa.width || ovWa0.height != hostWa.height)) {
+            gtk_window_resize(GTK_WINDOW(player->gtkWindow), hostWa.width, hostWa.height);
+            return;
+        }
+    }
+    XWindowAttributes wa;
+    if (!XGetWindowAttributes(dpy, player->overlayXid, &wa) || wa.width <= 0 || wa.height <= 0)
+        return;
+    if (!ensureShm(player, dpy, wa.visual, wa.depth, wa.width, wa.height)) return;
+    Pixmap pm = XCompositeNameWindowPixmap(dpy, player->overlayXid);
+    if (!pm) return;
+    if (XShmGetImage(dpy, pm, player->shmImg, 0, 0, AllPlanes) &&
+        player->shmImg->bits_per_pixel == 32) {
+        XImage *img = player->shmImg;
+        char addr[32], sw[16], sh[16], sstride[16];
+        snprintf(addr, sizeof addr, "&%zu", (size_t)(uintptr_t)img->data);
+        snprintf(sw, sizeof sw, "%d", img->width);
+        snprintf(sh, sizeof sh, "%d", img->height);
+        snprintf(sstride, sizeof sstride, "%d", img->bytes_per_line);
+        const char *cmd[] = {"overlay-add", "0", "0", "0", addr, "0",
+                             "bgra", sw, sh, sstride, nullptr};
+        mpv_command(player->mpv, cmd);
+        player->overlayPushed = true;
+    }
+    XFreePixmap(dpy, pm);
+    if (!player->overlayActive && player->fadeTicks > 0) player->fadeTicks--;
+}
+
+// Fast timer: composite the controls over the video (cheap while hidden).
+gboolean compositeTick(gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    if (player->mpv && player->gtkWindow) compositeOverlay(player);
+    return G_SOURCE_CONTINUE;
+}
+
+gboolean pushPlayerUpdate(gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    if (!player->webview || !player->mpv) return G_SOURCE_CONTINUE;
+    // Keep the (redirected, invisible) overlay window topmost so pointer/click
+    // events reach it instead of mpv's video window below. Redirection keeps it
+    // hidden from the screen regardless of stacking; raising only affects input.
+    if (player->gtkWindow) {
+        GdkWindow *ov = gtk_widget_get_window(player->gtkWindow);
+        if (ov) XRaiseWindow(GDK_WINDOW_XDISPLAY(ov), player->overlayXid);
+    }
+    double duration = mpvGetDouble(player->mpv, "duration");
+    double position = mpvGetDouble(player->mpv, "time-pos");
+    bool paused = mpvGetFlag(player->mpv, "pause");
+    bool loading = mpvGetFlag(player->mpv, "paused-for-cache") || mpvGetFlag(player->mpv, "seeking");
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,paused:%s,loading:%s,audioTracks:[],subtitleTracks:[]})",
+             duration, position, paused ? "true" : "false", loading ? "true" : "false");
+    evalJs(player->webview, buf);
+    return G_SOURCE_CONTINUE;
+}
+
+struct WebviewSetup {
+    Player *player;
+    Window hostXid;
+    std::string url;
+};
+
+// Surface controls-page load progress (debug only) so a blank/erroring page is
+// diagnosable; failures always log via onLoadFailed.
+void onLoadChanged(WebKitWebView * /*wv*/, WebKitLoadEvent event, gpointer /*data*/) {
+    const char *name = event == WEBKIT_LOAD_STARTED ? "started"
+                     : event == WEBKIT_LOAD_REDIRECTED ? "redirected"
+                     : event == WEBKIT_LOAD_COMMITTED ? "committed"
+                     : event == WEBKIT_LOAD_FINISHED ? "finished"
+                     : "unknown";
+    NUVIO_LOG("webview load-changed: %s", name);
+}
+
+gboolean onLoadFailed(WebKitWebView * /*wv*/, WebKitLoadEvent /*event*/,
+                      gchar *uri, GError *error, gpointer /*data*/) {
+    NUVIO_ERR("webview load-FAILED uri=%s error=%s", uri ? uri : "(null)",
+              error ? error->message : "(null)");
+    return FALSE;
+}
+
+// Runs on the GTK thread: build a transparent WebKitGTK window, reparent it
+// as a child of the host AWT/X11 window (over the mpv video), load the
+// controls page, and start the state-push timer.
+gboolean createWebviewOnGtk(gpointer data) {
+    auto *s = static_cast<WebviewSetup *>(data);
+    Player *player = s->player;
+
+    GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_decorated(GTK_WINDOW(win), FALSE);
+    gtk_widget_set_app_paintable(win, TRUE);
+    GdkScreen *screen = gtk_widget_get_screen(win);
+    GdkVisual *rgba = gdk_screen_get_rgba_visual(screen);
+    if (rgba) gtk_widget_set_visual(win, rgba);
+
+    WebKitUserContentManager *ucm = webkit_user_content_manager_new();
+    webkit_user_content_manager_register_script_message_handler(ucm, "player");
+    g_signal_connect(ucm, "script-message-received::player",
+                     G_CALLBACK(onPlayerMessage), player);
+
+    WebKitWebView *wv = WEBKIT_WEB_VIEW(webkit_web_view_new_with_user_content_manager(ucm));
+    GdkRGBA transparent = {0.0, 0.0, 0.0, 0.0};
+    webkit_web_view_set_background_color(wv, &transparent);
+
+    // The controls page is loaded from file:// and its JS pulls sibling assets
+    // (js/css/fonts) plus talks to native; without file-access + console piping a
+    // JS failure is silent. Mirror the capabilities the macOS/Windows webviews grant.
+    WebKitSettings *settings = webkit_web_view_get_settings(wv);
+    webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
+    webkit_settings_set_allow_file_access_from_file_urls(settings, TRUE);
+    webkit_settings_set_allow_universal_access_from_file_urls(settings, TRUE);
+    webkit_settings_set_enable_developer_extras(settings, TRUE);
+    webkit_settings_set_javascript_can_access_clipboard(settings, TRUE);
+
+    g_signal_connect(wv, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
+    g_signal_connect(wv, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
+
+    gtk_container_add(GTK_CONTAINER(win), GTK_WIDGET(wv));
+
+    // Make sure the overlay actually asks the X server for pointer/keyboard
+    // events; without an explicit mask WebKit gets no DOM pointer events once the
+    // window is a child of a foreign (AWT) parent.
+    gtk_widget_add_events(win,
+                          GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK |
+                          GDK_BUTTON_RELEASE_MASK | GDK_SCROLL_MASK |
+                          GDK_ENTER_NOTIFY_MASK | GDK_LEAVE_NOTIFY_MASK |
+                          GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK);
+    gtk_widget_realize(win);
+    GdkWindow *gdkWin = gtk_widget_get_window(win);
+    Display *dpy = GDK_WINDOW_XDISPLAY(gdkWin);
+    Window gtkXid = GDK_WINDOW_XID(gdkWin);
+
+    // size to the host window
+    XWindowAttributes attrs;
+    if (XGetWindowAttributes(dpy, s->hostXid, &attrs)) {
+        gtk_window_resize(GTK_WINDOW(win), attrs.width, attrs.height);
+    }
+
+    // Reparent THROUGH GDK (not raw XReparentWindow): GDK must know the window is
+    // now a child of the host, otherwise it never dispatches pointer events to it
+    // and the controls page receives no mousemove -> chrome never shows.
+    GdkDisplay *gdkDisplay = gdk_window_get_display(gdkWin);
+    GdkWindow *hostGdk = gdk_x11_window_foreign_new_for_display(gdkDisplay, s->hostXid);
+    if (hostGdk) {
+        gdk_window_reparent(gdkWin, hostGdk, 0, 0);
+    } else {
+        NUVIO_ERR("foreign host GdkWindow wrap failed; falling back to XReparentWindow");
+        XReparentWindow(dpy, gtkXid, s->hostXid, 0, 0);
+    }
+    gtk_widget_show_all(win);
+    gdk_window_raise(gdkWin);
+
+    // FEASIBILITY TEST: redirect the overlay window offscreen via the Composite
+    // extension. If this hides it from the screen (revealing the video below)
+    // while it keeps rendering + receiving input, we can read its pixmap and
+    // blend it over the video via mpv overlay-add (no window-stacking blend).
+    int compEventBase = 0, compErrorBase = 0;
+    if (XCompositeQueryExtension(dpy, &compEventBase, &compErrorBase)) {
+        int major = 0, minor = 0;
+        XCompositeQueryVersion(dpy, &major, &minor);
+        XCompositeRedirectWindow(dpy, gtkXid, CompositeRedirectManual);
+        player->overlayXid = gtkXid;
+        NUVIO_LOG("XComposite %d.%d present; redirected overlay 0x%lx (manual)",
+                  major, minor, gtkXid);
+    } else {
+        NUVIO_ERR("XComposite NOT available");
+    }
+    XFlush(dpy);
+
+    webkit_web_view_load_uri(wv, s->url.c_str());
+
+    player->gtkWindow = win;
+    player->webview = wv;
+    player->hostXid = s->hostXid;
+    player->updateTimer = g_timeout_add(200, pushPlayerUpdate, player);
+    player->compositeTimer = g_timeout_add(33, compositeTick, player);  // ~30fps when active
+
+    NUVIO_LOG("webview created + reparented into host 0x%lx", s->hostXid);
+    delete s;
+    return G_SOURCE_REMOVE;
+}
+
+struct ControlsUpdate {
+    WebKitWebView *webview;
+    std::string json;
+};
+
+// native -> JS: push a fresh controls state (identical call to WKWebView).
+gboolean applyControlsOnGtk(gpointer data) {
+    auto *u = static_cast<ControlsUpdate *>(data);
+    std::string script = "window.playerControls&&window.playerControls(JSON.parse(" + jsLiteral(u->json) + "))";
+    evalJs(u->webview, script);
+    delete u;
+    return G_SOURCE_REMOVE;
+}
+
+// Tear the webview down on the GTK thread (owns all GTK/WebKit state).
+gboolean destroyWebviewOnGtk(gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    if (player->updateTimer) {
+        g_source_remove(player->updateTimer);
+        player->updateTimer = 0;
+    }
+    if (player->compositeTimer) {
+        g_source_remove(player->compositeTimer);
+        player->compositeTimer = 0;
+    }
+    if (player->gtkWindow) {
+        GdkWindow *gw = gtk_widget_get_window(player->gtkWindow);
+        releaseShm(player, gw ? GDK_WINDOW_XDISPLAY(gw) : nullptr);
+        gtk_widget_destroy(player->gtkWindow);
+        player->gtkWindow = nullptr;
+        player->webview = nullptr;
+        player->overlayXid = 0;
+    }
+    return G_SOURCE_REMOVE;
+}
+
+// Drains the mpv event queue so the core keeps running and tracks EOF.
+void runEventLoop(Player *player) {
+    while (player->running.load()) {
+        mpv_event *event = mpv_wait_event(player->mpv, 0.05);
+        if (!event || event->event_id == MPV_EVENT_NONE) continue;
+        switch (event->event_id) {
+            case MPV_EVENT_LOG_MESSAGE: {
+                auto *msg = static_cast<mpv_event_log_message *>(event->data);
+                if (msg) NUVIO_LOG("mpv[%s] %s: %s", msg->level, msg->prefix, msg->text);
+                break;
+            }
+            case MPV_EVENT_END_FILE: {
+                auto *end = static_cast<mpv_event_end_file *>(event->data);
+                if (end && end->reason == MPV_END_FILE_REASON_EOF) {
+                    player->ended.store(true);
+                }
+                break;
+            }
+            case MPV_EVENT_START_FILE:
+                player->ended.store(false);
+                break;
+            case MPV_EVENT_PLAYBACK_RESTART:
+                player->firstFrameShown.store(true);
+                break;
+            case MPV_EVENT_SHUTDOWN:
+                player->running.store(false);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+} // namespace
+
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
+    gVm = vm;
+    return JNI_VERSION_1_6;
+}
+
+extern "C" {
+
+#define NP(name) \
+    Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_##name
+
+JNIEXPORT jlong JNICALL NP(create)(
+    JNIEnv *env, jobject /*thiz*/, jlong hostViewPtr, jstring sourceUrl,
+    jobjectArray headerLines, jboolean playWhenReady, jlong initialPositionMs,
+    jstring controlsPageUrl, jint decoderPriority,
+    jboolean /*nvidiaRtxSuperResolutionEnabled*/, jobject eventSink) {
+
+    // libmpv requires LC_NUMERIC=C (e.g. non-"C" locales with comma
+    // decimals make mpv_create fail); the JVM uses java.util.Locale, so
+    // this C-level change does not affect Java number formatting.
+    setlocale(LC_NUMERIC, "C");
+
+    auto *player = new Player();
+    player->mpv = mpv_create();
+    if (!player->mpv) {
+        NUVIO_ERR("mpv_create() returned NULL");
+        delete player;
+        return 0;
+    }
+    // Surface mpv's own diagnostics (drained by the event thread).
+    mpv_request_log_messages(player->mpv, nuvioDebug() ? "v" : "no");
+
+    // Embed into the host AWT Canvas's X11 window.
+    if (hostViewPtr != 0) {
+        std::string wid = std::to_string(static_cast<int64_t>(hostViewPtr));
+        NUVIO_LOG("embedding into X11 wid=%s", wid.c_str());
+        mpv_set_option_string(player->mpv, "wid", wid.c_str());
+    } else {
+        NUVIO_ERR("hostViewPtr is 0 — no window to embed into");
+    }
+
+    // Nuvio renders its own controls; keep mpv silent and non-interactive.
+    mpv_set_option_string(player->mpv, "osc", "no");
+    mpv_set_option_string(player->mpv, "osd-level", "0");
+    mpv_set_option_string(player->mpv, "input-default-bindings", "no");
+    mpv_set_option_string(player->mpv, "input-vo-keyboard", "no");
+    mpv_set_option_string(player->mpv, "input-cursor", "no");
+    mpv_set_option_string(player->mpv, "cursor-autohide", "no");
+    mpv_set_option_string(player->mpv, "keep-open", "yes");
+    mpv_set_option_string(player->mpv, "idle", "yes");
+    mpv_set_option_string(player->mpv, "vo", "gpu");
+    // Force the X11 GPU context so mpv embeds into the host window's X11
+    // "wid". Under a Wayland session mpv would otherwise pick its native
+    // Wayland backend, which cannot embed into a foreign surface and opens
+    // a separate window instead. The host AWT window is X11 (XWayland), so
+    // X11/EGL embedding composites correctly inside the Nuvio window.
+    mpv_set_option_string(player->mpv, "gpu-context", "x11egl");
+    mpv_set_option_string(player->mpv, "force-seekable", "yes");
+
+    // Decoder config mirrors the macOS bridge for parity (mac: hwdec=auto +
+    // gpu-hwdec-interop=auto + decoderPriority handling). gpu-hwdec-interop=auto
+    // lets vo=gpu use direct hardware decode instead of the slow copy-back path.
+    mpv_set_option_string(player->mpv, "audio-channels", "auto");
+    mpv_set_option_string(player->mpv, "hwdec", "auto");
+    mpv_set_option_string(player->mpv, "gpu-hwdec-interop", "auto");
+    if (decoderPriority == 0) {
+        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "no");
+    } else if (decoderPriority == 2) {
+        mpv_set_option_string(player->mpv, "hwdec", "no");
+        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "yes");
+    } else {
+        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "yes");
+    }
+    mpv_set_option_string(player->mpv, "vd-lavc-threads", "0");
+    mpv_set_option_string(player->mpv, "target-colorspace-hint", "yes");
+    mpv_set_option_string(player->mpv, "target-colorspace-hint-mode", "source");
+
+    // Forward addon/debrid HTTP headers verbatim.
+    if (headerLines != nullptr) {
+        jsize count = env->GetArrayLength(headerLines);
+        std::vector<std::string> headers;
+        headers.reserve(count);
+        for (jsize i = 0; i < count; ++i) {
+            auto line = static_cast<jstring>(env->GetObjectArrayElement(headerLines, i));
+            headers.push_back(jstringToUtf8(env, line));
+            if (line) env->DeleteLocalRef(line);
+        }
+        if (!headers.empty()) {
+            mpv_set_option_string(player->mpv, "http-header-fields", joinHeaderFields(headers).c_str());
+        }
+    }
+
+    if (initialPositionMs > 0) {
+        std::string start = std::to_string(initialPositionMs / 1000.0);
+        mpv_set_option_string(player->mpv, "start", start.c_str());
+    }
+    if (!playWhenReady) {
+        mpv_set_option_string(player->mpv, "pause", "yes");
+    }
+
+    int initResult = mpv_initialize(player->mpv);
+    if (initResult < 0) {
+        NUVIO_ERR("mpv_initialize failed: %s", mpv_error_string(initResult));
+        // Drain any queued log messages explaining the failure.
+        for (int i = 0; i < 50; ++i) {
+            mpv_event *ev = mpv_wait_event(player->mpv, 0.0);
+            if (!ev || ev->event_id == MPV_EVENT_NONE) break;
+            if (ev->event_id == MPV_EVENT_LOG_MESSAGE) {
+                auto *m = static_cast<mpv_event_log_message *>(ev->data);
+                if (m) NUVIO_LOG("mpv[%s] %s: %s", m->level, m->prefix, m->text);
+            }
+        }
+        mpv_destroy(player->mpv);
+        delete player;
+        return 0;
+    }
+    NUVIO_LOG("mpv initialized OK");
+
+    if (eventSink != nullptr) {
+        player->eventSink = env->NewGlobalRef(eventSink);
+        jclass sinkClass = env->GetObjectClass(eventSink);
+        player->eventMethod = env->GetMethodID(sinkClass, "onPlayerEvent", "(Ljava/lang/String;D)V");
+        env->DeleteLocalRef(sinkClass);
+    }
+
+    player->running.store(true);
+    player->eventThread = std::thread(runEventLoop, player);
+
+    std::string url = jstringToUtf8(env, sourceUrl);
+    const char *cmd[] = {"loadfile", url.c_str(), nullptr};
+    mpv_command(player->mpv, cmd);
+
+    // Bring up the WebKitGTK controls overlay now so it can render the loading
+    // screen (poster + title + spinner) over mpv's black frame while the stream
+    // buffers, matching macOS / Windows.
+    if (hostViewPtr != 0) {
+        ensureGtk();
+        auto *setup = new WebviewSetup{player, static_cast<Window>(hostViewPtr),
+                                       jstringToUtf8(env, controlsPageUrl)};
+        g_main_context_invoke(nullptr, createWebviewOnGtk, setup);
+    }
+
+    return reinterpret_cast<jlong>(player);
+}
+
+JNIEXPORT void JNICALL NP(dispose)(JNIEnv *env, jobject, jlong handle) {
+    Player *player = asPlayer(handle);
+    if (!player) return;
+    // Tear the overlay down on the GTK thread before freeing the player.
+    if (player->gtkWindow) {
+        gtkSync([player] { destroyWebviewOnGtk(player); });
+    }
+    player->running.store(false);
+    if (player->mpv) mpv_wakeup(player->mpv);
+    if (player->eventThread.joinable()) player->eventThread.join();
+    if (player->eventSink) env->DeleteGlobalRef(player->eventSink);
+    if (player->mpv) mpv_terminate_destroy(player->mpv);
+    delete player;
+}
+
+JNIEXPORT void JNICALL NP(setPaused)(JNIEnv *, jobject, jlong handle, jboolean paused) {
+    Player *p = asPlayer(handle);
+    if (p) mpvSetFlag(p->mpv, "pause", paused == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL NP(seekTo)(JNIEnv *, jobject, jlong handle, jlong positionMs) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    std::string target = std::to_string(positionMs / 1000.0);
+    const char *cmd[] = {"seek", target.c_str(), "absolute", nullptr};
+    mpv_command(p->mpv, cmd);
+    p->ended.store(false);
+}
+
+JNIEXPORT void JNICALL NP(seekBy)(JNIEnv *, jobject, jlong handle, jlong offsetMs) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    std::string delta = std::to_string(offsetMs / 1000.0);
+    const char *cmd[] = {"seek", delta.c_str(), "relative", nullptr};
+    mpv_command(p->mpv, cmd);
+    p->ended.store(false);
+}
+
+JNIEXPORT void JNICALL NP(setSpeed)(JNIEnv *, jobject, jlong handle, jfloat speed) {
+    Player *p = asPlayer(handle);
+    if (p) mpvSetDouble(p->mpv, "speed", speed);
+}
+
+JNIEXPORT void JNICALL NP(setVolume)(JNIEnv *, jobject, jlong handle, jfloat level) {
+    Player *p = asPlayer(handle);
+    if (p) mpvSetDouble(p->mpv, "volume", level * 100.0); // Kotlin 0..1 -> mpv 0..100
+}
+
+JNIEXPORT void JNICALL NP(adjustVolume)(JNIEnv *, jobject, jlong handle, jfloat delta) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    double current = mpvGetDouble(p->mpv, "volume");
+    double next = current + delta * 100.0;
+    if (next < 0) next = 0;
+    if (next > 100) next = 100;
+    mpvSetDouble(p->mpv, "volume", next);
+}
+
+JNIEXPORT jfloat JNICALL NP(volume)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return 0.0f;
+    return static_cast<jfloat>(mpvGetDouble(p->mpv, "volume") / 100.0);
+}
+
+JNIEXPORT jlong JNICALL NP(durationMs)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return 0;
+    return static_cast<jlong>(mpvGetDouble(p->mpv, "duration") * 1000.0);
+}
+
+JNIEXPORT jlong JNICALL NP(positionMs)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return 0;
+    return static_cast<jlong>(mpvGetDouble(p->mpv, "time-pos") * 1000.0);
+}
+
+JNIEXPORT jlong JNICALL NP(bufferedPositionMs)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return 0;
+    double pos = mpvGetDouble(p->mpv, "time-pos");
+    double cache = mpvGetDouble(p->mpv, "demuxer-cache-time");
+    double buffered = cache > pos ? cache : pos;
+    return static_cast<jlong>(buffered * 1000.0);
+}
+
+JNIEXPORT jboolean JNICALL NP(isLoading)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return JNI_FALSE;
+    bool loading = mpvGetFlag(p->mpv, "paused-for-cache") || mpvGetFlag(p->mpv, "seeking");
+    return loading ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL NP(isEnded)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return JNI_FALSE;
+    return p->ended.load() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL NP(isPaused)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return JNI_FALSE;
+    return mpvGetFlag(p->mpv, "pause") ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jfloat JNICALL NP(speed)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return 1.0f;
+    return static_cast<jfloat>(mpvGetDouble(p->mpv, "speed"));
+}
+
+JNIEXPORT void JNICALL NP(setResizeMode)(JNIEnv *, jobject, jlong handle, jint mode) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    // 0 fit, 1 fill/zoom, 2 fixed-width, 3 stretch (best-effort mpv mapping)
+    switch (mode) {
+        case 3: mpv_set_option_string(p->mpv, "keepaspect", "no"); break;
+        case 1: mpv_set_option_string(p->mpv, "keepaspect", "yes");
+                mpv_set_option_string(p->mpv, "panscan", "1.0"); break;
+        default: mpv_set_option_string(p->mpv, "keepaspect", "yes");
+                 mpv_set_option_string(p->mpv, "panscan", "0.0"); break;
+    }
+}
+
+// ---- tracks & subtitles (mpv properties) --------------------------------
+
+JNIEXPORT jstring JNICALL NP(audioTracksJson)(JNIEnv *env, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return utf8ToJstring(env, "[]");
+    char *json = nullptr;
+    // reuse mpv's track-list; the Kotlin side filters by type
+    if (mpv_get_property(p->mpv, "track-list", MPV_FORMAT_NONE, nullptr) == 0) {}
+    json = mpv_get_property_string(p->mpv, "track-list");
+    std::string out = json ? json : "[]";
+    if (json) mpv_free(json);
+    return utf8ToJstring(env, out);
+}
+
+JNIEXPORT jstring JNICALL NP(subtitleTracksJson)(JNIEnv *env, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return utf8ToJstring(env, "[]");
+    char *json = mpv_get_property_string(p->mpv, "track-list");
+    std::string out = json ? json : "[]";
+    if (json) mpv_free(json);
+    return utf8ToJstring(env, out);
+}
+
+JNIEXPORT void JNICALL NP(selectAudioTrack)(JNIEnv *, jobject, jlong handle, jint trackId) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    int64_t id = trackId;
+    if (trackId < 0) mpv_set_property_string(p->mpv, "aid", "no");
+    else mpv_set_property(p->mpv, "aid", MPV_FORMAT_INT64, &id);
+}
+
+JNIEXPORT void JNICALL NP(selectSubtitleTrack)(JNIEnv *, jobject, jlong handle, jint trackId) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    int64_t id = trackId;
+    if (trackId < 0) mpv_set_property_string(p->mpv, "sid", "no");
+    else mpv_set_property(p->mpv, "sid", MPV_FORMAT_INT64, &id);
+}
+
+JNIEXPORT void JNICALL NP(addSubtitleUrl)(JNIEnv *env, jobject, jlong handle, jstring url) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    std::string sub = jstringToUtf8(env, url);
+    const char *cmd[] = {"sub-add", sub.c_str(), "select", nullptr};
+    mpv_command(p->mpv, cmd);
+}
+
+JNIEXPORT void JNICALL NP(clearExternalSubtitles)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    const char *cmd[] = {"sub-remove", nullptr};
+    mpv_command(p->mpv, cmd);
+}
+
+JNIEXPORT void JNICALL NP(clearExternalSubtitlesAndSelect)(JNIEnv *, jobject, jlong handle, jint trackId) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    const char *cmd[] = {"sub-remove", nullptr};
+    mpv_command(p->mpv, cmd);
+    int64_t id = trackId;
+    if (trackId < 0) mpv_set_property_string(p->mpv, "sid", "no");
+    else mpv_set_property(p->mpv, "sid", MPV_FORMAT_INT64, &id);
+}
+
+JNIEXPORT void JNICALL NP(setSubtitleDelayMs)(JNIEnv *, jobject, jlong handle, jint delayMs) {
+    Player *p = asPlayer(handle);
+    if (p) mpvSetDouble(p->mpv, "sub-delay", delayMs / 1000.0);
+}
+
+JNIEXPORT void JNICALL NP(applySubtitleStyle)(
+    JNIEnv *env, jobject, jlong handle, jstring textColor, jstring /*backgroundColor*/,
+    jstring outlineColor, jfloat outlineSize, jboolean bold, jfloat fontSize, jint subPos) {
+    Player *p = asPlayer(handle);
+    if (!p) return;
+    mpv_set_property_string(p->mpv, "sub-color", jstringToUtf8(env, textColor).c_str());
+    mpv_set_property_string(p->mpv, "sub-border-color", jstringToUtf8(env, outlineColor).c_str());
+    std::string border = std::to_string(outlineSize);
+    mpv_set_property_string(p->mpv, "sub-border-size", border.c_str());
+    mpv_set_property_string(p->mpv, "sub-bold", bold == JNI_TRUE ? "yes" : "no");
+    std::string size = std::to_string(fontSize);
+    mpv_set_property_string(p->mpv, "sub-font-size", size.c_str());
+    std::string pos = std::to_string(subPos);
+    mpv_set_property_string(p->mpv, "sub-pos", pos.c_str());
+}
+
+// ---- Phase 2 stubs: webview controls / window chrome / focus ------------
+
+JNIEXPORT void JNICALL NP(updateControls)(JNIEnv *env, jobject, jlong handle, jstring controlsJson) {
+    Player *p = asPlayer(handle);
+    if (!p || !p->webview) return;
+    auto *u = new ControlsUpdate{p->webview, jstringToUtf8(env, controlsJson)};
+    g_main_context_invoke(nullptr, applyControlsOnGtk, u);
+}
+JNIEXPORT void JNICALL NP(requestFocus)(JNIEnv *, jobject, jlong) {}
+JNIEXPORT void JNICALL NP(applyWindowChrome)(JNIEnv *, jobject, jlong, jboolean, jint, jint, jint) {}
+JNIEXPORT void JNICALL NP(setWindowBorderlessFullscreen)(
+    JNIEnv *, jobject, jlong, jboolean, jint, jint, jint, jint) {}
+JNIEXPORT jboolean JNICALL NP(warmupWebView2)(JNIEnv *, jobject, jstring) { return JNI_FALSE; }
+JNIEXPORT void JNICALL NP(shutdownWebView2Warmup)(JNIEnv *, jobject) {}
+JNIEXPORT jboolean JNICALL NP(setWindowsDisplaySleepInhibited)(JNIEnv *, jobject, jboolean) {
+    return JNI_FALSE;
+}
+
+#undef NP
+} // extern "C"
