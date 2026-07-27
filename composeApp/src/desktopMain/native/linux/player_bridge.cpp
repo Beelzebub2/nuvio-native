@@ -99,6 +99,12 @@ std::atomic<bool> gGtkReady{false};
 std::thread gGtkThread;
 
 void gtkThreadMain() {
+    // Force the X11 GDK backend. On Wayland sessions (e.g. KDE Plasma) GTK would
+    // otherwise pick the Wayland backend and the controls window would be a
+    // Wayland surface — but we drive it with X11/XComposite (the AWT host is an
+    // XWayland X11 window), which fails with BadMatch on Composite. XWayland
+    // always provides X11, so this is safe and matches GDK_BACKEND=x11.
+    gdk_set_allowed_backends("x11");
     gtk_init(nullptr, nullptr);
     gGtkReady.store(true);
     gtk_main();
