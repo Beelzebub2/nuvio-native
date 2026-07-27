@@ -32,6 +32,7 @@
 #include <functional>
 #include <mutex>
 #include <cstdlib>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -72,6 +73,21 @@ struct Player {
     int shmW = 0, shmH = 0;
     std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
 };
+
+// ---- Player liveness -----------------------------------------------------
+// The GTK timers (compositeTick / pushPlayerUpdate) hold a Player* and run on
+// the detached GTK thread. They must never touch a Player that dispose() has
+// freed, nor a half-unloaded process during exit. Guard every callback: skip if
+// the process is shutting down or the Player is no longer registered as live.
+std::mutex gLiveMutex;
+std::set<Player *> gLivePlayers;
+std::atomic<bool> gShuttingDown{false};
+
+bool playerAlive(Player *p) {
+    if (gShuttingDown.load()) return false;
+    std::lock_guard<std::mutex> lk(gLiveMutex);
+    return gLivePlayers.find(p) != gLivePlayers.end();
+}
 
 // ---- GTK thread ----------------------------------------------------------
 // GTK is not thread-safe: it is initialised on a dedicated thread that owns
@@ -357,12 +373,14 @@ void compositeOverlay(Player *player) {
 // Fast timer: composite the controls over the video (cheap while hidden).
 gboolean compositeTick(gpointer data) {
     auto *player = static_cast<Player *>(data);
+    if (!playerAlive(player)) return G_SOURCE_REMOVE;
     if (player->mpv && player->gtkWindow) compositeOverlay(player);
     return G_SOURCE_CONTINUE;
 }
 
 gboolean pushPlayerUpdate(gpointer data) {
     auto *player = static_cast<Player *>(data);
+    if (!playerAlive(player)) return G_SOURCE_REMOVE;
     if (!player->webview || !player->mpv) return G_SOURCE_CONTINUE;
     // Keep the (redirected, invisible) overlay window topmost so pointer/click
     // events reach it instead of mpv's video window below. Redirection keeps it
@@ -581,6 +599,9 @@ void runEventLoop(Player *player) {
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     gVm = vm;
+    // On process exit the detached GTK thread keeps running gtk_main and firing
+    // timers while libraries unload; flag shutdown so those callbacks bail.
+    std::atexit([] { gShuttingDown.store(true); });
     return JNI_VERSION_1_6;
 }
 
@@ -703,6 +724,13 @@ JNIEXPORT jlong JNICALL NP(create)(
         env->DeleteLocalRef(sinkClass);
     }
 
+    // Register as live before starting the event thread / overlay timers so their
+    // callbacks can validate the pointer (see playerAlive).
+    {
+        std::lock_guard<std::mutex> lk(gLiveMutex);
+        gLivePlayers.insert(player);
+    }
+
     player->running.store(true);
     player->eventThread = std::thread(runEventLoop, player);
 
@@ -726,6 +754,11 @@ JNIEXPORT jlong JNICALL NP(create)(
 JNIEXPORT void JNICALL NP(dispose)(JNIEnv *env, jobject, jlong handle) {
     Player *player = asPlayer(handle);
     if (!player) return;
+    // Mark not-live first so any in-flight GTK timer bails before we free it.
+    {
+        std::lock_guard<std::mutex> lk(gLiveMutex);
+        gLivePlayers.erase(player);
+    }
     // Tear the overlay down on the GTK thread before freeing the player.
     if (player->gtkWindow) {
         gtkSync([player] { destroyWebviewOnGtk(player); });
