@@ -818,7 +818,11 @@ JNIEXPORT jboolean JNICALL NP(isLoading)(JNIEnv *, jobject, jlong handle) {
 JNIEXPORT jboolean JNICALL NP(isEnded)(JNIEnv *, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return JNI_FALSE;
-    return p->ended.load() ? JNI_TRUE : JNI_FALSE;
+    // keep-open=yes makes mpv PAUSE at EOF instead of unloading, so
+    // MPV_EVENT_END_FILE never fires — the `eof-reached` property is what flips.
+    // Mirror the macOS bridge (rawIsEnded reads eof-reached) so Nuvio's
+    // next-episode / autoplay logic actually triggers at the end of a file.
+    return (mpvGetFlag(p->mpv, "eof-reached") || p->ended.load()) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL NP(isPaused)(JNIEnv *, jobject, jlong handle) {
