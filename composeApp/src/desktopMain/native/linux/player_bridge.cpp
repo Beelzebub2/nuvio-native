@@ -208,6 +208,30 @@ void mpvSetFlag(mpv_handle *mpv, const char *name, bool value) {
     mpv_set_property(mpv, name, MPV_FORMAT_FLAG, &flag);
 }
 
+// "Loading" for the UI, mirroring the macOS bridge (rawLoadingWithPaused). Stays
+// true through the whole file-open phase (no duration/tracks yet) so Nuvio keeps
+// its loading screen up instead of revealing mpv's black frame — e.g. while a
+// non-faststart MP4 fetches its moov and seeks to the resume point.
+bool computeLoading(mpv_handle *mpv) {
+    if (!mpv) return true;
+    bool paused = mpvGetFlag(mpv, "pause");
+    bool eof = mpvGetFlag(mpv, "eof-reached");
+    bool idle = mpvGetFlag(mpv, "core-idle");
+    bool bufferingCache = mpvGetFlag(mpv, "paused-for-cache");
+    bool fileReady = mpvGetDouble(mpv, "duration") > 0.0 ||
+                     mpvGetInt(mpv, "track-list/count") > 0;
+    return !fileReady || (idle && !paused && !eof) || bufferingCache;
+}
+
+// Loading for the whole initial open: stay true until the FIRST FRAME is actually
+// shown, so Nuvio's opening overlay (dismissed the first time isLoading is false,
+// a one-way latch) survives mpv's flag flicker during open + resume-seek. After
+// the first frame, fall back to computeLoading so mid-playback rebuffers still show.
+bool playerLoading(Player *p) {
+    if (!p || !p->mpv) return true;
+    return !p->firstFrameShown.load() || computeLoading(p->mpv);
+}
+
 void mpvSetDouble(mpv_handle *mpv, const char *name, double value) {
     mpv_set_property(mpv, name, MPV_FORMAT_DOUBLE, &value);
 }
@@ -328,8 +352,7 @@ void compositeOverlay(Player *player) {
     // Also composite while loading (before the first frame, or during a rebuffer)
     // so Nuvio's loading screen — poster, title, spinner — shows over mpv's black
     // instead of a bare black screen. mpv is not decoding then, so it is free.
-    bool loading = !player->firstFrameShown.load() ||
-                   mpvGetFlag(player->mpv, "paused-for-cache");
+    bool loading = playerLoading(player);
     bool active = loading || player->overlayActive || player->fadeTicks > 0;
     if (!active) {
         if (player->overlayPushed) {
@@ -398,7 +421,7 @@ gboolean pushPlayerUpdate(gpointer data) {
     double duration = mpvGetDouble(player->mpv, "duration");
     double position = mpvGetDouble(player->mpv, "time-pos");
     bool paused = mpvGetFlag(player->mpv, "pause");
-    bool loading = mpvGetFlag(player->mpv, "paused-for-cache") || mpvGetFlag(player->mpv, "seeking");
+    bool loading = playerLoading(player);
     char buf[256];
     snprintf(buf, sizeof(buf),
              "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,paused:%s,loading:%s,audioTracks:[],subtitleTracks:[]})",
@@ -588,6 +611,7 @@ void runEventLoop(Player *player) {
             }
             case MPV_EVENT_START_FILE:
                 player->ended.store(false);
+                player->firstFrameShown.store(false);  // re-show loading for the new file
                 break;
             case MPV_EVENT_PLAYBACK_RESTART:
                 player->firstFrameShown.store(true);
@@ -656,6 +680,10 @@ JNIEXPORT jlong JNICALL NP(create)(
     mpv_set_option_string(player->mpv, "keep-open", "yes");
     mpv_set_option_string(player->mpv, "idle", "yes");
     mpv_set_option_string(player->mpv, "vo", "gpu");
+    // Bring the VO/OSD up immediately (before the first decoded frame) so the
+    // controls overlay — including the loading screen — can render via overlay-add
+    // while a slow/non-faststart file is still opening, instead of a black gap.
+    mpv_set_option_string(player->mpv, "force-window", "immediate");
     // Force the X11 GPU context so mpv embeds into the host window's X11
     // "wid". Under a Wayland session mpv would otherwise pick its native
     // Wayland backend, which cannot embed into a foreign surface and opens
@@ -849,9 +877,8 @@ JNIEXPORT jlong JNICALL NP(bufferedPositionMs)(JNIEnv *, jobject, jlong handle) 
 
 JNIEXPORT jboolean JNICALL NP(isLoading)(JNIEnv *, jobject, jlong handle) {
     Player *p = asPlayer(handle);
-    if (!p) return JNI_FALSE;
-    bool loading = mpvGetFlag(p->mpv, "paused-for-cache") || mpvGetFlag(p->mpv, "seeking");
-    return loading ? JNI_TRUE : JNI_FALSE;
+    if (!p) return JNI_TRUE;
+    return playerLoading(p) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL NP(isEnded)(JNIEnv *, jobject, jlong handle) {
