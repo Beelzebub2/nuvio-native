@@ -407,6 +407,94 @@ gboolean compositeTick(gpointer data) {
     return G_SOURCE_CONTINUE;
 }
 
+// JSON-escape a UTF-8 string for embedding in the track JSON we hand the
+// controls webview / Kotlin decoder.
+std::string jsonEscape(const std::string &s) {
+    std::string o;
+    o.reserve(s.size() + 8);
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"': o += "\\\""; break;
+            case '\\': o += "\\\\"; break;
+            case '\n': o += "\\n"; break;
+            case '\r': o += "\\r"; break;
+            case '\t': o += "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    char b[8];
+                    snprintf(b, sizeof(b), "\\u%04x", c);
+                    o += b;
+                } else {
+                    o += static_cast<char>(c);
+                }
+        }
+    }
+    return o;
+}
+
+// Read an mpv string property, trimmed; "" if unset.
+std::string mpvGetStr(mpv_handle *mpv, const std::string &name) {
+    char *v = mpv_get_property_string(mpv, name.c_str());
+    std::string out = v ? v : "";
+    if (v) mpv_free(v);
+    size_t a = out.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos) return "";
+    size_t b = out.find_last_not_of(" \t\r\n");
+    return out.substr(a, b - a + 1);
+}
+
+// Build the formatted track list both the controls webview and the Kotlin
+// NativeMpvTrack decoder expect (macOS parity — mirrors tracksJsonForType):
+// [{"index":N,"id":"..","label":"..","language":"..","selected":bool,"forced":bool}]
+// (raw mpv track-list JSON does NOT match: id is an int, no index/label, lang!=language.)
+std::string buildTracksJson(mpv_handle *mpv, const char *wantedType) {
+    if (!mpv) return "[]";
+    int64_t count = mpvGetInt(mpv, "track-list/count");
+    bool isSub = std::string(wantedType) == "sub";
+    bool isAudio = std::string(wantedType) == "audio";
+    std::string out = "[";
+    int logicalIndex = 0;
+    bool first = true;
+    for (int64_t i = 0; i < count; i++) {
+        std::string pfx = "track-list/" + std::to_string(i);
+        if (mpvGetStr(mpv, pfx + "/type") != wantedType) continue;
+        int64_t id = mpvGetInt(mpv, (pfx + "/id").c_str());
+        std::string title = mpvGetStr(mpv, pfx + "/title");
+        std::string lang = mpvGetStr(mpv, pfx + "/lang");
+        std::string codec = mpvGetStr(mpv, pfx + "/codec");
+        std::string channels = mpvGetStr(mpv, pfx + "/demux-channels");
+        bool selected = mpvGetFlag(mpv, (pfx + "/selected").c_str());
+        bool forced = mpvGetFlag(mpv, (pfx + "/forced").c_str());
+
+        std::string base = !title.empty() ? title
+                         : (!lang.empty() ? lang
+                         : ((isSub ? "Subtitle " : "Track ") + std::to_string(logicalIndex + 1)));
+        std::string extra;
+        auto appendDetail = [&](const std::string &d) {
+            if (d.empty() || d == "unknown") return;
+            if (base.find(d) != std::string::npos) return;
+            if (!extra.empty()) extra += ", ";
+            extra += d;
+        };
+        if (isAudio) appendDetail(channels);
+        appendDetail(codec);
+        std::string label = extra.empty() ? base : base + " (" + extra + ")";
+
+        if (!first) out += ",";
+        first = false;
+        out += "{\"index\":" + std::to_string(logicalIndex)
+             + ",\"id\":\"" + std::to_string(id) + "\""
+             + ",\"label\":\"" + jsonEscape(label) + "\""
+             + ",\"language\":\"" + jsonEscape(lang) + "\""
+             + ",\"selected\":" + (selected ? "true" : "false")
+             + ",\"forced\":" + (forced ? "true" : "false")
+             + "}";
+        logicalIndex++;
+    }
+    out += "]";
+    return out;
+}
+
 gboolean pushPlayerUpdate(gpointer data) {
     auto *player = static_cast<Player *>(data);
     if (!playerAlive(player)) return G_SOURCE_REMOVE;
@@ -422,11 +510,15 @@ gboolean pushPlayerUpdate(gpointer data) {
     double position = mpvGetDouble(player->mpv, "time-pos");
     bool paused = mpvGetFlag(player->mpv, "pause");
     bool loading = playerLoading(player);
-    char buf[256];
-    snprintf(buf, sizeof(buf),
-             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,paused:%s,loading:%s,audioTracks:[],subtitleTracks:[]})",
+    std::string audioTracks = buildTracksJson(player->mpv, "audio");
+    std::string subtitleTracks = buildTracksJson(player->mpv, "sub");
+    char head[192];
+    snprintf(head, sizeof(head),
+             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,paused:%s,loading:%s,audioTracks:",
              duration, position, paused ? "true" : "false", loading ? "true" : "false");
-    evalJs(player->webview, buf);
+    std::string js = std::string(head) + audioTracks +
+                     ",subtitleTracks:" + subtitleTracks + "})";
+    evalJs(player->webview, js);
     return G_SOURCE_CONTINUE;
 }
 
@@ -921,22 +1013,13 @@ JNIEXPORT void JNICALL NP(setResizeMode)(JNIEnv *, jobject, jlong handle, jint m
 JNIEXPORT jstring JNICALL NP(audioTracksJson)(JNIEnv *env, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return utf8ToJstring(env, "[]");
-    char *json = nullptr;
-    // reuse mpv's track-list; the Kotlin side filters by type
-    if (mpv_get_property(p->mpv, "track-list", MPV_FORMAT_NONE, nullptr) == 0) {}
-    json = mpv_get_property_string(p->mpv, "track-list");
-    std::string out = json ? json : "[]";
-    if (json) mpv_free(json);
-    return utf8ToJstring(env, out);
+    return utf8ToJstring(env, buildTracksJson(p->mpv, "audio"));
 }
 
 JNIEXPORT jstring JNICALL NP(subtitleTracksJson)(JNIEnv *env, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return utf8ToJstring(env, "[]");
-    char *json = mpv_get_property_string(p->mpv, "track-list");
-    std::string out = json ? json : "[]";
-    if (json) mpv_free(json);
-    return utf8ToJstring(env, out);
+    return utf8ToJstring(env, buildTracksJson(p->mpv, "sub"));
 }
 
 JNIEXPORT void JNICALL NP(selectAudioTrack)(JNIEnv *, jobject, jlong handle, jint trackId) {
