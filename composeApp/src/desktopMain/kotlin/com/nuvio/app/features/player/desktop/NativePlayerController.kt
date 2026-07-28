@@ -52,6 +52,7 @@ internal class NativePlayerController(
     private var controlsState = PlayerControlsState()
     private var pendingSubtitleDelayMs: Int? = null
     private var pendingSubtitleStyle: SubtitleStyleState? = null
+    private var pendingUseLibass: Boolean = false
     private var lastSentControlsStructureKey: NativeControlsStructureKey? = null
     private var onAction: (PlayerControlsAction) -> Boolean = { false }
     private var onEvent: (String, Double) -> Boolean = { _, _ -> false }
@@ -506,6 +507,7 @@ internal class NativePlayerController(
         }
         log.d { "selectSubtitleTrack index=$index trackId=$trackId count=${tracks.size} handle=$current" }
         NativePlayerBridge.selectSubtitleTrack(current, trackId)
+        applyPendingSubtitleSettings()
     }
 
     override fun setSubtitleUri(url: String) {
@@ -531,6 +533,7 @@ internal class NativePlayerController(
         }
         log.d { "clearExternalSubtitleAndSelect trackIndex=$trackIndex trackId=$trackId handle=$current" }
         NativePlayerBridge.clearExternalSubtitlesAndSelect(current, trackId)
+        applyPendingSubtitleSettings()
     }
 
     override fun setSubtitleDelayMs(delayMs: Int) {
@@ -541,10 +544,11 @@ internal class NativePlayerController(
         }
     }
 
-    override fun applySubtitleStyle(style: SubtitleStyleState) {
+    override fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean) {
         pendingSubtitleStyle = style
+        pendingUseLibass = useLibass
         handle.takeIf { it != 0L }?.let { current ->
-            applySubtitleStyle(current, style)
+            applySubtitleStyle(current, style, useLibass)
         }
     }
 
@@ -554,11 +558,11 @@ internal class NativePlayerController(
             NativePlayerBridge.setSubtitleDelayMs(current, delayMs)
         }
         pendingSubtitleStyle?.let { style ->
-            applySubtitleStyle(current, style)
+            applySubtitleStyle(current, style, pendingUseLibass)
         }
     }
 
-    private fun applySubtitleStyle(handle: Long, style: SubtitleStyleState) {
+    private fun applySubtitleStyle(handle: Long, style: SubtitleStyleState, useLibass: Boolean) {
         NativePlayerBridge.applySubtitleStyle(
             handle = handle,
             textColor = style.textColor.toMpvColorString(),
@@ -568,6 +572,7 @@ internal class NativePlayerController(
             bold = style.bold,
             fontSize = style.toMpvSubtitleFontSize(),
             subPos = style.toMpvSubtitlePosition(),
+            useLibass = useLibass,
         )
     }
 

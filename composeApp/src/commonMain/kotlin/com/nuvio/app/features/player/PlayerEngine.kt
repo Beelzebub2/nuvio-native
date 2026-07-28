@@ -18,7 +18,7 @@ interface PlayerEngineController {
     fun setSubtitleUri(url: String)
     fun clearExternalSubtitle()
     fun clearExternalSubtitleAndSelect(trackIndex: Int)
-    fun applySubtitleStyle(style: SubtitleStyleState) {}
+    fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean = false) {}
     fun setSubtitleDelayMs(delayMs: Int) {}
     fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
     fun updateNowPlayingMetadata(info: PlayerNowPlayingInfo) {}
