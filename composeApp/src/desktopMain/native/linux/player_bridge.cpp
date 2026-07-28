@@ -565,7 +565,18 @@ gboolean createWebviewOnGtk(gpointer data) {
     g_signal_connect(ucm, "script-message-received::player",
                      G_CALLBACK(onPlayerMessage), player);
 
-    WebKitWebView *wv = WEBKIT_WEB_VIEW(webkit_web_view_new_with_user_content_manager(ucm));
+    // Ephemeral (in-memory) web context: the controls page is a trusted local
+    // file:// UI that needs no cookies/cache/IndexedDB. Using the default context
+    // creates a disk-backed WebKitWebsiteDataStore whose finalize() races the
+    // detached gtk_main thread at process exit -> SIGABRT in
+    // webkit_web_context_finalize on quit. Ephemeral has no persistent store.
+    WebKitWebContext *webContext = webkit_web_context_new_ephemeral();
+    WebKitWebView *wv = WEBKIT_WEB_VIEW(g_object_new(
+        WEBKIT_TYPE_WEB_VIEW,
+        "web-context", webContext,
+        "user-content-manager", ucm,
+        nullptr));
+    g_object_unref(webContext);  // wv holds its own ref
     GdkRGBA transparent = {0.0, 0.0, 0.0, 0.0};
     webkit_web_view_set_background_color(wv, &transparent);
 
