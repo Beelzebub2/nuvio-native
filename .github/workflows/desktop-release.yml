@@ -405,7 +405,7 @@ jobs:
           & .\gradlew.bat `
             :composeApp:packageReleaseMsi `
             "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT" `
-            -Pcompose.desktop.packaging.checkJdkVendor=false `
+            "-Pcompose.desktop.packaging.checkJdkVendor=false" `
             --no-configuration-cache `
             --no-daemon `
             --stacktrace
