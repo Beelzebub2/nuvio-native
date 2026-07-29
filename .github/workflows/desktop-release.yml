@@ -579,4 +579,4 @@ jobs:
           if [[ "${RELEASE_MODE}" == "draft" ]]; then
             release_args+=(--draft)
           fi
-          gh release create "${release_args[@]}" "${release_assets[@]}"
+          gh release create --repo "${GITHUB_REPOSITORY}" "${release_args[@]}" "${release_assets[@]}"
