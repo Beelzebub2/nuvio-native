@@ -468,12 +468,12 @@ jobs:
             }
           }
 
-          $javaRuntime = Get-ChildItem $extractDir `
+          $javaRuntimeJvm = Get-ChildItem $extractDir `
             -Recurse `
-            -Filter "java.exe" `
-            | Where-Object { $_.FullName -match "[\\/]runtime[\\/]bin[\\/]java\.exe$" } `
+            -Filter "jvm.dll" `
+            | Where-Object { $_.FullName -match "[\\/]runtime[\\/]bin[\\/]server[\\/]jvm\.dll$" } `
             | Select-Object -First 1
-          if ($null -eq $javaRuntime) {
+          if ($null -eq $javaRuntimeJvm) {
             throw "The extracted MSI does not contain the bundled Java runtime."
           }
 
@@ -488,7 +488,7 @@ jobs:
           $manifest.Add("MSI_SIGNATURE_STATUS=$((Get-AuthenticodeSignature $msiPath).Status)")
           $manifest.Add("EXTRACTED_FILE_COUNT=$($extractedFiles.Count)")
           $manifest.Add("APP_JAR=$([IO.Path]::GetRelativePath($extractDir, $appJar.FullName).Replace('\', '/'))")
-          $manifest.Add("JAVA_RUNTIME=$([IO.Path]::GetRelativePath($extractDir, $javaRuntime.FullName).Replace('\', '/'))")
+          $manifest.Add("JAVA_RUNTIME_JVM=$([IO.Path]::GetRelativePath($extractDir, $javaRuntimeJvm.FullName).Replace('\', '/'))")
           $manifest.Add("")
           $manifest.Add("NATIVE_JAR_ENTRIES")
           foreach ($entry in $nativeEntries) {
