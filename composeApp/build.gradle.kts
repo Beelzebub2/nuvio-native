@@ -972,6 +972,13 @@ tasks.withType<Jar>().configureEach {
         from(linuxPlayerBridgeOutput) {
             into("native/linux")
         }
+        // TorrServer ships as a classpath resource so P2P streaming works from
+        // any working directory and in packaged builds (macOS does the same via
+        // prepareMacosTorrServerResources; Linux needs no signing pass).
+        from(layout.projectDirectory.dir("src/desktopMain/torrserver")) {
+            include("linux-amd64/**")
+            into("torrserver")
+        }
     }
 }
 
