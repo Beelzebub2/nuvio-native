@@ -950,6 +950,9 @@ tasks.matching { it.name == "prepareAppResources" }.configureEach {
 }
 
 tasks.withType<ProcessResources>().matching { it.name == "desktopProcessResources" }.configureEach {
+    if (!isWindowsHost) {
+        exclude("torrserver/windows-amd64/**")
+    }
     if (isMacHost) {
         dependsOn(prepareMacosTorrServerResources)
         from(prepareMacosTorrServerResources.map { it.outputDir })
