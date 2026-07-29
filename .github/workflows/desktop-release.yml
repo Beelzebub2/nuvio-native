@@ -4,14 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Validate only, create a draft, or publish the release
+        description: Build artifacts, validate a release, create a draft, or publish
         required: true
         type: choice
         options:
+          - build-only
           - dry-run
           - draft
           - publish
         default: dry-run
+      target:
+        description: Platforms to build in build-only mode
+        required: true
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+        default: all
       exclude_commits:
         description: Optional comma-separated commit hashes to omit from the notes
         required: false
@@ -27,7 +37,7 @@ concurrency:
 
 jobs:
   metadata:
-    name: ${{ inputs.mode }} desktop release
+    name: ${{ inputs.mode }} ${{ inputs.target }} desktop release
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -58,34 +68,44 @@ jobs:
           CURRENT_BUMP: ${{ steps.release.outputs.current_bump }}
           RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
           RELEASE_REF_TYPE: ${{ github.ref_type }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          RELEASE_TARGET: ${{ inputs.target }}
         run: |
           if [[ "${RELEASE_REF_TYPE}" != "branch" ]]; then
             echo "Releases must be dispatched from a branch, not ${RELEASE_REF_TYPE}." >&2
             exit 1
           fi
 
-          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}"; then
-            echo "Tag ${RELEASE_TAG} already exists." >&2
-            exit 1
-          fi
-          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "A GitHub release for ${RELEASE_TAG} already exists." >&2
+          if [[ "${RELEASE_MODE}" != "build-only" && "${RELEASE_TARGET}" != "all" ]]; then
+            echo "Release validation, draft, and publish modes require target=all." >&2
             exit 1
           fi
 
-          unexpected_changes="$(
-            git diff --name-only "${CURRENT_BUMP}..${RELEASE_COMMIT}" \
-              | grep -Ev '^(\.github/workflows/desktop-release\.yml|scripts/(generate-release-notes|release-metadata)\.sh)$' \
-              || true
-          )"
-          if [[ -n "${unexpected_changes}" ]]; then
-            echo "The desktop version bump must be the final application change before release." >&2
-            echo "Unexpected files changed after the bump:" >&2
-            echo "${unexpected_changes}" >&2
-            exit 1
+          if [[ "${RELEASE_MODE}" != "build-only" ]]; then
+            if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}"; then
+              echo "Tag ${RELEASE_TAG} already exists." >&2
+              exit 1
+            fi
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+              echo "A GitHub release for ${RELEASE_TAG} already exists." >&2
+              exit 1
+            fi
+
+            unexpected_changes="$(
+              git diff --name-only "${CURRENT_BUMP}..${RELEASE_COMMIT}" \
+                | grep -Ev '^(\.github/workflows/desktop-release\.yml|scripts/(generate-release-notes|release-metadata)\.sh)$' \
+                || true
+            )"
+            if [[ -n "${unexpected_changes}" ]]; then
+              echo "The desktop version bump must be the final application change before release." >&2
+              echo "Unexpected files changed after the bump:" >&2
+              echo "${unexpected_changes}" >&2
+              exit 1
+            fi
           fi
 
       - name: Generate repository release notes
+        if: inputs.mode != 'build-only'
         env:
           PREVIOUS_BUMP: ${{ steps.release.outputs.previous_bump }}
           CURRENT_BUMP: ${{ steps.release.outputs.current_bump }}
@@ -111,6 +131,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload release notes
+        if: inputs.mode != 'build-only'
         uses: actions/upload-artifact@v7
         with:
           name: nuvio-desktop-${{ steps.release.outputs.version }}-release-notes
@@ -120,7 +141,7 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.arch }}
-    if: inputs.mode != 'dry-run'
+    if: inputs.mode != 'dry-run' && inputs.target != 'windows'
     needs: metadata
     runs-on: ${{ matrix.runner }}
     environment: desktop-release
@@ -301,7 +322,7 @@ jobs:
 
   windows:
     name: Windows x64
-    if: inputs.mode != 'dry-run'
+    if: inputs.mode != 'dry-run' && inputs.target != 'macos'
     needs: metadata
     runs-on: windows-2022
     environment: desktop-release
@@ -394,22 +415,44 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          $msiPath = "composeApp\build\compose\release-msis\Nuvio-Windows-x64-$env:RELEASE_VERSION.msi"
-          if (-not (Test-Path $msiPath)) {
-            throw "Expected MSI was not produced: $msiPath"
+          $msiRelativePath = "composeApp\build\compose\release-msis\Nuvio-Windows-x64-$env:RELEASE_VERSION.msi"
+          if (-not (Test-Path $msiRelativePath)) {
+            throw "Expected MSI was not produced: $msiRelativePath"
+          }
+          $msiPath = (Resolve-Path $msiRelativePath).Path
+          $extractDir = Join-Path $env:RUNNER_TEMP "nuvio-msi-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $extractLog = Join-Path $env:RUNNER_TEMP "nuvio-msi-extract.log"
+          New-Item -ItemType Directory -Path $extractDir | Out-Null
+
+          $extractArguments = @(
+            "/a",
+            "`"$msiPath`"",
+            "/qn",
+            "TARGETDIR=`"$extractDir`"",
+            "/l*v",
+            "`"$extractLog`""
+          )
+          $extractProcess = Start-Process `
+            -FilePath msiexec.exe `
+            -ArgumentList $extractArguments `
+            -Wait `
+            -PassThru
+          if ($extractProcess.ExitCode -ne 0) {
+            Get-Content $extractLog -Tail 200
+            throw "MSI administrative extraction failed with exit code $($extractProcess.ExitCode)."
           }
 
-          $appJar = Get-ChildItem "composeApp\build\compose\binaries\main-release\app" `
+          $appJar = Get-ChildItem $extractDir `
             -Recurse `
             -Filter "composeApp-desktop-*.jar" `
             | Select-Object -First 1
           if ($null -eq $appJar) {
-            throw "The packaged desktop application JAR was not found."
+            throw "The extracted MSI does not contain the desktop application JAR."
           }
 
           $jarEntries = & jar tf $appJar.FullName
           if ($LASTEXITCODE -ne 0) {
-            throw "Could not inspect the packaged desktop application JAR."
+            throw "Could not inspect the extracted desktop application JAR."
           }
           $requiredEntries = @(
             "native/windows/player_bridge.dll",
@@ -421,23 +464,60 @@ jobs:
           )
           foreach ($entry in $requiredEntries) {
             if ($jarEntries -notcontains $entry) {
-              throw "The packaged desktop application is missing $entry"
+              throw "The extracted MSI application is missing $entry"
             }
           }
 
+          $javaRuntime = Get-ChildItem $extractDir `
+            -Recurse `
+            -Filter "java.exe" `
+            | Where-Object { $_.FullName -match "[\\/]runtime[\\/]bin[\\/]java\.exe$" } `
+            | Select-Object -First 1
+          if ($null -eq $javaRuntime) {
+            throw "The extracted MSI does not contain the bundled Java runtime."
+          }
+
+          $manifestPath = "composeApp\build\compose\release-msis\Nuvio-Windows-x64-$env:RELEASE_VERSION-contents.txt"
+          $extractedFiles = Get-ChildItem $extractDir -Recurse -File | Sort-Object FullName
+          $nativeEntries = $jarEntries `
+            | Where-Object { $_ -like "native/windows/*" } `
+            | Sort-Object
+          $manifest = [Collections.Generic.List[string]]::new()
+          $manifest.Add("MSI=Nuvio-Windows-x64-$env:RELEASE_VERSION.msi")
+          $manifest.Add("MSI_SHA256=$((Get-FileHash $msiPath -Algorithm SHA256).Hash.ToLowerInvariant())")
+          $manifest.Add("MSI_SIGNATURE_STATUS=$((Get-AuthenticodeSignature $msiPath).Status)")
+          $manifest.Add("EXTRACTED_FILE_COUNT=$($extractedFiles.Count)")
+          $manifest.Add("APP_JAR=$([IO.Path]::GetRelativePath($extractDir, $appJar.FullName).Replace('\', '/'))")
+          $manifest.Add("JAVA_RUNTIME=$([IO.Path]::GetRelativePath($extractDir, $javaRuntime.FullName).Replace('\', '/'))")
+          $manifest.Add("")
+          $manifest.Add("NATIVE_JAR_ENTRIES")
+          foreach ($entry in $nativeEntries) {
+            $manifest.Add($entry)
+          }
+          $manifest.Add("")
+          $manifest.Add("EXTRACTED_FILES")
+          foreach ($file in $extractedFiles) {
+            $relativePath = [IO.Path]::GetRelativePath($extractDir, $file.FullName).Replace('\', '/')
+            $manifest.Add("$relativePath`t$($file.Length)")
+          }
+          $manifest | Set-Content $manifestPath -Encoding utf8
+
           Get-Item $msiPath | Format-List Name, Length, LastWriteTime
+          $manifest | Select-Object -First (9 + $nativeEntries.Count)
 
       - name: Upload MSI
         uses: actions/upload-artifact@v7
         with:
           name: nuvio-desktop-${{ needs.metadata.outputs.version }}-windows-x64
-          path: composeApp/build/compose/release-msis/Nuvio-Windows-x64-${{ needs.metadata.outputs.version }}.msi
+          path: |
+            composeApp/build/compose/release-msis/Nuvio-Windows-x64-${{ needs.metadata.outputs.version }}.msi
+            composeApp/build/compose/release-msis/Nuvio-Windows-x64-${{ needs.metadata.outputs.version }}-contents.txt
           if-no-files-found: error
           retention-days: 14
 
   release:
     name: Create ${{ inputs.mode }} release
-    if: inputs.mode != 'dry-run'
+    if: inputs.mode != 'build-only' && inputs.mode != 'dry-run' && inputs.target == 'all'
     needs:
       - metadata
       - macos
