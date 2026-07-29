@@ -19,9 +19,6 @@
 #include <webkit2/webkit2.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xcomposite.h>
-#include <X11/extensions/XShm.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
 
 #include <atomic>
 #include <clocale>
@@ -61,16 +58,22 @@ struct Player {
     GtkWidget *gtkWindow = nullptr;
     WebKitWebView *webview = nullptr;
     Window hostXid = 0;
-    Window overlayXid = 0;   // redirected controls window, read as a pixmap
+    Window overlayXid = 0;   // controls window, composite-redirected offscreen
+                             // (invisible on screen but still receives input)
     guint updateTimer = 0;    // 200ms: state push + input raise
-    guint compositeTimer = 0; // fast: read overlay pixmap -> mpv overlay
+    guint compositeTimer = 0; // fast: snapshot controls page -> mpv overlay
     bool overlayActive = true;   // controls currently visible/interacting
     int fadeTicks = 0;           // extra composite ticks to render the fade-out
     bool overlayPushed = false;  // an overlay is currently set on mpv
-    // MIT-SHM readback of the overlay pixmap (avoids per-frame X socket copies)
-    XShmSegmentInfo shmInfo{};
-    XImage *shmImg = nullptr;
-    int shmW = 0, shmH = 0;
+    // Async WebKit snapshot of the controls page (premultiplied ARGB32 with real
+    // alpha). Reading the redirected window's X pixmap instead is renderer- and
+    // driver-dependent: on NVIDIA the dmabuf renderer leaves the pixmap empty and
+    // the fallback renderer fills the page background opaque, so the overlay
+    // either vanishes or blacks out the video underneath.
+    cairo_surface_t *snapSurf = nullptr;      // buffer mpv's overlay points at
+    cairo_surface_t *snapSurfPrev = nullptr;  // kept one push longer: mpv may
+                                              // still sample it mid-frame
+    bool snapInFlight = false;
     std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
 };
 
@@ -301,45 +304,51 @@ void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpo
     if (valV) g_object_unref(valV);
 }
 
-// Free the MIT-SHM readback buffer (safe to call with none allocated).
-void releaseShm(Player *player, Display *dpy) {
-    if (!player->shmImg) return;
-    if (dpy) XShmDetach(dpy, &player->shmInfo);
-    XDestroyImage(player->shmImg);
-    if (player->shmInfo.shmaddr) shmdt(player->shmInfo.shmaddr);
-    player->shmImg = nullptr;
-    player->shmInfo = XShmSegmentInfo{};
-    player->shmW = player->shmH = 0;
+// Free the snapshot buffers (safe to call with none allocated). Only after
+// overlay-remove or teardown — mpv's overlay points into snapSurf's data.
+void releaseSnapshots(Player *player) {
+    if (player->snapSurf) cairo_surface_destroy(player->snapSurf);
+    if (player->snapSurfPrev) cairo_surface_destroy(player->snapSurfPrev);
+    player->snapSurf = player->snapSurfPrev = nullptr;
 }
 
-// Ensure a MIT-SHM XImage of exactly w*h exists for zero-copy pixmap readback.
-bool ensureShm(Player *player, Display *dpy, Visual *vis, int depth, int w, int h) {
-    if (player->shmImg && player->shmW == w && player->shmH == h) return true;
-    releaseShm(player, dpy);
-    XImage *img = XShmCreateImage(dpy, vis, depth, ZPixmap, nullptr, &player->shmInfo, w, h);
-    if (!img) return false;
-    player->shmInfo.shmid =
-        shmget(IPC_PRIVATE, (size_t)img->bytes_per_line * img->height, IPC_CREAT | 0600);
-    if (player->shmInfo.shmid < 0) { XDestroyImage(img); return false; }
-    player->shmInfo.shmaddr = img->data = (char *)shmat(player->shmInfo.shmid, nullptr, 0);
-    player->shmInfo.readOnly = False;
-    if (player->shmInfo.shmaddr == (char *)-1 || !XShmAttach(dpy, &player->shmInfo)) {
-        XDestroyImage(img);
-        shmctl(player->shmInfo.shmid, IPC_RMID, nullptr);
-        player->shmInfo = XShmSegmentInfo{};
-        return false;
+// Completion of the async controls snapshot: hand the premultiplied BGRA pixels
+// to mpv as an OSD overlay. Runs on the GTK thread like the tick that issued it.
+void onOverlaySnapshot(GObject *src, GAsyncResult *res, gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    GError *err = nullptr;
+    cairo_surface_t *surf =
+        webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(src), res, &err);
+    if (err) g_error_free(err);
+    if (!playerAlive(player)) {
+        if (surf) cairo_surface_destroy(surf);
+        return;
     }
-    XSync(dpy, False);
-    // Segment stays alive until XShmDetach + shmdt; mark for removal now so it is
-    // reclaimed even if the process dies.
-    shmctl(player->shmInfo.shmid, IPC_RMID, nullptr);
-    player->shmImg = img;
-    player->shmW = w;
-    player->shmH = h;
-    return true;
+    player->snapInFlight = false;
+    if (!surf) return;
+    if (cairo_image_surface_get_format(surf) != CAIRO_FORMAT_ARGB32 ||
+        cairo_image_surface_get_width(surf) <= 0 ||
+        cairo_image_surface_get_height(surf) <= 0 || !player->mpv) {
+        cairo_surface_destroy(surf);
+        return;
+    }
+    cairo_surface_flush(surf);
+    char addr[32], sw[16], sh[16], sstride[16];
+    snprintf(addr, sizeof addr, "&%zu",
+             (size_t)(uintptr_t)cairo_image_surface_get_data(surf));
+    snprintf(sw, sizeof sw, "%d", cairo_image_surface_get_width(surf));
+    snprintf(sh, sizeof sh, "%d", cairo_image_surface_get_height(surf));
+    snprintf(sstride, sizeof sstride, "%d", cairo_image_surface_get_stride(surf));
+    const char *cmd[] = {"overlay-add", "0", "0", "0", addr, "0",
+                         "bgra", sw, sh, sstride, nullptr};
+    mpv_command(player->mpv, cmd);
+    player->overlayPushed = true;
+    if (player->snapSurfPrev) cairo_surface_destroy(player->snapSurfPrev);
+    player->snapSurfPrev = player->snapSurf;
+    player->snapSurf = surf;
 }
 
-// Read the redirected controls window's pixmap (premultiplied BGRA) and hand it
+// Snapshot the controls page (premultiplied BGRA with real alpha) and hand it
 // to mpv as an OSD overlay, so mpv blends the HTML controls over the video in its
 // single window (XWayland won't alpha-blend sibling windows; mpv does the compose
 // that Core Animation / DWM do on macOS / Windows). Only runs while the chrome is
@@ -359,7 +368,7 @@ void compositeOverlay(Player *player) {
             const char *rm[] = {"overlay-remove", "0", nullptr};
             mpv_command(player->mpv, rm);
             player->overlayPushed = false;
-            releaseShm(player, dpy);
+            releaseSnapshots(player);
         }
         return;
     }
@@ -376,26 +385,12 @@ void compositeOverlay(Player *player) {
             return;
         }
     }
-    XWindowAttributes wa;
-    if (!XGetWindowAttributes(dpy, player->overlayXid, &wa) || wa.width <= 0 || wa.height <= 0)
-        return;
-    if (!ensureShm(player, dpy, wa.visual, wa.depth, wa.width, wa.height)) return;
-    Pixmap pm = XCompositeNameWindowPixmap(dpy, player->overlayXid);
-    if (!pm) return;
-    if (XShmGetImage(dpy, pm, player->shmImg, 0, 0, AllPlanes) &&
-        player->shmImg->bits_per_pixel == 32) {
-        XImage *img = player->shmImg;
-        char addr[32], sw[16], sh[16], sstride[16];
-        snprintf(addr, sizeof addr, "&%zu", (size_t)(uintptr_t)img->data);
-        snprintf(sw, sizeof sw, "%d", img->width);
-        snprintf(sh, sizeof sh, "%d", img->height);
-        snprintf(sstride, sizeof sstride, "%d", img->bytes_per_line);
-        const char *cmd[] = {"overlay-add", "0", "0", "0", addr, "0",
-                             "bgra", sw, sh, sstride, nullptr};
-        mpv_command(player->mpv, cmd);
-        player->overlayPushed = true;
+    if (!player->snapInFlight && player->webview) {
+        player->snapInFlight = true;
+        webkit_web_view_get_snapshot(player->webview, WEBKIT_SNAPSHOT_REGION_VISIBLE,
+                                     WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND,
+                                     nullptr, onOverlaySnapshot, player);
     }
-    XFreePixmap(dpy, pm);
     if (!player->overlayActive && player->fadeTicks > 0) player->fadeTicks--;
 }
 
@@ -700,8 +695,7 @@ gboolean destroyWebviewOnGtk(gpointer data) {
         player->compositeTimer = 0;
     }
     if (player->gtkWindow) {
-        GdkWindow *gw = gtk_widget_get_window(player->gtkWindow);
-        releaseShm(player, gw ? GDK_WINDOW_XDISPLAY(gw) : nullptr);
+        releaseSnapshots(player);
         gtk_widget_destroy(player->gtkWindow);
         player->gtkWindow = nullptr;
         player->webview = nullptr;
