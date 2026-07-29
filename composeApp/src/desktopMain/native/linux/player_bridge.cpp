@@ -771,67 +771,17 @@ JNIEXPORT jlong JNICALL NP(create)(
         delete player;
         return 0;
     }
-    // Surface mpv's own diagnostics (drained by the event thread).
-    mpv_request_log_messages(player->mpv, nuvioDebug() ? "v" : "no");
-
-    // Embed into the host AWT Canvas's X11 window.
+    // Config shared by both init attempts (see below).
+    std::string wid;
     if (hostViewPtr != 0) {
-        std::string wid = std::to_string(static_cast<int64_t>(hostViewPtr));
+        wid = std::to_string(static_cast<int64_t>(hostViewPtr));
         NUVIO_LOG("embedding into X11 wid=%s", wid.c_str());
-        mpv_set_option_string(player->mpv, "wid", wid.c_str());
     } else {
         NUVIO_ERR("hostViewPtr is 0 — no window to embed into");
     }
 
-    // Nuvio renders its own controls; keep mpv silent and non-interactive.
-    mpv_set_option_string(player->mpv, "osc", "no");
-    mpv_set_option_string(player->mpv, "osd-level", "0");
-    mpv_set_option_string(player->mpv, "input-default-bindings", "no");
-    mpv_set_option_string(player->mpv, "input-vo-keyboard", "no");
-    mpv_set_option_string(player->mpv, "input-cursor", "no");
-    mpv_set_option_string(player->mpv, "cursor-autohide", "no");
-    mpv_set_option_string(player->mpv, "keep-open", "yes");
-    mpv_set_option_string(player->mpv, "idle", "yes");
-    mpv_set_option_string(player->mpv, "vo", "gpu");
-    // Bring the VO/OSD up immediately (before the first decoded frame) so the
-    // controls overlay — including the loading screen — can render via overlay-add
-    // while a slow/non-faststart file is still opening, instead of a black gap.
-    mpv_set_option_string(player->mpv, "force-window", "immediate");
-    // Force the X11 GPU context so mpv embeds into the host window's X11
-    // "wid". Under a Wayland session mpv would otherwise pick its native
-    // Wayland backend, which cannot embed into a foreign surface and opens
-    // a separate window instead. The host AWT window is X11 (XWayland), so
-    // X11/EGL embedding composites correctly inside the Nuvio window.
-    // Default x11egl; overridable (e.g. x11vk for Nvidia, where x11egl fails to
-    // make its context current on the foreign AWT window) via env for testing.
-    const char *gpuCtx = getenv("NUVIO_MPV_GPU_CONTEXT");
-    mpv_set_option_string(player->mpv, "gpu-context",
-                          (gpuCtx && *gpuCtx) ? gpuCtx : "x11egl");
-    mpv_set_option_string(player->mpv, "force-seekable", "yes");
-
-    // Decoder config mirrors the macOS bridge for parity (mac: hwdec=auto +
-    // gpu-hwdec-interop=auto + decoderPriority handling). gpu-hwdec-interop=auto
-    // lets vo=gpu use direct hardware decode instead of the slow copy-back path.
-    mpv_set_option_string(player->mpv, "audio-channels", "auto");
-    // Default hwdec=auto; overridable (e.g. "no"/"cuda" on Nvidia+Vulkan, where
-    // the vulkan-native decode path produces corrupt frames) via env for testing.
-    const char *hwdecEnv = getenv("NUVIO_MPV_HWDEC");
-    mpv_set_option_string(player->mpv, "hwdec",
-                          (hwdecEnv && *hwdecEnv) ? hwdecEnv : "auto");
-    mpv_set_option_string(player->mpv, "gpu-hwdec-interop", "auto");
-    if (decoderPriority == 0) {
-        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "no");
-    } else if (decoderPriority == 2) {
-        mpv_set_option_string(player->mpv, "hwdec", "no");
-        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "yes");
-    } else {
-        mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "yes");
-    }
-    mpv_set_option_string(player->mpv, "vd-lavc-threads", "0");
-    mpv_set_option_string(player->mpv, "target-colorspace-hint", "yes");
-    mpv_set_option_string(player->mpv, "target-colorspace-hint-mode", "source");
-
     // Forward addon/debrid HTTP headers verbatim.
+    std::string headerFields;
     if (headerLines != nullptr) {
         jsize count = env->GetArrayLength(headerLines);
         std::vector<std::string> headers;
@@ -841,22 +791,103 @@ JNIEXPORT jlong JNICALL NP(create)(
             headers.push_back(jstringToUtf8(env, line));
             if (line) env->DeleteLocalRef(line);
         }
-        if (!headers.empty()) {
-            mpv_set_option_string(player->mpv, "http-header-fields", joinHeaderFields(headers).c_str());
+        if (!headers.empty()) headerFields = joinHeaderFields(headers);
+    }
+
+    auto configure = [&](mpv_handle *m, const char *gpuCtx, const char *hwdec) {
+        // Surface mpv's own diagnostics (drained by the event thread).
+        mpv_request_log_messages(m, nuvioDebug() ? "v" : "no");
+        // Embed into the host AWT Canvas's X11 window.
+        if (!wid.empty()) mpv_set_option_string(m, "wid", wid.c_str());
+
+        // Nuvio renders its own controls; keep mpv silent and non-interactive.
+        mpv_set_option_string(m, "osc", "no");
+        mpv_set_option_string(m, "osd-level", "0");
+        mpv_set_option_string(m, "input-default-bindings", "no");
+        mpv_set_option_string(m, "input-vo-keyboard", "no");
+        mpv_set_option_string(m, "input-cursor", "no");
+        mpv_set_option_string(m, "cursor-autohide", "no");
+        mpv_set_option_string(m, "keep-open", "yes");
+        mpv_set_option_string(m, "idle", "yes");
+        mpv_set_option_string(m, "vo", "gpu");
+        // Bring the VO/OSD up immediately (before the first decoded frame) so the
+        // controls overlay — including the loading screen — can render via
+        // overlay-add while a slow/non-faststart file is still opening, instead of
+        // a black gap. (This also makes mpv_initialize itself surface GPU-context
+        // failures, which the attempt loop below relies on.)
+        mpv_set_option_string(m, "force-window", "immediate");
+        // Force an X11 GPU context so mpv embeds into the host window's X11
+        // "wid". Under a Wayland session mpv would otherwise pick its native
+        // Wayland backend, which cannot embed into a foreign surface and opens
+        // a separate window instead. The host AWT window is X11 (XWayland), so
+        // X11 embedding composites correctly inside the Nuvio window.
+        mpv_set_option_string(m, "gpu-context", gpuCtx);
+        mpv_set_option_string(m, "force-seekable", "yes");
+
+        // Decoder config mirrors the macOS bridge for parity (mac: hwdec=auto +
+        // gpu-hwdec-interop=auto + decoderPriority handling). gpu-hwdec-interop=auto
+        // lets vo=gpu use direct hardware decode instead of the slow copy-back path.
+        mpv_set_option_string(m, "audio-channels", "auto");
+        mpv_set_option_string(m, "hwdec", hwdec);
+        mpv_set_option_string(m, "gpu-hwdec-interop", "auto");
+        if (decoderPriority == 0) {
+            mpv_set_option_string(m, "vd-lavc-software-fallback", "no");
+        } else if (decoderPriority == 2) {
+            mpv_set_option_string(m, "hwdec", "no");
+            mpv_set_option_string(m, "vd-lavc-software-fallback", "yes");
+        } else {
+            mpv_set_option_string(m, "vd-lavc-software-fallback", "yes");
         }
-    }
+        mpv_set_option_string(m, "vd-lavc-threads", "0");
+        mpv_set_option_string(m, "target-colorspace-hint", "yes");
+        mpv_set_option_string(m, "target-colorspace-hint-mode", "source");
 
-    if (initialPositionMs > 0) {
-        std::string start = std::to_string(initialPositionMs / 1000.0);
-        mpv_set_option_string(player->mpv, "start", start.c_str());
-    }
-    if (!playWhenReady) {
-        mpv_set_option_string(player->mpv, "pause", "yes");
-    }
+        if (!headerFields.empty()) {
+            mpv_set_option_string(m, "http-header-fields", headerFields.c_str());
+        }
+        if (initialPositionMs > 0) {
+            std::string start = std::to_string(initialPositionMs / 1000.0);
+            mpv_set_option_string(m, "start", start.c_str());
+        }
+        if (!playWhenReady) {
+            mpv_set_option_string(m, "pause", "yes");
+        }
+    };
 
-    int initResult = mpv_initialize(player->mpv);
-    if (initResult < 0) {
-        NUVIO_ERR("mpv_initialize failed: %s", mpv_error_string(initResult));
+    // Attempt 1: x11egl — the proven path on Mesa (Intel/AMD). Attempt 2: x11vk —
+    // NVIDIA's proprietary EGL refuses to make a context current on the foreign
+    // AWT window (mpv_initialize fails via force-window=immediate), while Vulkan
+    // embeds fine there; its native hwdec interop corrupts frames on NVIDIA, so
+    // the retry pairs it with copy-back NVDEC (harmless elsewhere: unavailable
+    // hwdec just falls back to software). NUVIO_MPV_GPU_CONTEXT / NUVIO_MPV_HWDEC
+    // env overrides pin a single attempt for testing.
+    const char *gpuCtxEnv = getenv("NUVIO_MPV_GPU_CONTEXT");
+    const char *hwdecEnv = getenv("NUVIO_MPV_HWDEC");
+    bool ctxPinned = gpuCtxEnv && *gpuCtxEnv;
+    struct Attempt { const char *ctx; const char *hwdec; };
+    Attempt attempts[2] = {
+        {ctxPinned ? gpuCtxEnv : "x11egl", (hwdecEnv && *hwdecEnv) ? hwdecEnv : "auto"},
+        {"x11vk", (hwdecEnv && *hwdecEnv) ? hwdecEnv : "nvdec-copy"},
+    };
+    int nAttempts = ctxPinned ? 1 : 2;
+    int initResult = MPV_ERROR_GENERIC;
+    for (int a = 0; a < nAttempts; ++a) {
+        if (!player->mpv) player->mpv = mpv_create();
+        if (!player->mpv) {
+            NUVIO_ERR("mpv_create() returned NULL on retry");
+            break;
+        }
+        configure(player->mpv, attempts[a].ctx, attempts[a].hwdec);
+        initResult = mpv_initialize(player->mpv);
+        if (initResult >= 0) {
+            if (a > 0) {
+                NUVIO_ERR("gpu-context %s failed to initialize; using %s instead",
+                          attempts[0].ctx, attempts[a].ctx);
+            }
+            break;
+        }
+        NUVIO_ERR("mpv_initialize failed (gpu-context=%s): %s", attempts[a].ctx,
+                  mpv_error_string(initResult));
         // Drain any queued log messages explaining the failure.
         for (int i = 0; i < 50; ++i) {
             mpv_event *ev = mpv_wait_event(player->mpv, 0.0);
@@ -867,6 +898,9 @@ JNIEXPORT jlong JNICALL NP(create)(
             }
         }
         mpv_destroy(player->mpv);
+        player->mpv = nullptr;
+    }
+    if (!player->mpv || initResult < 0) {
         delete player;
         return 0;
     }
