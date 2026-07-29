@@ -467,37 +467,11 @@ fun HomeScreen(
     }
     val hasContinueWatchingRows = continueWatchingItems.isNotEmpty() || upcomingItems.isNotEmpty()
 
-    LaunchedEffect(activeProfileId, continueWatchingItems.isNotEmpty(), hasUserScrolledContinueWatching) {
-        if (!hasUserScrolledContinueWatching && continueWatchingItems.isNotEmpty()) {
-            snapshotFlow {
-                continueWatchingListState.firstVisibleItemIndex to
-                    continueWatchingListState.firstVisibleItemScrollOffset
-            }.collect { (index, offset) ->
-                if (
-                    !hasUserScrolledContinueWatching &&
-                    !continueWatchingListState.isScrollInProgress &&
-                    (index != 0 || offset != 0)
-                ) {
-                    continueWatchingListState.scrollToItem(0)
-                }
-            }
-        }
-    }
-    LaunchedEffect(activeProfileId, upcomingItems.isNotEmpty(), hasUserScrolledUpcoming) {
-        if (!hasUserScrolledUpcoming && upcomingItems.isNotEmpty()) {
-            snapshotFlow {
-                upcomingListState.firstVisibleItemIndex to
-                    upcomingListState.firstVisibleItemScrollOffset
-            }.collect { (index, offset) ->
-                if (
-                    !hasUserScrolledUpcoming &&
-                    !upcomingListState.isScrollInProgress &&
-                    (index != 0 || offset != 0)
-                ) {
-                    upcomingListState.scrollToItem(0)
-                }
-            }
-        }
+    LaunchedEffect(activeProfileId) {
+        hasUserScrolledContinueWatching = false
+        hasUserScrolledUpcoming = false
+        continueWatchingListState.scrollToItem(0)
+        upcomingListState.scrollToItem(0)
     }
     val enabledAddons = remember(addonsUiState.addons) {
         addonsUiState.addons.enabledAddons()
@@ -545,11 +519,8 @@ fun HomeScreen(
     }
 
     LaunchedEffect(collections, enabledAddons) {
-        HomeCatalogSettingsRepository.syncCollections(collections)
+        HomeCatalogSettingsRepository.syncCollections(collections, enabledAddons)
         HomeRepository.applyCurrentSettings()
-        if (collections.any { it.folders.isNotEmpty() }) {
-            HomeRepository.refresh(enabledAddons, force = true)
-        }
     }
 
     LaunchedEffect(
