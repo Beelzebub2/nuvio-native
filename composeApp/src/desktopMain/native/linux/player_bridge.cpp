@@ -792,14 +792,22 @@ JNIEXPORT jlong JNICALL NP(create)(
     // Wayland backend, which cannot embed into a foreign surface and opens
     // a separate window instead. The host AWT window is X11 (XWayland), so
     // X11/EGL embedding composites correctly inside the Nuvio window.
-    mpv_set_option_string(player->mpv, "gpu-context", "x11egl");
+    // Default x11egl; overridable (e.g. x11vk for Nvidia, where x11egl fails to
+    // make its context current on the foreign AWT window) via env for testing.
+    const char *gpuCtx = getenv("NUVIO_MPV_GPU_CONTEXT");
+    mpv_set_option_string(player->mpv, "gpu-context",
+                          (gpuCtx && *gpuCtx) ? gpuCtx : "x11egl");
     mpv_set_option_string(player->mpv, "force-seekable", "yes");
 
     // Decoder config mirrors the macOS bridge for parity (mac: hwdec=auto +
     // gpu-hwdec-interop=auto + decoderPriority handling). gpu-hwdec-interop=auto
     // lets vo=gpu use direct hardware decode instead of the slow copy-back path.
     mpv_set_option_string(player->mpv, "audio-channels", "auto");
-    mpv_set_option_string(player->mpv, "hwdec", "auto");
+    // Default hwdec=auto; overridable (e.g. "no"/"cuda" on Nvidia+Vulkan, where
+    // the vulkan-native decode path produces corrupt frames) via env for testing.
+    const char *hwdecEnv = getenv("NUVIO_MPV_HWDEC");
+    mpv_set_option_string(player->mpv, "hwdec",
+                          (hwdecEnv && *hwdecEnv) ? hwdecEnv : "auto");
     mpv_set_option_string(player->mpv, "gpu-hwdec-interop", "auto");
     if (decoderPriority == 0) {
         mpv_set_option_string(player->mpv, "vd-lavc-software-fallback", "no");
