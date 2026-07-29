@@ -462,7 +462,23 @@ std::string buildTracksJson(mpv_handle *mpv, const char *wantedType) {
         std::string title = mpvGetStr(mpv, pfx + "/title");
         std::string lang = mpvGetStr(mpv, pfx + "/lang");
         std::string codec = mpvGetStr(mpv, pfx + "/codec");
-        std::string channels = mpvGetStr(mpv, pfx + "/demux-channels");
+        // Clean channel-layout name. mpv names unknown layouts "unknownN" (e.g.
+        // "unknown2"); map from the channel count to a friendly name instead.
+        std::string channels;
+        if (isAudio) {
+            std::string rawCh = mpvGetStr(mpv, pfx + "/demux-channels");
+            if (!rawCh.empty() && rawCh.rfind("unknown", 0) != 0) {
+                channels = rawCh == "mono" ? "Mono"
+                         : (rawCh == "stereo" ? "Stereo" : rawCh);
+            } else {
+                int64_t nch = mpvGetInt(mpv, (pfx + "/demux-channel-count").c_str());
+                if (nch == 1) channels = "Mono";
+                else if (nch == 2) channels = "Stereo";
+                else if (nch == 6) channels = "5.1";
+                else if (nch == 8) channels = "7.1";
+                else if (nch > 0) channels = std::to_string(nch) + "ch";
+            }
+        }
         bool selected = mpvGetFlag(mpv, (pfx + "/selected").c_str());
         bool forced = mpvGetFlag(mpv, (pfx + "/forced").c_str());
 
