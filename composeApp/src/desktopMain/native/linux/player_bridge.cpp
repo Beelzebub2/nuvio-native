@@ -883,6 +883,12 @@ JNIEXPORT jlong JNICALL NP(create)(
             if (a > 0) {
                 NUVIO_ERR("gpu-context %s failed to initialize; using %s instead",
                           attempts[0].ctx, attempts[a].ctx);
+                // The x11egl failure doubles as NVIDIA detection: the same
+                // driver's WebKit DMABUF renderer fails GBM buffer creation,
+                // yielding stale/opaque controls snapshots. Disable it before
+                // the controls webview (below) spawns WebKit's processes.
+                // overwrite=0 keeps an explicit user setting authoritative.
+                setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 0);
             }
             break;
         }
