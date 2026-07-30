@@ -818,6 +818,26 @@ extern "C" {
 #define NP(name) \
     Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_##name
 
+// Initialize GTK before AWT/Compose/Skia (called as the first statement of
+// main() on Linux). On some JDK builds (Ubuntu's OpenJDK) AWT/Skiko partially
+// loads libgdk-3 without a full GTK init, registering GdkDisplayManager in a
+// state that makes our later gtk_init on the bridge thread abort with a GType
+// conflict. Initializing GTK first, on the JVM main thread, registers the GDK
+// types once and canonically; the bridge thread's gtk_init then no-ops.
+// Approach from skoruppa's linux-webkitgtk branch (initGtkEarly).
+JNIEXPORT jboolean JNICALL NP(initGtkEarly)(JNIEnv *, jobject) {
+    // Same backend pin as gtkThreadMain: the controls overlay is driven with
+    // X11/XComposite, so GTK must not come up on the Wayland backend here.
+    gdk_set_allowed_backends("x11");
+    int argc = 0;
+    if (!gtk_init_check(&argc, nullptr)) {
+        NUVIO_ERR("initGtkEarly: gtk_init_check failed");
+        return JNI_FALSE;
+    }
+    NUVIO_LOG("initGtkEarly: GTK initialized before AWT/Skia");
+    return JNI_TRUE;
+}
+
 JNIEXPORT jlong JNICALL NP(create)(
     JNIEnv *env, jobject /*thiz*/, jlong hostViewPtr, jstring sourceUrl,
     jobjectArray headerLines, jboolean playWhenReady, jlong initialPositionMs,

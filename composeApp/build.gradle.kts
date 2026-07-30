@@ -1206,6 +1206,9 @@ compose.desktop {
             ?: System.getenv("NUVIO_DESKTOP_SMOKE_PLAYER_URL")
         jvmArgs += listOfNotNull(
             "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
+            // Keep AWT from loading its own GTK (Swing L&F/file dialogs): the
+            // bridge owns the process's GTK via initGtkEarly (skoruppa's fix).
+            "-Djdk.gtk.version=0",
             "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
             "--add-opens=java.desktop/sun.lwawt=ALL-UNNAMED",
             "--add-opens=java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
