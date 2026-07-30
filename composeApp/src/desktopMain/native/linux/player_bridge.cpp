@@ -600,6 +600,15 @@ gboolean createWebviewOnGtk(gpointer data) {
     g_signal_connect(ucm, "script-message-received::player",
                      G_CALLBACK(onPlayerMessage), player);
 
+    // WebKit's DMABUF renderer yields controls snapshots with degraded alpha —
+    // the semi-transparent chrome scrim reads back near-opaque (NVIDIA: stale or
+    // fully opaque via GBM failures; Mesa: no fully-transparent pixels at all),
+    // which mpv then blends as a dark wall over the video. The software path
+    // snapshots with correct alpha everywhere, and the controls page is cheap to
+    // render, so disable DMABUF before WebKit's processes spawn. overwrite=0
+    // keeps an explicit user setting authoritative.
+    setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 0);
+
     // Ephemeral (in-memory) web context: the controls page is a trusted local
     // file:// UI that needs no cookies/cache/IndexedDB. Using the default context
     // creates a disk-backed WebKitWebsiteDataStore whose finalize() races the
@@ -917,12 +926,6 @@ JNIEXPORT jlong JNICALL NP(create)(
             if (a > 0) {
                 NUVIO_ERR("gpu-context %s failed to initialize; using %s instead",
                           attempts[0].ctx, attempts[a].ctx);
-                // The x11egl failure doubles as NVIDIA detection: the same
-                // driver's WebKit DMABUF renderer fails GBM buffer creation,
-                // yielding stale/opaque controls snapshots. Disable it before
-                // the controls webview (below) spawns WebKit's processes.
-                // overwrite=0 keeps an explicit user setting authoritative.
-                setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 0);
             }
             break;
         }
