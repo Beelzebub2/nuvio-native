@@ -678,6 +678,16 @@ gboolean createWebviewOnGtk(gpointer data) {
     } else {
         NUVIO_ERR("XComposite NOT available");
     }
+    // Give the overlay window a real cursor: it defines none of its own, and on
+    // some WMs (mutter) the pointer goes blank over it instead of inheriting.
+    {
+        GdkDisplay *gdpy = gtk_widget_get_display(win);
+        GdkCursor *cur = gdk_cursor_new_from_name(gdpy, "default");
+        if (cur && gdkWin) {
+            gdk_window_set_cursor(gdkWin, cur);
+            g_object_unref(cur);
+        }
+    }
     XFlush(dpy);
 
     webkit_web_view_load_uri(wv, s->url.c_str());
