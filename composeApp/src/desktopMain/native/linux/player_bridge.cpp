@@ -391,6 +391,15 @@ void compositeOverlay(Player *player) {
                                      WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND,
                                      nullptr, onOverlaySnapshot, player);
     }
+    // The redirected (invisible) overlay window is never presented, so on some
+    // compositors (mutter's XWayland) its GTK frame clock stalls — freezing the
+    // page's CSS fades/spinners mid-flight, so hideChrome never fires and the
+    // loading screen never animates. Keep the clock ticking while we composite.
+    {
+        GdkWindow *ovGw = gtk_widget_get_window(player->gtkWindow);
+        GdkFrameClock *fc = ovGw ? gdk_window_get_frame_clock(ovGw) : nullptr;
+        if (fc) gdk_frame_clock_request_phase(fc, GDK_FRAME_CLOCK_PHASE_UPDATE);
+    }
     if (!player->overlayActive && player->fadeTicks > 0) player->fadeTicks--;
 }
 
