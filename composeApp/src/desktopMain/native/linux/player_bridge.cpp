@@ -522,9 +522,24 @@ gboolean pushPlayerUpdate(gpointer data) {
     // Keep the (redirected, invisible) overlay window topmost so pointer/click
     // events reach it instead of mpv's video window below. Redirection keeps it
     // hidden from the screen regardless of stacking; raising only affects input.
+    // Only restack when NOT already topmost: an unconditional XRaiseWindow makes
+    // some servers (mutter's XWayland) emit pointer crossing events every tick,
+    // which the controls page reads as endless cursor activity — chrome never
+    // auto-hides and hover/cursor state thrashes.
     if (player->gtkWindow) {
         GdkWindow *ov = gtk_widget_get_window(player->gtkWindow);
-        if (ov) XRaiseWindow(GDK_WINDOW_XDISPLAY(ov), player->overlayXid);
+        if (ov) {
+            Display *dpy = GDK_WINDOW_XDISPLAY(ov);
+            Window root0, parent0, *kids = nullptr;
+            unsigned int nkids = 0;
+            bool onTop = false;
+            if (XQueryTree(dpy, player->hostXid, &root0, &parent0, &kids, &nkids) &&
+                kids) {
+                onTop = nkids > 0 && kids[nkids - 1] == player->overlayXid;
+                XFree(kids);
+            }
+            if (!onTop) XRaiseWindow(dpy, player->overlayXid);
+        }
     }
     double duration = mpvGetDouble(player->mpv, "duration");
     double position = mpvGetDouble(player->mpv, "time-pos");
