@@ -362,7 +362,12 @@ void compositeOverlay(Player *player) {
     // so Nuvio's loading screen — poster, title, spinner — shows over mpv's black
     // instead of a bare black screen. mpv is not decoding then, so it is free.
     bool loading = playerLoading(player);
-    bool active = loading || player->overlayActive || player->fadeTicks > 0;
+    // Also composite while paused: the "You're watching" pause overlay only shows
+    // once the chrome has hidden, which is exactly when this gate used to go
+    // inactive — the page rendered it but it never reached mpv. mpv is not
+    // decoding while paused, so this is free.
+    bool paused = mpvGetFlag(player->mpv, "pause");
+    bool active = loading || paused || player->overlayActive || player->fadeTicks > 0;
     if (!active) {
         if (player->overlayPushed) {
             const char *rm[] = {"overlay-remove", "0", nullptr};
