@@ -74,6 +74,7 @@ struct Player {
     cairo_surface_t *snapSurfPrev = nullptr;  // kept one push longer: mpv may
                                               // still sample it mid-frame
     bool snapInFlight = false;
+    int snapWaitTicks = 0;  // watchdog: ticks spent waiting on the in-flight snapshot
     std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
 };
 
@@ -392,9 +393,18 @@ void compositeOverlay(Player *player) {
     }
     if (!player->snapInFlight && player->webview) {
         player->snapInFlight = true;
+        player->snapWaitTicks = 0;
         webkit_web_view_get_snapshot(player->webview, WEBKIT_SNAPSHOT_REGION_VISIBLE,
                                      WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND,
                                      nullptr, onOverlaySnapshot, player);
+    } else if (player->snapInFlight && ++player->snapWaitTicks > 30) {
+        // Watchdog: a snapshot requested before the page starts loading (or after
+        // a web-process death) never calls back, which would freeze the overlay
+        // forever. Give up on it after ~1s and request a fresh one; if the stale
+        // callback fires later anyway, the extra overlay push is harmless.
+        NUVIO_ERR("snapshot stuck in flight >30 ticks, resetting (watchdog)");
+        player->snapInFlight = false;
+        player->snapWaitTicks = 0;
     }
     // The redirected (invisible) overlay window is never presented, so on some
     // compositors (mutter's XWayland) its GTK frame clock stalls — freezing the
