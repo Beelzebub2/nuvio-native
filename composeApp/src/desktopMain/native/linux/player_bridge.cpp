@@ -651,6 +651,13 @@ gboolean createWebviewOnGtk(gpointer data) {
 
     g_signal_connect(wv, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
     g_signal_connect(wv, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
+    // Suppress WebKit's own right-click context menu over the controls page
+    // (the macOS/Windows player webviews never show one).
+    g_signal_connect(wv, "context-menu",
+                     G_CALLBACK(+[](WebKitWebView *, WebKitContextMenu *,
+                                    GdkEvent *, WebKitHitTestResult *,
+                                    gpointer) -> gboolean { return TRUE; }),
+                     nullptr);
 
     gtk_container_add(GTK_CONTAINER(win), GTK_WIDGET(wv));
 
