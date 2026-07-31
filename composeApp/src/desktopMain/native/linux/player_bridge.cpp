@@ -80,6 +80,14 @@ struct Player {
                                               // still sample it mid-frame
     bool snapInFlight = false;
     int snapWaitTicks = 0;  // watchdog: ticks spent waiting on the in-flight snapshot
+    // Snapshot requests are generation-stamped: a watchdog reset (or teardown)
+    // bumps the generation so the abandoned request's late callback is dropped
+    // instead of racing the replacement (double-clearing snapInFlight, pushing
+    // overlays out of order, or rotating a surface mpv's VO still samples).
+    int snapGen = 0;
+    GCancellable *snapCancel = nullptr;  // cancels the in-flight snapshot, owned
+    int snapCooldownTicks = 0;  // watchdog backoff before the next request
+    int snapResets = 0;         // consecutive watchdog resets without a snapshot
     // Controls-state payload buffering (macOS/Windows parity): the first
     // updateControls arrives before the page defines window.playerControls, so a
     // fire-and-forget eval loses it and the loading screen shows a bare spinner
@@ -419,10 +427,21 @@ void releaseSnapshots(Player *player) {
     player->snapSurf = player->snapSurfPrev = nullptr;
 }
 
+// Ties a snapshot request to the generation it was issued under, so callbacks
+// from abandoned (watchdog-reset / torn-down) requests can be told apart from
+// the live one and dropped without touching any player state.
+struct SnapCtx {
+    Player *player;
+    int gen;
+};
+
 // Completion of the async controls snapshot: hand the premultiplied BGRA pixels
 // to mpv as an OSD overlay. Runs on the GTK thread like the tick that issued it.
 void onOverlaySnapshot(GObject *src, GAsyncResult *res, gpointer data) {
-    auto *player = static_cast<Player *>(data);
+    auto *ctx = static_cast<SnapCtx *>(data);
+    Player *player = ctx->player;
+    int gen = ctx->gen;
+    delete ctx;
     GError *err = nullptr;
     cairo_surface_t *surf =
         webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(src), res, &err);
@@ -431,7 +450,17 @@ void onOverlaySnapshot(GObject *src, GAsyncResult *res, gpointer data) {
         if (surf) cairo_surface_destroy(surf);
         return;
     }
+    if (gen != player->snapGen) {
+        // Abandoned request draining late (after a watchdog reset or a
+        // cancellation). Touch nothing: clearing snapInFlight here would let
+        // requests pile up concurrently, and pushing the (older) pixels would
+        // rewind the overlay and rotate a surface mpv may still be sampling.
+        NUVIO_LOG("stale snapshot (gen %d != %d) dropped", gen, player->snapGen);
+        if (surf) cairo_surface_destroy(surf);
+        return;
+    }
     player->snapInFlight = false;
+    player->snapResets = 0;
     if (!surf) return;
     if (cairo_image_surface_get_format(surf) != CAIRO_FORMAT_ARGB32 ||
         cairo_image_surface_get_width(surf) <= 0 ||
@@ -536,19 +565,44 @@ void compositeOverlay(Player *player) {
         }
     }
     if (!player->snapInFlight && player->webview) {
-        player->snapInFlight = true;
-        player->snapWaitTicks = 0;
-        webkit_web_view_get_snapshot(player->webview, WEBKIT_SNAPSHOT_REGION_VISIBLE,
-                                     WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND,
-                                     nullptr, onOverlaySnapshot, player);
+        if (player->snapCooldownTicks > 0) {
+            // Backing off after a watchdog reset: a stalled web process gets no
+            // relief from being asked again immediately.
+            player->snapCooldownTicks--;
+        } else {
+            player->snapInFlight = true;
+            player->snapWaitTicks = 0;
+            if (!player->snapCancel) player->snapCancel = g_cancellable_new();
+            webkit_web_view_get_snapshot(player->webview, WEBKIT_SNAPSHOT_REGION_VISIBLE,
+                                         WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND,
+                                         player->snapCancel, onOverlaySnapshot,
+                                         new SnapCtx{player, player->snapGen});
+        }
     } else if (player->snapInFlight && ++player->snapWaitTicks > 30) {
         // Watchdog: a snapshot requested before the page starts loading (or after
         // a web-process death) never calls back, which would freeze the overlay
-        // forever. Give up on it after ~1s and request a fresh one; if the stale
-        // callback fires later anyway, the extra overlay push is harmless.
+        // forever. Cancel it, invalidate its callback via the generation stamp
+        // (a late arrival must not race the replacement request), and retry
+        // after a short backoff.
         NUVIO_ERR("snapshot stuck in flight >30 ticks, resetting (watchdog)");
+        player->snapGen++;
+        if (player->snapCancel) {
+            g_cancellable_cancel(player->snapCancel);
+            g_object_unref(player->snapCancel);
+            player->snapCancel = nullptr;
+        }
         player->snapInFlight = false;
         player->snapWaitTicks = 0;
+        player->snapCooldownTicks = 15;  // ~0.5s before retrying
+        // Repeated resets mean the snapshot pipeline is wedged (web process hung
+        // or dying): take the frozen overlay down so the stall reads as "controls
+        // faded out" instead of a hung UI painted over the video.
+        if (++player->snapResets >= 2 && player->overlayPushed) {
+            const char *rm[] = {"overlay-remove", "0", nullptr};
+            mpv_command(player->mpv, rm);
+            player->overlayPushed = false;
+            releaseSnapshots(player);
+        }
     }
     // The redirected (invisible) overlay window is never presented, so on some
     // compositors (mutter's XWayland) its GTK frame clock stalls — freezing the
@@ -937,6 +991,12 @@ gboolean destroyWebviewOnGtk(gpointer data) {
     if (player->compositeTimer) {
         g_source_remove(player->compositeTimer);
         player->compositeTimer = 0;
+    }
+    player->snapGen++;  // drop any in-flight snapshot callback
+    if (player->snapCancel) {
+        g_cancellable_cancel(player->snapCancel);
+        g_object_unref(player->snapCancel);
+        player->snapCancel = nullptr;
     }
     if (player->gtkWindow) {
         releaseSnapshots(player);
