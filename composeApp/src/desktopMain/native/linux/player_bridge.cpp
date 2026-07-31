@@ -1000,7 +1000,25 @@ gboolean applyControlsOnGtk(gpointer data) {
         if (k != std::string::npos) {
             const char *v = u->json.c_str() + k + strlen("\"controlsVisible\":");
             while (*v == ' ') ++v;
-            setOverlayCursorHidden(u->player, *v == 'f');
+            bool visible = *v == 't';
+            setOverlayCursorHidden(u->player, !visible);
+            // Drive the composite gate from the same authoritative flag, in both
+            // directions. Without this: (a) a Kotlin-initiated show (keyboard
+            // command — the webview never holds keyboard focus on Linux) renders
+            // chrome the page never announces via a message, so it was drawn but
+            // never composited (invisible, and waving the mouse can't fix it —
+            // the page already believes the chrome is up and sends nothing);
+            // (b) a click-hide (toggleChrome) reaches onPlayerMessage as a
+            // non-hideChrome message, so overlayActive stayed true and the
+            // full-rate snapshot loop kept compositing fully-transparent frames
+            // over playing video for the rest of the session.
+            if (visible) {
+                u->player->overlayActive = true;
+                u->player->fadeTicks = 0;
+            } else if (u->player->overlayActive) {
+                u->player->overlayActive = false;
+                u->player->fadeTicks = 18;  // render the fade-out, like hideChrome
+            }
         }
         u->player->pendingControlsJson = std::move(u->json);
         flushControlsJson(u->player);
