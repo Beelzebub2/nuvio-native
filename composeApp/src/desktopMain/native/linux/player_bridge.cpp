@@ -518,18 +518,13 @@ void compositeOverlay(Player *player) {
     // decoding while paused, so this is free.
     bool paused = mpvGetFlag(player->mpv, "pause");
     bool active = loading || paused || player->overlayActive || player->fadeTicks > 0;
-    if (!active) {
-        if (player->overlayPushed) {
-            const char *rm[] = {"overlay-remove", "0", nullptr};
-            mpv_command(player->mpv, rm);
-            player->overlayPushed = false;
-            releaseSnapshots(player);
-        }
-        return;
-    }
-    // Track the host (video) size: on resize/fullscreen the host canvas changes
-    // size but the overlay does not, so the controls + their click hit-area drift
-    // out of alignment. Resize the overlay to match, then compose next tick.
+    // Track the host (video) size BEFORE the activity gate: on resize/fullscreen
+    // the host canvas changes size but the overlay does not, so the controls +
+    // their click hit-area drift out of alignment. This must also run while the
+    // chrome is hidden — a resize then would otherwise leave the (input-topmost)
+    // overlay at its old, smaller size, and mouse motion in the uncovered region
+    // goes to mpv's window instead: the page never sees it and moving the mouse
+    // "sometimes" fails to reveal the controls.
     XWindowAttributes hostWa;
     if (XGetWindowAttributes(dpy, player->hostXid, &hostWa) && hostWa.width > 0 &&
         hostWa.height > 0) {
@@ -562,6 +557,15 @@ void compositeOverlay(Player *player) {
                 releaseSnapshots(player);
             }
         }
+    }
+    if (!active) {
+        if (player->overlayPushed) {
+            const char *rm[] = {"overlay-remove", "0", nullptr};
+            mpv_command(player->mpv, rm);
+            player->overlayPushed = false;
+            releaseSnapshots(player);
+        }
+        return;
     }
     if (!player->snapInFlight && player->webview) {
         if (player->snapCooldownTicks > 0) {
