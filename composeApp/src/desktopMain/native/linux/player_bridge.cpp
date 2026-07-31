@@ -333,6 +333,21 @@ void onOverlaySnapshot(GObject *src, GAsyncResult *res, gpointer data) {
         cairo_surface_destroy(surf);
         return;
     }
+    // Drop snapshots taken at a stale size (requested mid-resize): pushing one
+    // would paint mis-scaled controls over the video. The overlay was already
+    // removed when the mismatch was detected; the next tick requests a fresh
+    // snapshot at the settled size.
+    if (player->gtkWindow) {
+        GdkWindow *ovGw = gtk_widget_get_window(player->gtkWindow);
+        XWindowAttributes wa;
+        if (ovGw && player->overlayXid &&
+            XGetWindowAttributes(GDK_WINDOW_XDISPLAY(ovGw), player->overlayXid, &wa) &&
+            (cairo_image_surface_get_width(surf) != wa.width ||
+             cairo_image_surface_get_height(surf) != wa.height)) {
+            cairo_surface_destroy(surf);
+            return;
+        }
+    }
     cairo_surface_flush(surf);
     char addr[32], sw[16], sh[16], sstride[16];
     snprintf(addr, sizeof addr, "&%zu",
@@ -403,6 +418,15 @@ void compositeOverlay(Player *player) {
             // indefinitely. Allocate synchronously so the viewport follows now.
             GtkAllocation alloc = {0, 0, hostWa.width, hostWa.height};
             gtk_widget_size_allocate(player->gtkWindow, &alloc);
+            // Take the old-size overlay down while the sizes disagree: painting
+            // it 1:1 over a differently-sized window garbles the controls. The
+            // first snapshot at the settled size repushes it a tick later.
+            if (player->overlayPushed) {
+                const char *rm[] = {"overlay-remove", "0", nullptr};
+                mpv_command(player->mpv, rm);
+                player->overlayPushed = false;
+                releaseSnapshots(player);
+            }
         }
     }
     if (!player->snapInFlight && player->webview) {
