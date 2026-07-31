@@ -192,9 +192,26 @@ void gtkSync(std::function<void()> fn) {
 
 std::string jstringToUtf8(JNIEnv *env, jstring value) {
     if (value == nullptr) return {};
-    const char *chars = env->GetStringUTFChars(value, nullptr);
-    std::string result = chars ? chars : "";
-    if (chars) env->ReleaseStringUTFChars(value, chars);
+    // Not GetStringUTFChars: that returns Modified UTF-8 (CESU-8), where any
+    // non-BMP character (emoji in an episode overview, decorative characters in
+    // stream names) becomes a 6-byte surrogate-pair encoding that is NOT valid
+    // UTF-8. WebKit then rejects the whole controls eval script, and since the
+    // Kotlin side dedups payloads, the page can stay on defaults (no theme, no
+    // episode list) for the entire session. Convert from UTF-16 like the
+    // macOS/Windows bridges do.
+    const jchar *chars = env->GetStringChars(value, nullptr);
+    if (!chars) return {};
+    jsize len = env->GetStringLength(value);
+    glong written = 0;
+    gchar *utf8 = g_utf16_to_utf8(reinterpret_cast<const gunichar2 *>(chars),
+                                  len, nullptr, &written, nullptr);
+    env->ReleaseStringChars(value, chars);
+    if (!utf8) {
+        NUVIO_ERR("jstringToUtf8: UTF-16 -> UTF-8 conversion failed (len=%d)", (int)len);
+        return {};
+    }
+    std::string result(utf8, (size_t)written);
+    g_free(utf8);
     return result;
 }
 
@@ -290,7 +307,14 @@ void onControlsEval(GObject *src, GAsyncResult *res, gpointer data) {
     auto *player = static_cast<Player *>(data);
     GError *err = nullptr;
     JSCValue *v = webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(src), res, &err);
-    if (err) g_error_free(err);
+    if (err) {
+        // A real eval failure, not the page-not-ready probe (that returns
+        // 'missing' successfully). E.g. an invalid script would land here —
+        // never swallow it, this is the difference between a diagnosable log
+        // line and a session-long silent default theme.
+        NUVIO_ERR("controls eval failed: %s", err->message);
+        g_error_free(err);
+    }
     if (!playerAlive(player)) {
         if (v) g_object_unref(v);
         return;
