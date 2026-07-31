@@ -387,8 +387,22 @@ void compositeOverlay(Player *player) {
         XWindowAttributes ovWa0;
         if (XGetWindowAttributes(dpy, player->overlayXid, &ovWa0) &&
             (ovWa0.width != hostWa.width || ovWa0.height != hostWa.height)) {
+            // gtk_window_resize alone never lands here: GTK applies it in the
+            // frame-clock layout phase, and the redirected overlay's clock is
+            // stalled (the same stall the forcing below works around) — on
+            // mutter the sizes then mismatch forever. Resize the X window
+            // directly for immediate geometry/hit-area, and keep the GTK-side
+            // resize so the widget allocation follows on the forced clock tick.
+            // No early return: a transiently mis-sized snapshot beats a frozen
+            // overlay, and returning here would skip the clock forcing.
+            gdk_window_resize(gw, hostWa.width, hostWa.height);
             gtk_window_resize(GTK_WINDOW(player->gtkWindow), hostWa.width, hostWa.height);
-            return;
+            // The X window now resizes, but the WebKit view renders at the GTK
+            // widget *allocation* size, and allocations are applied in the same
+            // stalled layout phase — the page would stay at the old size
+            // indefinitely. Allocate synchronously so the viewport follows now.
+            GtkAllocation alloc = {0, 0, hostWa.width, hostWa.height};
+            gtk_widget_size_allocate(player->gtkWindow, &alloc);
         }
     }
     if (!player->snapInFlight && player->webview) {
