@@ -91,11 +91,11 @@ struct Player {
     // Controls-state payload buffering (macOS/Windows parity): the first
     // updateControls arrives before the page defines window.playerControls, so a
     // fire-and-forget eval loses it and the loading screen shows a bare spinner
-    // on black (no title/artwork) until some state change forces a resend. Keep
-    // the latest payload until an eval confirms delivery.
+    // on black (no title/artwork) until some state change forces a resend. The
+    // latest payload is kept for the player's whole life (not cleared once
+    // delivered): Kotlin dedups by structure and may never resend, so this is
+    // also what restores the page after a web-process crash/reload.
     std::string pendingControlsJson;
-    int controlsSeq = 0;      // bumped per new payload
-    int controlsSentSeq = 0;  // seq of the payload in the in-flight eval
     std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
 };
 
@@ -328,11 +328,11 @@ void onControlsEval(GObject *src, GAsyncResult *res, gpointer data) {
         return;
     }
     char *s = (v && jsc_value_is_string(v)) ? jsc_value_to_string(v) : nullptr;
-    if (s && strcmp(s, "ok") == 0) {
-        // Only clear if no newer payload arrived while this eval was in flight.
-        if (player->controlsSentSeq == player->controlsSeq)
-            player->pendingControlsJson.clear();
-    } else {
+    // Deliberately keep pendingControlsJson after a successful delivery: the
+    // Kotlin side dedups by structure and may never resend, so this buffered
+    // copy is the only source for a re-push after a web-process crash/reload
+    // (the page's full-state merge makes re-delivery idempotent).
+    if (!(s && strcmp(s, "ok") == 0)) {
         NUVIO_LOG("controls payload deferred: page not ready yet");
     }
     if (s) g_free(s);
@@ -344,7 +344,6 @@ void onControlsEval(GObject *src, GAsyncResult *res, gpointer data) {
 // GTK thread only.
 void flushControlsJson(Player *player) {
     if (!player->webview || player->pendingControlsJson.empty()) return;
-    player->controlsSentSeq = player->controlsSeq;
     std::string script =
         "(function(){if(!window.playerControls)return 'missing';"
         "window.playerControls(JSON.parse(" + jsLiteral(player->pendingControlsJson) + "));"
@@ -854,6 +853,32 @@ gboolean createWebviewOnGtk(gpointer data) {
 
     g_signal_connect(wv, "load-changed", G_CALLBACK(onLoadChanged), player);
     g_signal_connect(wv, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
+    // A web-process death (crash, OOM kill) silently blanks the page: pending
+    // snapshot requests never complete (the watchdog would fire forever) and the
+    // controls never come back. Reload the page and drop the dead process's
+    // in-flight snapshot; the buffered controls payload is re-delivered on
+    // LOAD_FINISHED / controlsReady, restoring theme + metadata.
+    g_signal_connect(wv, "web-process-terminated",
+                     G_CALLBACK(+[](WebKitWebView *view,
+                                    WebKitWebProcessTerminationReason reason,
+                                    gpointer data) {
+                         auto *p = static_cast<Player *>(data);
+                         NUVIO_ERR("controls web process terminated (reason=%d); reloading",
+                                   (int)reason);
+                         if (!playerAlive(p)) return;
+                         p->snapGen++;
+                         if (p->snapCancel) {
+                             g_cancellable_cancel(p->snapCancel);
+                             g_object_unref(p->snapCancel);
+                             p->snapCancel = nullptr;
+                         }
+                         p->snapInFlight = false;
+                         p->snapWaitTicks = 0;
+                         p->snapCooldownTicks = 0;
+                         p->snapResets = 0;
+                         webkit_web_view_reload(view);
+                     }),
+                     player);
     // Suppress WebKit's own right-click context menu over the controls page
     // (the macOS/Windows player webviews never show one).
     g_signal_connect(wv, "context-menu",
@@ -974,7 +999,6 @@ gboolean applyControlsOnGtk(gpointer data) {
             setOverlayCursorHidden(u->player, *v == 'f');
         }
         u->player->pendingControlsJson = std::move(u->json);
-        u->player->controlsSeq++;
         flushControlsJson(u->player);
     }
     delete u;
