@@ -834,6 +834,18 @@ gboolean createWebviewOnGtk(gpointer data) {
     } else {
         NUVIO_ERR("XComposite NOT available");
     }
+    // Motion events are compressed by default: GDK defers them to the frame
+    // clock's flush phase. mutter implements X frame-sync, and this redirected
+    // window is never presented, so that flush (almost) never runs — motion
+    // events pile up undelivered and the page never sees pointer movement
+    // (buttons/crossings are not compressed, which is why clicks still worked).
+    // KWin has no frame-sync, so the clock free-runs and KDE never showed this.
+    gdk_window_set_event_compression(gdkWin, FALSE);
+    {
+        GdkWindow *wvWin = gtk_widget_get_window(GTK_WIDGET(wv));
+        if (wvWin && wvWin != gdkWin) gdk_window_set_event_compression(wvWin, FALSE);
+    }
+
     // Give the overlay window a real cursor: it defines none of its own, and on
     // some WMs (mutter) the pointer goes blank over it instead of inheriting.
     // Keep a blank one alongside so chrome-hide can hide the cursor natively
