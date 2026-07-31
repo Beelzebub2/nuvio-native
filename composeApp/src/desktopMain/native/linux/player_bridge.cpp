@@ -65,6 +65,11 @@ struct Player {
     bool overlayActive = true;   // controls currently visible/interacting
     int fadeTicks = 0;           // extra composite ticks to render the fade-out
     bool overlayPushed = false;  // an overlay is currently set on mpv
+    // Native mirror of the page's cursor-hiding (CSS cursor:none never takes
+    // effect on the redirected overlay window — see setOverlayCursorHidden).
+    GdkCursor *cursorVisible = nullptr;  // "default", owned
+    GdkCursor *cursorHidden = nullptr;   // blank, owned
+    bool cursorIsHidden = false;
     // Async WebKit snapshot of the controls page (premultiplied ARGB32 with real
     // alpha). Reading the redirected window's X pixmap instead is renderer- and
     // driver-dependent: on NVIDIA the dmabuf renderer leaves the pixmap empty and
@@ -316,6 +321,31 @@ void flushControlsJson(Player *player) {
                                         nullptr, nullptr, onControlsEval, player);
 }
 
+// Mirror the controls page's cursor-hiding natively. The page hides the cursor
+// with CSS (cursor: none) when the chrome fades out, but on Linux that never
+// reaches the screen: the composite-redirected overlay window pins its own
+// cursor (the mutter blank-pointer workaround), the AWT canvas underneath never
+// sees the pointer (the overlay is raised above it for input), and mpv's
+// autohide is explicitly disabled. Swap the overlay cursor in lockstep with
+// chrome visibility instead. GTK thread only.
+void setOverlayCursorHidden(Player *player, bool hidden) {
+    if (player->cursorIsHidden == hidden || !player->gtkWindow) return;
+    GdkCursor *cur = hidden ? player->cursorHidden : player->cursorVisible;
+    if (!cur) return;
+    GdkWindow *gw = gtk_widget_get_window(player->gtkWindow);
+    if (gw) gdk_window_set_cursor(gw, cur);
+    // The WebKit view's own event window is what actually contains the pointer
+    // and may define its own cursor (KWin honors it, so the toplevel's cursor is
+    // never consulted there). Set it on both; WebKit may override the visible
+    // cursor again on the next pointer move, which is fine — motion re-shows it.
+    GdkWindow *wvw = player->webview
+        ? gtk_widget_get_window(GTK_WIDGET(player->webview)) : nullptr;
+    if (wvw && wvw != gw) gdk_window_set_cursor(wvw, cur);
+    if (gw) gdk_display_flush(gdk_window_get_display(gw));
+    player->cursorIsHidden = hidden;
+    NUVIO_LOG("overlay cursor %s", hidden ? "hidden" : "shown");
+}
+
 // JS -> native: forward {type, value} to NativePlayerEventSink.onPlayerEvent.
 void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpointer data) {
     auto *player = static_cast<Player *>(data);
@@ -342,6 +372,9 @@ void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpo
         // The page just defined its API surface — deliver any controls payload
         // that arrived before the page finished loading (macOS/Windows parity).
         if (strcmp(type, "controlsReady") == 0) flushControlsJson(player);
+        // Cursor follows chrome: hidden on hideChrome, back on any activity
+        // (cursorActivity also re-shows the chrome via the Kotlin side).
+        setOverlayCursorHidden(player, strcmp(type, "hideChrome") == 0);
     }
     JNIEnv *env = attachGtkThread();
     if (env && type) {
@@ -803,13 +836,16 @@ gboolean createWebviewOnGtk(gpointer data) {
     }
     // Give the overlay window a real cursor: it defines none of its own, and on
     // some WMs (mutter) the pointer goes blank over it instead of inheriting.
+    // Keep a blank one alongside so chrome-hide can hide the cursor natively
+    // (the page's CSS cursor:none never propagates through this window).
     {
         GdkDisplay *gdpy = gtk_widget_get_display(win);
-        GdkCursor *cur = gdk_cursor_new_from_name(gdpy, "default");
-        if (cur && gdkWin) {
-            gdk_window_set_cursor(gdkWin, cur);
-            g_object_unref(cur);
-        }
+        player->cursorVisible = gdk_cursor_new_from_name(gdpy, "default");
+        player->cursorHidden = gdk_cursor_new_from_name(gdpy, "none");
+        if (!player->cursorHidden)
+            player->cursorHidden = gdk_cursor_new_for_display(gdpy, GDK_BLANK_CURSOR);
+        if (player->cursorVisible && gdkWin)
+            gdk_window_set_cursor(gdkWin, player->cursorVisible);
     }
     XFlush(dpy);
 
@@ -837,6 +873,16 @@ struct ControlsUpdate {
 gboolean applyControlsOnGtk(gpointer data) {
     auto *u = static_cast<ControlsUpdate *>(data);
     if (playerAlive(u->player)) {
+        // Chrome visibility travels authoritatively in this state JSON. The
+        // page's hideChrome message only covers its own idle-timer hides —
+        // fullscreen hides are decided on the Kotlin side and arrive here as a
+        // controlsVisible=false push, so mirror the cursor from the state too.
+        size_t k = u->json.find("\"controlsVisible\":");
+        if (k != std::string::npos) {
+            const char *v = u->json.c_str() + k + strlen("\"controlsVisible\":");
+            while (*v == ' ') ++v;
+            setOverlayCursorHidden(u->player, *v == 'f');
+        }
         u->player->pendingControlsJson = std::move(u->json);
         u->player->controlsSeq++;
         flushControlsJson(u->player);
@@ -862,6 +908,14 @@ gboolean destroyWebviewOnGtk(gpointer data) {
         player->gtkWindow = nullptr;
         player->webview = nullptr;
         player->overlayXid = 0;
+    }
+    if (player->cursorVisible) {
+        g_object_unref(player->cursorVisible);
+        player->cursorVisible = nullptr;
+    }
+    if (player->cursorHidden) {
+        g_object_unref(player->cursorHidden);
+        player->cursorHidden = nullptr;
     }
     return G_SOURCE_REMOVE;
 }
