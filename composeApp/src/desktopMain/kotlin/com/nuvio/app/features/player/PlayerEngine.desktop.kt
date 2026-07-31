@@ -179,6 +179,7 @@ private fun NativePlayerSurface(
                     KeyEvent.VK_UP -> "keyboardVolumeUp"
                     KeyEvent.VK_DOWN -> "keyboardVolumeDown"
                     KeyEvent.VK_F11 -> "toggleFullscreen"
+                    KeyEvent.VK_ESCAPE -> "back"
                     else -> null
                 } ?: return@KeyEventDispatcher false
                 controller.handleKeyCommand(command)
