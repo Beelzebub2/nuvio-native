@@ -75,6 +75,14 @@ struct Player {
                                               // still sample it mid-frame
     bool snapInFlight = false;
     int snapWaitTicks = 0;  // watchdog: ticks spent waiting on the in-flight snapshot
+    // Controls-state payload buffering (macOS/Windows parity): the first
+    // updateControls arrives before the page defines window.playerControls, so a
+    // fire-and-forget eval loses it and the loading screen shows a bare spinner
+    // on black (no title/artwork) until some state change forces a resend. Keep
+    // the latest payload until an eval confirms delivery.
+    std::string pendingControlsJson;
+    int controlsSeq = 0;      // bumped per new payload
+    int controlsSentSeq = 0;  // seq of the payload in the in-flight eval
     std::atomic<bool> firstFrameShown{false};  // gates the loading-screen composite
 };
 
@@ -270,6 +278,44 @@ JNIEnv *attachGtkThread() {
     return nullptr;
 }
 
+// Completion of the probed controls-state eval: 'missing' means the page has
+// not defined window.playerControls yet — keep the payload pending; the page's
+// controlsReady message (or the next update) retries it.
+void onControlsEval(GObject *src, GAsyncResult *res, gpointer data) {
+    auto *player = static_cast<Player *>(data);
+    GError *err = nullptr;
+    JSCValue *v = webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(src), res, &err);
+    if (err) g_error_free(err);
+    if (!playerAlive(player)) {
+        if (v) g_object_unref(v);
+        return;
+    }
+    char *s = (v && jsc_value_is_string(v)) ? jsc_value_to_string(v) : nullptr;
+    if (s && strcmp(s, "ok") == 0) {
+        // Only clear if no newer payload arrived while this eval was in flight.
+        if (player->controlsSentSeq == player->controlsSeq)
+            player->pendingControlsJson.clear();
+    } else {
+        NUVIO_LOG("controls payload deferred: page not ready yet");
+    }
+    if (s) g_free(s);
+    if (v) g_object_unref(v);
+}
+
+// Deliver the pending controls payload, probing for window.playerControls so a
+// too-early push is detected and retried instead of silently short-circuited.
+// GTK thread only.
+void flushControlsJson(Player *player) {
+    if (!player->webview || player->pendingControlsJson.empty()) return;
+    player->controlsSentSeq = player->controlsSeq;
+    std::string script =
+        "(function(){if(!window.playerControls)return 'missing';"
+        "window.playerControls(JSON.parse(" + jsLiteral(player->pendingControlsJson) + "));"
+        "return 'ok';})()";
+    webkit_web_view_evaluate_javascript(player->webview, script.c_str(), -1, nullptr,
+                                        nullptr, nullptr, onControlsEval, player);
+}
+
 // JS -> native: forward {type, value} to NativePlayerEventSink.onPlayerEvent.
 void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpointer data) {
     auto *player = static_cast<Player *>(data);
@@ -293,6 +339,9 @@ void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpo
             player->overlayActive = true;
             player->fadeTicks = 0;
         }
+        // The page just defined its API surface — deliver any controls payload
+        // that arrived before the page finished loading (macOS/Windows parity).
+        if (strcmp(type, "controlsReady") == 0) flushControlsJson(player);
     }
     JNIEnv *env = attachGtkThread();
     if (env && type) {
@@ -618,13 +667,18 @@ struct WebviewSetup {
 
 // Surface controls-page load progress (debug only) so a blank/erroring page is
 // diagnosable; failures always log via onLoadFailed.
-void onLoadChanged(WebKitWebView * /*wv*/, WebKitLoadEvent event, gpointer /*data*/) {
+void onLoadChanged(WebKitWebView * /*wv*/, WebKitLoadEvent event, gpointer data) {
     const char *name = event == WEBKIT_LOAD_STARTED ? "started"
                      : event == WEBKIT_LOAD_REDIRECTED ? "redirected"
                      : event == WEBKIT_LOAD_COMMITTED ? "committed"
                      : event == WEBKIT_LOAD_FINISHED ? "finished"
                      : "unknown";
     NUVIO_LOG("webview load-changed: %s", name);
+    // Belt-and-braces alongside the controlsReady message: retry the pending
+    // controls payload once the page finishes loading (the probe re-defers it
+    // if scripts haven't defined window.playerControls yet).
+    auto *player = static_cast<Player *>(data);
+    if (event == WEBKIT_LOAD_FINISHED && playerAlive(player)) flushControlsJson(player);
 }
 
 gboolean onLoadFailed(WebKitWebView * /*wv*/, WebKitLoadEvent /*event*/,
@@ -687,7 +741,7 @@ gboolean createWebviewOnGtk(gpointer data) {
     webkit_settings_set_enable_developer_extras(settings, TRUE);
     webkit_settings_set_javascript_can_access_clipboard(settings, TRUE);
 
-    g_signal_connect(wv, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
+    g_signal_connect(wv, "load-changed", G_CALLBACK(onLoadChanged), player);
     g_signal_connect(wv, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
     // Suppress WebKit's own right-click context menu over the controls page
     // (the macOS/Windows player webviews never show one).
@@ -773,15 +827,20 @@ gboolean createWebviewOnGtk(gpointer data) {
 }
 
 struct ControlsUpdate {
-    WebKitWebView *webview;
+    Player *player;
     std::string json;
 };
 
 // native -> JS: push a fresh controls state (identical call to WKWebView).
+// Buffered on the Player and delivered via the probing flush so a payload that
+// arrives before the page loads is retried instead of lost.
 gboolean applyControlsOnGtk(gpointer data) {
     auto *u = static_cast<ControlsUpdate *>(data);
-    std::string script = "window.playerControls&&window.playerControls(JSON.parse(" + jsLiteral(u->json) + "))";
-    evalJs(u->webview, script);
+    if (playerAlive(u->player)) {
+        u->player->pendingControlsJson = std::move(u->json);
+        u->player->controlsSeq++;
+        flushControlsJson(u->player);
+    }
     delete u;
     return G_SOURCE_REMOVE;
 }
@@ -1274,8 +1333,12 @@ JNIEXPORT void JNICALL NP(applySubtitleStyle)(
 
 JNIEXPORT void JNICALL NP(updateControls)(JNIEnv *env, jobject, jlong handle, jstring controlsJson) {
     Player *p = asPlayer(handle);
-    if (!p || !p->webview) return;
-    auto *u = new ControlsUpdate{p->webview, jstringToUtf8(env, controlsJson)};
+    // No webview check: the webview is created asynchronously after create()
+    // returns, and the first (often only) payload with the loading-screen
+    // metadata arrives in exactly that window. Buffer it; the flush delivers it
+    // once the page is up.
+    if (!p) return;
+    auto *u = new ControlsUpdate{p, jstringToUtf8(env, controlsJson)};
     g_main_context_invoke(nullptr, applyControlsOnGtk, u);
 }
 JNIEXPORT void JNICALL NP(requestFocus)(JNIEnv *, jobject, jlong) {}
