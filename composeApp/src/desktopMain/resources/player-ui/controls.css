@@ -2135,6 +2135,20 @@ button:disabled {
   gap: 6px;
 }
 
+
+.audio-rail-panel .track-list,
+.subtitle-rail-panel .track-list,
+.subtitle-rail-panel .style-panel {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.audio-rail-panel .track-list::-webkit-scrollbar,
+.subtitle-rail-panel .track-list::-webkit-scrollbar,
+.subtitle-rail-panel .style-panel::-webkit-scrollbar {
+  display: none;
+}
+
 .player-side-panel .track-list {
   margin-top: 16px;
   gap: 8px;
