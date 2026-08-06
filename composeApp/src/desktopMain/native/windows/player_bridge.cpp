@@ -3,6 +3,7 @@
 #endif
 #include <windows.h>
 #include <dwmapi.h>
+#include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
 #include <jni.h>
@@ -458,22 +459,27 @@ std::wstring moduleDirectory() {
     return path.substr(0, separator);
 }
 
-std::wstring tempUserDataDirectory() {
-    wchar_t tempPath[MAX_PATH] = {};
-    DWORD length = GetTempPathW(MAX_PATH, tempPath);
-    std::wstring result = length > 0 ? std::wstring(tempPath, tempPath + length) : L".\\";
-    if (!result.empty() && result.back() != L'\\' && result.back() != L'/') {
-        result.push_back(L'\\');
-    }
-    result += L"NuvioWebView2";
-    CreateDirectoryW(result.c_str(), nullptr);
-    return result;
-}
-
 std::string hresultMessage(const char *operation, HRESULT hr) {
     std::ostringstream builder;
     builder << operation << " failed: 0x" << std::hex << (unsigned long)hr;
     return builder.str();
+}
+
+std::wstring webViewUserDataDirectory() {
+    PWSTR localAppData = nullptr;
+    HRESULT result = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &localAppData);
+    if (FAILED(result) || !localAppData) {
+        if (localAppData) CoTaskMemFree(localAppData);
+        throw std::runtime_error(hresultMessage("SHGetKnownFolderPath", result));
+    }
+    std::wstring directory(localAppData);
+    CoTaskMemFree(localAppData);
+    directory += L"\\Nuvio\\WebView2";
+    int createResult = SHCreateDirectoryExW(nullptr, directory.c_str(), nullptr);
+    if (createResult != ERROR_SUCCESS && createResult != ERROR_ALREADY_EXISTS && createResult != ERROR_FILE_EXISTS) {
+        throw std::runtime_error("Failed to create WebView2 user data directory");
+    }
+    return directory;
 }
 
 struct MpvApi {
@@ -656,7 +662,7 @@ void runWebView2WarmupThread(std::string controlsUrl) {
         return;
     }
 
-    std::wstring userDataDir = tempUserDataDirectory();
+    std::wstring userDataDir = webViewUserDataDirectory();
     HRESULT envCallResult = CreateCoreWebView2EnvironmentWithOptions(
         nullptr,
         userDataDir.c_str(),
@@ -1392,7 +1398,7 @@ private:
     }
 
     void startWebView(const std::string &controlsUrl) {
-        std::wstring userDataDir = tempUserDataDirectory();
+        std::wstring userDataDir = webViewUserDataDirectory();
         auto weakSelf = weak_from_this();
         HRESULT result = CreateCoreWebView2EnvironmentWithOptions(
             nullptr,
