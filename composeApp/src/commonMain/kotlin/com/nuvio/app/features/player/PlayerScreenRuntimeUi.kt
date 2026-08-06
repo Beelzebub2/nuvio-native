@@ -479,7 +479,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             )
         }
 
-        RenderPlayerControls(displayedPositionMs = displayedPositionMs, isEpisode = isEpisode)
+        if (!isDesktop) {
+            RenderPlayerControls(displayedPositionMs = displayedPositionMs, isEpisode = isEpisode)
+        }
         RenderPlaybackOverlays(
             runtime = runtime,
             displayedPositionMs = displayedPositionMs,
