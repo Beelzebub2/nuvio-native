@@ -8,6 +8,8 @@ import com.nuvio.app.features.player.PlayerControlFilterItem
 import com.nuvio.app.features.player.PlayerControlSeasonItem
 import com.nuvio.app.features.player.PlayerControlSourceItem
 import com.nuvio.app.features.player.PlayerControlSubtitleCueItem
+import com.nuvio.app.features.player.PlayerControlSubtitleLanguageItem
+import com.nuvio.app.features.player.PlayerControlSubtitleOptionItem
 import com.nuvio.app.features.player.AudioTrack
 import com.nuvio.app.features.player.ParentalWarning
 import com.nuvio.app.features.player.PlayerControlsAction
@@ -18,6 +20,7 @@ import com.nuvio.app.features.player.PlayerResizeMode
 import com.nuvio.app.features.player.SUBTITLE_DELAY_MAX_MS
 import com.nuvio.app.features.player.SUBTITLE_DELAY_MIN_MS
 import com.nuvio.app.features.player.SubtitleColorSwatches
+import com.nuvio.app.features.player.SubtitleOutlineColorSwatches
 import com.nuvio.app.features.player.SubtitleStyleState
 import com.nuvio.app.features.player.SubtitleTrack
 import com.nuvio.app.features.player.inferForcedSubtitleTrack
@@ -677,7 +680,6 @@ private fun List<String>.toHeaderMap(): Map<String, String> =
 private fun String.toPlayerControlsAction(): PlayerControlsAction? =
     when (this) {
         "toggleChrome" -> PlayerControlsAction.ToggleChrome
-        "revealLockedOverlay" -> PlayerControlsAction.RevealLockedOverlay
         "back" -> PlayerControlsAction.Back
         "toggle" -> PlayerControlsAction.TogglePlayback
         "keyboardToggle" -> PlayerControlsAction.KeyboardTogglePlayback
@@ -695,7 +697,6 @@ private fun String.toPlayerControlsAction(): PlayerControlsAction? =
         "episodes" -> PlayerControlsAction.Episodes
         "external" -> PlayerControlsAction.OpenExternalPlayer
         "submitIntro" -> PlayerControlsAction.SubmitIntro
-        "lock" -> PlayerControlsAction.LockToggle
         "videoSettings" -> PlayerControlsAction.VideoSettings
         else -> null
     }
@@ -750,15 +751,9 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonField("closeLabel", closeLabel)
         append(',')
-        appendJsonField("lockLabel", lockLabel)
-        append(',')
-        appendJsonField("unlockLabel", unlockLabel)
-        append(',')
         appendJsonField("submitIntroLabel", submitIntroLabel)
         append(',')
         appendJsonField("videoSettingsLabel", videoSettingsLabel)
-        append(',')
-        appendJsonField("tapToUnlockLabel", tapToUnlockLabel)
         append(',')
         appendJsonField("playbackErrorTitle", playbackErrorTitle)
         append(',')
@@ -814,13 +809,21 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonField("p2pConsentCancelLabel", p2pConsentCancelLabel)
         append(',')
+        appendJsonField("audioTracksPanelTitle", audioTracksPanelTitle)
+        append(',')
+        appendJsonField("noAudioTracksLabel", noAudioTracksLabel)
+        append(',')
         appendJsonField("subtitlesPanelTitle", subtitlesPanelTitle)
+        append(',')
+        appendJsonField("subtitleLanguagesLabel", subtitleLanguagesLabel)
         append(',')
         appendJsonField("subtitleBuiltInTabLabel", subtitleBuiltInTabLabel)
         append(',')
         appendJsonField("subtitleAddonsTabLabel", subtitleAddonsTabLabel)
         append(',')
         appendJsonField("subtitleStyleTabLabel", subtitleStyleTabLabel)
+        append(',')
+        appendJsonField("forcedLabel", forcedLabel)
         append(',')
         appendJsonField("noneLabel", noneLabel)
         append(',')
@@ -854,6 +857,8 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonField("outlineColorLabel", outlineColorLabel)
         append(',')
+        appendJsonField("noSubtitleLinesFoundLabel", noSubtitleLinesFoundLabel)
+        append(',')
         appendJsonField("resetDefaultsLabel", resetDefaultsLabel)
         append(',')
         appendJsonField("onLabel", onLabel)
@@ -884,13 +889,23 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonField("themeControlForegroundColor", themeControlForegroundColor)
         append(',')
+        appendJsonField("themeSurfaceElevatedColor", themeSurfaceElevatedColor)
+        append(',')
+        appendJsonField("themeSurfaceCardColor", themeSurfaceCardColor)
+        append(',')
+        appendJsonField("themeSurfacePopoverColor", themeSurfacePopoverColor)
+        append(',')
+        appendJsonField("themeTextPrimaryColor", themeTextPrimaryColor)
+        append(',')
+        appendJsonField("themeTextSecondaryColor", themeTextSecondaryColor)
+        append(',')
+        appendJsonField("themeTextMutedColor", themeTextMutedColor)
+        append(',')
+        appendJsonField("themeBorderDefaultColor", themeBorderDefaultColor)
+        append(',')
         appendJsonField("isPlaying", isPlaying)
         append(',')
         appendJsonField("isLoading", isLoading)
-        append(',')
-        appendJsonField("isLocked", isLocked)
-        append(',')
-        appendJsonField("lockedOverlayVisible", lockedOverlayVisible)
         append(',')
         appendJsonField("controlsVisible", controlsVisible)
         append(',')
@@ -968,6 +983,8 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonArrayField("episodeStreamItems", episodeStreamItems) { appendSourceItemJson(it) }
         append(',')
+        appendJsonField("blurUnwatchedEpisodes", blurUnwatchedEpisodes)
+        append(',')
         appendJsonField("submitIntroSegmentType", submitIntroSegmentType)
         append(',')
         appendJsonField("submitIntroStartTime", submitIntroStartTime)
@@ -981,6 +998,14 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonField("showP2pConsent", showP2pConsent)
         append(',')
         appendJsonField("subtitleActiveTab", subtitleActiveTab)
+        append(',')
+        appendJsonArrayField("subtitleLanguageItems", subtitleLanguageItems) { appendSubtitleLanguageItemJson(it) }
+        append(',')
+        appendJsonArrayField("subtitleOptionItems", subtitleOptionItems) { appendSubtitleOptionItemJson(it) }
+        append(',')
+        appendJsonField("selectedSubtitleLanguageKey", selectedSubtitleLanguageKey)
+        append(',')
+        appendJsonField("selectedSubtitleOptionId", selectedSubtitleOptionId)
         append(',')
         appendJsonArrayField("addonSubtitleItems", addonSubtitleItems) { appendAddonSubtitleItemJson(it) }
         append(',')
@@ -1005,6 +1030,8 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonField("subtitleStyle", subtitleStyle)
         append(',')
         appendJsonArrayField("subtitleColorSwatches", SubtitleColorSwatches.map { it.toStorageHexString() }) { append(it.toJsonString()) }
+        append(',')
+        appendJsonArrayField("subtitleOutlineColorSwatches", SubtitleOutlineColorSwatches.map { it.toStorageHexString() }) { append(it.toJsonString()) }
         append(',')
         appendJsonField("closeModalsToken", closeModalsToken)
         append('}')
@@ -1118,6 +1145,8 @@ private fun StringBuilder.appendEpisodeItemJson(item: PlayerControlEpisodeItem) 
     append(',')
     appendJsonField("thumbnail", item.thumbnail)
     append(',')
+    appendJsonField("released", item.released)
+    append(',')
     appendJsonField("season", item.season)
     append(',')
     appendJsonField("episode", item.episode)
@@ -1136,9 +1165,43 @@ private fun StringBuilder.appendAddonSubtitleItemJson(item: PlayerControlAddonSu
     append(',')
     appendJsonField("display", item.display)
     append(',')
+    appendJsonField("language", item.language)
+    append(',')
     appendJsonField("languageLabel", item.languageLabel)
     append(',')
     appendJsonField("addonName", item.addonName)
+    append(',')
+    appendJsonField("isSelected", item.isSelected)
+    append('}')
+}
+
+private fun StringBuilder.appendSubtitleLanguageItemJson(item: PlayerControlSubtitleLanguageItem) {
+    append('{')
+    appendJsonField("key", item.key)
+    append(',')
+    appendJsonField("label", item.label)
+    append(',')
+    appendJsonField("count", item.count)
+    append(',')
+    appendJsonField("isSelected", item.isSelected)
+    append('}')
+}
+
+private fun StringBuilder.appendSubtitleOptionItemJson(item: PlayerControlSubtitleOptionItem) {
+    append('{')
+    appendJsonField("id", item.id)
+    append(',')
+    appendJsonField("languageKey", item.languageKey)
+    append(',')
+    appendJsonField("kind", item.kind)
+    append(',')
+    appendJsonField("index", item.index)
+    append(',')
+    appendJsonField("sourceLabel", item.sourceLabel)
+    append(',')
+    appendJsonField("title", item.title)
+    append(',')
+    appendJsonField("metadata", item.metadata)
     append(',')
     appendJsonField("isSelected", item.isSelected)
     append('}')
