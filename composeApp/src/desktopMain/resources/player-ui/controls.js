@@ -2471,6 +2471,7 @@ window.playerControls = nextState => {
   const previousResizeLabel = state.resizeModeLabel || "";
   const previousSpeedLabel = state.playbackSpeedLabel || "";
   const previousVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
+  const previousEpisodeStreamsVisible = Boolean(state.episodeStreamsVisible);
   state = { ...state, ...nextState };
   hasReceivedPlayerControls = true;
   const closeToken = Number(state.closeModalsToken) || 0;
@@ -2481,6 +2482,8 @@ window.playerControls = nextState => {
     openPlayerModal("p2pConsent");
   } else if (!state.showP2pConsent && activeModal === "p2pConsent") {
     closePlayerModal();
+  } else if (state.episodeStreamsVisible && !previousEpisodeStreamsVisible && activeModal !== "episodes") {
+    openPlayerModal("episodes");
   }
   render();
   if (pendingSettingToastCommand === "resize" && (state.resizeModeLabel || "") !== previousResizeLabel) {
