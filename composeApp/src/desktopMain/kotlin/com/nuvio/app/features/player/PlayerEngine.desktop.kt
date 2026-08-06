@@ -29,6 +29,7 @@ import com.nuvio.app.features.player.desktop.DesktopHostOs
 import com.nuvio.app.features.player.desktop.NativePlayerController
 import com.nuvio.app.features.player.desktop.NativePlayerHost
 import com.nuvio.app.features.player.desktop.desktopFullscreenChanges
+import com.nuvio.app.features.player.desktop.isDesktopAppFullscreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 
@@ -179,7 +180,9 @@ private fun NativePlayerSurface(
                     KeyEvent.VK_UP -> "keyboardVolumeUp"
                     KeyEvent.VK_DOWN -> "keyboardVolumeDown"
                     KeyEvent.VK_F11 -> "toggleFullscreen"
-                    KeyEvent.VK_ESCAPE -> "back"
+                    // esc leaves fullscreen before leaving the player (parity with
+                    // the webview keydown handler, which never gets focus on linux)
+                    KeyEvent.VK_ESCAPE -> if (isDesktopAppFullscreen()) "toggleFullscreen" else "back"
                     else -> null
                 } ?: return@KeyEventDispatcher false
                 controller.handleKeyCommand(command)
