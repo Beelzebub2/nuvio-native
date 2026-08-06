@@ -1,6 +1,10 @@
 package com.nuvio.app.features.home.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +76,7 @@ private suspend fun loadDesktopGifAnimation(url: String): SkiaGifAnimation? {
 @Composable
 internal actual fun CollectionCardRemoteImage(
     imageUrl: String,
+    staticImageUrl: String?,
     contentDescription: String,
     modifier: Modifier,
     contentScale: ContentScale,
@@ -80,8 +85,23 @@ internal actual fun CollectionCardRemoteImage(
     val isGifUrl = remember(imageUrl) {
         imageUrl.contains(".gif", ignoreCase = true)
     }
+    val context = LocalPlatformContext.current
+    val displayImageUrl = if (animateIfPossible && isGifUrl) {
+        staticImageUrl?.takeIf { it.isNotBlank() } ?: imageUrl
+    } else {
+        imageUrl
+    }
+    val request = remember(context, displayImageUrl) {
+        ImageRequest.Builder(context)
+            .data(displayImageUrl)
+            .memoryCacheKey("home-collection:$displayImageUrl")
+            .diskCacheKey(displayImageUrl)
+            .build()
+    }
 
     if (animateIfPossible && isGifUrl) {
+        val hoverInteractionSource = remember { MutableInteractionSource() }
+        val isHovered by hoverInteractionSource.collectIsHoveredAsState()
         var animation by remember(imageUrl) { mutableStateOf(desktopGifCache[imageUrl]) }
 
         LaunchedEffect(imageUrl) {
@@ -91,34 +111,43 @@ internal actual fun CollectionCardRemoteImage(
         }
 
         val currentAnimation = animation
-        if (currentAnimation != null && currentAnimation.frames.isNotEmpty()) {
-            var frameIndex by remember(imageUrl) { mutableStateOf(0) }
+        var frameIndex by remember(imageUrl, isHovered) { mutableStateOf(0) }
 
-            LaunchedEffect(imageUrl, currentAnimation) {
-                while (true) {
-                    val delayMs = currentAnimation.delaysMs.getOrElse(frameIndex) { 100L }
-                    delay(delayMs)
-                    frameIndex = (frameIndex + 1) % currentAnimation.frames.size
-                }
+        LaunchedEffect(imageUrl, currentAnimation, isHovered) {
+            val playableAnimation = currentAnimation?.takeIf { it.frames.isNotEmpty() }
+                ?: return@LaunchedEffect
+            if (!isHovered) return@LaunchedEffect
+            while (true) {
+                val delayMs = playableAnimation.delaysMs.getOrElse(frameIndex) { 100L }
+                delay(delayMs)
+                frameIndex = (frameIndex + 1) % playableAnimation.frames.size
             }
-
-            Image(
-                bitmap = currentAnimation.frames[frameIndex],
-                contentDescription = contentDescription,
-                modifier = modifier,
-                contentScale = contentScale,
-            )
-            return
         }
-    }
 
-    val context = LocalPlatformContext.current
-    val request = remember(context, imageUrl) {
-        ImageRequest.Builder(context)
-            .data(imageUrl)
-            .memoryCacheKey("home-collection:$imageUrl")
-            .diskCacheKey(imageUrl)
-            .build()
+        Box(modifier = modifier.hoverable(hoverInteractionSource)) {
+            if (
+                currentAnimation != null &&
+                currentAnimation.frames.isNotEmpty() &&
+                (isHovered || staticImageUrl.isNullOrBlank())
+            ) {
+                Image(
+                    bitmap = currentAnimation.frames[
+                        if (isHovered) frameIndex else currentAnimation.frames.lastIndex
+                    ],
+                    contentDescription = contentDescription,
+                    modifier = Modifier.matchParentSize(),
+                    contentScale = contentScale,
+                )
+            } else {
+                AsyncImage(
+                    model = request,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.matchParentSize(),
+                    contentScale = contentScale,
+                )
+            }
+        }
+        return
     }
 
     AsyncImage(
