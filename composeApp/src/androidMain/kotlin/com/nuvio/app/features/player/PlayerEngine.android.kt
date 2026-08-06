@@ -845,7 +845,7 @@ private fun ExoPlayerSurface(
                     Log.d(TAG, "clearExternalSubtitleAndSelect: done, pending=$trackIndex position=$currentPosition")
                 }
 
-                override fun applySubtitleStyle(style: SubtitleStyleState) {
+                override fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean) {
                     currentSubtitleStyle = style
                     playerViewRef?.applySubtitleStyle(style, pipSubtitleScale)
                 }
@@ -1433,18 +1433,22 @@ private class NuvioLibmpvView(
                 selectSubtitleTrack(trackIndex)
             }
 
-            override fun applySubtitleStyle(style: SubtitleStyleState) {
-                mpv.setPropertyString("sub-ass-override", "no")
-                mpv.setPropertyString("sub-color", style.textColor.toMpvColor())
-                mpv.setPropertyString("sub-back-color", style.backgroundColor.toMpvColor())
-                mpv.setPropertyString("sub-outline-color", style.outlineColor.toMpvColor())
-                mpv.setPropertyString("sub-border-color", style.outlineColor.toMpvColor())
-                mpv.setPropertyString("sub-border-style", style.toMpvSubtitleBorderStyle())
-                mpv.setPropertyString("sub-bold", if (style.bold) "yes" else "no")
-                mpv.setPropertyInt("sub-font-size", style.toMpvSubtitleFontSize())
-                mpv.setPropertyInt("sub-outline-size", style.toMpvSubtitleOutlineSize())
-                mpv.setPropertyInt("sub-border-size", style.toMpvSubtitleOutlineSize())
-                mpv.setPropertyInt("sub-pos", (100 - style.bottomOffset / 10).coerceIn(0, 100))
+            override fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean) {
+                if (useLibass) {
+                    mpv.setPropertyString("sub-ass-override", "no")
+                } else {
+                    mpv.setPropertyString("sub-ass-override", "force")
+                    mpv.setPropertyString("sub-color", style.textColor.toMpvColor())
+                    mpv.setPropertyString("sub-back-color", style.backgroundColor.toMpvColor())
+                    mpv.setPropertyString("sub-outline-color", style.outlineColor.toMpvColor())
+                    mpv.setPropertyString("sub-border-color", style.outlineColor.toMpvColor())
+                    mpv.setPropertyString("sub-border-style", style.toMpvSubtitleBorderStyle())
+                    mpv.setPropertyString("sub-bold", if (style.bold) "yes" else "no")
+                    mpv.setPropertyInt("sub-font-size", style.toMpvSubtitleFontSize())
+                    mpv.setPropertyInt("sub-outline-size", style.toMpvSubtitleOutlineSize())
+                    mpv.setPropertyInt("sub-border-size", style.toMpvSubtitleOutlineSize())
+                    mpv.setPropertyInt("sub-pos", (100 - style.bottomOffset / 10).coerceIn(0, 100))
+                }
             }
 
             override fun setSubtitleDelayMs(delayMs: Int) {
