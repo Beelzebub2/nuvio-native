@@ -44,16 +44,21 @@ import nuvio.composeapp.generated.resources.settings_advanced_section_diagnostic
 import nuvio.composeapp.generated.resources.settings_advanced_section_startup
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle
+import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle_desktop
 import nuvio.composeapp.generated.resources.sentry_disable_dialog_subtitle
+import nuvio.composeapp.generated.resources.sentry_disable_dialog_subtitle_desktop
 import nuvio.composeapp.generated.resources.sentry_disable_dialog_title
 import nuvio.composeapp.generated.resources.sentry_enable_dialog_subtitle
+import nuvio.composeapp.generated.resources.sentry_enable_dialog_subtitle_desktop
 import nuvio.composeapp.generated.resources.sentry_enable_dialog_title
 import nuvio.composeapp.generated.resources.sentry_help_body
+import nuvio.composeapp.generated.resources.sentry_help_body_desktop
 import nuvio.composeapp.generated.resources.sentry_help_title
 import nuvio.composeapp.generated.resources.sentry_keep_enabled
 import nuvio.composeapp.generated.resources.sentry_not_sent_body
 import nuvio.composeapp.generated.resources.sentry_not_sent_title
 import nuvio.composeapp.generated.resources.sentry_sent_body
+import nuvio.composeapp.generated.resources.sentry_sent_body_desktop
 import nuvio.composeapp.generated.resources.sentry_sent_title
 import nuvio.composeapp.generated.resources.sentry_turn_off
 import nuvio.composeapp.generated.resources.sentry_turn_on
@@ -95,7 +100,13 @@ internal fun LazyListScope.advancedSettingsContent(
                 SettingsGroup(isTablet = isTablet) {
                     SettingsSwitchRow(
                         title = stringResource(Res.string.settings_advanced_sentry_reports),
-                        description = stringResource(Res.string.settings_advanced_sentry_reports_subtitle),
+                        description = stringResource(
+                            if (SentrySettingsPlatform.usesDesktopCopy) {
+                                Res.string.settings_advanced_sentry_reports_subtitle_desktop
+                            } else {
+                                Res.string.settings_advanced_sentry_reports_subtitle
+                            },
+                        ),
                         checked = sentryEnabled,
                         isTablet = isTablet,
                         onCheckedChange = { showSentryDialog = true },
@@ -182,10 +193,15 @@ private fun SentrySettingsDialog(
                 Spacer(modifier = Modifier.height(tokens.spacing.controlGap))
                 Text(
                     text = stringResource(
-                        if (enabled) {
-                            Res.string.sentry_disable_dialog_subtitle
-                        } else {
-                            Res.string.sentry_enable_dialog_subtitle
+                        when {
+                            enabled && SentrySettingsPlatform.usesDesktopCopy -> {
+                                Res.string.sentry_disable_dialog_subtitle_desktop
+                            }
+                            enabled -> Res.string.sentry_disable_dialog_subtitle
+                            SentrySettingsPlatform.usesDesktopCopy -> {
+                                Res.string.sentry_enable_dialog_subtitle_desktop
+                            }
+                            else -> Res.string.sentry_enable_dialog_subtitle
                         },
                     ),
                     style = MaterialTheme.typography.bodyLarge,
@@ -197,11 +213,23 @@ private fun SentrySettingsDialog(
                 ) {
                     SentryInfoSection(
                         title = stringResource(Res.string.sentry_help_title),
-                        body = stringResource(Res.string.sentry_help_body),
+                        body = stringResource(
+                            if (SentrySettingsPlatform.usesDesktopCopy) {
+                                Res.string.sentry_help_body_desktop
+                            } else {
+                                Res.string.sentry_help_body
+                            },
+                        ),
                     )
                     SentryInfoSection(
                         title = stringResource(Res.string.sentry_sent_title),
-                        body = stringResource(Res.string.sentry_sent_body),
+                        body = stringResource(
+                            if (SentrySettingsPlatform.usesDesktopCopy) {
+                                Res.string.sentry_sent_body_desktop
+                            } else {
+                                Res.string.sentry_sent_body
+                            },
+                        ),
                     )
                     SentryInfoSection(
                         title = stringResource(Res.string.sentry_not_sent_title),

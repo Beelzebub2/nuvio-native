@@ -421,7 +421,13 @@ internal fun settingsSearchEntries(
             page = SettingsPage.Advanced,
             key = "sentry-crash-reports",
             title = stringResource(Res.string.settings_advanced_sentry_reports),
-            description = stringResource(Res.string.settings_advanced_sentry_reports_subtitle),
+            description = stringResource(
+                if (SentrySettingsPlatform.usesDesktopCopy) {
+                    Res.string.settings_advanced_sentry_reports_subtitle_desktop
+                } else {
+                    Res.string.settings_advanced_sentry_reports_subtitle
+                },
+            ),
             pageLabel = advancedPage,
             section = stringResource(Res.string.settings_advanced_section_diagnostics),
             category = advancedCategory,

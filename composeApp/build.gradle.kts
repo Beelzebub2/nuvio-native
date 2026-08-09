@@ -53,6 +53,9 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     abstract val sentryDsn: Property<String>
 
     @get:Input
+    abstract val sentryDesktopDsn: Property<String>
+
+    @get:Input
     abstract val sentryEnvironment: Property<String>
 
     @TaskAction
@@ -84,6 +87,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |
                 |object SentryConfig {
                 |    const val DSN = "${sentryDsn.get()}"
+                |    const val DESKTOP_DSN = "${sentryDesktopDsn.get()}"
                 |    const val ENVIRONMENT = "${sentryEnvironment.get()}"
                 |}
                 """.trimMargin()
@@ -500,6 +504,7 @@ val nuvioEngineAppleFramework = rootProject.file("../nuvio-engine/platform/apple
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val fullPluginSourceDir = fullCommonSourceDir.resolve("com/nuvio/app/features/plugins")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
+val desktopSentryResourceDir = rootProject.layout.projectDirectory.dir("desktopSentry/build/generated/sentry")
 val requestedGradleTasks = gradle.startParameter.taskNames.map { taskName ->
     taskName.substringAfterLast(':').lowercase()
 }
@@ -566,6 +571,7 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL"))
     sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
+    sentryDesktopDsn.set(runtimeConfigValue("SENTRY_DESKTOP_DSN"))
     sentryEnvironment.set(
         when {
             requestedGradleTasks.any { "benchmark" in it } -> "benchmark"
@@ -1120,6 +1126,7 @@ kotlin {
         }
         val desktopMain by getting {
             kotlin.srcDir(fullPluginSourceDir)
+            resources.srcDir(desktopSentryResourceDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
@@ -1127,6 +1134,7 @@ kotlin {
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.quickjs.kt)
                 implementation(libs.ksoup)
+                implementation(libs.sentry.jvm)
             }
         }
         commonMain.dependencies {
@@ -1166,6 +1174,12 @@ kotlin {
             implementation(libs.kotlin.test)
         }
     }
+}
+
+tasks.matching {
+    it.name == "desktopProcessResources" || it.name == "processDesktopMainResources"
+}.configureEach {
+    dependsOn(":desktopSentry:generateSentryDebugMetaPropertiesjava")
 }
 
 compose.desktop {

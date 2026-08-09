@@ -15,6 +15,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.deeplink.handleAppUrl
+import com.nuvio.app.core.diagnostics.SentryInitializer
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.plugins.configureDesktopQuickJsLibrary
 import com.nuvio.app.features.player.PlatformPlayerSurface
@@ -35,6 +36,7 @@ private const val NuvioDesktopIconPath = "icons/nuvio-app-icon.png"
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
 fun main(args: Array<String>) {
+    SentryInitializer.start()
     configureDesktopQuickJsLibrary()
     configureDesktopChrome()
     installDesktopOpenUriHandler()
@@ -76,6 +78,7 @@ fun main(args: Array<String>) {
         Window(
             onCloseRequest = {
                 P2pStreamingEngine.shutdown()
+                SentryInitializer.close()
                 exitApplication()
             },
             title = if (smokePlayerUrl == null) "Nuvio" else "Nuvio Player Smoke",
