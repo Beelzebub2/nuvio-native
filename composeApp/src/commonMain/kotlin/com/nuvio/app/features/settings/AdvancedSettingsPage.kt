@@ -37,11 +37,15 @@ import nuvio.composeapp.generated.resources.action_cancel
 import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache
 import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_done
 import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_subtitle
+import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer
+import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_description
+import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_external_description
 import nuvio.composeapp.generated.resources.settings_advanced_remember_last_profile
 import nuvio.composeapp.generated.resources.settings_advanced_remember_last_profile_description
 import nuvio.composeapp.generated.resources.settings_advanced_section_cache
 import nuvio.composeapp.generated.resources.settings_advanced_section_diagnostics
 import nuvio.composeapp.generated.resources.settings_advanced_section_startup
+import nuvio.composeapp.generated.resources.settings_advanced_section_windows_graphics
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle_desktop
@@ -81,6 +85,37 @@ internal fun LazyListScope.advancedSettingsContent(
                     isTablet = isTablet,
                     onCheckedChange = ProfileRepository::setRememberLastProfileEnabled,
                 )
+            }
+        }
+    }
+    if (DesktopRendererSettings.isSupported) {
+        item {
+            val externallyControlled = remember { DesktopRendererSettings.isExternallyControlled }
+            var useOpenGl by remember { mutableStateOf(DesktopRendererSettings.useOpenGl) }
+
+            SettingsSection(
+                title = stringResource(Res.string.settings_advanced_section_windows_graphics),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_advanced_opengl_renderer),
+                        description = stringResource(
+                            if (externallyControlled) {
+                                Res.string.settings_advanced_opengl_renderer_external_description
+                            } else {
+                                Res.string.settings_advanced_opengl_renderer_description
+                            },
+                        ),
+                        checked = useOpenGl,
+                        enabled = !externallyControlled,
+                        isTablet = isTablet,
+                        onCheckedChange = { enabled ->
+                            DesktopRendererSettings.setUseOpenGl(enabled)
+                            useOpenGl = enabled
+                        },
+                    )
+                }
             }
         }
     }

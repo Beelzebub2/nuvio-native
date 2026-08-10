@@ -416,6 +416,18 @@ internal fun settingsSearchEntries(
         category = advancedCategory,
         icon = Icons.Rounded.Tune,
     )
+    if (DesktopRendererSettings.isSupported) {
+        addRow(
+            page = SettingsPage.Advanced,
+            key = "desktop-opengl-renderer",
+            title = stringResource(Res.string.settings_advanced_opengl_renderer),
+            description = stringResource(Res.string.settings_advanced_opengl_renderer_description),
+            pageLabel = advancedPage,
+            section = stringResource(Res.string.settings_advanced_section_windows_graphics),
+            category = advancedCategory,
+            icon = Icons.Rounded.Tune,
+        )
+    }
     if (SentrySettingsRepository.isSupported) {
         addRow(
             page = SettingsPage.Advanced,

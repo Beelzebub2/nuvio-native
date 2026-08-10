@@ -484,10 +484,14 @@
     <string name="settings_search_placeholder">Search settings...</string>
     <string name="settings_search_results_section">RESULTS</string>
     <string name="settings_advanced_section_startup">STARTUP</string>
+    <string name="settings_advanced_section_windows_graphics">WINDOWS GRAPHICS</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTICS</string>
     <string name="settings_advanced_section_cache">CACHE</string>
     <string name="settings_advanced_remember_last_profile">Remember Last Profile</string>
     <string name="settings_advanced_remember_last_profile_description">Remember last selected profile at startup</string>
+    <string name="settings_advanced_opengl_renderer">Use OpenGL renderer</string>
+    <string name="settings_advanced_opengl_renderer_description">May fix interface stutter or flicker with NVIDIA G-SYNC and some high-refresh-rate displays. Restart Nuvio to apply.</string>
+    <string name="settings_advanced_opengl_renderer_external_description">The interface renderer is controlled by SKIKO_RENDER_API or skiko.renderApi. Remove that override to change it here.</string>
     <string name="settings_advanced_sentry_reports">Sentry Crash Reports</string>
     <string name="settings_advanced_sentry_reports_subtitle">Send crash and ANR reports with safe context. On by default.</string>
     <string name="settings_advanced_sentry_reports_subtitle_desktop">Send crash reports with safe diagnostic context. On by default.</string>

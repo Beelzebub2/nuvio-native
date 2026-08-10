@@ -27,6 +27,7 @@ import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
 import com.nuvio.app.features.player.desktop.preloadNativePlayerBridgeAsync
 import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
+import com.nuvio.app.features.settings.applyDesktopRendererPreference
 import java.awt.Desktop
 import java.awt.Color as AwtColor
 import javax.swing.JComponent
@@ -36,6 +37,7 @@ private const val NuvioDesktopIconPath = "icons/nuvio-app-icon.png"
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
 fun main(args: Array<String>) {
+    applyDesktopRendererPreference()
     SentryInitializer.start()
     configureDesktopQuickJsLibrary()
     configureDesktopChrome()
