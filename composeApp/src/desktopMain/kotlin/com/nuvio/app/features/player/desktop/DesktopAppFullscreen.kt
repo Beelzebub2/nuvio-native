@@ -3,6 +3,7 @@ package com.nuvio.app.features.player.desktop
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import java.awt.Frame
 import java.awt.GraphicsEnvironment
 import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
@@ -78,7 +79,7 @@ internal class DesktopAppFullscreenController {
 
     fun toggle(window: Window, windowState: WindowState) {
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
-            toggleWindowsFullscreen(window)
+            toggleWindowsFullscreen(window, windowState)
         } else {
             toggleComposeFullscreen(window, windowState)
         }
@@ -96,7 +97,7 @@ internal class DesktopAppFullscreenController {
     fun applyRestoredFullscreenState(window: Window, windowState: WindowState, fullscreen: Boolean) {
         if (!fullscreen) return
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
-            enterWindowsFullscreen(window)
+            enterWindowsFullscreen(window, windowState)
         } else {
             restoreWindowPlacement = windowState.placement
                 .takeUnless { it == WindowPlacement.Fullscreen }
@@ -146,21 +147,24 @@ internal class DesktopAppFullscreenController {
         }.isSuccess
     }
 
-    private fun toggleWindowsFullscreen(window: Window) {
+    private fun toggleWindowsFullscreen(window: Window, windowState: WindowState) {
         if (windowsFullscreenState?.window === window) {
-            exitWindowsFullscreen(window)
+            exitWindowsFullscreen(window, windowState)
         } else {
-            enterWindowsFullscreen(window)
+            enterWindowsFullscreen(window, windowState)
         }
     }
 
-    private fun enterWindowsFullscreen(window: Window) {
+    private fun enterWindowsFullscreen(window: Window, windowState: WindowState) {
         val gc = window.graphicsConfiguration
             ?: GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
         val screenBounds = gc.bounds
         val transform = gc.defaultTransform
         val scaleX = transform.scaleX
         val scaleY = transform.scaleY
+
+        val wasMaximized = (window as? Frame)?.extendedState == Frame.MAXIMIZED_BOTH ||
+            windowState.placement == WindowPlacement.Maximized
 
         val hwnd = AwtNativeViewResolver.resolveNativeViewPointer(window)
         NativePlayerBridge.setWindowBorderlessFullscreen(
@@ -171,12 +175,16 @@ internal class DesktopAppFullscreenController {
             width = (screenBounds.width * scaleX).toInt(),
             height = (screenBounds.height * scaleY).toInt(),
         )
-        windowsFullscreenState = WindowsFullscreenState(window = window, windowHwnd = hwnd)
+        windowsFullscreenState = WindowsFullscreenState(
+            window = window,
+            windowHwnd = hwnd,
+            wasMaximized = wasMaximized,
+        )
         window.toFront()
         window.requestFocus()
     }
 
-    private fun exitWindowsFullscreen(window: Window) {
+    private fun exitWindowsFullscreen(window: Window, windowState: WindowState? = null) {
         val fullscreenState = windowsFullscreenState?.takeIf { it.window === window } ?: return
         NativePlayerBridge.setWindowBorderlessFullscreen(
             windowHwnd = fullscreenState.windowHwnd,
@@ -186,12 +194,27 @@ internal class DesktopAppFullscreenController {
             width = 0,
             height = 0,
         )
+        val wasMaximized = fullscreenState.wasMaximized
         windowsFullscreenState = null
+
+        if (window is Frame) {
+            if (wasMaximized) {
+                window.extendedState = Frame.NORMAL
+                window.extendedState = Frame.MAXIMIZED_BOTH
+                windowState?.placement = WindowPlacement.Maximized
+            } else {
+                window.extendedState = Frame.NORMAL
+                windowState?.placement = WindowPlacement.Floating
+            }
+            window.revalidate()
+            window.repaint()
+        }
     }
 
     private data class WindowsFullscreenState(
         val window: Window,
         val windowHwnd: Long,
+        val wasMaximized: Boolean,
     )
 }
 
