@@ -100,14 +100,20 @@ internal object TrailerExtractionPlatform {
     ): TrailerPlaybackSource? = withContext(Dispatchers.IO) {
         val bestCombinedIsManifest = bestManifest != null &&
             (bestProgressive == null || bestManifest.height > bestProgressive.height)
+        val preferManifestPlayback = bestManifest != null &&
+            (bestVideo == null || bestManifest.height >= bestVideo.height)
         val combinedUrl = if (bestCombinedIsManifest) {
-            bestManifest.selectedVariantUrl
+            bestManifest.manifestUrl
         } else {
             bestProgressive?.url
         }
 
-        val separatedVideoUrl = bestVideo?.url?.let { resolveReachableUrlOrNull(it) }
-        if (bestVideo != null && separatedVideoUrl == null) {
+        val separatedVideoUrl = if (preferManifestPlayback) {
+            null
+        } else {
+            bestVideo?.url?.let { resolveReachableUrlOrNull(it) }
+        }
+        if (!preferManifestPlayback && bestVideo != null && separatedVideoUrl == null) {
             diagnostic("blocked stage=video_probe candidate=${bestVideo.diagnosticSummary()}")
         }
         val separatedAudioUrl = if (!separatedVideoUrl.isNullOrBlank()) {
@@ -132,6 +138,7 @@ internal object TrailerExtractionPlatform {
         val audioUrl = separatedAudioUrl.takeIf { useSeparatedStreams }
         val mode = when {
             useSeparatedStreams -> "adaptive_separate"
+            combinedCandidateUrl != null && bestCombinedIsManifest -> "hls"
             combinedCandidateUrl != null -> "combined_fallback"
             else -> "adaptive_video_only"
         }
@@ -199,7 +206,7 @@ internal object TrailerExtractionPlatform {
         }
 
         return try {
-            val selected = withTimeoutOrNull(2_000L) { result.await() }
+            val selected = withTimeoutOrNull(4_000L) { result.await() }
             diagnostic(
                 "probe ${if (selected != null) "ok" else "failed"} ${describeUrl(url)} candidates=${candidates.size}" +
                     selected?.let { " selectedHost=${it.toHttpUrlOrNull()?.host ?: "unknown"}" }.orEmpty(),
@@ -213,27 +220,31 @@ internal object TrailerExtractionPlatform {
     private fun isUrlReachable(url: String): Boolean = runCatching {
         val parsedUrl = url.toHttpUrlOrNull()
         val sourceSize = parsedUrl?.queryParameter("clen")?.toLongOrNull()?.takeIf { it > 0L }
-        val rangeStart = sourceSize?.let {
-            if (it > 1_048_576L) 1_048_576L else it / 2L
-        } ?: 0L
-        val rangeEnd = sourceSize
-            ?.let { (rangeStart + 65_535L).coerceAtMost(it - 1L) }
-            ?: rangeStart
-        val request = Request.Builder()
-            .url(url)
-            .headers(buildHeaders(defaultHeaders))
-            .header("Range", "bytes=$rangeStart-$rangeEnd")
-            .get()
-            .build()
+        val ranges = sourceSize?.let { size ->
+            listOf(
+                0L to 65_535L.coerceAtMost(size - 1L),
+                (size - 65_536L).coerceAtLeast(0L) to size - 1L,
+            ).distinct()
+        } ?: listOf(0L to 0L)
 
-        probeClient.newCall(request).execute().use { response ->
-            val reachable = response.code == 206 || (rangeStart == 0L && response.code in 200..299)
-            if (!reachable) {
-                diagnostic(
-                    "probe range rejected ${describeUrl(url)} requested=$rangeStart-$rangeEnd status=${response.code}",
-                )
+        ranges.all { (rangeStart, rangeEnd) ->
+            val request = Request.Builder()
+                .url(url)
+                .headers(buildHeaders(defaultHeaders))
+                .header("Range", "bytes=$rangeStart-$rangeEnd")
+                .get()
+                .build()
+
+            probeClient.newCall(request).execute().use { response ->
+                val reachable = response.code == 206 ||
+                    (sourceSize == null && rangeStart == 0L && response.code in 200..299)
+                if (!reachable) {
+                    diagnostic(
+                        "probe range rejected ${describeUrl(url)} requested=$rangeStart-$rangeEnd status=${response.code}",
+                    )
+                }
+                reachable
             }
-            reachable
         }
     }.getOrDefault(false)
 

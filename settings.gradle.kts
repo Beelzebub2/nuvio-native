@@ -35,3 +35,5 @@ dependencyResolutionManagement {
 include(":composeApp")
 include(":androidApp")
 include(":desktopSentry")
+include(":composeMediaPlayer")
+project(":composeMediaPlayer").projectDir = file("vendor/compose-media-player/mediaplayer")

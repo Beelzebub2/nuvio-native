@@ -1,32 +1,26 @@
 package com.nuvio.app.features.details.components
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.graphicsLayer
-import com.nuvio.app.features.trailer.TrailerHttpRangeMediaData
+import androidx.compose.ui.layout.ContentScale
 import com.nuvio.app.features.trailer.TrailerExtractionPlatform
-import com.nuvio.app.features.trailer.createTrailerMediaData
-import com.nuvio.app.features.trailer.requiresBoundedRanges
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.collect
-import org.openani.mediamp.PlaybackEvent
-import org.openani.mediamp.compose.MediampPlayerSurface
-import org.openani.mediamp.compose.rememberMediampPlayer
-import org.openani.mediamp.mpv.MPVHandle
-import org.openani.mediamp.source.MediaData
-
-private const val TrailerFillFrameScale = 1.35f
+import io.github.kdroidfilter.composemediaplayer.InitialPlayerState
+import io.github.kdroidfilter.composemediaplayer.VideoPlayerSurface
+import io.github.kdroidfilter.composemediaplayer.rememberVideoPlayerState
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 actual fun HeroTrailerPlayerSurface(
@@ -41,134 +35,109 @@ actual fun HeroTrailerPlayerSurface(
     onEnded: () -> Unit,
     onError: () -> Unit,
 ) {
-    val player = rememberMediampPlayer()
+    key(sourceUrl, sourceAudioUrl, startPositionMillis) {
+        DesktopTrailerPlayerSession(
+            sourceUrl = sourceUrl,
+            sourceAudioUrl = sourceAudioUrl,
+            playWhenReady = playWhenReady,
+            muted = muted,
+            startPositionMillis = startPositionMillis,
+            fillFrame = fillFrame,
+            modifier = modifier,
+            onReady = onReady,
+            onEnded = onEnded,
+            onError = onError,
+        )
+    }
+}
+
+@Composable
+private fun DesktopTrailerPlayerSession(
+    sourceUrl: String,
+    sourceAudioUrl: String?,
+    playWhenReady: Boolean,
+    muted: Boolean,
+    startPositionMillis: Long,
+    fillFrame: Boolean,
+    modifier: Modifier,
+    onReady: () -> Unit,
+    onEnded: () -> Unit,
+    onError: () -> Unit,
+) {
+    val player = rememberVideoPlayerState()
+    val callbackScope = rememberCoroutineScope()
     val latestOnReady = rememberUpdatedState(onReady)
     val latestOnEnded = rememberUpdatedState(onEnded)
     val latestOnError = rememberUpdatedState(onError)
-    var mediaPrepared by remember(player, sourceUrl, sourceAudioUrl, startPositionMillis) {
-        mutableStateOf(false)
-    }
-    var terminalReported by remember(player, sourceUrl, sourceAudioUrl, startPositionMillis) {
-        mutableStateOf(false)
-    }
-    var activeMediaData by remember(player, sourceUrl, sourceAudioUrl, startPositionMillis) {
-        mutableStateOf<MediaData?>(null)
-    }
-    var registeredAudioInput by remember(player) {
-        mutableStateOf<String?>(null)
-    }
-    val latestRegisteredAudioInput = rememberUpdatedState(registeredAudioInput)
+    var mediaReady by remember { mutableStateOf(false) }
+    var terminalReported by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
+        player.onPlaybackEnded = {
+            callbackScope.launch {
+                if (!terminalReported) {
+                    terminalReported = true
+                    mediaReady = false
+                    TrailerExtractionPlatform.diagnostic("compose player ended")
+                    latestOnEnded.value()
+                }
+            }
+        }
         onDispose {
-            latestRegisteredAudioInput.value?.let { uri ->
-                runCatching { (player.impl as? MPVHandle)?.unregisterSeekableInput(uri) }
-            }
+            player.onPlaybackEnded = null
         }
     }
 
     LaunchedEffect(player, sourceUrl, sourceAudioUrl, startPositionMillis) {
-        player.events.collect { event ->
-            when (event) {
-                is PlaybackEvent.MediaEnded -> {
-                    if (event.mediaData === activeMediaData && !terminalReported) {
-                        terminalReported = true
-                        mediaPrepared = false
-                        TrailerExtractionPlatform.diagnostic("mediamp ended")
-                        latestOnEnded.value()
-                    }
-                }
-
-                is PlaybackEvent.ErrorOccurred -> {
-                    if (!terminalReported) {
-                        terminalReported = true
-                        mediaPrepared = false
-                        TrailerExtractionPlatform.diagnostic(
-                            "blocked stage=mediamp error=${event.error::class.simpleName} detail=${event.error}",
-                        )
-                        latestOnError.value()
-                    }
-                }
-
-                else -> Unit
-            }
-        }
-    }
-
-    LaunchedEffect(player, sourceUrl, sourceAudioUrl, startPositionMillis) {
-        mediaPrepared = false
+        mediaReady = false
         terminalReported = false
-        val handle = player.impl as? MPVHandle
-            ?: error("MediaMP desktop backend did not provide an MPV handle")
-        registeredAudioInput?.let { uri ->
-            runCatching { handle.unregisterSeekableInput(uri) }
-            registeredAudioInput = null
-        }
-        val mediaData = createTrailerMediaData(sourceUrl, "video")
-        activeMediaData = mediaData
+        player.clearError()
+        player.loop = false
+        player.volume = if (muted) 0f else 1f
         TrailerExtractionPlatform.diagnostic(
-            "mediamp open ${TrailerExtractionPlatform.describeUrl(sourceUrl)} " +
+            "compose player open ${TrailerExtractionPlatform.describeUrl(sourceUrl)} " +
                 "separateAudio=${!sourceAudioUrl.isNullOrBlank()} startMs=$startPositionMillis",
         )
+        player.openUri(
+            uri = sourceUrl,
+            audioUri = sourceAudioUrl,
+            initializeplayerState = InitialPlayerState.PAUSE,
+        )
 
-        try {
-            player.setMediaData(
-                data = mediaData,
-                playWhenReady = false,
-                startPositionMillis = startPositionMillis,
-            )
-            handle.setPropertyString("loop-file", "no")
-            if (!sourceAudioUrl.isNullOrBlank()) {
-                TrailerExtractionPlatform.diagnostic(
-                    "mediamp audio attach ${TrailerExtractionPlatform.describeUrl(sourceAudioUrl)}",
-                )
-                if (sourceAudioUrl.requiresBoundedRanges()) {
-                    val audioData = TrailerHttpRangeMediaData(sourceAudioUrl, "audio")
-                    val audioInput = audioData.createInput(currentCoroutineContext())
-                    val audioTarget =
-                        "mediamp://trailer_audio/${sourceAudioUrl.hashCode().toUInt().toString(16)}-${System.nanoTime()}"
-                    val registered = try {
-                        handle.registerSeekableInput(audioInput, audioTarget)
-                    } catch (error: Throwable) {
-                        audioInput.close()
-                        throw error
-                    }
-                    registeredAudioInput = registered
-                    if (!handle.command("audio-add", registered, "select", "Trailer audio")) {
-                        handle.unregisterSeekableInput(registered)
-                        registeredAudioInput = null
-                        error("MPV rejected the separate trailer audio track")
-                    }
-                } else {
-                    check(handle.command("audio-add", sourceAudioUrl, "select", "Trailer audio")) {
-                        "MPV rejected the separate trailer audio track"
-                    }
-                }
-                TrailerExtractionPlatform.diagnostic("mediamp audio attached")
-            }
-            handle.setPropertyBoolean("mute", muted)
-            mediaPrepared = true
-            if (playWhenReady) {
-                player.play()
-            }
-            TrailerExtractionPlatform.diagnostic("mediamp ready playing=$playWhenReady")
-            latestOnReady.value()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Throwable) {
-            mediaPrepared = false
+        val opened = withTimeoutOrNull(12_000L) {
+            snapshotFlow { player.hasMedia to player.error }
+                .first { (hasMedia, error) -> hasMedia || error != null }
+        }
+        val error = opened?.second ?: player.error
+        if (opened == null || error != null) {
             if (!terminalReported) {
                 terminalReported = true
                 TrailerExtractionPlatform.diagnostic(
-                    "blocked stage=mediamp_open error=${error::class.simpleName} detail=$error",
+                    "blocked stage=compose_player_open detail=${error ?: "timeout"}",
                 )
                 latestOnError.value()
             }
+            return@LaunchedEffect
         }
+
+        if (startPositionMillis > 0L && player.duration > 0.0) {
+            val normalizedPosition = (
+                startPositionMillis.toDouble() /
+                    (player.duration * 1_000.0) *
+                    1_000.0
+                ).toFloat()
+            player.seekTo(normalizedPosition)
+        }
+        mediaReady = true
+        if (playWhenReady) {
+            player.play()
+        }
+        TrailerExtractionPlatform.diagnostic("compose player ready playing=$playWhenReady")
+        latestOnReady.value()
     }
 
-    LaunchedEffect(player, playWhenReady, mediaPrepared) {
-        if (mediaPrepared) {
+    LaunchedEffect(player, playWhenReady, mediaReady) {
+        if (mediaReady) {
             if (playWhenReady) {
                 player.play()
             } else {
@@ -177,23 +146,28 @@ actual fun HeroTrailerPlayerSurface(
         }
     }
 
-    LaunchedEffect(player, muted, mediaPrepared) {
-        if (mediaPrepared) {
-            (player.impl as? MPVHandle)?.setPropertyBoolean("mute", muted)
-        }
+    LaunchedEffect(player, muted) {
+        player.volume = if (muted) 0f else 1f
     }
 
-    Box(modifier = modifier.clipToBounds()) {
-        MediampPlayerSurface(
-            mediampPlayer = player,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    if (fillFrame) {
-                        scaleX = TrailerFillFrameScale
-                        scaleY = TrailerFillFrameScale
-                    }
-                },
-        )
+    LaunchedEffect(player) {
+        snapshotFlow { player.error }
+            .first { it != null }
+            ?.let { error ->
+                if (!terminalReported) {
+                    terminalReported = true
+                    mediaReady = false
+                    TrailerExtractionPlatform.diagnostic(
+                        "blocked stage=compose_player detail=$error",
+                    )
+                    latestOnError.value()
+                }
+            }
     }
+
+    VideoPlayerSurface(
+        playerState = player,
+        modifier = modifier.clipToBounds(),
+        contentScale = if (fillFrame) ContentScale.Crop else ContentScale.Fit,
+    )
 }
