@@ -63,6 +63,7 @@ import com.nuvio.app.core.ui.NuvioAsyncImage
 import com.nuvio.app.core.ui.NuvioDesktopImageScaling
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.ui.PosterZoomOverlayCoordinator
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.secondaryClick
@@ -95,6 +96,11 @@ internal fun HomePosterHoverPreview(
 
     val posterCardStyle = rememberPosterCardStyleUiState()
     if (!posterCardStyle.hoverPreviewEnabled) {
+        content(modifier)
+        return
+    }
+
+    if (PosterZoomOverlayCoordinator.isVisible) {
         content(modifier)
         return
     }
@@ -174,6 +180,9 @@ internal fun HomePosterHoverPreview(
                     HomePosterPreviewCard(
                         item = item,
                         isWatched = isWatched,
+                        trailerEnabled = posterCardStyle.hoverPreviewTrailerEnabled,
+                        trailerSoundEnabled = posterCardStyle.hoverPreviewTrailerSoundEnabled,
+                        trailerStartSeconds = posterCardStyle.hoverPreviewTrailerStartSeconds,
                         modifier = Modifier.hoverable(previewInteractionSource),
                         onClick = onClick,
                         onLongClick = onLongClick,
@@ -188,6 +197,9 @@ internal fun HomePosterHoverPreview(
 private fun HomePosterPreviewCard(
     item: MetaPreview,
     isWatched: Boolean,
+    trailerEnabled: Boolean,
+    trailerSoundEnabled: Boolean,
+    trailerStartSeconds: Int,
     modifier: Modifier,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
@@ -229,6 +241,15 @@ private fun HomePosterPreviewCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     desktopImageScaling = NuvioDesktopImageScaling.Disabled,
+                )
+            }
+
+            if (trailerEnabled) {
+                HomePosterHoverTrailer(
+                    item = item,
+                    soundEnabled = trailerSoundEnabled,
+                    startPositionSeconds = trailerStartSeconds,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 

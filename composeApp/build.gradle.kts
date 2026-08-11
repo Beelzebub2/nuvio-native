@@ -503,6 +503,7 @@ val iosFrameworkBundleId = "com.nuvio.media"
 val nuvioEngineAppleFramework = rootProject.file("../nuvio-engine/platform/apple/NuvioEngine.xcframework")
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val fullPluginSourceDir = fullCommonSourceDir.resolve("com/nuvio/app/features/plugins")
+val fullTrailerSourceDir = fullCommonSourceDir.resolve("com/nuvio/app/features/trailer")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
 val desktopSentryResourceDir = rootProject.layout.projectDirectory.dir("desktopSentry/build/generated/sentry")
 val requestedGradleTasks = gradle.startParameter.taskNames.map { taskName ->
@@ -1126,9 +1127,25 @@ kotlin {
         }
         val desktopMain by getting {
             kotlin.srcDir(fullPluginSourceDir)
+            kotlin.srcDir(fullTrailerSourceDir)
             resources.srcDir(desktopSentryResourceDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation(libs.mediamp.all)
+                runtimeOnly(
+                    when {
+                        isMacHost && macosPlayerBridgeArch == "arm64" ->
+                            "org.openani.mediamp:mediamp-mpv-runtime-macos-arm64:${libs.versions.mediamp.get()}"
+                        isMacHost ->
+                            "org.openani.mediamp:mediamp-mpv-runtime-macos-x64:${libs.versions.mediamp.get()}"
+                        isWindowsHost && windowsPlayerBridgeArch == "arm64" ->
+                            "org.openani.mediamp:mediamp-mpv-runtime-windows-arm64:${libs.versions.mediamp.get()}"
+                        isWindowsHost ->
+                            "org.openani.mediamp:mediamp-mpv-runtime-windows-x64:${libs.versions.mediamp.get()}"
+                        else ->
+                            "org.openani.mediamp:mediamp-mpv-runtime-linux-x64:${libs.versions.mediamp.get()}"
+                    },
+                )
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.ktor.client.cio)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -14,14 +14,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,6 +76,7 @@ fun DesktopDetailHero(
     heroTrailerMuted: Boolean,
     heroGradientColor: Color? = null,
     onBackdropLoaded: (Painter) -> Unit = {},
+    onHeroTrailerMuteToggle: () -> Unit,
     onHeroTrailerReady: () -> Unit,
     onHeroTrailerEnded: () -> Unit,
     onHeroTrailerError: () -> Unit,
@@ -129,6 +136,7 @@ fun DesktopDetailHero(
                 sourceAudioUrl = heroTrailerSourceAudioUrl,
                 playWhenReady = heroTrailerPlayWhenReady,
                 muted = heroTrailerMuted,
+                fillFrame = true,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -281,6 +289,39 @@ fun DesktopDetailHero(
                 onPlayClick = onPlayClick,
                 onPlayLongClick = onPlayLongClick,
             )
+        }
+
+        if (heroTrailerSourceUrl != null) {
+            Surface(
+                onClick = onHeroTrailerMuteToggle,
+                enabled = heroTrailerReady,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(
+                        top = space.s32,
+                        end = actionHorizontalInset + if (isFullscreenActionSupported) 60.dp else 0.dp,
+                    )
+                    .size(48.dp)
+                    .graphicsLayer { alpha = trailerAlpha },
+                shape = CircleShape,
+                color = colorScheme.surfaceVariant.copy(alpha = 0.82f),
+                contentColor = colorScheme.onSurface,
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (heroTrailerMuted) {
+                            Icons.AutoMirrored.Rounded.VolumeOff
+                        } else {
+                            Icons.AutoMirrored.Rounded.VolumeUp
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
         }
 
         if (isFullscreenActionSupported) {

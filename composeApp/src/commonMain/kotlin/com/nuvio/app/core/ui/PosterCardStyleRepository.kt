@@ -16,6 +16,10 @@ internal const val DefaultHoverPreviewOpenDelayMillis = 2_000
 internal const val MinHoverPreviewOpenDelayMillis = 500
 internal const val MaxHoverPreviewOpenDelayMillis = 5_000
 internal const val HoverPreviewOpenDelayStepMillis = 500
+internal const val DefaultHoverPreviewTrailerStartSeconds = 0
+internal const val MinHoverPreviewTrailerStartSeconds = 0
+internal const val MaxHoverPreviewTrailerStartSeconds = 60
+internal const val HoverPreviewTrailerStartStepSeconds = 5
 
 @Serializable
 private data class StoredPosterCardStylePreferences(
@@ -26,6 +30,9 @@ private data class StoredPosterCardStylePreferences(
     val hideLabelsEnabled: Boolean = false,
     val hoverPreviewEnabled: Boolean = true,
     val hoverPreviewOpenDelayMillis: Int = DefaultHoverPreviewOpenDelayMillis,
+    val hoverPreviewTrailerEnabled: Boolean = false,
+    val hoverPreviewTrailerSoundEnabled: Boolean = false,
+    val hoverPreviewTrailerStartSeconds: Int = DefaultHoverPreviewTrailerStartSeconds,
 )
 
 data class PosterCardStyleUiState(
@@ -36,6 +43,9 @@ data class PosterCardStyleUiState(
     val hideLabelsEnabled: Boolean = false,
     val hoverPreviewEnabled: Boolean = true,
     val hoverPreviewOpenDelayMillis: Int = DefaultHoverPreviewOpenDelayMillis,
+    val hoverPreviewTrailerEnabled: Boolean = false,
+    val hoverPreviewTrailerSoundEnabled: Boolean = false,
+    val hoverPreviewTrailerStartSeconds: Int = DefaultHoverPreviewTrailerStartSeconds,
 )
 
 object PosterCardStyleRepository {
@@ -111,11 +121,38 @@ object PosterCardStyleRepository {
         persist()
     }
 
+    fun setHoverPreviewTrailerEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.hoverPreviewTrailerEnabled == enabled) return
+        _uiState.value = _uiState.value.copy(hoverPreviewTrailerEnabled = enabled)
+        persist()
+    }
+
+    fun setHoverPreviewTrailerSoundEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.hoverPreviewTrailerSoundEnabled == enabled) return
+        _uiState.value = _uiState.value.copy(hoverPreviewTrailerSoundEnabled = enabled)
+        persist()
+    }
+
+    fun setHoverPreviewTrailerStartSeconds(startSeconds: Int) {
+        ensureLoaded()
+        val normalizedStartSeconds = normalizeHoverPreviewTrailerStartSeconds(startSeconds)
+        if (_uiState.value.hoverPreviewTrailerStartSeconds == normalizedStartSeconds) return
+        _uiState.value = _uiState.value.copy(
+            hoverPreviewTrailerStartSeconds = normalizedStartSeconds,
+        )
+        persist()
+    }
+
     fun resetToDefaults() {
         ensureLoaded()
         val defaults = PosterCardStyleUiState(
             hoverPreviewEnabled = _uiState.value.hoverPreviewEnabled,
             hoverPreviewOpenDelayMillis = _uiState.value.hoverPreviewOpenDelayMillis,
+            hoverPreviewTrailerEnabled = _uiState.value.hoverPreviewTrailerEnabled,
+            hoverPreviewTrailerSoundEnabled = _uiState.value.hoverPreviewTrailerSoundEnabled,
+            hoverPreviewTrailerStartSeconds = _uiState.value.hoverPreviewTrailerStartSeconds,
         )
         if (_uiState.value == defaults) return
         _uiState.value = defaults
@@ -149,6 +186,11 @@ object PosterCardStyleRepository {
                 hoverPreviewOpenDelayMillis = normalizeHoverPreviewOpenDelayMillis(
                     stored.hoverPreviewOpenDelayMillis,
                 ),
+                hoverPreviewTrailerEnabled = stored.hoverPreviewTrailerEnabled,
+                hoverPreviewTrailerSoundEnabled = stored.hoverPreviewTrailerSoundEnabled,
+                hoverPreviewTrailerStartSeconds = normalizeHoverPreviewTrailerStartSeconds(
+                    stored.hoverPreviewTrailerStartSeconds,
+                ),
             )
         } else {
             PosterCardStyleUiState()
@@ -166,6 +208,9 @@ object PosterCardStyleRepository {
                     hideLabelsEnabled = _uiState.value.hideLabelsEnabled,
                     hoverPreviewEnabled = _uiState.value.hoverPreviewEnabled,
                     hoverPreviewOpenDelayMillis = _uiState.value.hoverPreviewOpenDelayMillis,
+                    hoverPreviewTrailerEnabled = _uiState.value.hoverPreviewTrailerEnabled,
+                    hoverPreviewTrailerSoundEnabled = _uiState.value.hoverPreviewTrailerSoundEnabled,
+                    hoverPreviewTrailerStartSeconds = _uiState.value.hoverPreviewTrailerStartSeconds,
                 ),
             ),
         )
@@ -178,3 +223,10 @@ private fun normalizeHoverPreviewOpenDelayMillis(delayMillis: Int): Int =
         MaxHoverPreviewOpenDelayMillis,
     ) / HoverPreviewOpenDelayStepMillis.toFloat()).roundToInt() * HoverPreviewOpenDelayStepMillis)
         .coerceIn(MinHoverPreviewOpenDelayMillis, MaxHoverPreviewOpenDelayMillis)
+
+private fun normalizeHoverPreviewTrailerStartSeconds(startSeconds: Int): Int =
+    ((startSeconds.coerceIn(
+        MinHoverPreviewTrailerStartSeconds,
+        MaxHoverPreviewTrailerStartSeconds,
+    ) / HoverPreviewTrailerStartStepSeconds.toFloat()).roundToInt() * HoverPreviewTrailerStartStepSeconds)
+        .coerceIn(MinHoverPreviewTrailerStartSeconds, MaxHoverPreviewTrailerStartSeconds)

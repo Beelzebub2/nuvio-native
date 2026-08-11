@@ -671,6 +671,14 @@
     <string name="settings_hover_preview_delay">Open Delay</string>
     <string name="settings_hover_preview_delay_description">How long a poster must be hovered before its preview opens.</string>
     <string name="settings_hover_preview_delay_value">%1$s s</string>
+    <string name="settings_hover_preview_section_trailer">TRAILER</string>
+    <string name="settings_hover_preview_trailer_enabled">Preview Trailers</string>
+    <string name="settings_hover_preview_trailer_enabled_description">Play a trailer in the hover preview when one is available.</string>
+    <string name="settings_hover_preview_trailer_sound_enabled">Play with Sound</string>
+    <string name="settings_hover_preview_trailer_sound_enabled_description">Play hover preview trailers with audio. Turn this off to keep previews muted.</string>
+    <string name="settings_hover_preview_trailer_start_time">Trailer Start Time</string>
+    <string name="settings_hover_preview_trailer_start_time_description">Choose how far into the trailer the hover preview begins.</string>
+    <string name="settings_hover_preview_trailer_start_time_value">%1$d s</string>
     <string name="settings_playback_subtitle">Player, subtitles, and auto-play</string>
     <string name="settings_card_depth_title">CARD DEPTH EFFECT</string>
     <string name="settings_card_depth_description">Adds a lit top edge and a soft sheen to image cards for a subtle sense of depth.</string>
