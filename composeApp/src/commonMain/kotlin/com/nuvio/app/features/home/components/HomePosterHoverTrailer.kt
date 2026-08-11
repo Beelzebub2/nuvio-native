@@ -17,49 +17,37 @@ import com.nuvio.app.features.details.youtubePlaybackUrl
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.trailer.TrailerPlaybackResolver
 import com.nuvio.app.features.trailer.TrailerPlaybackSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 private const val HoverTrailerFadeDurationMillis = 480
 
 @Composable
 internal fun HomePosterHoverTrailer(
-    item: MetaPreview,
+    playbackSource: TrailerPlaybackSource?,
     soundEnabled: Boolean,
     startPositionSeconds: Int,
     modifier: Modifier = Modifier,
 ) {
-    var playbackSource by remember(item.type, item.id) {
-        mutableStateOf<TrailerPlaybackSource?>(null)
+    var trailerReady by remember(playbackSource?.videoUrl, playbackSource?.audioUrl) { mutableStateOf(false) }
+    var trailerFinished by remember(playbackSource?.videoUrl, playbackSource?.audioUrl) { mutableStateOf(false) }
+    var playerMounted by remember(playbackSource?.videoUrl, playbackSource?.audioUrl) {
+        mutableStateOf(playbackSource != null)
     }
-    var trailerReady by remember(item.type, item.id) { mutableStateOf(false) }
-    var trailerFinished by remember(item.type, item.id) { mutableStateOf(false) }
     val trailerAlpha by animateFloatAsState(
         targetValue = if (trailerReady && !trailerFinished) 1f else 0f,
         animationSpec = tween(durationMillis = HoverTrailerFadeDurationMillis),
         label = "poster_hover_trailer_alpha",
     )
 
-    LaunchedEffect(item.type, item.id) {
-        playbackSource = null
-        trailerReady = false
-        trailerFinished = false
-        val meta = MetaDetailsRepository.peek(type = item.type, id = item.id)
-            ?: MetaDetailsRepository.fetch(type = item.type, id = item.id)
-        val trailer = selectHeroTrailer(meta?.trailers.orEmpty())
-            ?: return@LaunchedEffect
-        playbackSource = runCatching {
-            TrailerPlaybackResolver.resolveFromYouTubeUrl(trailer.youtubePlaybackUrl())
-        }.getOrNull()
-    }
-
     LaunchedEffect(trailerFinished, playbackSource) {
         if (trailerFinished && playbackSource != null) {
             delay(HoverTrailerFadeDurationMillis.toLong())
-            playbackSource = null
+            playerMounted = false
         }
     }
 
-    playbackSource?.let { source ->
+    playbackSource?.takeIf { playerMounted }?.let { source ->
         HeroTrailerPlayerSurface(
             sourceUrl = source.videoUrl,
             sourceAudioUrl = source.audioUrl,
@@ -82,5 +70,21 @@ internal fun HomePosterHoverTrailer(
                 trailerFinished = true
             },
         )
+    }
+}
+
+internal suspend fun resolveHomePosterHoverTrailerPlaybackSource(
+    item: MetaPreview,
+): TrailerPlaybackSource? {
+    val meta = MetaDetailsRepository.peek(type = item.type, id = item.id)
+        ?: MetaDetailsRepository.fetch(type = item.type, id = item.id)
+    val trailer = selectHeroTrailer(meta?.trailers.orEmpty())
+        ?: return null
+    return try {
+        TrailerPlaybackResolver.resolveFromYouTubeUrl(trailer.youtubePlaybackUrl())
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (_: Throwable) {
+        null
     }
 }

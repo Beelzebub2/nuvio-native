@@ -18,8 +18,8 @@ internal const val MaxHoverPreviewOpenDelayMillis = 5_000
 internal const val HoverPreviewOpenDelayStepMillis = 500
 internal const val DefaultHoverPreviewTrailerStartSeconds = 0
 internal const val MinHoverPreviewTrailerStartSeconds = 0
-internal const val MaxHoverPreviewTrailerStartSeconds = 60
-internal const val HoverPreviewTrailerStartStepSeconds = 5
+internal const val MaxHoverPreviewTrailerStartSeconds = 5
+internal const val HoverPreviewTrailerStartStepSeconds = 1
 
 @Serializable
 private data class StoredPosterCardStylePreferences(

@@ -96,6 +96,11 @@ fun DesktopDetailHero(
         animationSpec = tween(durationMillis = NuvioTokens.Motion.sheetEnterMillis),
         label = "desktop_detail_hero_trailer_alpha",
     )
+    val gradientIntensity by animateFloatAsState(
+        targetValue = if (heroTrailerReady) 0.3f else 1f,
+        animationSpec = tween(durationMillis = NuvioTokens.Motion.sheetEnterMillis),
+        label = "desktop_detail_hero_gradient_intensity",
+    )
     var logoLoadError by remember(meta.id, meta.logo) {
         mutableStateOf(false)
     }
@@ -158,10 +163,10 @@ fun DesktopDetailHero(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
                             0.00f to Color.Transparent,
-                            0.14f to bottomGradientColor.copy(alpha = opacity.subtle),
-                            0.38f to bottomGradientColor.copy(alpha = opacity.overlayLight),
-                            0.66f to bottomGradientColor.copy(alpha = opacity.overlayHeavy),
-                            0.88f to bottomGradientColor.copy(alpha = 0.98f),
+                            0.14f to bottomGradientColor.copy(alpha = opacity.subtle * gradientIntensity),
+                            0.38f to bottomGradientColor.copy(alpha = opacity.overlayLight * gradientIntensity),
+                            0.66f to bottomGradientColor.copy(alpha = opacity.overlayHeavy * gradientIntensity),
+                            0.88f to bottomGradientColor.copy(alpha = 0.98f * gradientIntensity),
                             1.00f to bottomGradientColor,
                         ),
                     ),
@@ -173,9 +178,9 @@ fun DesktopDetailHero(
                 .background(
                     Brush.horizontalGradient(
                         colorStops = arrayOf(
-                            0.00f to sideGradientColor.copy(alpha = opacity.overlayHeavy),
-                            0.32f to sideGradientColor.copy(alpha = opacity.medium),
-                            0.62f to sideGradientColor.copy(alpha = opacity.subtle),
+                            0.00f to sideGradientColor.copy(alpha = opacity.overlayHeavy * gradientIntensity),
+                            0.32f to sideGradientColor.copy(alpha = opacity.medium * gradientIntensity),
+                            0.62f to sideGradientColor.copy(alpha = opacity.subtle * gradientIntensity),
                             1.00f to Color.Transparent,
                         ),
                     ),
