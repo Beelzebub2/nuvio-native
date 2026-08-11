@@ -7,10 +7,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.math.roundToInt
 
 internal const val DefaultPosterCardWidthDp = 126
 internal const val DefaultPosterCardHeightDp = 189
 internal const val DefaultPosterCardCornerRadiusDp = 12
+internal const val DefaultHoverPreviewOpenDelayMillis = 2_000
+internal const val MinHoverPreviewOpenDelayMillis = 500
+internal const val MaxHoverPreviewOpenDelayMillis = 5_000
+internal const val HoverPreviewOpenDelayStepMillis = 500
 
 @Serializable
 private data class StoredPosterCardStylePreferences(
@@ -19,6 +24,8 @@ private data class StoredPosterCardStylePreferences(
     val cornerRadiusDp: Int = DefaultPosterCardCornerRadiusDp,
     val catalogLandscapeModeEnabled: Boolean = false,
     val hideLabelsEnabled: Boolean = false,
+    val hoverPreviewEnabled: Boolean = true,
+    val hoverPreviewOpenDelayMillis: Int = DefaultHoverPreviewOpenDelayMillis,
 )
 
 data class PosterCardStyleUiState(
@@ -27,6 +34,8 @@ data class PosterCardStyleUiState(
     val cornerRadiusDp: Int = DefaultPosterCardCornerRadiusDp,
     val catalogLandscapeModeEnabled: Boolean = false,
     val hideLabelsEnabled: Boolean = false,
+    val hoverPreviewEnabled: Boolean = true,
+    val hoverPreviewOpenDelayMillis: Int = DefaultHoverPreviewOpenDelayMillis,
 )
 
 object PosterCardStyleRepository {
@@ -87,10 +96,29 @@ object PosterCardStyleRepository {
         persist()
     }
 
+    fun setHoverPreviewEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.hoverPreviewEnabled == enabled) return
+        _uiState.value = _uiState.value.copy(hoverPreviewEnabled = enabled)
+        persist()
+    }
+
+    fun setHoverPreviewOpenDelayMillis(delayMillis: Int) {
+        ensureLoaded()
+        val normalizedDelay = normalizeHoverPreviewOpenDelayMillis(delayMillis)
+        if (_uiState.value.hoverPreviewOpenDelayMillis == normalizedDelay) return
+        _uiState.value = _uiState.value.copy(hoverPreviewOpenDelayMillis = normalizedDelay)
+        persist()
+    }
+
     fun resetToDefaults() {
         ensureLoaded()
-        if (_uiState.value == PosterCardStyleUiState()) return
-        _uiState.value = PosterCardStyleUiState()
+        val defaults = PosterCardStyleUiState(
+            hoverPreviewEnabled = _uiState.value.hoverPreviewEnabled,
+            hoverPreviewOpenDelayMillis = _uiState.value.hoverPreviewOpenDelayMillis,
+        )
+        if (_uiState.value == defaults) return
+        _uiState.value = defaults
         persist()
     }
 
@@ -117,6 +145,10 @@ object PosterCardStyleRepository {
                 cornerRadiusDp = cornerRadiusDp,
                 catalogLandscapeModeEnabled = stored.catalogLandscapeModeEnabled,
                 hideLabelsEnabled = stored.hideLabelsEnabled,
+                hoverPreviewEnabled = stored.hoverPreviewEnabled,
+                hoverPreviewOpenDelayMillis = normalizeHoverPreviewOpenDelayMillis(
+                    stored.hoverPreviewOpenDelayMillis,
+                ),
             )
         } else {
             PosterCardStyleUiState()
@@ -132,8 +164,17 @@ object PosterCardStyleRepository {
                     cornerRadiusDp = _uiState.value.cornerRadiusDp,
                     catalogLandscapeModeEnabled = _uiState.value.catalogLandscapeModeEnabled,
                     hideLabelsEnabled = _uiState.value.hideLabelsEnabled,
+                    hoverPreviewEnabled = _uiState.value.hoverPreviewEnabled,
+                    hoverPreviewOpenDelayMillis = _uiState.value.hoverPreviewOpenDelayMillis,
                 ),
             ),
         )
     }
 }
+
+private fun normalizeHoverPreviewOpenDelayMillis(delayMillis: Int): Int =
+    ((delayMillis.coerceIn(
+        MinHoverPreviewOpenDelayMillis,
+        MaxHoverPreviewOpenDelayMillis,
+    ) / HoverPreviewOpenDelayStepMillis.toFloat()).roundToInt() * HoverPreviewOpenDelayStepMillis)
+        .coerceIn(MinHoverPreviewOpenDelayMillis, MaxHoverPreviewOpenDelayMillis)
