@@ -14,8 +14,10 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.language.jvm.tasks.ProcessResources
 import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Properties
 import javax.inject.Inject
@@ -1282,6 +1284,7 @@ compose.desktop {
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon.png"))
+                debMaintainer = "hello@nuvio.tv"
             }
         }
 
@@ -1399,6 +1402,43 @@ tasks.matching { it.name == "packageReleaseMsi" }.configureEach {
     doLast {
         publishWindowsMsiOutput(release = true)
     }
+}
+
+if (isLinuxHost) {
+    val linuxDebPatchScript = rootProject.layout.projectDirectory.file("scripts/patch-linux-deb.sh")
+    val linuxDebVerifyScript = rootProject.layout.projectDirectory.file("scripts/verify-linux-deb.sh")
+
+    tasks.withType<AbstractJPackageTask>()
+        .matching { it.name == "packageDeb" || it.name == "packageReleaseDeb" }
+        .configureEach {
+            doLast {
+                val effectiveLinuxPackageName = linuxPackageName.orNull ?: packageName.get().lowercase()
+                val effectiveLinuxAppRelease = linuxAppRelease.orNull ?: "1"
+                val artifactPrefix =
+                    "${effectiveLinuxPackageName}_${packageVersion.get()}-${effectiveLinuxAppRelease}_"
+                val debs = destinationDir.get().asFile
+                    .listFiles { file ->
+                        file.isFile && file.name.startsWith(artifactPrefix) && file.extension == "deb"
+                    }
+                    ?.sortedBy { it.name }
+                    .orEmpty()
+                require(debs.size == 1) {
+                    "Expected exactly one current Linux DEB matching $artifactPrefix in " +
+                        "${destinationDir.get().asFile.absolutePath}, found ${debs.size}."
+                }
+                val deb = debs.single()
+                listOf(linuxDebPatchScript, linuxDebVerifyScript).forEach { script ->
+                    val command = listOf("bash", script.asFile.absolutePath, deb.absolutePath)
+                    val exitCode = ProcessBuilder(command)
+                        .inheritIO()
+                        .start()
+                        .waitFor()
+                    check(exitCode == 0) {
+                        "Linux DEB command failed with exit code $exitCode: ${command.joinToString(" ")}"
+                    }
+                }
+            }
+        }
 }
 
 if (isMacHost) {
