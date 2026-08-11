@@ -1,6 +1,3 @@
-rootProject.name = "Nuvio"
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
-
 pluginManagement {
     repositories {
         google {
@@ -14,6 +11,13 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
+rootProject.name = "Nuvio"
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
     repositories {
@@ -31,3 +35,5 @@ dependencyResolutionManagement {
 include(":composeApp")
 include(":androidApp")
 include(":desktopSentry")
+include(":composeMediaPlayer")
+project(":composeMediaPlayer").projectDir = file("vendor/compose-media-player/mediaplayer")

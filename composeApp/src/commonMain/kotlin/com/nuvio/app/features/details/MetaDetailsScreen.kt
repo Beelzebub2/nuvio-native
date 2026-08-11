@@ -1047,6 +1047,9 @@ fun MetaDetailsScreen(
                                         onBackdropLoaded = { painter ->
                                             dominantBackdropPainter = painter
                                         },
+                                        onHeroTrailerMuteToggle = {
+                                            HeroTrailerAudioState.toggleMuted()
+                                        },
                                         onHeroTrailerReady = {
                                             if (!heroTrailerFinished) {
                                                 heroTrailerReady = true
