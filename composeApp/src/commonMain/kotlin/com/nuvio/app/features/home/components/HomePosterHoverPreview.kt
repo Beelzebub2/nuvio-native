@@ -67,9 +67,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.build.TrailerPlaybackMode
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioAsyncImage
-import com.nuvio.app.core.ui.NuvioDesktopImageScaling
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.PosterZoomOverlayCoordinator
@@ -123,6 +124,8 @@ internal fun HomePosterHoverPreview(
     }
 
     val posterCardStyle = rememberPosterCardStyleUiState()
+    val trailerPlaybackEnabled = AppFeaturePolicy.trailerPlaybackMode == TrailerPlaybackMode.IN_APP &&
+        posterCardStyle.hoverPreviewTrailerEnabled
     if (!posterCardStyle.hoverPreviewEnabled) {
         content(modifier)
         return
@@ -187,10 +190,10 @@ internal fun HomePosterHoverPreview(
         }
     }
 
-    LaunchedEffect(anchorHovered, posterCardStyle.hoverPreviewTrailerEnabled) {
+    LaunchedEffect(anchorHovered, trailerPlaybackEnabled) {
         if (
             anchorHovered &&
-            posterCardStyle.hoverPreviewTrailerEnabled &&
+            trailerPlaybackEnabled &&
             trailerPlaybackSource == null &&
             !trailerResolutionPending
         ) {
@@ -202,11 +205,11 @@ internal fun HomePosterHoverPreview(
 
     LaunchedEffect(
         trailerRequestId,
-        posterCardStyle.hoverPreviewTrailerEnabled,
+        trailerPlaybackEnabled,
         item.type,
         item.id,
     ) {
-        if (!posterCardStyle.hoverPreviewTrailerEnabled) {
+        if (!trailerPlaybackEnabled) {
             trailerPlaybackSource = null
             trailerResolutionPending = false
             return@LaunchedEffect
@@ -316,7 +319,7 @@ internal fun HomePosterHoverPreview(
                         item = item,
                         isWatched = isWatched,
                         isSaved = previewIsSaved,
-                        trailerEnabled = posterCardStyle.hoverPreviewTrailerEnabled,
+                        trailerEnabled = trailerPlaybackEnabled,
                         trailerSoundEnabled = posterCardStyle.hoverPreviewTrailerSoundEnabled,
                         trailerStartSeconds = posterCardStyle.hoverPreviewTrailerStartSeconds,
                         trailerPlaybackSource = trailerPlaybackSource,
@@ -396,7 +399,6 @@ private fun HomePosterPreviewCard(
                     contentDescription = item.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    desktopImageScaling = NuvioDesktopImageScaling.Disabled,
                 )
             }
 
@@ -435,7 +437,6 @@ private fun HomePosterPreviewCard(
                     alignment = Alignment.CenterStart,
                     contentScale = ContentScale.Fit,
                     clipToBounds = false,
-                    desktopImageScaling = NuvioDesktopImageScaling.Disabled,
                     onError = { logoLoadError = true },
                 )
             } else {

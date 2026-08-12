@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.build.TrailerPlaybackMode
 import com.nuvio.app.core.ui.HoverPreviewOpenDelayStepMillis
 import com.nuvio.app.core.ui.HoverPreviewTrailerStartStepSeconds
 import com.nuvio.app.core.ui.MaxHoverPreviewOpenDelayMillis
@@ -72,37 +74,39 @@ internal fun LazyListScope.hoverPreviewSettingsContent(
             }
         }
     }
-    item {
-        SettingsSection(
-            title = stringResource(Res.string.settings_hover_preview_section_trailer),
-            isTablet = isTablet,
-        ) {
-            SettingsGroup(isTablet = isTablet) {
-                SettingsSwitchRow(
-                    title = stringResource(Res.string.settings_hover_preview_trailer_enabled),
-                    description = stringResource(Res.string.settings_hover_preview_trailer_enabled_description),
-                    checked = uiState.hoverPreviewTrailerEnabled,
-                    enabled = uiState.hoverPreviewEnabled,
-                    isTablet = isTablet,
-                    onCheckedChange = PosterCardStyleRepository::setHoverPreviewTrailerEnabled,
-                )
-                SettingsGroupDivider(isTablet = isTablet)
-                SettingsSwitchRow(
-                    title = stringResource(Res.string.settings_hover_preview_trailer_sound_enabled),
-                    description = stringResource(
-                        Res.string.settings_hover_preview_trailer_sound_enabled_description,
-                    ),
-                    checked = uiState.hoverPreviewTrailerSoundEnabled,
-                    enabled = uiState.hoverPreviewEnabled && uiState.hoverPreviewTrailerEnabled,
-                    isTablet = isTablet,
-                    onCheckedChange = PosterCardStyleRepository::setHoverPreviewTrailerSoundEnabled,
-                )
-                SettingsGroupDivider(isTablet = isTablet)
-                HoverPreviewTrailerStartSlider(
-                    isTablet = isTablet,
-                    enabled = uiState.hoverPreviewEnabled && uiState.hoverPreviewTrailerEnabled,
-                    startSeconds = uiState.hoverPreviewTrailerStartSeconds,
-                )
+    if (AppFeaturePolicy.trailerPlaybackMode == TrailerPlaybackMode.IN_APP) {
+        item {
+            SettingsSection(
+                title = stringResource(Res.string.settings_hover_preview_section_trailer),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_hover_preview_trailer_enabled),
+                        description = stringResource(Res.string.settings_hover_preview_trailer_enabled_description),
+                        checked = uiState.hoverPreviewTrailerEnabled,
+                        enabled = uiState.hoverPreviewEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = PosterCardStyleRepository::setHoverPreviewTrailerEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_hover_preview_trailer_sound_enabled),
+                        description = stringResource(
+                            Res.string.settings_hover_preview_trailer_sound_enabled_description,
+                        ),
+                        checked = uiState.hoverPreviewTrailerSoundEnabled,
+                        enabled = uiState.hoverPreviewEnabled && uiState.hoverPreviewTrailerEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = PosterCardStyleRepository::setHoverPreviewTrailerSoundEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    HoverPreviewTrailerStartSlider(
+                        isTablet = isTablet,
+                        enabled = uiState.hoverPreviewEnabled && uiState.hoverPreviewTrailerEnabled,
+                        startSeconds = uiState.hoverPreviewTrailerStartSeconds,
+                    )
+                }
             }
         }
     }
