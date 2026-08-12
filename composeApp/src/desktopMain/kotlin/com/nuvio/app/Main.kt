@@ -15,6 +15,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.deeplink.handleAppUrl
+import com.nuvio.app.core.diagnostics.SentryInitializer
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.plugins.configureDesktopQuickJsLibrary
 import com.nuvio.app.features.player.PlatformPlayerSurface
@@ -26,6 +27,7 @@ import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
 import com.nuvio.app.features.player.desktop.preloadNativePlayerBridgeAsync
 import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
+import com.nuvio.app.features.settings.applyDesktopRendererPreference
 import java.awt.Desktop
 import java.awt.Color as AwtColor
 import javax.swing.JComponent
@@ -35,6 +37,8 @@ private const val NuvioDesktopIconPath = "icons/nuvio-app-icon.png"
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
 fun main(args: Array<String>) {
+    applyDesktopRendererPreference()
+    SentryInitializer.start()
     configureDesktopQuickJsLibrary()
     configureDesktopChrome()
     installDesktopOpenUriHandler()
@@ -50,6 +54,7 @@ fun main(args: Array<String>) {
         val wasFullscreenOnLastExit = remember { DesktopWindowModeStorage.loadWasFullscreen() }
         val wasMaximizedOnLastExit = remember { DesktopWindowModeStorage.loadWasMaximized() }
         val savedGeometry = remember { DesktopWindowModeStorage.loadWindowedGeometry() }
+        val restoresMaximizedWindowPlacement = DesktopHostOs.current != DesktopHostOs.MACOS
         val windowState = rememberWindowState(
             width = savedGeometry?.width?.dp ?: 1280.dp,
             height = savedGeometry?.height?.dp ?: 820.dp,
@@ -64,9 +69,10 @@ fun main(args: Array<String>) {
                 wasMaximizedOnLastExit == false && savedGeometry != null -> {
                     WindowPlacement.Floating
                 }
-                else -> {
+                restoresMaximizedWindowPlacement -> {
                     WindowPlacement.Maximized
                 }
+                else -> WindowPlacement.Floating
             },
         )
         val fullscreenController = remember { DesktopAppFullscreenController() }
@@ -74,6 +80,7 @@ fun main(args: Array<String>) {
         Window(
             onCloseRequest = {
                 P2pStreamingEngine.shutdown()
+                SentryInitializer.close()
                 exitApplication()
             },
             title = if (smokePlayerUrl == null) "Nuvio" else "Nuvio Player Smoke",
@@ -108,7 +115,7 @@ fun main(args: Array<String>) {
                 snapshotFlow { Triple(windowState.placement, windowState.position, windowState.size) }
                     .collect { (placement, position, size) ->
                         val isFullscreen = fullscreenController.isFullscreen(window, windowState)
-                        if (!isFullscreen) {
+                        if (!isFullscreen && restoresMaximizedWindowPlacement) {
                             DesktopWindowModeStorage.saveWasMaximized(placement == WindowPlacement.Maximized)
                         }
                         val isWindowed = placement == WindowPlacement.Floating && !isFullscreen
