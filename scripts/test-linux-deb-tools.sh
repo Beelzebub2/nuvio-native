@@ -27,7 +27,7 @@ cat > "$package_root/DEBIAN/control" <<'CONTROL'
 Package: nuvio-test
 Version: 1.0-1
 Architecture: all
-Maintainer: Nuvio Media <hello@nuvio.tv>
+Maintainer: Nuvio Media <contact@nuvio.tv>
 Depends: libmpv2 (>= 0.35),
  libwebkit2gtk-4.1-0 | nuvio-webkit-fallback,
  libxcomposite1,

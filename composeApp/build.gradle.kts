@@ -1284,7 +1284,7 @@ compose.desktop {
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon.png"))
-                debMaintainer = "hello@nuvio.tv"
+                debMaintainer = "contact@nuvio.tv"
             }
         }
 
