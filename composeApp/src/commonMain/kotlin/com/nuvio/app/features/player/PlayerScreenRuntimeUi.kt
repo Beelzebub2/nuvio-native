@@ -26,6 +26,7 @@ import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
 import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.streams.AddonStreamGroup
+import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.isSelectableForPlayback
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
@@ -1127,6 +1128,9 @@ private fun PlayerScreenRuntime.buildPlayerControlEpisodeStreamFilters(
 
 private fun PlayerScreenRuntime.buildPlayerControlSourceItems(): List<PlayerControlSourceItem> {
     val canResolveDebrid = DebridSettingsRepository.uiState.value.canResolvePlayableLinks
+    val streamBadgeState = StreamBadgeSettingsRepository.uiState.value
+    val showFileSizeBadges = streamBadgeState.showFileSizeBadges
+    val showAddonLogo = streamBadgeState.showAddonLogo
     return sourceStreamsState.groups.flatMap { group ->
         group.streams.map { stream -> group.addonId to stream }
     }.mapIndexed { index, (filterId, stream) ->
@@ -1136,14 +1140,29 @@ private fun PlayerScreenRuntime.buildPlayerControlSourceItems(): List<PlayerCont
             label = stream.streamLabel,
             subtitle = stream.streamSubtitle.orEmpty(),
             addonName = stream.addonName,
+            addonLogo = stream.addonLogo.orEmpty(),
+            showAddonLogo = showAddonLogo,
             isCurrent = isCurrentPlayerControlStream(stream),
             isEnabled = stream.isSelectableForPlayback(canResolveDebrid),
+            badges = stream.badges.map {
+                PlayerControlSourceBadgeItem(
+                    name = it.name,
+                    imageURL = it.imageURL,
+                    tagColor = it.tagColor,
+                    tagStyle = it.tagStyle,
+                    borderColor = it.borderColor,
+                )
+            },
+            formattedSize = if (showFileSizeBadges) formatStreamVideoSize(stream.behaviorHints.videoSize) else "",
         )
     }
 }
 
 private fun PlayerScreenRuntime.buildPlayerControlEpisodeStreamItems(): List<PlayerControlSourceItem> {
     val canResolveDebrid = DebridSettingsRepository.uiState.value.canResolvePlayableLinks
+    val streamBadgeState = StreamBadgeSettingsRepository.uiState.value
+    val showFileSizeBadges = streamBadgeState.showFileSizeBadges
+    val showAddonLogo = streamBadgeState.showAddonLogo
     return episodeStreamsRepoState.groups.flatMap { group ->
         group.streams.map { stream -> group.addonId to stream }
     }.mapIndexed { index, (filterId, stream) ->
@@ -1153,9 +1172,33 @@ private fun PlayerScreenRuntime.buildPlayerControlEpisodeStreamItems(): List<Pla
             label = stream.streamLabel,
             subtitle = stream.streamSubtitle.orEmpty(),
             addonName = stream.addonName,
+            addonLogo = stream.addonLogo.orEmpty(),
+            showAddonLogo = showAddonLogo,
             isCurrent = false,
             isEnabled = stream.isSelectableForPlayback(canResolveDebrid),
+            badges = stream.badges.map {
+                PlayerControlSourceBadgeItem(
+                    name = it.name,
+                    imageURL = it.imageURL,
+                    tagColor = it.tagColor,
+                    tagStyle = it.tagStyle,
+                    borderColor = it.borderColor,
+                )
+            },
+            formattedSize = if (showFileSizeBadges) formatStreamVideoSize(stream.behaviorHints.videoSize) else "",
         )
+    }
+}
+
+private fun formatStreamVideoSize(bytes: Long?): String {
+    if (bytes == null || bytes <= 0L) return ""
+    val gib = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
+    return if (gib >= 1.0) {
+        val roundedGiB = kotlin.math.round(gib * 10.0) / 10.0
+        "$roundedGiB GB"
+    } else {
+        val mib = bytes.toDouble() / (1024.0 * 1024.0)
+        "${kotlin.math.round(mib).toInt()} MB"
     }
 }
 
