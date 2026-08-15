@@ -24,8 +24,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Canvas
@@ -38,7 +41,16 @@ import org.jetbrains.skia.SamplingMode
 
 private const val MAX_FRAME_DIMENSION = 512
 
-private val desktopGifHttpClient by lazy { HttpClient(CIO) }
+private val desktopGifHttpClient by lazy {
+    HttpClient(CIO) {
+        followRedirects = true
+        engine {
+            requestTimeout = 15_000
+        }
+    }
+}
+
+private val downloadSemaphore = Semaphore(4)
 
 private class GifCodecHolder(
     val codec: Codec,
@@ -69,33 +81,43 @@ private suspend fun loadDesktopGifCodec(url: String): GifCodecHolder? {
             return gifCodecCache[url]
         }
     }
+    
     val holder = withContext(Dispatchers.IO) {
-        try {
-            val bytes = desktopGifHttpClient.get(url).body<ByteArray>()
-            val codec = Codec.makeFromData(Data.makeFromBytes(bytes))
-            val count = codec.frameCount
-            if (count <= 1) return@withContext null
-            val w = codec.width
-            val h = codec.height
-            if (w <= 0 || h <= 0) return@withContext null
+        downloadSemaphore.withPermit {
+            try {
+                val bytes = desktopGifHttpClient.get(url) {
+                    header(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    )
+                }.body<ByteArray>()
 
-            val scale = if (w > MAX_FRAME_DIMENSION || h > MAX_FRAME_DIMENSION) {
-                minOf(MAX_FRAME_DIMENSION.toFloat() / w, MAX_FRAME_DIMENSION.toFloat() / h)
-            } else 1f
+                val codec = Codec.makeFromData(Data.makeFromBytes(bytes))
+                val count = codec.frameCount
+                if (count <= 1) return@withPermit null
+                val w = codec.width
+                val h = codec.height
+                if (w <= 0 || h <= 0) return@withPermit null
 
-            val tw = (w * scale).toInt().coerceAtLeast(1)
-            val th = (h * scale).toInt().coerceAtLeast(1)
-            val needsScale = tw != w || th != h
+                val scale = if (w > MAX_FRAME_DIMENSION || h > MAX_FRAME_DIMENSION) {
+                    minOf(MAX_FRAME_DIMENSION.toFloat() / w, MAX_FRAME_DIMENSION.toFloat() / h)
+                } else 1f
 
-            val delays = List(count) { i ->
-                val duration = codec.getFrameInfo(i).duration
-                if (duration > 0) duration.toLong() else 100L
+                val tw = (w * scale).toInt().coerceAtLeast(1)
+                val th = (h * scale).toInt().coerceAtLeast(1)
+                val needsScale = tw != w || th != h
+
+                val delays = List(count) { i ->
+                    val duration = codec.getFrameInfo(i).duration
+                    if (duration > 0) duration.toLong() else 100L
+                }
+                GifCodecHolder(codec, delays, w, h, tw, th, needsScale)
+            } catch (_: Exception) {
+                null
             }
-            GifCodecHolder(codec, delays, w, h, tw, th, needsScale)
-        } catch (_: Exception) {
-            null
         }
     }
+
     synchronized(gifCodecCache) {
         gifCodecCache[url] = holder
     }
