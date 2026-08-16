@@ -233,14 +233,27 @@ data class PlayerControlSeasonItem(
     val isSelected: Boolean = false,
 )
 
+data class PlayerControlSourceBadgeItem(
+    val name: String = "",
+    val imageURL: String = "",
+    val tagColor: String = "",
+    val tagStyle: String = "",
+    val borderColor: String = "",
+)
+
 data class PlayerControlSourceItem(
     val index: Int = 0,
     val filterId: String = "",
     val label: String = "",
     val subtitle: String = "",
     val addonName: String = "",
+    val addonLogo: String = "",
+    val showAddonLogo: Boolean = false,
     val isCurrent: Boolean = false,
     val isEnabled: Boolean = true,
+    val badges: List<PlayerControlSourceBadgeItem> = emptyList(),
+    val formattedSize: String = "",
+    val badgePlacement: String = "BOTTOM",
 )
 
 data class PlayerControlEpisodeItem(

@@ -1359,22 +1359,109 @@ const buildSourceRow = (item, onSelect) => {
     chip.textContent = state.playingLabel || "Playing";
     top.appendChild(chip);
   }
-  copy.appendChild(top);
 
+  let subtitle = null;
   if (item.subtitle) {
-    const subtitle = document.createElement("span");
+    subtitle = document.createElement("span");
     subtitle.className = "stream-subtitle";
     subtitle.textContent = item.subtitle;
-    copy.appendChild(subtitle);
   }
 
-  if (item.addonName) {
-    const addon = document.createElement("span");
-    addon.className = "stream-addon";
-    addon.textContent = item.addonName;
-    copy.appendChild(addon);
+function formatCssColor(colorStr) {
+  if (!colorStr) return null;
+  let str = String(colorStr).trim();
+  if (!str) return null;
+  const hex = str.replace(/^#/, "");
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return '#' + hex;
   }
+  if (/^[0-9a-fA-F]{8}$/.test(hex)) {
+    const a = parseInt(hex.substring(0, 2), 16) / 255;
+    const r = parseInt(hex.substring(2, 4), 16);
+    const g = parseInt(hex.substring(4, 6), 16);
+    const b = parseInt(hex.substring(6, 8), 16);
+    if (a <= 0) return null;
+    return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
+  }
+  return str.startsWith('#') ? str : '#' + str;
+}
+
+  const isTopPlacement = (item.badgePlacement || "").toUpperCase() === "TOP";
+  const badges = Array.isArray(item.badges) ? item.badges.filter(b => b && b.imageURL) : [];
+  const hasSize = Boolean(item.formattedSize);
+  let badgeRow = null;
+  if (badges.length > 0 || hasSize) {
+    badgeRow = document.createElement("span");
+    badgeRow.className = `stream-badge-row${isTopPlacement ? " badge-placement-top" : ""}`;
+
+    badges.forEach(badge => {
+      const container = document.createElement("span");
+      container.className = "stream-badge-chip-container";
+      
+      const tagStyle = (badge.tagStyle || "").trim().toLowerCase();
+      const isFilled = tagStyle === "filled";
+      
+      if (badge.tagColor && isFilled) {
+        const bg = formatCssColor(badge.tagColor);
+        if (bg) container.style.backgroundColor = bg;
+      }
+      
+      if (badge.borderColor) {
+        const borderCol = formatCssColor(badge.borderColor);
+        if (borderCol) container.style.border = `1px solid ${borderCol}`;
+      }
+
+      const img = document.createElement("img");
+      img.className = "stream-badge-chip-img";
+      img.alt = badge.name || "";
+      img.loading = "lazy";
+      setImageSource(img, badge.imageURL);
+      container.appendChild(img);
+      badgeRow.appendChild(container);
+    });
+
+    if (hasSize) {
+      const sizeBadge = document.createElement("span");
+      sizeBadge.className = "stream-size-badge";
+      sizeBadge.textContent = item.formattedSize;
+      badgeRow.appendChild(sizeBadge);
+    }
+  }
+
+  if (isTopPlacement) {
+    if (badgeRow) copy.appendChild(badgeRow);
+    copy.appendChild(top);
+    if (subtitle) copy.appendChild(subtitle);
+  } else {
+    copy.appendChild(top);
+    if (subtitle) copy.appendChild(subtitle);
+    if (badgeRow) copy.appendChild(badgeRow);
+  }
+
   row.appendChild(copy);
+
+  if (item.showAddonLogo && (item.addonLogo || item.addonName)) {
+    const addonCol = document.createElement("span");
+    addonCol.className = "stream-addon-col";
+
+    if (item.addonLogo) {
+      const logoImg = document.createElement("img");
+      logoImg.className = "stream-addon-logo";
+      logoImg.alt = item.addonName || "";
+      setImageSource(logoImg, item.addonLogo);
+      addonCol.appendChild(logoImg);
+    }
+
+    if (item.addonName) {
+      const addonLabel = document.createElement("span");
+      addonLabel.className = "stream-addon-label";
+      addonLabel.textContent = item.addonName;
+      addonCol.appendChild(addonLabel);
+    }
+
+    row.appendChild(addonCol);
+  }
+
   return row;
 };
 
