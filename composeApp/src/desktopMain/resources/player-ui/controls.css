@@ -2475,6 +2475,11 @@ button:disabled {
   margin-bottom: 2px;
 }
 
+.stream-badge-row.badge-placement-top {
+  margin-top: 2px;
+  margin-bottom: 6px;
+}
+
 .stream-badge-chip-container {
   display: inline-flex;
   align-items: center;

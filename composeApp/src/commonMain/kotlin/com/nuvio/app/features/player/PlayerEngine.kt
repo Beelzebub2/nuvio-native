@@ -253,6 +253,7 @@ data class PlayerControlSourceItem(
     val isEnabled: Boolean = true,
     val badges: List<PlayerControlSourceBadgeItem> = emptyList(),
     val formattedSize: String = "",
+    val badgePlacement: String = "BOTTOM",
 )
 
 data class PlayerControlEpisodeItem(

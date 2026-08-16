@@ -1359,13 +1359,12 @@ const buildSourceRow = (item, onSelect) => {
     chip.textContent = state.playingLabel || "Playing";
     top.appendChild(chip);
   }
-  copy.appendChild(top);
 
+  let subtitle = null;
   if (item.subtitle) {
-    const subtitle = document.createElement("span");
+    subtitle = document.createElement("span");
     subtitle.className = "stream-subtitle";
     subtitle.textContent = item.subtitle;
-    copy.appendChild(subtitle);
   }
 
 function formatCssColor(colorStr) {
@@ -1387,11 +1386,13 @@ function formatCssColor(colorStr) {
   return str.startsWith('#') ? str : '#' + str;
 }
 
+  const isTopPlacement = (item.badgePlacement || "").toUpperCase() === "TOP";
   const badges = Array.isArray(item.badges) ? item.badges.filter(b => b && b.imageURL) : [];
   const hasSize = Boolean(item.formattedSize);
+  let badgeRow = null;
   if (badges.length > 0 || hasSize) {
-    const badgeRow = document.createElement("span");
-    badgeRow.className = "stream-badge-row";
+    badgeRow = document.createElement("span");
+    badgeRow.className = `stream-badge-row${isTopPlacement ? " badge-placement-top" : ""}`;
 
     badges.forEach(badge => {
       const container = document.createElement("span");
@@ -1422,11 +1423,19 @@ function formatCssColor(colorStr) {
     if (hasSize) {
       const sizeBadge = document.createElement("span");
       sizeBadge.className = "stream-size-badge";
-      sizeBadge.textContent = `SIZE ${item.formattedSize}`;
+      sizeBadge.textContent = item.formattedSize;
       badgeRow.appendChild(sizeBadge);
     }
+  }
 
-    copy.appendChild(badgeRow);
+  if (isTopPlacement) {
+    if (badgeRow) copy.appendChild(badgeRow);
+    copy.appendChild(top);
+    if (subtitle) copy.appendChild(subtitle);
+  } else {
+    copy.appendChild(top);
+    if (subtitle) copy.appendChild(subtitle);
+    if (badgeRow) copy.appendChild(badgeRow);
   }
 
   row.appendChild(copy);
