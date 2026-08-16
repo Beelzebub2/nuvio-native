@@ -27,6 +27,7 @@ import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
 import com.nuvio.app.features.player.desktop.preloadNativePlayerBridgeAsync
 import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.settings.applyDesktopRendererPreference
 import java.awt.Desktop
 import java.awt.Color as AwtColor
@@ -44,6 +45,9 @@ fun main(args: Array<String>) {
     installDesktopOpenUriHandler()
     handleDesktopLaunchArgs(args)
     preloadNativePlayerBridgeAsync()
+    // Load cached profile data synchronously so the profile color is available
+    // on the very first Compose frame (matching Android's SharedPreferences behavior).
+    ProfileRepository.loadCachedProfiles()
 
     application {
         val smokePlayerUrl = (
@@ -55,25 +59,43 @@ fun main(args: Array<String>) {
         val wasMaximizedOnLastExit = remember { DesktopWindowModeStorage.loadWasMaximized() }
         val savedGeometry = remember { DesktopWindowModeStorage.loadWindowedGeometry() }
         val restoresMaximizedWindowPlacement = DesktopHostOs.current != DesktopHostOs.MACOS
+        val initialPlacement = when {
+            wasFullscreenOnLastExit && DesktopHostOs.current != DesktopHostOs.WINDOWS -> {
+                WindowPlacement.Fullscreen
+            }
+            wasMaximizedOnLastExit == false && savedGeometry != null -> {
+                WindowPlacement.Floating
+            }
+            restoresMaximizedWindowPlacement -> {
+                WindowPlacement.Maximized
+            }
+            else -> WindowPlacement.Floating
+        }
+        val isStartingMaximizedOrFullscreen =
+            initialPlacement == WindowPlacement.Maximized || initialPlacement == WindowPlacement.Fullscreen
+        val maxScreenBounds = remember {
+            runCatching {
+                java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+            }.getOrNull()
+        }
+        val initialWidth = when {
+            isStartingMaximizedOrFullscreen && maxScreenBounds != null -> maxScreenBounds.width.dp
+            savedGeometry != null -> savedGeometry.width.dp
+            else -> 1280.dp
+        }
+        val initialHeight = when {
+            isStartingMaximizedOrFullscreen && maxScreenBounds != null -> maxScreenBounds.height.dp
+            savedGeometry != null -> savedGeometry.height.dp
+            else -> 820.dp
+        }
         val windowState = rememberWindowState(
-            width = savedGeometry?.width?.dp ?: 1280.dp,
-            height = savedGeometry?.height?.dp ?: 820.dp,
+            width = initialWidth,
+            height = initialHeight,
             position = savedGeometry?.let { WindowPosition.Absolute(x = it.x.dp, y = it.y.dp) }
                 ?: WindowPosition.PlatformDefault,
             // Windows fullscreen is emulated natively (see DesktopAppFullscreenController)
             // rather than driven by WindowPlacement, so it's restored separately below.
-            placement = when {
-                wasFullscreenOnLastExit && DesktopHostOs.current != DesktopHostOs.WINDOWS -> {
-                    WindowPlacement.Fullscreen
-                }
-                wasMaximizedOnLastExit == false && savedGeometry != null -> {
-                    WindowPlacement.Floating
-                }
-                restoresMaximizedWindowPlacement -> {
-                    WindowPlacement.Maximized
-                }
-                else -> WindowPlacement.Floating
-            },
+            placement = initialPlacement,
         )
         val fullscreenController = remember { DesktopAppFullscreenController() }
 
