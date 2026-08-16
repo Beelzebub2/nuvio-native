@@ -2433,6 +2433,26 @@ static NSArray<NSString *> *jstringArrayToNSArray(JNIEnv *env, jobjectArray valu
     return result;
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setMacosWindowFullscreen(
+    JNIEnv * /* env */,
+    jobject /* bridge */,
+    jlong windowViewPtr,
+    jboolean fullscreen
+) {
+    NSView *windowView = (__bridge NSView *)(void *)(intptr_t)windowViewPtr;
+    if (!windowView) return;
+    BOOL requestedFullscreen = fullscreen == JNI_TRUE;
+    runOnMainAsync(^{
+        NSWindow *window = windowView.window;
+        if (!window) return;
+        BOOL isFullscreen = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
+        if (isFullscreen != requestedFullscreen) {
+            [window toggleFullScreen:nil];
+        }
+    });
+}
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_create(
     JNIEnv *env,
