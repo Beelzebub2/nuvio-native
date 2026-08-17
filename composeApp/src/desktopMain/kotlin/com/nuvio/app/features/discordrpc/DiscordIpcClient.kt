@@ -27,7 +27,10 @@ import java.util.UUID
 private const val OpcodeHandshake = 0
 private const val OpcodeFrame = 1
 
-private val discordIpcJson = Json { ignoreUnknownKeys = true }
+private val discordIpcJson = Json {
+    ignoreUnknownKeys = true
+    explicitNulls = true
+}
 
 @Serializable
 private data class HandshakePayload(
@@ -43,7 +46,7 @@ private data class SetActivityArgs(
 
 @Serializable
 private data class SetActivityCommand(
-    val cmd: String = "SET_ACTIVITY",
+    val cmd: String,
     val nonce: String,
     val args: SetActivityArgs,
 )
@@ -160,11 +163,21 @@ internal class DiscordIpcClient(private val clientId: String) {
         val currentPipe = pipe ?: return@withContext false
         try {
             val command = SetActivityCommand(
+                cmd = "SET_ACTIVITY",
                 nonce = UUID.randomUUID().toString(),
                 args = SetActivityArgs(pid = pid, activity = activity),
             )
-            writeFrame(currentPipe, OpcodeFrame, discordIpcJson.encodeToString(command))
-            readFrame(currentPipe)
+            val encodedCommand = discordIpcJson.encodeToString(command)
+            writeFrame(currentPipe, OpcodeFrame, encodedCommand)
+            val (responseOpcode, responsePayload) = readFrame(currentPipe)
+            val response = discordIpcJson.parseToJsonElement(responsePayload).jsonObject
+            val responseCommand = response["cmd"]?.jsonPrimitive?.contentOrNull
+            val responseEvent = response["evt"]?.jsonPrimitive?.contentOrNull
+            val responseNonce = response["nonce"]?.jsonPrimitive?.contentOrNull
+            check(responseOpcode == OpcodeFrame) { "unexpected Discord response opcode=$responseOpcode" }
+            check(responseCommand == "SET_ACTIVITY" && responseNonce == command.nonce) {
+                "unexpected Discord response cmd=$responseCommand evt=$responseEvent nonce=$responseNonce"
+            }
             true
         } catch (e: CancellationException) {
             throw e
