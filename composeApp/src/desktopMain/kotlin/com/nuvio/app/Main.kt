@@ -16,6 +16,7 @@ import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.deeplink.handleAppUrl
 import com.nuvio.app.core.diagnostics.SentryInitializer
+import com.nuvio.app.features.discordrpc.DiscordPresenceManager
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.plugins.configureDesktopQuickJsLibrary
 import com.nuvio.app.features.player.PlatformPlayerSurface
@@ -48,6 +49,7 @@ fun main(args: Array<String>) {
     // Load cached profile data synchronously so the profile color is available
     // on the very first Compose frame (matching Android's SharedPreferences behavior).
     ProfileRepository.loadCachedProfiles()
+    DiscordPresenceManager.start()
 
     application {
         val smokePlayerUrl = (
@@ -102,6 +104,7 @@ fun main(args: Array<String>) {
         Window(
             onCloseRequest = {
                 P2pStreamingEngine.shutdown()
+                DiscordPresenceManager.shutdown()
                 SentryInitializer.close()
                 exitApplication()
             },
