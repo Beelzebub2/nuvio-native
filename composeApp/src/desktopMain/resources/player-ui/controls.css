@@ -1672,7 +1672,7 @@ button:disabled {
   display: flex;
   align-items: flex-end;
   justify-content: flex-start;
-  padding: clamp(28px, 4vw, 52px) clamp(28px, 4vw, 52px) clamp(40px, 7vh, 76px);
+  padding: clamp(28px, 4vw, 52px) clamp(28px, 4vw, 52px) clamp(64px, 11vh, 124px);
   background:
     linear-gradient(90deg, rgba(0, 0, 0, .88) 0%, rgba(0, 0, 0, .66) 36%, transparent 82%),
     linear-gradient(180deg, rgba(0, 0, 0, .6) 0%, rgba(0, 0, 0, .34) 30%, rgba(0, 0, 0, .14) 60%, transparent 100%),
@@ -1989,7 +1989,7 @@ button:disabled {
   flex-direction: column;
   overflow: auto;
   max-height: calc(100vh - clamp(152px, 22vh, 220px));
-  padding: 0;
+  padding: 0 8px 8px 0;
 }
 
 .style-card {
@@ -2004,6 +2004,22 @@ button:disabled {
   align-items: flex-start;
   gap: 10px;
   min-width: 0;
+}
+
+.style-toggle-section {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.custom-subtitle-style-controls {
+  display: contents;
+}
+
+.custom-subtitle-style-controls.disabled > * {
+  opacity: .42;
+  pointer-events: none;
 }
 
 .style-control-row {
@@ -2064,13 +2080,8 @@ button:disabled {
 .swatch-row {
   display: flex;
   width: 100%;
-  overflow-x: auto;
+  flex-wrap: wrap;
   gap: 8px;
-  scrollbar-width: none;
-}
-
-.swatch-row::-webkit-scrollbar {
-  display: none;
 }
 
 .swatch {
@@ -2150,14 +2161,21 @@ button:disabled {
 .audio-rail-panel .track-list,
 .subtitle-rail-panel .track-list,
 .subtitle-rail-panel .style-panel {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .3) transparent;
 }
 
 .audio-rail-panel .track-list::-webkit-scrollbar,
 .subtitle-rail-panel .track-list::-webkit-scrollbar,
 .subtitle-rail-panel .style-panel::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+}
+
+.audio-rail-panel .track-list::-webkit-scrollbar-thumb,
+.subtitle-rail-panel .track-list::-webkit-scrollbar-thumb,
+.subtitle-rail-panel .style-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .3);
 }
 
 .player-side-panel .track-list {
@@ -3042,7 +3060,7 @@ button.action:focus-visible {
   }
 
   .player-rail-modal {
-    padding: 28px 24px 40px;
+    padding: 28px 24px 64px;
   }
 
   .subtitle-rails {
@@ -3066,7 +3084,7 @@ button.action:focus-visible {
 @media (max-height: 680px) {
   .player-rail-modal {
     padding-top: 24px;
-    padding-bottom: 32px;
+    padding-bottom: 48px;
   }
 
   .player-rail-modal .track-header {
