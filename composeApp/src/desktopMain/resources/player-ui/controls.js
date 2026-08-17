@@ -1953,7 +1953,6 @@ const isInteractingWithChrome = () =>
 
 const canAutoHideChrome = showOpening => Boolean(
   state.controlsVisible &&
-  state.isPlaying &&
   !state.isLoading &&
   !activeModal &&
   !isScrubbing &&
@@ -2776,7 +2775,7 @@ root.addEventListener("click", event => {
   if (event.target.closest("button,input")) return;
   window.clearTimeout(tapTimer);
   tapTimer = window.setTimeout(() => {
-    toggleChrome();
+    requestPlaybackState("setPlaybackStateQuiet", false);
   }, 220);
 });
 
