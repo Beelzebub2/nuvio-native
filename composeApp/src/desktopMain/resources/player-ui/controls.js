@@ -22,6 +22,8 @@ const pauseDescription = document.getElementById("pauseDescription");
 const toggle = document.getElementById("toggle");
 const toggleIcon = document.getElementById("toggleIcon");
 const toggleLabel = document.getElementById("toggleLabel");
+const nextEpisodeButton = document.getElementById("nextEpisodeButton");
+const nextEpisodeButtonLabel = document.getElementById("nextEpisodeButtonLabel");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
 const title = document.getElementById("title");
@@ -2147,6 +2149,12 @@ const renderChrome = () => {
   }
   if (toggleLabel) {
     toggleLabel.textContent = playPauseLabel || (isPlaying ? "Pause" : "Play");
+  }
+  if (nextEpisodeButton) {
+    nextEpisodeButton.hidden = !state.nextEpisodePlayable;
+    const nextLabel = state.nextEpisodeHeaderLabel || "Next episode";
+    nextEpisodeButton.setAttribute("aria-label", nextLabel);
+    if (nextEpisodeButtonLabel) nextEpisodeButtonLabel.textContent = nextLabel;
   }
   syncFullscreenButtons();
   backButton.setAttribute("aria-label", state.closeLabel || "Close player");
