@@ -1953,7 +1953,6 @@ const isInteractingWithChrome = () =>
 
 const canAutoHideChrome = showOpening => Boolean(
   state.controlsVisible &&
-  state.isPlaying &&
   !state.isLoading &&
   !activeModal &&
   !isScrubbing &&
