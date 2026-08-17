@@ -2291,6 +2291,17 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
         [self syncControls];
         return;
     }
+    if ([type isEqualToString:@"setPlaybackState"] || [type isEqualToString:@"setPlaybackStateQuiet"]) {
+        BOOL shouldPlay = value && value.doubleValue >= 0.5;
+        if (shouldPlay && [self isEnded]) {
+            [self seekToMilliseconds:0];
+        }
+        [self setPaused:!shouldPlay];
+        if (_eventSink && _eventMethod) {
+            [self sendPlayerEvent:type value:shouldPlay ? 1.0 : 0.0];
+        }
+        return;
+    }
     if ([type isEqualToString:@"toggleFullscreen"]) {
         [self beginFullscreenTransitionWithReason:@"control-toggle"];
     }

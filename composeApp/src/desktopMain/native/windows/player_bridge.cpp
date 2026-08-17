@@ -1703,6 +1703,15 @@ private:
             syncControls();
             return;
         }
+        if (type == "setPlaybackState" || type == "setPlaybackStateQuiet") {
+            bool shouldPlay = value >= 0.5;
+            if (shouldPlay && isEnded()) {
+                seekToMilliseconds(0);
+            }
+            setPaused(!shouldPlay);
+            sendPlayerEvent(type, value);
+            return;
+        }
         sendPlayerEvent(type, value);
     }
 

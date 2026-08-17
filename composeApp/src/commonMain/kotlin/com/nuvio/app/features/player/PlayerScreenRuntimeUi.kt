@@ -727,6 +727,13 @@ private fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: D
             controlsVisible = true
             controlsActivityTick += 1
         }
+        "setPlaybackState",
+        "setPlaybackStateQuiet" -> {
+            shouldPlay = value >= 0.5
+            if (type == "setPlaybackState") {
+                controlsVisible = true
+            }
+        }
         "reloadSources" -> {
             prepareSourcesForPlayerControls(forceRefresh = true)
         }
