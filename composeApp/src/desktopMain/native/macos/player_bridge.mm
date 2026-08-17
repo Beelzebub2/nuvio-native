@@ -1053,6 +1053,15 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     std::atomic_bool _cachedPaused;
     std::atomic_bool _cachedLoading;
     std::atomic_bool _cachedEnded;
+    BOOL _hasAppliedSubtitleStyle;
+    BOOL _appliedSubtitleUseLibass;
+    NSString *_appliedSubtitleTextColor;
+    NSString *_appliedSubtitleBackgroundColor;
+    NSString *_appliedSubtitleOutlineColor;
+    double _appliedSubtitleOutlineSize;
+    BOOL _appliedSubtitleBold;
+    double _appliedSubtitleFontSize;
+    int64_t _appliedSubtitlePosition;
 }
 
 - (instancetype)initWithHostView:(NSView *)hostView
@@ -2030,26 +2039,75 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
                                   subPos:(int)subPos
                                useLibass:(BOOL)useLibass {
     if (!_mpv) return;
-    if (useLibass) {
-        [self setStringProperty:"sub-ass-override" value:@"no"];
-    } else {
-        [self setStringProperty:"sub-ass-override" value:@"force"];
-        [self setStringProperty:"sub-color" value:textColor ?: @"#FFFFFFFF"];
-        [self setStringProperty:"sub-back-color" value:backgroundColor ?: @"#00000000"];
-        [self setStringProperty:"sub-outline-color" value:outlineColor ?: @"#FF000000"];
-        [self setStringProperty:"sub-border-style"
-                          value:[(backgroundColor ?: @"") hasPrefix:@"#00"] ? @"outline-and-shadow" : @"opaque-box"];
-        [self setStringProperty:"sub-bold" value:bold ? @"yes" : @"no"];
+    double size = MAX(18.0, MIN(96.0, fontSize));
+    double scale = useLibass ? size / 54.0 : 1.0;
+    int64_t position = MAX(0, MIN(150, subPos));
+    double outline = MAX(0.0, MIN(8.0, outlineSize));
+    NSString *resolvedTextColor = textColor ?: @"#FFFFFFFF";
+    NSString *resolvedBackgroundColor = backgroundColor ?: @"#00000000";
+    NSString *resolvedOutlineColor = outlineColor ?: @"#FF000000";
 
-        double outline = MAX(0.0, MIN(8.0, outlineSize));
-        mpv_set_property(_mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
+    BOOL modeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleUseLibass != useLibass;
+    BOOL sizeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleFontSize != size;
+    BOOL positionChanged = !_hasAppliedSubtitleStyle || _appliedSubtitlePosition != position;
+    BOOL boldChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleBold != bold;
+    BOOL textColorChanged = !_hasAppliedSubtitleStyle || ![_appliedSubtitleTextColor isEqualToString:resolvedTextColor];
+    BOOL backgroundColorChanged =
+        !_hasAppliedSubtitleStyle || ![_appliedSubtitleBackgroundColor isEqualToString:resolvedBackgroundColor];
+    BOOL outlineColorChanged =
+        !_hasAppliedSubtitleStyle || ![_appliedSubtitleOutlineColor isEqualToString:resolvedOutlineColor];
+    BOOL outlineSizeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleOutlineSize != outline;
 
-        double size = MAX(18.0, MIN(96.0, fontSize));
+    if (modeChanged) {
+        [self setStringProperty:"sub-ass-override" value:useLibass ? @"scale" : @"force"];
+    }
+    if (modeChanged || (!useLibass && boldChanged)) {
+        const char *styleOverridesCommand[] = {
+            "change-list",
+            "sub-ass-style-overrides",
+            useLibass ? "clr" : "set",
+            useLibass ? "" : (bold ? "Bold=1" : "Bold=0"),
+            NULL,
+        };
+        mpv_command(_mpv, styleOverridesCommand);
+    }
+    if (modeChanged || sizeChanged) {
+        mpv_set_property(_mpv, "sub-scale", MPV_FORMAT_DOUBLE, &scale);
         mpv_set_property(_mpv, "sub-font-size", MPV_FORMAT_DOUBLE, &size);
-
-        int64_t position = MAX(0, MIN(150, subPos));
+    }
+    if (modeChanged || positionChanged) {
         mpv_set_property(_mpv, "sub-pos", MPV_FORMAT_INT64, &position);
     }
+
+    if (!useLibass) {
+        if (modeChanged || textColorChanged) {
+            [self setStringProperty:"sub-color" value:resolvedTextColor];
+        }
+        if (modeChanged || backgroundColorChanged) {
+            [self setStringProperty:"sub-back-color" value:resolvedBackgroundColor];
+            [self setStringProperty:"sub-border-style"
+                              value:[resolvedBackgroundColor hasPrefix:@"#00"] ? @"outline-and-shadow" : @"opaque-box"];
+        }
+        if (modeChanged || outlineColorChanged) {
+            [self setStringProperty:"sub-outline-color" value:resolvedOutlineColor];
+        }
+        if (modeChanged || boldChanged) {
+            [self setStringProperty:"sub-bold" value:bold ? @"yes" : @"no"];
+        }
+        if (modeChanged || outlineSizeChanged) {
+            mpv_set_property(_mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
+        }
+    }
+
+    _hasAppliedSubtitleStyle = YES;
+    _appliedSubtitleUseLibass = useLibass;
+    _appliedSubtitleTextColor = resolvedTextColor;
+    _appliedSubtitleBackgroundColor = resolvedBackgroundColor;
+    _appliedSubtitleOutlineColor = resolvedOutlineColor;
+    _appliedSubtitleOutlineSize = outline;
+    _appliedSubtitleBold = bold;
+    _appliedSubtitleFontSize = size;
+    _appliedSubtitlePosition = position;
 }
 
 - (double)doubleProperty:(const char *)name fallback:(double)fallback {
