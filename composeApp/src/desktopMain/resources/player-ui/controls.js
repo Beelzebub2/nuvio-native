@@ -348,6 +348,10 @@ let selectedEpisodeSeason = null;
 let episodeStreamFilterId = "";
 let activeSubtitleLanguageKey = "";
 let pendingSubtitleOptionId = "";
+let pendingIsPlaying = null;
+let pendingPlaybackTimer = 0;
+let lastNativeIsPlaying = true;
+let suppressNextPointerToggleClick = false;
 let submitIntroDraft = {
   segmentType: "intro",
   startTime: "00:00",
@@ -2156,6 +2160,28 @@ const isTextEntryTarget = target => {
   return Boolean(element && element.type !== "range");
 };
 
+const requestPlaybackState = (eventType, revealControls) => {
+  const currentIsPlaying = pendingIsPlaying === null
+    ? Boolean(state.isPlaying)
+    : pendingIsPlaying;
+  const nextIsPlaying = !currentIsPlaying;
+  pendingIsPlaying = nextIsPlaying;
+  state = {
+    ...state,
+    isPlaying: nextIsPlaying,
+    controlsVisible: revealControls ? true : state.controlsVisible,
+  };
+  renderChrome();
+  send(eventType, nextIsPlaying ? 1 : 0);
+
+  window.clearTimeout(pendingPlaybackTimer);
+  pendingPlaybackTimer = window.setTimeout(() => {
+    pendingPlaybackTimer = 0;
+    pendingIsPlaying = null;
+    state = { ...state, isPlaying: lastNativeIsPlaying };
+    renderChrome();
+  }, 1500);
+};
 const shortcutCommandForEvent = event => {
   if (event.metaKey || event.ctrlKey || event.altKey) return "";
   switch (event.code) {
@@ -2373,6 +2399,14 @@ document.querySelectorAll("[data-command]").forEach(button => {
     }
     noteChromeActivity(true);
     const command = button.dataset.command;
+    if (command === "toggle") {
+      if (event.detail !== 0 && suppressNextPointerToggleClick) {
+        suppressNextPointerToggleClick = false;
+        return;
+      }
+      requestPlaybackState("setPlaybackState", true);
+      return;
+    }
     if (command === "audio") {
       openPlayerModal("audio");
       return;
@@ -2404,6 +2438,12 @@ document.querySelectorAll("[data-command]").forEach(button => {
     showCommandToast(command);
     send(command, 0);
   });
+});
+
+toggle.addEventListener("pointerdown", event => {
+  if (!event.isPrimary || event.button !== 0) return;
+  suppressNextPointerToggleClick = true;
+  requestPlaybackState("setPlaybackState", true);
 });
 
 openingOverlay.addEventListener("click", event => {
@@ -2651,11 +2691,18 @@ window.playerUpdate = update => {
   const subtitleTracks = normalizeTracks(update.subtitleTracks);
   const audioTracksChanged = trackListSignature(audioTracks) !== trackListSignature(state.audioTracks);
   const subtitleTracksChanged = trackListSignature(subtitleTracks) !== trackListSignature(state.subtitleTracks);
+  const nativeIsPlaying = !Boolean(update.paused);
+  lastNativeIsPlaying = nativeIsPlaying;
+  if (pendingIsPlaying !== null && nativeIsPlaying === pendingIsPlaying) {
+    pendingIsPlaying = null;
+    window.clearTimeout(pendingPlaybackTimer);
+    pendingPlaybackTimer = 0;
+  }
   state = {
     ...state,
     durationMs,
     positionMs,
-    isPlaying: !Boolean(update.paused),
+    isPlaying: pendingIsPlaying === null ? nativeIsPlaying : pendingIsPlaying,
     isLoading: Boolean(update.loading || update.isLoading),
     audioTracks,
     subtitleTracks,
@@ -2682,7 +2729,10 @@ window.playerControls = nextState => {
   const previousEpisodeStreamsVisible = Boolean(state.episodeStreamsVisible);
   const previousSelectedSubtitleLanguageKey = state.selectedSubtitleLanguageKey || "__off__";
   const previousSelectedSubtitleOptionId = state.selectedSubtitleOptionId || "";
-  state = { ...state, ...nextState };
+  const currentPlaybackState = pendingIsPlaying === null
+    ? state.isPlaying
+    : pendingIsPlaying;
+  state = { ...state, ...nextState, isPlaying: currentPlaybackState };
   hasReceivedPlayerControls = true;
   const closeToken = Number(state.closeModalsToken) || 0;
   if (closeToken !== previousCloseToken) {
@@ -2778,6 +2828,10 @@ document.addEventListener("keydown", event => {
   }
   if (command === "keyboardVolumeDown") {
     sendKeyboardVolume(-1);
+    return;
+  }
+  if (command === "keyboardToggle") {
+    requestPlaybackState("setPlaybackStateQuiet", false);
     return;
   }
   showCommandToast(command);
