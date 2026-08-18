@@ -197,7 +197,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
     }.orEmpty()
     val nativeSkipInterval = activeSkipInterval.takeIf { initialLoadCompleted && !pausedOverlayVisible }
-    val nextEpisodeForControls = nextEpisodeInfo.takeIf { isSeries && showNextEpisodeCard }
+    val nextEpisodeForControls = nextEpisodeInfo.takeIf { 
+        isSeries && (showNextEpisodeCard || nextEpisodeAutoPlaySearching || nextEpisodeAutoPlayCountdown != null) 
+    }
     val nextEpisodeStatus = when {
         nextEpisodeForControls == null -> ""
         !nextEpisodeForControls.hasAired && !nextEpisodeForControls.unairedMessage.isNullOrBlank() ->
@@ -395,7 +397,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         } else {
             stringResource(Res.string.player_next_episode_unaired)
         },
-        nextEpisodePlayable = nextEpisodeForControls?.hasAired == true,
+        nextEpisodePlayable = nextEpisodeInfo?.hasAired == true,
     )
     val gestureCallbacks = rememberSurfaceGestureCallbacks()
 
