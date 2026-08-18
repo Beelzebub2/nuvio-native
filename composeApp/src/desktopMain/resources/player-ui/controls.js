@@ -4,6 +4,7 @@ const positionLabel = document.getElementById("position");
 const durationLabel = document.getElementById("duration");
 const timeLabel = document.getElementById("timeLabel");
 const volumeControl = document.getElementById("volumeControl");
+const volumeButton = document.getElementById("volumeButton");
 const volumeIcon = document.getElementById("volumeIcon");
 const volumeSlider = document.getElementById("volumeSlider");
 const bufferingStatus = document.getElementById("bufferingStatus");
@@ -2721,6 +2722,22 @@ volumeSlider.addEventListener("input", () => {
   syncVolumeControl();
   send("volumeChange", nextLevel);
 });
+
+let preMuteVolumeLevel = 1.0;
+
+if (volumeButton) {
+  volumeButton.addEventListener("click", () => {
+    noteChromeActivity();
+    if (state.volumeLevel > 0) {
+      preMuteVolumeLevel = state.volumeLevel;
+      state.volumeLevel = 0;
+    } else {
+      state.volumeLevel = preMuteVolumeLevel > 0 ? preMuteVolumeLevel : 1.0;
+    }
+    syncVolumeControl();
+    send("volumeChange", state.volumeLevel);
+  });
+}
 
 window.playerUpdate = update => {
   const durationMs = Math.round((Number(update.duration) || 0) * 1000);
