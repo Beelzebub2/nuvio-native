@@ -33,7 +33,7 @@ import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.settings.AppIconRepository
 import com.nuvio.app.features.settings.applyDesktopRendererPreference
-import com.nuvio.app.features.settings.previewResource
+import com.nuvio.app.features.settings.transparentPreviewResource
 import java.awt.Desktop
 import javax.imageio.ImageIO
 import java.awt.Color as AwtColor
@@ -116,7 +116,7 @@ fun main(args: Array<String>) {
             },
             title = if (smokePlayerUrl == null) "Nuvio" else "Nuvio Player Smoke",
             state = windowState,
-            icon = painterResource(appIconState.selected.previewResource(appIconState.blackBackground)),
+            icon = painterResource(appIconState.selected.transparentPreviewResource),
         ) {
             SideEffect {
                 window.background = NuvioDesktopNativeBackground
@@ -124,8 +124,8 @@ fun main(args: Array<String>) {
                 window.contentPane.background = NuvioDesktopNativeBackground
                 (window.contentPane as? JComponent)?.isOpaque = true
             }
-            LaunchedEffect(window, appIconState.selected, appIconState.blackBackground) {
-                val backgroundSuffix = if (appIconState.blackBackground) "" else "-transparent"
+            LaunchedEffect(window, appIconState.selected) {
+                val backgroundSuffix = "-transparent"
                 val iconPath = "icons/app-icon-${appIconState.selected.key}$backgroundSuffix.png"
                 Thread.currentThread().contextClassLoader.getResourceAsStream(iconPath)?.use { stream ->
                     ImageIO.read(stream)?.let { image ->

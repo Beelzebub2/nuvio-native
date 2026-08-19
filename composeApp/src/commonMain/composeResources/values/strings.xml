@@ -609,7 +609,7 @@
     <string name="settings_appearance_amoled_description">Use pure black backgrounds for OLED screens.</string>
     <string name="settings_appearance_app_icon">App Icon</string>
     <string name="settings_appearance_app_icon_arctic_blue">Arctic Blue</string>
-    <string name="settings_appearance_app_icon_android_confirmation_message">Changing to %1$s will close Nuvio. Tap OK to continue.</string>
+    <string name="settings_appearance_app_icon_android_confirmation_message">Changing to %1$s requires restarting Nuvio. Tap OK to continue.</string>
     <string name="settings_appearance_app_icon_android_confirmation_title">Change App Icon?</string>
     <string name="settings_appearance_app_icon_change_failed">The icon could not be changed. Please try again.</string>
     <string name="settings_appearance_app_icon_copper">Copper</string>
@@ -618,8 +618,6 @@
     <string name="settings_appearance_app_icon_original">Original</string>
     <string name="settings_appearance_app_icon_rose_gold">Rose Gold</string>
     <string name="settings_appearance_app_icon_sheet_title">Choose App Icon</string>
-    <string name="settings_appearance_app_icon_black_background">Black background</string>
-    <string name="settings_appearance_app_icon_black_background_description">Show a black background behind the app icon</string>
     <string name="settings_appearance_app_language">App Language</string>
     <string name="settings_appearance_app_language_device">Device language</string>
     <string name="settings_appearance_app_language_sheet_title">Choose Language</string>
@@ -1099,6 +1097,8 @@
     <string name="settings_playback_subtitle_show_preferred_only">Show Only Preferred Languages</string>
     <string name="settings_playback_subtitle_show_preferred_only_description">Only show subtitles matching your preferred subtitle languages.</string>
     <string name="settings_playback_subtitle_size">Subtitle Size</string>
+    <string name="settings_playback_subtitle_strip_sdh">Strip SDH Subtitles</string>
+    <string name="settings_playback_subtitle_strip_sdh_description">Hide sound descriptions and speaker labels from text subtitles.</string>
     <string name="settings_playback_subtitle_text_color">Text Color</string>
     <string name="settings_playback_subtitle_use_forced">Use Forced Subtitles</string>
     <string name="settings_playback_subtitle_use_forced_description">Prefer forced subtitles when audio matches the subtitle language; if unavailable, select nothing.</string>
