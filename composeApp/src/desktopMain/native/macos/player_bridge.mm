@@ -2104,7 +2104,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     }
     if (stripSdhChanged) {
         [self setStringProperty:"sub-filter-sdh" value:stripSdh ? @"yes" : @"no"];
-        [self setStringProperty:"sub-filter-sdh-harder" value:@"no"];
+        [self setStringProperty:"sub-filter-sdh-harder" value:stripSdh ? @"yes" : @"no"];
     }
 
     _hasAppliedSubtitleStyle = YES;

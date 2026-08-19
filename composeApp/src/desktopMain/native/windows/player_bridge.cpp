@@ -1232,7 +1232,7 @@ public:
         }
         if (stripSdhChanged) {
             setStringProperty("sub-filter-sdh", stripSdh ? "yes" : "no");
-            setStringProperty("sub-filter-sdh-harder", "no");
+            setStringProperty("sub-filter-sdh-harder", stripSdh ? "yes" : "no");
         }
 
         hasAppliedSubtitleStyle = true;
