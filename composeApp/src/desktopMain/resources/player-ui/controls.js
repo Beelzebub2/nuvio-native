@@ -487,6 +487,11 @@ const syncVolumeControl = () => {
   volumeSlider.setAttribute("aria-label", label);
   volumeSlider.setAttribute("title", label);
   volumeIcon.setAttribute("href", percent === 0 ? "#icon-volume-muted" : "#icon-volume");
+  if (volumeButton) {
+    const btnLabel = percent === 0 ? "Unmute" : "Mute";
+    volumeButton.setAttribute("aria-label", btnLabel);
+    volumeButton.setAttribute("title", btnLabel);
+  }
 };
 
 const nextVolumeToastLabel = delta => {
@@ -2727,6 +2732,9 @@ volumeSlider.addEventListener("input", () => {
   const percent = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
   const nextLevel = percent / 100;
   state.volumeLevel = nextLevel;
+  if (nextLevel > 0) {
+    preMuteVolumeLevel = nextLevel;
+  }
   syncVolumeControl();
   send("volumeChange", nextLevel);
 });
@@ -2743,7 +2751,7 @@ if (volumeButton) {
       state.volumeLevel = preMuteVolumeLevel > 0 ? preMuteVolumeLevel : 1.0;
     }
     syncVolumeControl();
-    send("volumeChange", state.volumeLevel);
+    send("volumeChangeTemporary", state.volumeLevel);
   });
 }
 
@@ -2796,6 +2804,9 @@ window.playerControls = nextState => {
     ? state.isPlaying
     : pendingIsPlaying;
   state = { ...state, ...nextState, isPlaying: currentPlaybackState };
+  if (typeof state.volumeLevel === "number" && state.volumeLevel > 0) {
+    preMuteVolumeLevel = state.volumeLevel;
+  }
   hasReceivedPlayerControls = true;
   const closeToken = Number(state.closeModalsToken) || 0;
   if (closeToken !== previousCloseToken) {
