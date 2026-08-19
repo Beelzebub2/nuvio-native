@@ -8,7 +8,7 @@ internal data class AppIconSettingsState(
     val selected: AppIconOption = AppIconOption.ORIGINAL,
     val pending: AppIconOption? = null,
     val changeFailed: Boolean = false,
-    val blackBackground: Boolean = true,
+    val blackBackground: Boolean = false,
 )
 
 internal object AppIconRepository {
@@ -22,7 +22,7 @@ internal object AppIconRepository {
         hasLoaded = true
         _state.value = AppIconSettingsState(
             selected = AppIconOption.fromPlatformName(AppIconPlatform.currentIconName()),
-            blackBackground = AppIconPlatform.currentBlackBackground(),
+            blackBackground = false,
         )
     }
 

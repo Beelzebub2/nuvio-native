@@ -35,7 +35,7 @@ internal val AppIconOption.wordmarkResource: DrawableResource
     }
 
 internal fun AppIconOption.previewResource(blackBackground: Boolean): DrawableResource =
-    if (blackBackground) previewResource else transparentPreviewResource
+    transparentPreviewResource
 
 internal val AppIconOption.transparentPreviewResource: DrawableResource
     get() = when (this) {

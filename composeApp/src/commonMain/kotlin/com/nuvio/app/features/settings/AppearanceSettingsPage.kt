@@ -230,14 +230,6 @@ internal fun LazyListScope.appearanceSettingsContent(
                             showAppIconPicker = true
                         },
                     )
-                    SettingsGroupDivider(isTablet = isTablet)
-                    SettingsSwitchRow(
-                        title = stringResource(Res.string.settings_appearance_app_icon_black_background),
-                        description = stringResource(Res.string.settings_appearance_app_icon_black_background_description),
-                        checked = appIconState.blackBackground,
-                        isTablet = isTablet,
-                        onCheckedChange = onAppIconBackgroundChanged,
-                    )
                 }
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
