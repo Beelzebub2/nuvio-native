@@ -34,8 +34,6 @@ internal val AppIconOption.wordmarkResource: DrawableResource
         AppIconOption.GRAPHITE -> Res.drawable.app_logo_wordmark_graphite
     }
 
-internal fun AppIconOption.previewResource(blackBackground: Boolean): DrawableResource =
-    transparentPreviewResource
 
 internal val AppIconOption.transparentPreviewResource: DrawableResource
     get() = when (this) {

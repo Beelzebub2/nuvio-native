@@ -7,8 +7,14 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 internal object MacAppIconUpdater {
-    fun updateAsync(icon: AppIconOption) {
-        Thread({ update(icon) }, "Nuvio macOS app icon updater").apply { isDaemon = true }.start()
+    fun updateAsync(icon: AppIconOption, onComplete: () -> Unit) {
+        Thread({
+            try {
+                update(icon)
+            } finally {
+                onComplete()
+            }
+        }, "Nuvio macOS app icon updater").apply { isDaemon = false }.start()
     }
 
     private fun update(icon: AppIconOption) {

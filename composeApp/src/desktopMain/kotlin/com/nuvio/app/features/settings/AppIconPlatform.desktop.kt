@@ -13,27 +13,21 @@ internal actual object AppIconPlatform {
 
     private val store = DesktopStorage.store("nuvio_app_icon")
     private const val selectedIconKey = "selected_icon"
-    private const val blackBackgroundKey = "black_background"
 
     actual fun currentIconName(): String? = store.getString(selectedIconKey)
-
-    actual fun currentBlackBackground(): Boolean = false
-
-    actual fun setBlackBackground(enabled: Boolean): Boolean {
-        store.putBoolean(blackBackgroundKey, enabled)
-        return true
-    }
 
     actual suspend fun activateIcon(name: String?): Boolean {
         store.putString(selectedIconKey, name)
         when (DesktopHostOs.current) {
             DesktopHostOs.WINDOWS -> {
-                WindowsAppShortcutIconUpdater.updateAsync(AppIconOption.fromPlatformName(name))
-                restartWindowsApp()
+                WindowsAppShortcutIconUpdater.updateAsync(AppIconOption.fromPlatformName(name)) {
+                    restartWindowsApp()
+                }
             }
             DesktopHostOs.MACOS -> {
-                MacAppIconUpdater.updateAsync(AppIconOption.fromPlatformName(name))
-                MacAppIconUpdater.restartAsync()
+                MacAppIconUpdater.updateAsync(AppIconOption.fromPlatformName(name)) {
+                    MacAppIconUpdater.restartAsync()
+                }
             }
             else -> Unit
         }

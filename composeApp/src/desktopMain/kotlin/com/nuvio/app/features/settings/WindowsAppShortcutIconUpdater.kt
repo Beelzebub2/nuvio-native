@@ -1,25 +1,28 @@
 package com.nuvio.app.features.settings
 
 import com.nuvio.app.features.player.desktop.DesktopHostOs
-
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.nio.file.StandardOpenOption
 import java.util.concurrent.TimeUnit
 
 internal object WindowsAppShortcutIconUpdater {
-    fun updateAsync(icon: AppIconOption) {
-        Thread({ update(icon) }, "Nuvio Windows app icon updater").apply { isDaemon = true }.start()
+    fun updateAsync(icon: AppIconOption, onComplete: () -> Unit) {
+        Thread({
+            try {
+                update(icon)
+            } finally {
+                onComplete()
+            }
+        }, "Nuvio Windows app icon updater").apply { isDaemon = false }.start()
     }
 
     private fun update(icon: AppIconOption) {
         if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
         runCatching {
             val resource = "icons/app-icon-${icon.key}-transparent.ico"
-            val localAppData = System.getenv("LOCALAPPDATA")
-                ?: Path.of(System.getProperty("user.home"), "AppData", "Local").toString()
-            val iconDirectory = Path.of(localAppData, "Nuvio", "icons")
+            val localAppData = knownFolder("LocalApplicationData") ?: return@runCatching
+            val iconDirectory = localAppData.resolve("Nuvio/icons")
             Files.createDirectories(iconDirectory)
             val iconFile = iconDirectory.resolve("app-icon-${icon.key}-transparent.ico")
             Thread.currentThread().contextClassLoader.getResourceAsStream(resource)?.use { input ->
@@ -27,10 +30,10 @@ internal object WindowsAppShortcutIconUpdater {
             } ?: return@runCatching
 
             val shortcuts = shortcutPaths().filter(Files::isRegularFile).toList()
-            val elevatedRoots = listOf(
-                System.getenv("PUBLIC") ?: "C:/Users/Public",
-                System.getenv("ProgramData") ?: "C:/ProgramData",
-            ).map { Path.of(it).toAbsolutePath().normalize() }
+            val elevatedRoots = listOfNotNull(
+                knownFolder("CommonDesktopDirectory"),
+                knownFolder("CommonPrograms"),
+            ).map { it.toAbsolutePath().normalize() }
             val elevated = shortcuts.filter { shortcut ->
                 elevatedRoots.any { root -> shortcut.toAbsolutePath().normalize().startsWith(root) }
             }
@@ -40,14 +43,36 @@ internal object WindowsAppShortcutIconUpdater {
     }
 
     private fun shortcutPaths(): Sequence<Path> = sequence {
-        val home = Path.of(System.getProperty("user.home"))
-        yield(home.resolve("Desktop/Nuvio.lnk"))
-        yield(home.resolve("OneDrive/Desktop/Nuvio.lnk"))
-        yield(home.resolve("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Nuvio.lnk"))
-        yield(home.resolve("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Nuvio/Nuvio.lnk"))
-        yield(home.resolve("AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Nuvio.lnk"))
-        yield(Path.of(System.getenv("PUBLIC") ?: "C:/Users/Public", "Desktop", "Nuvio.lnk"))
-        yield(Path.of(System.getenv("ProgramData") ?: "C:/ProgramData", "Microsoft", "Windows", "Start Menu", "Programs", "Nuvio", "Nuvio.lnk"))
+        val desktop = knownFolder("Desktop")
+        val programs = knownFolder("Programs")
+        val applicationData = knownFolder("ApplicationData")
+        val commonDesktop = knownFolder("CommonDesktopDirectory")
+        val commonPrograms = knownFolder("CommonPrograms")
+
+        desktop?.let { yield(it.resolve("Nuvio.lnk")) }
+        programs?.let {
+            yield(it.resolve("Nuvio.lnk"))
+            yield(it.resolve("Nuvio/Nuvio.lnk"))
+        }
+        applicationData?.let {
+            yield(it.resolve("Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Nuvio.lnk"))
+        }
+        commonDesktop?.let { yield(it.resolve("Nuvio.lnk")) }
+        commonPrograms?.let {
+            yield(it.resolve("Nuvio/Nuvio.lnk"))
+            yield(it.resolve("Nuvio.lnk"))
+        }
+    }
+
+    private fun knownFolder(name: String): Path? {
+        val command = "[Environment]::GetFolderPath([Environment+SpecialFolder]::$name)"
+        val process = ProcessBuilder(
+            "powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-NonInteractive",
+            "-ExecutionPolicy", "Bypass", "-Command", command,
+        ).redirectErrorStream(true).start()
+        val value = process.inputStream.bufferedReader().use { it.readText().trim() }
+        if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly()
+        return value.takeIf { it.isNotBlank() }?.let(Path::of)
     }
 
     private fun setShortcutIconsElevated(shortcuts: List<Path>, iconFile: Path) {
