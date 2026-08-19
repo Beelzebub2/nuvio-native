@@ -18,7 +18,7 @@ interface PlayerEngineController {
     fun setSubtitleUri(url: String)
     fun clearExternalSubtitle()
     fun clearExternalSubtitleAndSelect(trackIndex: Int)
-    fun applySubtitleStyle(style: SubtitleStyleState) {}
+    fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean = false) {}
     fun setSubtitleDelayMs(delayMs: Int) {}
     fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
     fun updateNowPlayingMetadata(info: PlayerNowPlayingInfo) {}
@@ -112,10 +112,15 @@ data class PlayerControlsState(
     val p2pConsentBody: String = "",
     val p2pConsentEnableLabel: String = "Enable P2P",
     val p2pConsentCancelLabel: String = "Cancel",
+    val audioTracksPanelTitle: String = "Audio Tracks",
+    val noAudioTracksLabel: String = "No audio tracks available",
     val subtitlesPanelTitle: String = "Subtitles",
+    val subtitleLanguagesLabel: String = "Languages",
     val subtitleBuiltInTabLabel: String = "Built-in",
     val subtitleAddonsTabLabel: String = "Addons",
     val subtitleStyleTabLabel: String = "Style",
+    val customSubtitleStyleLabel: String = "Use custom styling",
+    val forcedLabel: String = "Forced",
     val noneLabel: String = "None",
     val fetchSubtitlesLabel: String = "Tap to fetch subtitles",
     val subtitleDelayLabel: String = "Subtitle Delay",
@@ -132,6 +137,7 @@ data class PlayerControlsState(
     val colorLabel: String = "Color",
     val textOpacityLabel: String = "Text Opacity",
     val outlineColorLabel: String = "Outline Color",
+    val noSubtitleLinesFoundLabel: String = "No subtitle lines found",
     val resetDefaultsLabel: String = "Reset Defaults",
     val onLabel: String = "On",
     val offLabel: String = "Off",
@@ -147,6 +153,13 @@ data class PlayerControlsState(
     val themeBufferingColor: String = "#ffffff",
     val themeBufferingTrackColor: String = "rgba(255, 255, 255, .28)",
     val themeControlForegroundColor: String = "#ffffff",
+    val themeSurfaceElevatedColor: String = "#16171d",
+    val themeSurfaceCardColor: String = "rgba(255, 255, 255, .08)",
+    val themeSurfacePopoverColor: String = "rgba(255, 255, 255, .08)",
+    val themeTextPrimaryColor: String = "#ffffff",
+    val themeTextSecondaryColor: String = "rgba(255, 255, 255, .72)",
+    val themeTextMutedColor: String = "rgba(255, 255, 255, .60)",
+    val themeBorderDefaultColor: String = "rgba(255, 255, 255, .12)",
     val isPlaying: Boolean = false,
     val isLoading: Boolean = false,
     val isLocked: Boolean = false,
@@ -189,6 +202,7 @@ data class PlayerControlsState(
     val selectedEpisodeLabel: String = "",
     val episodeStreamFilters: List<PlayerControlFilterItem> = emptyList(),
     val episodeStreamItems: List<PlayerControlSourceItem> = emptyList(),
+    val blurUnwatchedEpisodes: Boolean = false,
     val submitIntroSegmentType: String = "intro",
     val submitIntroStartTime: String = "00:00",
     val submitIntroEndTime: String = "00:00",
@@ -196,10 +210,15 @@ data class PlayerControlsState(
     val submitIntroStatusMessage: String = "",
     val showP2pConsent: Boolean = false,
     val subtitleActiveTab: String = "BuiltIn",
+    val subtitleLanguageItems: List<PlayerControlSubtitleLanguageItem> = emptyList(),
+    val subtitleOptionItems: List<PlayerControlSubtitleOptionItem> = emptyList(),
+    val selectedSubtitleLanguageKey: String = "__off__",
+    val selectedSubtitleOptionId: String = "",
     val addonSubtitleItems: List<PlayerControlAddonSubtitleItem> = emptyList(),
     val isLoadingAddonSubtitles: Boolean = false,
     val selectedAddonSubtitleId: String = "",
     val useCustomSubtitles: Boolean = false,
+    val customSubtitleStylingEnabled: Boolean = true,
     val subtitleStyle: SubtitleStyleState = SubtitleStyleState.DEFAULT,
     val subtitleDelayMs: Int = 0,
     val hasSelectedAddonSubtitle: Boolean = false,
@@ -224,14 +243,27 @@ data class PlayerControlSeasonItem(
     val isSelected: Boolean = false,
 )
 
+data class PlayerControlSourceBadgeItem(
+    val name: String = "",
+    val imageURL: String = "",
+    val tagColor: String = "",
+    val tagStyle: String = "",
+    val borderColor: String = "",
+)
+
 data class PlayerControlSourceItem(
     val index: Int = 0,
     val filterId: String = "",
     val label: String = "",
     val subtitle: String = "",
     val addonName: String = "",
+    val addonLogo: String = "",
+    val showAddonLogo: Boolean = false,
     val isCurrent: Boolean = false,
     val isEnabled: Boolean = true,
+    val badges: List<PlayerControlSourceBadgeItem> = emptyList(),
+    val formattedSize: String = "",
+    val badgePlacement: String = "BOTTOM",
 )
 
 data class PlayerControlEpisodeItem(
@@ -241,6 +273,7 @@ data class PlayerControlEpisodeItem(
     val code: String = "",
     val overview: String = "",
     val thumbnail: String = "",
+    val released: String = "",
     val season: Int = 0,
     val episode: Int = 0,
     val isCurrent: Boolean = false,
@@ -251,8 +284,27 @@ data class PlayerControlAddonSubtitleItem(
     val index: Int = 0,
     val id: String = "",
     val display: String = "",
+    val language: String = "",
     val languageLabel: String = "",
     val addonName: String = "",
+    val isSelected: Boolean = false,
+)
+
+data class PlayerControlSubtitleLanguageItem(
+    val key: String = "",
+    val label: String = "",
+    val count: Int = 0,
+    val isSelected: Boolean = false,
+)
+
+data class PlayerControlSubtitleOptionItem(
+    val id: String = "",
+    val languageKey: String = "",
+    val kind: String = "",
+    val index: Int = 0,
+    val sourceLabel: String = "",
+    val title: String = "",
+    val metadata: String = "",
     val isSelected: Boolean = false,
 )
 
