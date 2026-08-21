@@ -2224,16 +2224,17 @@ const isInteractiveControlTarget = target => Boolean(
 );
 const shortcutCommandForEvent = event => {
   if (event.metaKey || event.ctrlKey || event.altKey) return "";
+  const isShift = Boolean(event.shiftKey);
   switch (event.code) {
     case "Space":
     case "KeyK":
       return "keyboardToggle";
     case "ArrowLeft":
     case "KeyJ":
-      return "keyboardSeekBack";
+      return isShift ? "keyboardFineSeekBack" : "keyboardSeekBack";
     case "ArrowRight":
     case "KeyL":
-      return "keyboardSeekForward";
+      return isShift ? "keyboardFineSeekForward" : "keyboardSeekForward";
     case "ArrowUp":
       return "keyboardVolumeUp";
     case "ArrowDown":
@@ -2325,6 +2326,43 @@ const actionShortcutCommandForEvent = event => {
 
 const keepChromeVisibleFromKeyboard = () => {
   noteChromeActivity(true);
+};
+
+let fineSeekTimer = 0;
+let fineSeekAccumulatedMs = 0;
+let fineSeekDirection = null;
+
+const fineSeek = isForward => {
+  const direction = isForward ? "forward" : "backward";
+  const stepMs = isForward ? 1000 : -1000;
+
+  if (fineSeekDirection === direction) {
+    fineSeekAccumulatedMs += stepMs;
+  } else {
+    fineSeekDirection = direction;
+    fineSeekAccumulatedMs = stepMs;
+  }
+
+  const currentPosMs = Math.max(0, Number(state.positionMs) || 0);
+  const durationMs = Math.max(0, Number(state.durationMs) || 0);
+  const targetPosMs = Math.max(0, durationMs > 0 ? Math.min(durationMs, currentPosMs + stepMs) : currentPosMs + stepMs);
+
+  state.positionMs = targetPosMs;
+  setProgress(targetPosMs, durationMs);
+
+  const deltaSec = Math.round(fineSeekAccumulatedMs / 1000);
+  const sign = deltaSec > 0 ? "+" : "";
+  showPlayerToast(`${sign}${deltaSec}s`);
+
+  send("scrubFinish", targetPosMs);
+
+  if (fineSeekTimer) {
+    window.clearTimeout(fineSeekTimer);
+  }
+  fineSeekTimer = window.setTimeout(() => {
+    fineSeekAccumulatedMs = 0;
+    fineSeekDirection = null;
+  }, 800);
 };
 
 const sendKeyboardVolume = delta => {
@@ -2864,7 +2902,17 @@ root.addEventListener("dblclick", event => {
 });
 
 root.addEventListener("wheel", event => {
-  if (activeModal) return;
+  if (playbackErrorText() || activeModal) return;
+  const isProgressTarget = Boolean(event.target.closest("#seek, .time-row, .time-pill, .scrub"));
+  if (isProgressTarget || event.shiftKey) {
+    event.preventDefault();
+    noteChromeActivity();
+    const delta = event.deltaY !== 0 ? Math.sign(event.deltaY) * -1 : Math.sign(event.deltaX);
+    if (delta !== 0) {
+      fineSeek(delta > 0);
+    }
+    return;
+  }
   event.preventDefault();
   const delta = Math.sign(event.deltaY) * -1;
   if (delta !== 0) {
@@ -2916,6 +2964,14 @@ document.addEventListener("keydown", event => {
   }
   if (command === "keyboardToggle") {
     requestPlaybackState("setPlaybackStateQuiet", false);
+    return;
+  }
+  if (command === "keyboardFineSeekForward") {
+    fineSeek(true);
+    return;
+  }
+  if (command === "keyboardFineSeekBack") {
+    fineSeek(false);
     return;
   }
   showCommandToast(command);
