@@ -2160,6 +2160,7 @@ const renderChrome = () => {
     nextEpisodeButton.hidden = !state.nextEpisodePlayable;
     const nextLabel = state.nextEpisodeHeaderLabel || "Next episode";
     nextEpisodeButton.setAttribute("aria-label", nextLabel);
+    nextEpisodeButton.setAttribute("title", nextLabel);
     if (nextEpisodeButtonLabel) nextEpisodeButtonLabel.textContent = nextLabel;
   }
   syncFullscreenButtons();
