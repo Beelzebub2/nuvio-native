@@ -219,6 +219,7 @@ data class PlayerControlsState(
     val subtitleAutoSyncIsLoading: Boolean = false,
     val subtitleAutoSyncErrorMessage: String = "",
     val closeModalsToken: Long = 0L,
+    val submitIntroSuccessToken: Long = 0L,
 )
 
 data class PlayerControlFilterItem(

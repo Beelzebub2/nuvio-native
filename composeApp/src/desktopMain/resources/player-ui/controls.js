@@ -906,12 +906,16 @@ const openPlayerModal = modal => {
   }
   activeModal = modal;
   if (modal === "submitIntro") {
-    submitIntroDraft = {
-      segmentType: state.submitIntroSegmentType || "intro",
-      startTime: state.submitIntroStartTime || "00:00",
-      endTime: state.submitIntroEndTime || "00:00",
-      status: "",
-    };
+    if (submitIntroDraft.title !== state.title || submitIntroDraft.episodeText !== state.episodeText) {
+      submitIntroDraft = {
+        title: state.title,
+        episodeText: state.episodeText,
+        segmentType: state.submitIntroSegmentType || "intro",
+        startTime: state.submitIntroStartTime || "00:00",
+        endTime: state.submitIntroEndTime || "00:00",
+        status: "",
+      };
+    }
   }
   if (modal === "subtitles") {
     resetSubtitleSelectionState();
@@ -2636,6 +2640,14 @@ captureEndButton.addEventListener("click", event => {
   renderSubmitIntroModal();
 });
 
+submitIntroStartInput.addEventListener("input", () => {
+  submitIntroDraft.startTime = submitIntroStartInput.value;
+});
+
+submitIntroEndInput.addEventListener("input", () => {
+  submitIntroDraft.endTime = submitIntroEndInput.value;
+});
+
 submitIntroCloseButton.addEventListener("click", event => {
   event.stopPropagation();
   closePlayerModal();
@@ -2794,6 +2806,7 @@ window.playerUpdate = update => {
 
 window.playerControls = nextState => {
   const previousCloseToken = Number(state.closeModalsToken) || 0;
+  const previousSubmitIntroSuccessToken = Number(state.submitIntroSuccessToken) || 0;
   const previousResizeLabel = state.resizeModeLabel || "";
   const previousSpeedLabel = state.playbackSpeedLabel || "";
   const previousVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
@@ -2809,8 +2822,14 @@ window.playerControls = nextState => {
   }
   hasReceivedPlayerControls = true;
   const closeToken = Number(state.closeModalsToken) || 0;
+  const submitIntroSuccessToken = Number(state.submitIntroSuccessToken) || 0;
   if (closeToken !== previousCloseToken) {
     closePlayerModal();
+  }
+  if (submitIntroSuccessToken !== previousSubmitIntroSuccessToken) {
+    submitIntroDraft.startTime = "00:00";
+    submitIntroDraft.endTime = "00:00";
+    submitIntroDraft.status = "";
   }
   if (state.showP2pConsent && activeModal !== "p2pConsent") {
     openPlayerModal("p2pConsent");
