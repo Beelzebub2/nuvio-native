@@ -2863,6 +2863,15 @@ root.addEventListener("dblclick", event => {
   togglePlayerFullscreen();
 });
 
+root.addEventListener("wheel", event => {
+  if (activeModal) return;
+  event.preventDefault();
+  const delta = Math.sign(event.deltaY) * -1;
+  if (delta !== 0) {
+    sendKeyboardVolume(delta);
+  }
+}, { passive: false });
+
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && activeModal) {
     event.preventDefault();
