@@ -337,6 +337,8 @@ let state = {
   subtitleColorSwatches: [],
   subtitleOutlineColorSwatches: [],
   closeModalsToken: 0,
+  notificationMessage: "",
+  notificationToken: 0,
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
@@ -2794,6 +2796,7 @@ window.playerUpdate = update => {
 
 window.playerControls = nextState => {
   const previousCloseToken = Number(state.closeModalsToken) || 0;
+  const previousNotificationToken = Number(state.notificationToken) || 0;
   const previousResizeLabel = state.resizeModeLabel || "";
   const previousSpeedLabel = state.playbackSpeedLabel || "";
   const previousVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
@@ -2811,6 +2814,10 @@ window.playerControls = nextState => {
   const closeToken = Number(state.closeModalsToken) || 0;
   if (closeToken !== previousCloseToken) {
     closePlayerModal();
+  }
+  const notificationToken = Number(state.notificationToken) || 0;
+  if (notificationToken !== previousNotificationToken) {
+    showPlayerToast(state.notificationMessage);
   }
   if (state.showP2pConsent && activeModal !== "p2pConsent") {
     openPlayerModal("p2pConsent");

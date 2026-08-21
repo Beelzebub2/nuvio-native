@@ -1059,6 +1059,10 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonArrayField("subtitleOutlineColorSwatches", SubtitleOutlineColorSwatches.map { it.toStorageHexString() }) { append(it.toJsonString()) }
         append(',')
         appendJsonField("closeModalsToken", closeModalsToken)
+        append(',')
+        appendJsonField("notificationMessage", notificationMessage)
+        append(',')
+        appendJsonField("notificationToken", notificationToken)
         append('}')
     }
 
