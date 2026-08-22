@@ -162,7 +162,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
     val initialPositionRequestKey = currentInitialPositionRequestKey()
     val currentPlayerSurfaceSource = playerSurfaceSourceUrl?.let { sourceUrl ->
-        RetainedPlayerSurfaceSource(
+        PlayerSurfaceSource(
             sourceUrl = sourceUrl,
             sourceAudioUrl = activeSourceAudioUrl,
             sourceHeaders = activeSourceHeaders,
@@ -173,7 +173,11 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             initialPositionRequestKey = initialPositionRequestKey,
         )
     }
-    val effectivePlayerSurfaceSource = currentPlayerSurfaceSource ?: retainedPlayerSurfaceSource
+    val renderPlayerSurface = shouldRenderPlayerSurface(
+        hasCurrentSource = currentPlayerSurfaceSource != null,
+        hasLifecycleController = playerLifecycleController != null,
+        desktop = isDesktop,
+    )
     val openingOverlayWanted = playerSettingsUiState.showLoadingOverlay &&
         !initialLoadCompleted &&
         errorMessage == null
@@ -451,18 +455,21 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 commitHorizontalSeekState = gestureCallbacks.commitHorizontalSeek,
             ),
     ) {
-        effectivePlayerSurfaceSource?.let { surfaceSource ->
+        if (renderPlayerSurface) {
+            val surfaceSource = currentPlayerSurfaceSource
+            val sourceAvailable = surfaceSource != null
             PlatformPlayerSurface(
-                sourceUrl = surfaceSource.sourceUrl,
-                sourceAudioUrl = surfaceSource.sourceAudioUrl,
-                sourceHeaders = surfaceSource.sourceHeaders,
-                sourceResponseHeaders = surfaceSource.sourceResponseHeaders,
-                externalSubtitles = surfaceSource.externalSubtitles,
-                streamType = surfaceSource.streamType,
+                sourceUrl = surfaceSource?.sourceUrl.orEmpty(),
+                sourceAvailable = sourceAvailable,
+                sourceAudioUrl = surfaceSource?.sourceAudioUrl,
+                sourceHeaders = surfaceSource?.sourceHeaders.orEmpty(),
+                sourceResponseHeaders = surfaceSource?.sourceResponseHeaders.orEmpty(),
+                externalSubtitles = surfaceSource?.externalSubtitles.orEmpty(),
+                streamType = surfaceSource?.streamType,
                 modifier = Modifier.fillMaxSize(),
-                playWhenReady = shouldPlay && currentPlayerSurfaceSource != null,
-                initialPositionMs = surfaceSource.initialPositionMs,
-                initialPositionRequestKey = surfaceSource.initialPositionRequestKey,
+                playWhenReady = shouldPlay && sourceAvailable,
+                initialPositionMs = surfaceSource?.initialPositionMs,
+                initialPositionRequestKey = surfaceSource?.initialPositionRequestKey,
                 resizeMode = resizeMode,
                 playerControlsState = playerControlsState,
                 onPlayerControlsAction = { action -> handlePlayerControlsAction(action) },
@@ -481,10 +488,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     }
                 },
                 onControllerReady = { controller ->
-                    playerController = controller.takeIf { currentPlayerSurfaceSource != null }
+                    playerController = controller.takeIf { sourceAvailable }
                     playerLifecycleController = controller
-                    currentPlayerSurfaceSource?.let { retainedPlayerSurfaceSource = it }
-                    playerControllerSourceUrl = currentPlayerSurfaceSource?.sourceUrl
+                    playerControllerSourceUrl = surfaceSource?.sourceUrl
                 },
                 onSnapshot = { snapshot ->
                     playbackSnapshot = snapshot

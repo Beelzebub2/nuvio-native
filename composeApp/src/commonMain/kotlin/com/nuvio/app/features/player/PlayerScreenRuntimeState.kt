@@ -22,7 +22,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
-internal data class RetainedPlayerSurfaceSource(
+internal data class PlayerSurfaceSource(
     val sourceUrl: String,
     val sourceAudioUrl: String?,
     val sourceHeaders: Map<String, String>,
@@ -32,6 +32,12 @@ internal data class RetainedPlayerSurfaceSource(
     val initialPositionMs: Long?,
     val initialPositionRequestKey: String?,
 )
+
+internal fun shouldRenderPlayerSurface(
+    hasCurrentSource: Boolean,
+    hasLifecycleController: Boolean,
+    desktop: Boolean,
+): Boolean = hasCurrentSource || (desktop && hasLifecycleController)
 
 internal class PlayerScreenRuntime(
     args: PlayerScreenArgs,
@@ -140,7 +146,6 @@ internal class PlayerScreenRuntime(
     var playbackSnapshot by mutableStateOf(PlayerPlaybackSnapshot())
     var playerController by mutableStateOf<PlayerEngineController?>(null)
     var playerLifecycleController by mutableStateOf<PlayerEngineController?>(null)
-    var retainedPlayerSurfaceSource by mutableStateOf<RetainedPlayerSurfaceSource?>(null)
     var playerControllerSourceUrl by mutableStateOf<String?>(null)
     var errorMessage by mutableStateOf<String?>(null)
     var isScrubbingTimeline by mutableStateOf(false)
