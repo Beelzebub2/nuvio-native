@@ -16,6 +16,7 @@ internal class NativePlayerHost : Canvas() {
     var onFirstPaint: (() -> Unit)? = null
     var onFirstFullSizePaint: (() -> Unit)? = null
     var onCursorActivity: (() -> Unit)? = null
+    var onMouseButton: ((Int) -> Unit)? = null
     private var firstPaintNotified = false
     private var firstFullSizePaintNotified = false
     private var controlsVisible = true
@@ -38,6 +39,11 @@ internal class NativePlayerHost : Canvas() {
 
             override fun mouseDragged(event: MouseEvent) {
                 noteCursorActivity()
+            }
+        })
+        addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mousePressed(event: MouseEvent) {
+                onMouseButton?.invoke(event.button)
             }
         })
     }

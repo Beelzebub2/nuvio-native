@@ -2373,6 +2373,13 @@ const clearPressedButton = () => {
 };
 
 document.addEventListener("pointerdown", event => {
+  if (event.button === 3) {
+    send("seekBack", 0);
+    return;
+  } else if (event.button === 4) {
+    send("seekForward", 0);
+    return;
+  }
   const interactingWithChrome = isChromeInteractionTarget(event.target);
   if (interactingWithChrome) {
     isChromePointerDown = true;

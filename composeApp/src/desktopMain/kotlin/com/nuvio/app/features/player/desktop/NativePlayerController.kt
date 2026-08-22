@@ -202,6 +202,13 @@ internal class NativePlayerController(
         host.onCursorActivity = {
             this.onEvent("cursorActivity", 0.0)
         }
+        host.onMouseButton = { button ->
+            if (button == 4) {
+                this.onAction?.invoke(PlayerControlsAction.SeekBack)
+            } else if (button == 5) {
+                this.onAction?.invoke(PlayerControlsAction.SeekForward)
+            }
+        }
     }
 
     fun updateControls(state: PlayerControlsState) {
