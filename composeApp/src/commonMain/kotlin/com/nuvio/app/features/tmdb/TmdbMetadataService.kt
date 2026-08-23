@@ -488,7 +488,7 @@ object TmdbMetadataService {
             type = if (mediaType == TmdbEntityMediaType.TV) "series" else "movie",
             name = title,
             poster = poster,
-            banner = buildImageUrl(result.backdropPath, "w780"),
+            banner = buildImageUrl(result.backdropPath, "w1280"),
             logo = null,
             description = result.overview?.takeIf { it.isNotBlank() },
             releaseInfo = releaseInfo,

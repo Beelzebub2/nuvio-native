@@ -149,6 +149,7 @@ fun NuvioSurfaceCard(
 fun NuvioScreenHeader(
     title: String,
     modifier: Modifier = Modifier,
+    backgroundColor: Color = MaterialTheme.nuvio.colors.background,
     includeStatusBarPadding: Boolean = true,
     topPadding: Dp? = null,
     onBack: (() -> Unit)? = null,
@@ -177,7 +178,7 @@ fun NuvioScreenHeader(
         Row(
             modifier = Modifier
                 .matchParentSize()
-                .background(tokens.colors.background)
+                .background(backgroundColor)
                 .nuvioConsumePointerEvents(),
         ) {}
         Row(

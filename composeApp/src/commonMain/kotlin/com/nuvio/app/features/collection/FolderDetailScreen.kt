@@ -7,15 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -35,18 +32,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,8 +74,6 @@ import nuvio.composeapp.generated.resources.collections_folder_not_found
 import nuvio.composeapp.generated.resources.collections_tab_all
 import org.jetbrains.compose.resources.stringResource
 
-private val FolderCoverHeight = 176.dp
-
 @Composable
 fun FolderDetailScreen(
     onBack: () -> Unit,
@@ -96,124 +88,89 @@ fun FolderDetailScreen(
     val folder = uiState.folder
     val useNativeNavigation = LocalUseNativeNavigation.current
     val coverImageUrl = folder?.coverImageUrl?.takeIf { it.isNotBlank() }
-    val density = LocalDensity.current
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val maxHeroHeightPx = with(density) { FolderCoverHeight.toPx() }
-    var heroHeightPx by remember(coverImageUrl, maxHeroHeightPx) {
-        mutableFloatStateOf(if (coverImageUrl != null) maxHeroHeightPx else 0f)
-    }
 
-    val heroScrollConnection = remember(coverImageUrl, maxHeroHeightPx) {
-        object : NestedScrollConnection {
-            fun consumeHeroDelta(deltaY: Float): Float {
-                if (coverImageUrl == null || deltaY == 0f) return 0f
-                val previousHeight = heroHeightPx
-                val nextHeight = (previousHeight + deltaY).coerceIn(0f, maxHeroHeightPx)
-                heroHeightPx = nextHeight
-                return nextHeight - previousHeight
-            }
-
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y >= 0f) return Offset.Zero
-                return Offset(x = 0f, y = consumeHeroDelta(available.y))
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y <= 0f) return Offset.Zero
-                return Offset(x = 0f, y = consumeHeroDelta(available.y))
-            }
-        }
-    }
-
-    val heroHeight = with(density) { heroHeightPx.toDp() }
-    val heroCollapseFraction = if (coverImageUrl == null || maxHeroHeightPx == 0f) {
-        1f
-    } else {
-        1f - (heroHeightPx / maxHeroHeightPx)
-    }
-    val contentModifier = if (coverImageUrl != null) {
-        Modifier.nestedScroll(heroScrollConnection)
-    } else {
-        Modifier
-    }
-
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        if (coverImageUrl != null && heroHeight > 0.dp) {
-            FolderCoverImage(
-                imageUrl = coverImageUrl,
-                title = folder.title,
-                modifier = Modifier.height(heroHeight),
+        if (coverImageUrl != null) {
+            AsyncImage(
+                model = coverImageUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.06f
+                        scaleY = 1.06f
+                    }
+                    .blur(28.dp),
+                contentScale = ContentScale.Crop,
+                alpha = 0.72f,
             )
-        }
-
-        if (!useNativeNavigation) {
-            NuvioScreenHeader(
-                title = folder?.title ?: uiState.collectionTitle,
-                modifier = Modifier.padding(horizontal = 16.dp),
-                includeStatusBarPadding = coverImageUrl == null,
-                topPadding = if (coverImageUrl != null) statusBarTop * heroCollapseFraction else null,
-                onBack = onBack,
-            )
-        }
-
-        if (folder == null && !uiState.isLoading) {
             Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(Res.string.collections_folder_not_found),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to MaterialTheme.colorScheme.background.copy(alpha = 0.50f),
+                            0.42f to MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                            1f to MaterialTheme.colorScheme.background.copy(alpha = 0.88f),
+                        ),
+                    ),
+            )
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!useNativeNavigation) {
+                NuvioScreenHeader(
+                    title = folder?.title ?: uiState.collectionTitle,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    backgroundColor = Color.Transparent,
+                    includeStatusBarPadding = true,
+                    onBack = onBack,
                 )
             }
-            return@Column
-        }
 
-        when (uiState.viewMode) {
-            FolderViewMode.TABBED_GRID -> TabbedGridContent(
-                uiState = uiState,
-                watchedKeys = watchedUiState.watchedKeys,
-                modifier = Modifier.weight(1f).then(contentModifier),
-                onTabSelected = { FolderDetailRepository.selectTab(it) },
-                onPosterClick = onPosterClick,
-            )
-            FolderViewMode.ROWS -> RowsContent(
-                uiState = uiState,
-                watchedKeys = watchedUiState.watchedKeys,
-                modifier = Modifier.weight(1f).then(contentModifier),
-                onCatalogClick = onCatalogClick,
-                onPosterClick = onPosterClick,
-            )
-            FolderViewMode.FOLLOW_LAYOUT -> RowsContent(
-                uiState = uiState,
-                watchedKeys = watchedUiState.watchedKeys,
-                modifier = Modifier.weight(1f).then(contentModifier),
-                onCatalogClick = onCatalogClick,
-                onPosterClick = onPosterClick,
-            )
+            if (folder == null && !uiState.isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.collections_folder_not_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                return@Column
+            }
+
+            when (uiState.viewMode) {
+                FolderViewMode.TABBED_GRID -> TabbedGridContent(
+                    uiState = uiState,
+                    watchedKeys = watchedUiState.watchedKeys,
+                    modifier = Modifier.weight(1f),
+                    onTabSelected = { FolderDetailRepository.selectTab(it) },
+                    onPosterClick = onPosterClick,
+                )
+                FolderViewMode.ROWS -> RowsContent(
+                    uiState = uiState,
+                    watchedKeys = watchedUiState.watchedKeys,
+                    modifier = Modifier.weight(1f),
+                    onCatalogClick = onCatalogClick,
+                    onPosterClick = onPosterClick,
+                )
+                FolderViewMode.FOLLOW_LAYOUT -> RowsContent(
+                    uiState = uiState,
+                    watchedKeys = watchedUiState.watchedKeys,
+                    modifier = Modifier.weight(1f),
+                    onCatalogClick = onCatalogClick,
+                    onPosterClick = onPosterClick,
+                )
+            }
         }
     }
-}
-
-@Composable
-private fun FolderCoverImage(
-    imageUrl: String,
-    title: String,
-    modifier: Modifier = Modifier,
-) {
-    AsyncImage(
-        model = imageUrl,
-        contentDescription = title,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(FolderCoverHeight),
-        contentScale = ContentScale.Crop,
-    )
 }
 
 @Composable

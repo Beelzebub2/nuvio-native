@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -161,8 +162,11 @@ private fun EntityBrowseContent(
         } else {
             TmdbEntityMediaType.TV
         }
-        data.rails.firstOrNull { it.mediaType == preferredMediaType }
-            ?.items?.firstOrNull()?.poster
+        val preferredItems = data.rails.firstOrNull { it.mediaType == preferredMediaType }?.items.orEmpty()
+        preferredItems.firstOrNull { !it.banner.isNullOrBlank() }?.banner
+            ?: data.rails.asSequence().flatMap { it.items.asSequence() }
+                .firstOrNull { !it.banner.isNullOrBlank() }?.banner
+            ?: preferredItems.firstOrNull()?.poster
             ?: data.rails.firstOrNull()?.items?.firstOrNull()?.poster
     }
 
@@ -171,9 +175,11 @@ private fun EntityBrowseContent(
             AsyncImage(
                 model = backgroundUrl,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(22.dp),
                 contentScale = ContentScale.Crop,
-                alpha = 0.10f,
+                alpha = 0.68f,
             )
         }
 
@@ -182,9 +188,17 @@ private fun EntityBrowseContent(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
-                        0.3f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-                        1f to MaterialTheme.colorScheme.background,
+                        0f to MaterialTheme.colorScheme.background.copy(alpha = 0.52f),
+                        0.42f to MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
+                        1f to MaterialTheme.colorScheme.background.copy(alpha = 0.84f),
+                    ),
+                )
+                .background(
+                    Brush.horizontalGradient(
+                        0f to MaterialTheme.colorScheme.background.copy(alpha = 0.26f),
+                        0.32f to Color.Transparent,
+                        0.82f to Color.Transparent,
+                        1f to MaterialTheme.colorScheme.background.copy(alpha = 0.20f),
                     ),
                 ),
         )
