@@ -70,6 +70,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -867,7 +871,7 @@ fun App(
 }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun MainAppContent(
     initialTab: AppScreenTab = AppScreenTab.Home,
@@ -1931,7 +1935,22 @@ private fun MainAppContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.nuvio.colors.background),
+                    .background(MaterialTheme.nuvio.colors.background)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.type == PointerEventType.Press) {
+                                    if (!event.changes.any { it.isConsumed }) {
+                                        if (event.button == PointerButton.Back) {
+                                            event.changes.forEach { it.consume() }
+                                            navController.popBackStack()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
             ) {
             Box(
                 modifier = Modifier
