@@ -6,7 +6,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -103,7 +102,6 @@ import com.nuvio.app.features.details.components.CommentDetailSheet
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
 import com.nuvio.app.features.details.components.DetailCastSection
 import com.nuvio.app.features.details.components.DetailCommentsSection
-import com.nuvio.app.features.details.components.DetailFloatingHeader
 import com.nuvio.app.features.details.components.DetailHero
 import com.nuvio.app.features.details.components.DetailMetaInfo
 import com.nuvio.app.features.details.components.DetailPosterRailSection
@@ -918,24 +916,7 @@ fun MetaDetailsScreen(
                 val heroTrailerPlayWhenReady = heroTrailerSourceUrl != null &&
                     !isLeavingDetails &&
                     !isHeroCollapsed.value
-                val headerTarget = if (isHeroCollapsed.value) 1f else 0f
-                val headerProgressState = animateFloatAsState(
-                    targetValue = headerTarget,
-                    animationSpec = tween(
-                        durationMillis = if (headerTarget > 0f) 150 else 100,
-                        easing = LinearOutSlowInEasing,
-                    ),
-                    label = "detail_floating_header_progress",
-                )
-                val headerProgressProvider = remember(headerProgressState) {
-                    { headerProgressState.value }
-                }
-                val showHeroBackButton by remember(headerProgressState) {
-                    derivedStateOf { headerProgressState.value <= 0.05f }
-                }
-                val headerInteractive by remember(headerProgressState) {
-                    derivedStateOf { headerProgressState.value > 0.05f }
-                }
+                val showHeroBackButton = !isHeroCollapsed.value
 
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val colorScheme = MaterialTheme.colorScheme
@@ -1346,17 +1327,6 @@ fun MetaDetailsScreen(
                                 iconSize = 24.dp,
                             )
                         }
-
-                        DetailFloatingHeader(
-                            meta = meta,
-                            isSaved = isSaved,
-                            progressProvider = headerProgressProvider,
-                            interactive = headerInteractive,
-                            backgroundColor = dominantBackdropColor.takeIf { dominantColorEnabled },
-                            onBack = onBackFromDetails,
-                            onToggleSaved = toggleSaved,
-                            modifier = Modifier.zIndex(2f),
-                        )
 
                         selectedEpisodeForActions
                             ?.takeIf { selectedEpisodeZoomAnchor == null }

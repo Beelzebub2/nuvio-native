@@ -66,6 +66,8 @@ import com.nuvio.app.features.home.canOpenCatalog
 import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomePosterHoverPreview
+import com.nuvio.app.features.home.components.homeCatalogPreviewLimitForWidth
+import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.navigation.LocalUseNativeNavigation
@@ -366,7 +368,15 @@ private fun RowsContent(
         return
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val sectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
+        val posterCardStyle = rememberPosterCardStyleUiState()
+        val catalogPreviewLimit = homeCatalogPreviewLimitForWidth(
+            maxWidthDp = maxWidth.value,
+            sectionPadding = sectionPadding,
+            basePosterWidthDp = posterCardStyle.widthDp,
+            useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
+        )
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -382,8 +392,9 @@ private fun RowsContent(
                 val section = keyedSection.value
                 HomeCatalogRowSection(
                     section = section,
-                    entries = section.items.take(18),
-                    onViewAllClick = if (section.canOpenCatalog(18)) {
+                    entries = section.items.take(catalogPreviewLimit),
+                    sectionPadding = sectionPadding,
+                    onViewAllClick = if (section.canOpenCatalog(catalogPreviewLimit)) {
                         { onCatalogClick(section) }
                     } else {
                         null
