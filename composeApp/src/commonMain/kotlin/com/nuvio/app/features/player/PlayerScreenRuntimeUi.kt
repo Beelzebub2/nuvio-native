@@ -650,7 +650,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
     }
 }
 
-internal fun PlayerScreenRuntime.handlePlayerControlsAction(action: PlayerControlsAction): Boolean {
+private fun PlayerScreenRuntime.handlePlayerControlsAction(action: PlayerControlsAction): Boolean {
     playerControlsLog.d { "action=$action ${playerControlLogContext()}" }
     when (action) {
         PlayerControlsAction.ToggleChrome -> {

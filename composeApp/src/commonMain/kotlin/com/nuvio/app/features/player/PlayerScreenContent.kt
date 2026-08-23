@@ -91,10 +91,8 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
                         if (event.type == PointerEventType.Press) {
                             if (event.button == PointerButton.Back) {
                                 event.changes.forEach { it.consume() }
-                                runtime.seekBy(-10_000L)
                             } else if (event.button == PointerButton.Forward) {
                                 event.changes.forEach { it.consume() }
-                                runtime.seekBy(10_000L)
                             }
                         }
                     }
