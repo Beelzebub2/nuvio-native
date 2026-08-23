@@ -176,6 +176,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val renderPlayerSurface = shouldRenderPlayerSurface(
         hasCurrentSource = currentPlayerSurfaceSource != null,
         hasLifecycleController = playerLifecycleController != null,
+        releaseInFlight = playerReleaseSurfaceRetention.inFlight,
         desktop = isDesktop,
     )
     val openingOverlayWanted = playerSettingsUiState.showLoadingOverlay &&
@@ -701,22 +702,34 @@ private fun PlayerScreenRuntime.requestBack() {
     flushWatchProgress()
     val exitingController = playerLifecycleController
     args.onBack { afterRelease, releaseFailed ->
-        releaseRetainedPlayerBeforeNavigation(
-            controller = exitingController,
-            navigateBack = {
-                if (playerLifecycleController === exitingController) {
-                    playerLifecycleController = null
-                }
-                if (playerController === exitingController) {
-                    playerController = null
-                }
-                afterRelease()
-            },
-            onReleaseFailed = { message ->
-                errorMessage = message
-                releaseFailed(message)
-            },
-        )
+        val releaseAttemptId = playerReleaseSurfaceRetention.begin()
+        try {
+            releaseRetainedPlayerBeforeNavigation(
+                controller = exitingController,
+                navigateBack = {
+                    if (!playerReleaseSurfaceRetention.finish(releaseAttemptId)) {
+                        return@releaseRetainedPlayerBeforeNavigation
+                    }
+                    if (playerLifecycleController === exitingController) {
+                        playerLifecycleController = null
+                    }
+                    if (playerController === exitingController) {
+                        playerController = null
+                    }
+                    afterRelease()
+                },
+                onReleaseFailed = { message ->
+                    if (!playerReleaseSurfaceRetention.finish(releaseAttemptId)) {
+                        return@releaseRetainedPlayerBeforeNavigation
+                    }
+                    errorMessage = message
+                    releaseFailed(message)
+                },
+            )
+        } catch (failure: Throwable) {
+            playerReleaseSurfaceRetention.finish(releaseAttemptId)
+            throw failure
+        }
     }
 }
 
