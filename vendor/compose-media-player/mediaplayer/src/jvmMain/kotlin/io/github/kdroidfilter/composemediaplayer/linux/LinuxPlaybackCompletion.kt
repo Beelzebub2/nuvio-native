@@ -5,7 +5,8 @@ package io.github.kdroidfilter.composemediaplayer.linux
  * notification has been consumed by the UI update loop.
  *
  * Frame-update jobs carry the generation they started under so a late EOS from
- * a cancelled job cannot mark replacement media as ended.
+ * a cancelled job cannot mark replacement media as ended. No callback or native
+ * operation is ever executed while [lock] is held.
  */
 internal class LinuxPlaybackCompletion {
     private val lock = Any()
@@ -14,18 +15,8 @@ internal class LinuxPlaybackCompletion {
 
     fun captureGeneration(): Long = synchronized(lock) { generation }
 
-    fun markEndedIfConsumed(
-        observedGeneration: Long,
-        consumeEnd: () -> Boolean,
-    ): Boolean =
-        synchronized(lock) {
-            if (generation != observedGeneration || !consumeEnd()) {
-                false
-            } else {
-                endedGeneration = observedGeneration
-                true
-            }
-        }
+    fun isCurrent(observedGeneration: Long): Boolean =
+        synchronized(lock) { generation == observedGeneration }
 
     fun markEnded(observedGeneration: Long): Boolean =
         synchronized(lock) {
@@ -37,15 +28,18 @@ internal class LinuxPlaybackCompletion {
             }
         }
 
-    fun runIfCurrent(
-        observedGeneration: Long,
-        action: () -> Unit,
-    ): Boolean =
+    fun replayGeneration(): Long? =
         synchronized(lock) {
-            if (generation != observedGeneration) {
+            endedGeneration?.takeIf { it == generation }
+        }
+
+    fun completeReplay(observedGeneration: Long): Boolean =
+        synchronized(lock) {
+            if (generation != observedGeneration || endedGeneration != observedGeneration) {
                 false
             } else {
-                action()
+                endedGeneration = null
+                generation += 1
                 true
             }
         }
@@ -56,44 +50,64 @@ internal class LinuxPlaybackCompletion {
             endedGeneration = null
         }
     }
-
-    fun resumeFromEnd(): Boolean =
-        synchronized(lock) {
-            if (endedGeneration == generation) {
-                endedGeneration = null
-                generation += 1
-                true
-            } else {
-                false
-            }
-        }
 }
 
-internal fun executePlaybackResume(
-    replayFromEnd: Boolean,
-    seekToStart: () -> Unit,
-    play: () -> Unit,
-) {
-    if (replayFromEnd) seekToStart()
-    play()
-}
-
-/** Serializes native Play commands without holding the completion-state lock. */
+/**
+ * Serializes native playback commands and completion callbacks without holding
+ * [LinuxPlaybackCompletion]'s state lock across arbitrary or JNI work.
+ */
 internal class LinuxPlaybackResumeCoordinator(
     private val completion: LinuxPlaybackCompletion,
 ) {
     private val commandLock = Any()
+
+    fun markEndedIfConsumed(
+        observedGeneration: Long,
+        consumeEnd: () -> Boolean,
+    ): Boolean =
+        synchronized(commandLock) {
+            if (!completion.isCurrent(observedGeneration) || !consumeEnd()) {
+                false
+            } else {
+                completion.markEnded(observedGeneration)
+            }
+        }
+
+    fun runIfCurrent(
+        observedGeneration: Long,
+        action: () -> Unit,
+    ): Boolean =
+        synchronized(commandLock) {
+            if (!completion.isCurrent(observedGeneration)) {
+                false
+            } else {
+                action()
+                true
+            }
+        }
+
+    fun runCommand(action: () -> Unit) {
+        synchronized(commandLock) { action() }
+    }
 
     fun resume(
         seekToStart: () -> Unit,
         play: () -> Unit,
     ) {
         synchronized(commandLock) {
-            executePlaybackResume(
-                replayFromEnd = completion.resumeFromEnd(),
-                seekToStart = seekToStart,
-                play = play,
-            )
+            val replayGeneration = completion.replayGeneration()
+            if (replayGeneration == null) {
+                play()
+                return
+            }
+
+            // Commit only after both native operations succeed. If either throws,
+            // the durable marker remains available for the next Play retry.
+            seekToStart()
+            play()
+            check(completion.completeReplay(replayGeneration)) {
+                "Replay generation changed while playback commands were serialized"
+            }
         }
     }
 

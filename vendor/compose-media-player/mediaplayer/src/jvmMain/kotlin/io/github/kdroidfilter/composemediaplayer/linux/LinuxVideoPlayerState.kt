@@ -588,31 +588,28 @@ class LinuxVideoPlayerState : VideoPlayerState {
         }
 
         val reachedEnd =
-            playbackCompletion.markEndedIfConsumed(playbackGeneration) {
+            playbackResumeCoordinator.markEndedIfConsumed(playbackGeneration) {
                 val ptr = playerPtr
                 ptr != 0L && LinuxNativeBridge.nConsumeDidPlayToEnd(ptr)
             }
         if (!reachedEnd) return
 
         val pausedCurrentPlayback =
-            playbackCompletion.runIfCurrent(playbackGeneration) {
+            playbackResumeCoordinator.runIfCurrent(playbackGeneration) {
                 val ptr = playerPtr
                 if (ptr != 0L) LinuxNativeBridge.nPause(ptr)
             }
         if (!pausedCurrentPlayback) return
 
         withContext(Dispatchers.Main) {
-            playbackCompletion.runIfCurrent(playbackGeneration) {
+            if (playbackCompletion.isCurrent(playbackGeneration)) {
                 isPlaying = false
                 isLoading = false
             }
         }
-        val finalizedCurrentPlayback =
-            playbackCompletion.runIfCurrent(playbackGeneration) {
-                stopFrameUpdates()
-                stopBufferingCheck()
-            }
-        if (finalizedCurrentPlayback) {
+        playbackResumeCoordinator.runIfCurrent(playbackGeneration) {
+            stopFrameUpdates()
+            stopBufferingCheck()
             onPlaybackEnded?.invoke()
         }
     }
@@ -660,7 +657,7 @@ class LinuxVideoPlayerState : VideoPlayerState {
         val ptr = playerPtr
         if (ptr == 0L) return
         try {
-            LinuxNativeBridge.nPause(ptr)
+            playbackResumeCoordinator.runCommand { LinuxNativeBridge.nPause(ptr) }
             withContext(Dispatchers.Main) {
                 isPlaying = false
                 isLoading = false
