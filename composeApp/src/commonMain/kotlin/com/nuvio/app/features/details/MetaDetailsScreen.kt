@@ -108,7 +108,6 @@ import com.nuvio.app.features.details.components.DetailPosterRailSection
 import com.nuvio.app.features.details.components.DetailProductionSection
 import com.nuvio.app.features.details.components.DetailSeriesContent
 import com.nuvio.app.features.details.components.DesktopDetailBackdrop
-import com.nuvio.app.features.details.components.DesktopDetailContentBackground
 import com.nuvio.app.features.details.components.DesktopDetailHero
 import com.nuvio.app.features.details.components.DetailTrailersSection
 import com.nuvio.app.features.details.components.EpisodeWatchedActionSheet
@@ -1028,16 +1027,6 @@ fun MetaDetailsScreen(
                                     heroTrailerFinished = true
                                 },
                             )
-                            if (heroHeightPx.intValue > 0) {
-                                DesktopDetailContentBackground(
-                                    backgroundColor = dominantBackdropColor.takeIf { dominantColorEnabled }
-                                        ?: colorScheme.background,
-                                    contentStartOffset = {
-                                        heroHeightPx.intValue.toFloat() - detailScrollOffsetPx()
-                                    },
-                                    modifier = Modifier.zIndex(0.5f),
-                                )
-                            }
                         }
                         LazyColumn(
                             state = listState,
