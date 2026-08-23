@@ -72,6 +72,7 @@ class LinuxVideoPlayerState : VideoPlayerState {
     private var seekInProgress = false
     private var targetSeekTime: Double? = null
     private val playbackCompletion = LinuxPlaybackCompletion()
+    private val playbackResumeCoordinator = LinuxPlaybackResumeCoordinator(playbackCompletion)
 
     // Frame rate from native layer
     private var captureFrameRate: Float = 0.0f
@@ -230,9 +231,9 @@ class LinuxVideoPlayerState : VideoPlayerState {
             setPlayerError(VideoPlayerError.SourceError("File not found: $uri"))
             return
         }
-        playbackCompletion.reset()
 
         ioScope.launch {
+            playbackResumeCoordinator.reset()
             withContext(Dispatchers.Main) {
                 isLoading = true
                 error = null
@@ -587,11 +588,11 @@ class LinuxVideoPlayerState : VideoPlayerState {
         }
 
         val reachedEnd =
-            playbackCompletion.consumeEndIfCurrent(playbackGeneration) {
+            playbackCompletion.markEndedIfConsumed(playbackGeneration) {
                 val ptr = playerPtr
                 ptr != 0L && LinuxNativeBridge.nConsumeDidPlayToEnd(ptr)
             }
-        if (!reachedEnd || !playbackCompletion.markEnded(playbackGeneration)) return
+        if (!reachedEnd) return
 
         val pausedCurrentPlayback =
             playbackCompletion.runIfCurrent(playbackGeneration) {
@@ -637,7 +638,7 @@ class LinuxVideoPlayerState : VideoPlayerState {
         val ptr = playerPtr
         if (ptr == 0L) return
         try {
-            playbackCompletion.resume(
+            playbackResumeCoordinator.resume(
                 seekToStart = { LinuxNativeBridge.nSeekTo(ptr, 0.0) },
                 play = { LinuxNativeBridge.nPlay(ptr) },
             )
@@ -677,11 +678,7 @@ class LinuxVideoPlayerState : VideoPlayerState {
         ioScope.launch {
             pauseInBackground()
             if (hasMedia) seekToAsync(0f)
-            withContext(Dispatchers.Main) {
-                hasMedia = false
-                isLoading = false
-                resetState()
-            }
+            resetState()
         }
     }
 
@@ -714,11 +711,14 @@ class LinuxVideoPlayerState : VideoPlayerState {
 
             val ptr = playerPtr
             if (ptr == 0L) return
-            playbackCompletion.reset()
-            LinuxNativeBridge.nSeekTo(ptr, seekTime.toDouble())
+            playbackResumeCoordinator.resetAndRun {
+                LinuxNativeBridge.nSeekTo(ptr, seekTime.toDouble())
+                if (isPlaying) {
+                    LinuxNativeBridge.nPlay(ptr)
+                }
+            }
 
             if (isPlaying) {
-                LinuxNativeBridge.nPlay(ptr)
                 startFrameUpdates()
                 delay(10)
                 updateFrameAsync()
@@ -870,7 +870,7 @@ class LinuxVideoPlayerState : VideoPlayerState {
     // --- Internal helpers ---
 
     private suspend fun resetState() {
-        playbackCompletion.reset()
+        playbackResumeCoordinator.reset()
         withContext(Dispatchers.Main) {
             hasMedia = false
             isPlaying = false

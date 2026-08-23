@@ -14,12 +14,17 @@ internal class LinuxPlaybackCompletion {
 
     fun captureGeneration(): Long = synchronized(lock) { generation }
 
-    fun consumeEndIfCurrent(
+    fun markEndedIfConsumed(
         observedGeneration: Long,
         consumeEnd: () -> Boolean,
     ): Boolean =
         synchronized(lock) {
-            generation == observedGeneration && consumeEnd()
+            if (generation != observedGeneration || !consumeEnd()) {
+                false
+            } else {
+                endedGeneration = observedGeneration
+                true
+            }
         }
 
     fun markEnded(observedGeneration: Long): Boolean =
@@ -52,17 +57,54 @@ internal class LinuxPlaybackCompletion {
         }
     }
 
-    fun resume(
-        seekToStart: () -> Unit,
-        play: () -> Unit,
-    ) {
+    fun resumeFromEnd(): Boolean =
         synchronized(lock) {
             if (endedGeneration == generation) {
                 endedGeneration = null
                 generation += 1
-                seekToStart()
+                true
+            } else {
+                false
             }
-            play()
+        }
+}
+
+internal fun executePlaybackResume(
+    replayFromEnd: Boolean,
+    seekToStart: () -> Unit,
+    play: () -> Unit,
+) {
+    if (replayFromEnd) seekToStart()
+    play()
+}
+
+/** Serializes native Play commands without holding the completion-state lock. */
+internal class LinuxPlaybackResumeCoordinator(
+    private val completion: LinuxPlaybackCompletion,
+) {
+    private val commandLock = Any()
+
+    fun resume(
+        seekToStart: () -> Unit,
+        play: () -> Unit,
+    ) {
+        synchronized(commandLock) {
+            executePlaybackResume(
+                replayFromEnd = completion.resumeFromEnd(),
+                seekToStart = seekToStart,
+                play = play,
+            )
+        }
+    }
+
+    fun reset() {
+        resetAndRun {}
+    }
+
+    fun resetAndRun(action: () -> Unit) {
+        synchronized(commandLock) {
+            completion.reset()
+            action()
         }
     }
 }
