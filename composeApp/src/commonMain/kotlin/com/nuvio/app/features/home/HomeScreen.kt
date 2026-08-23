@@ -97,6 +97,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import com.nuvio.app.features.home.components.continueWatchingHeroViewportReserveHeight
+import com.nuvio.app.features.home.components.homeCatalogPreviewLimitForWidth
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.home.components.rememberContinueWatchingLayout
 import kotlinx.coroutines.CancellationException
@@ -825,6 +826,12 @@ fun HomeScreen(
         val homeSectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
         val continueWatchingLayout = rememberContinueWatchingLayout(maxWidth.value)
         val posterCardStyle = rememberPosterCardStyleUiState()
+        val homeCatalogPreviewLimit = homeCatalogPreviewLimitForWidth(
+            maxWidthDp = maxWidth.value,
+            sectionPadding = homeSectionPadding,
+            basePosterWidthDp = posterCardStyle.widthDp,
+            useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
+        )
         val nativeBottomNavigationOverlayHeight =
             if (LocalNuvioBottomNavigationOverlayPadding.current > 0.dp) {
                 nuvioSafeBottomPadding()
@@ -1003,10 +1010,10 @@ fun HomeScreen(
                                 item(key = keyedSettingsItem.lazyKey) {
                                     HomeCatalogRowSection(
                                         section = section,
-                                        entries = section.items.take(HOME_CATALOG_PREVIEW_LIMIT),
+                                        entries = section.items.take(homeCatalogPreviewLimit),
                                         modifier = Modifier.padding(bottom = 12.dp),
                                         sectionPadding = homeSectionPadding,
-                                        onViewAllClick = if (section.canOpenCatalog(HOME_CATALOG_PREVIEW_LIMIT)) {
+                                        onViewAllClick = if (section.canOpenCatalog(homeCatalogPreviewLimit)) {
                                             onCatalogClick?.let { { it(section) } }
                                         } else {
                                             null
@@ -1081,7 +1088,6 @@ private fun LazyListScope.homeContinueWatchingSections(
     }
 }
 
-private const val HOME_CATALOG_PREVIEW_LIMIT = 18
 private const val HOME_CONTINUE_WATCHING_SECTION_KEY = "home_continue_watching"
 private const val HOME_UPCOMING_SECTION_KEY = "home_upcoming"
 internal const val HomeContinueWatchingMaxRecentProgressItems = 300

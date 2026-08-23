@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
-import com.nuvio.app.core.ui.desktopCatalogShelfPosterBaseWidthDp
+import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
 import com.nuvio.app.core.ui.landscapePosterWidth
 import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.posterCardClickable
@@ -98,7 +98,7 @@ private fun CollectionFolderCard(
     onClick: (() -> Unit)? = null,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
-    val basePosterWidthDp = desktopCatalogShelfPosterBaseWidthDp(posterCardStyle.widthDp)
+    val basePosterWidthDp = catalogPosterBaseWidthDp(posterCardStyle.widthDp)
     val isLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled
     val shape = if (isLandscapeMode) PosterShape.Landscape else folder.posterShape
     val cardWidth: Dp

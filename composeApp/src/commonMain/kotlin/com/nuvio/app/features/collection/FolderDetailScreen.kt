@@ -49,7 +49,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
@@ -57,6 +56,8 @@ import com.nuvio.app.core.ui.NuvioPosterCard
 import com.nuvio.app.core.ui.NuvioPosterShape
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.posterGridColumnCountForViewport
+import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
@@ -274,7 +275,10 @@ private fun TabbedGridContent(
         if (selectedTab == null) return
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val columns = remember(maxWidth) { folderDetailGridColumnsForWidth(maxWidth) }
+            val posterCardStyle = rememberPosterCardStyleUiState()
+            val columns = remember(maxWidth, maxHeight, posterCardStyle.widthDp) {
+                posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+            }
 
             when {
                 selectedTab.isLoading && selectedTab.items.isEmpty() -> LoadingIndicator()
@@ -413,15 +417,6 @@ private fun PaginationLoadingFooter() {
         )
     }
 }
-
-private fun folderDetailGridColumnsForWidth(screenWidth: Dp): Int =
-    when {
-        screenWidth >= 1400.dp -> 7
-        screenWidth >= 1200.dp -> 6
-        screenWidth >= 1000.dp -> 5
-        screenWidth >= 840.dp -> 4
-        else -> 3
-    }
 
 @Composable
 private fun LoadingIndicator() {

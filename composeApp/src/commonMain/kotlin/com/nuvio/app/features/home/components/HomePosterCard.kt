@@ -5,7 +5,7 @@ import androidx.compose.ui.Modifier
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioPosterCard
 import com.nuvio.app.core.ui.NuvioPosterShape
-import com.nuvio.app.core.ui.desktopCatalogShelfPosterBaseWidthDp
+import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.PosterShape
@@ -32,7 +32,7 @@ fun HomePosterCard(
             title = item.name,
             imageUrl = if (isLandscapeMode) (item.banner ?: item.poster) else item.poster,
             modifier = modifier.then(hoverModifier),
-            basePosterWidthDp = desktopCatalogShelfPosterBaseWidthDp(posterCardStyle.widthDp),
+            basePosterWidthDp = catalogPosterBaseWidthDp(posterCardStyle.widthDp),
             shape = if (isLandscapeMode) NuvioPosterShape.Landscape else item.posterShape.toNuvioPosterShape(),
             detailLine = if (isLandscapeMode || posterCardStyle.hideLabelsEnabled) null else item.releaseInfo?.let { formatReleaseDateForDisplay(it) },
             showTitleBelow = !posterCardStyle.hideLabelsEnabled,

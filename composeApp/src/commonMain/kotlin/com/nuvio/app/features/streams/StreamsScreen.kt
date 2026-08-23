@@ -91,6 +91,8 @@ import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.debrid.toastMessage
+import com.nuvio.app.features.details.MetaScreenBackgroundMode
+import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import kotlinx.coroutines.launch
@@ -142,6 +144,10 @@ fun StreamsScreen(
     val watchProgressUiState by remember {
         WatchProgressRepository.ensureLoaded()
         WatchProgressRepository.uiState
+    }.collectAsStateWithLifecycle()
+    val metaScreenSettings by remember {
+        MetaScreenSettingsRepository.ensureLoaded()
+        MetaScreenSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
     remember {
         if (AppFeaturePolicy.downloadsEnabled) {
@@ -249,6 +255,7 @@ fun StreamsScreen(
                 appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
+                dominantColorEnabled = metaScreenSettings.backgroundMode == MetaScreenBackgroundMode.DominantColor,
                 onStreamSelected = { stream, positionMs, progressFraction ->
                     onStreamSelected(stream, positionMs, progressFraction)
                 },

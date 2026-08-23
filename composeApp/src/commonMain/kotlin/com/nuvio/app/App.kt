@@ -2408,7 +2408,15 @@ private fun MainAppContent(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                entry<StreamRoute> { route ->
+                entry<StreamRoute>(
+                    metadata = NavDisplay.transitionSpec {
+                        fadeIn(animationSpec = tween(160)) togetherWith
+                            fadeOut(animationSpec = tween(160))
+                    } + NavDisplay.popTransitionSpec {
+                        fadeIn(animationSpec = tween(160)) togetherWith
+                            fadeOut(animationSpec = tween(160))
+                    },
+                ) { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)
                     val launch = remember(route.launchId) {
                         StreamLaunchStore.get(route.launchId)

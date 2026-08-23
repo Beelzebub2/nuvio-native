@@ -21,10 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.nuvioCardDepth
@@ -33,15 +32,6 @@ import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.PosterShape
 import com.nuvio.app.features.watching.application.WatchingState
-
-internal fun posterGridColumnCountForWidth(screenWidth: Dp): Int =
-    when {
-        screenWidth >= 1400.dp -> 7
-        screenWidth >= 1200.dp -> 6
-        screenWidth >= 1000.dp -> 5
-        screenWidth >= 840.dp -> 4
-        else -> 3
-    }
 
 @Composable
 internal fun PosterGridRow(

@@ -63,7 +63,6 @@ import nuvio.composeapp.generated.resources.home_view_all
 import nuvio.composeapp.generated.resources.poster_logo_content_description
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 enum class NuvioPosterShape {
     Poster,
@@ -421,17 +420,7 @@ private fun NuvioViewAllPill(
     }
 }
 
-internal const val NuvioDesktopCatalogShelfPosterScale = 1.4f
 private const val DesktopPosterHoverScale = 1.045f
-
-internal fun desktopCatalogShelfPosterBaseWidthDp(
-    basePosterWidthDp: Int,
-): Int =
-    if (isDesktop) {
-        (basePosterWidthDp * NuvioDesktopCatalogShelfPosterScale).roundToInt()
-    } else {
-        basePosterWidthDp
-    }
 
 internal fun Modifier.nuvioShelfHoverOverdraw(inset: Dp): Modifier {
     if (inset == 0.dp) return this

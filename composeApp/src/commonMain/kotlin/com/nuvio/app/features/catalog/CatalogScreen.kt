@@ -41,7 +41,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +56,7 @@ import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.posterCardClickable
+import com.nuvio.app.core.ui.posterGridColumnCountForViewport
 import com.nuvio.app.core.ui.desktopPosterHoverScale
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
@@ -167,7 +167,9 @@ fun CatalogScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        val columns = remember(maxWidth) { catalogGridColumnsForWidth(maxWidth) }
+        val columns = remember(maxWidth, maxHeight, posterCardStyle.widthDp) {
+            posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             LazyVerticalGrid(
@@ -439,13 +441,4 @@ private fun PosterShape.catalogAspectRatio(): Float =
         PosterShape.Poster -> 0.68f
         PosterShape.Square -> 1f
         PosterShape.Landscape -> 1.2f
-    }
-
-private fun catalogGridColumnsForWidth(screenWidth: Dp): Int =
-    when {
-        screenWidth >= 1400.dp -> 7
-        screenWidth >= 1200.dp -> 6
-        screenWidth >= 1000.dp -> 5
-        screenWidth >= 840.dp -> 4
-        else -> 3
     }

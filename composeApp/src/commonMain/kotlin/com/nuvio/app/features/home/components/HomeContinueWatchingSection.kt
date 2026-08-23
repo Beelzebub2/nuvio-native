@@ -54,7 +54,7 @@ import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
-import com.nuvio.app.core.ui.desktopCatalogShelfPosterBaseWidthDp
+import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
 import com.nuvio.app.core.ui.ScopedDisintegrationTracker
 import com.nuvio.app.core.ui.landscapePosterHeightForWidth
 import com.nuvio.app.core.ui.landscapePosterWidth
@@ -634,7 +634,7 @@ private fun ContinueWatchingCard(
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val cardMetrics = remember(posterCardStyle.widthDp, posterCardStyle.cornerRadiusDp) {
-        val basePosterWidthDp = desktopCatalogShelfPosterBaseWidthDp(posterCardStyle.widthDp)
+        val basePosterWidthDp = catalogPosterBaseWidthDp(posterCardStyle.widthDp)
         continueWatchingLandscapeCardMetrics(
             basePosterWidthDp = basePosterWidthDp,
             cornerRadiusDp = posterCardStyle.cornerRadiusDp,

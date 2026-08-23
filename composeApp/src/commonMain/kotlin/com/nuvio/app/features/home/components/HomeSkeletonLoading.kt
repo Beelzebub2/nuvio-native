@@ -33,7 +33,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
-import com.nuvio.app.core.ui.desktopCatalogShelfPosterBaseWidthDp
+import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
 import com.nuvio.app.core.ui.landscapePosterHeightForWidth
 import com.nuvio.app.core.ui.landscapePosterWidth
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
@@ -125,7 +125,15 @@ fun HomeSkeletonHero(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
+                    .then(
+                        if (isDesktop) {
+                            Modifier
+                                .widthIn(max = layout.contentContainerMaxWidth)
+                                .fillMaxWidth()
+                        } else {
+                            Modifier.fillMaxWidth()
+                        },
+                    )
                     .padding(
                         horizontal = contentHorizontalPadding,
                         vertical = layout.contentVerticalPadding,
@@ -192,7 +200,7 @@ fun HomeSkeletonRow(
 ) {
     val brush = rememberHomeSkeletonBrush()
     val posterCardStyle = rememberPosterCardStyleUiState()
-    val basePosterWidthDp = desktopCatalogShelfPosterBaseWidthDp(posterCardStyle.widthDp)
+    val basePosterWidthDp = catalogPosterBaseWidthDp(posterCardStyle.widthDp)
     val skeletonWidth = if (posterCardStyle.catalogLandscapeModeEnabled) {
         landscapePosterWidth(basePosterWidthDp)
     } else {

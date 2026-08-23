@@ -4,7 +4,9 @@ import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.catalog.CatalogTarget
+import com.nuvio.app.features.catalog.CatalogPage
 import com.nuvio.app.features.catalog.fetchCatalogPage
+import com.nuvio.app.features.catalog.mergeCatalogItems
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.collection.CollectionSource
@@ -220,13 +222,7 @@ object HomeRepository {
     }
 
     private suspend fun HomeCatalogDefinition.toSection(forceRefresh: Boolean): HomeCatalogSection {
-        val page = fetchCatalogPage(
-            manifestUrl = manifestUrl,
-            type = type,
-            catalogId = catalogId,
-            maxItems = HOME_CATALOG_PREVIEW_FETCH_LIMIT,
-            forceRefresh = forceRefresh,
-        )
+        val page = fetchHomePreview(forceRefresh)
         val items = page.items
         if (items.isEmpty()) {
             return HomeCatalogSection(
@@ -260,6 +256,35 @@ object HomeRepository {
             items = items,
             availableItemCount = page.rawItemCount,
             hasMore = supportsPagination && page.nextSkip != null,
+        )
+    }
+
+    private suspend fun HomeCatalogDefinition.fetchHomePreview(forceRefresh: Boolean): CatalogPage {
+        var items = emptyList<MetaPreview>()
+        var rawItemCount = 0
+        var nextSkip: Int? = null
+        var pagesFetched = 0
+        do {
+            val page = fetchCatalogPage(
+                manifestUrl = manifestUrl,
+                type = type,
+                catalogId = catalogId,
+                skip = nextSkip,
+                maxItems = HOME_CATALOG_PREVIEW_FETCH_LIMIT - items.size,
+                forceRefresh = forceRefresh,
+            )
+            items = mergeCatalogItems(items, page.items)
+            rawItemCount += page.rawItemCount
+            nextSkip = page.nextSkip
+            pagesFetched++
+        } while (
+            supportsPagination && nextSkip != null && items.size < HOME_CATALOG_PREVIEW_FETCH_LIMIT &&
+            pagesFetched < HOME_CATALOG_PREVIEW_MAX_PAGES
+        )
+        return CatalogPage(
+            items = items.take(HOME_CATALOG_PREVIEW_FETCH_LIMIT),
+            rawItemCount = rawItemCount,
+            nextSkip = nextSkip,
         )
     }
 
@@ -428,7 +453,8 @@ private const val HOME_HERO_ITEM_LIMIT = 8
 private const val HOME_COLLECTION_HERO_SOURCE_LIMIT = 6
 private const val HOME_COLLECTION_HERO_SOURCE_ITEM_LIMIT = 8
 private const val HOME_CATALOG_FETCH_BATCH_SIZE = 4
-private const val HOME_CATALOG_PREVIEW_FETCH_LIMIT = 18
+private const val HOME_CATALOG_PREVIEW_FETCH_LIMIT = 64
+private const val HOME_CATALOG_PREVIEW_MAX_PAGES = 4
 private const val HOME_CATALOG_PUBLISH_INTERVAL = 2
 
 private fun prioritizeDefinitions(

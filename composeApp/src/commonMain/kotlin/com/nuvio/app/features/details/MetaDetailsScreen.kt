@@ -86,6 +86,7 @@ import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioPosterZoomActionOverlay
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.dominantBackdropBlendColor
 import com.nuvio.app.core.ui.PosterZoomAnchor
 import com.nuvio.app.core.ui.PosterZoomAnchorHolder
 import com.nuvio.app.core.ui.PosterZoomOverlayAction
@@ -108,6 +109,7 @@ import com.nuvio.app.features.details.components.DetailMetaInfo
 import com.nuvio.app.features.details.components.DetailPosterRailSection
 import com.nuvio.app.features.details.components.DetailProductionSection
 import com.nuvio.app.features.details.components.DetailSeriesContent
+import com.nuvio.app.features.details.components.DesktopDetailBackdrop
 import com.nuvio.app.features.details.components.DesktopDetailHero
 import com.nuvio.app.features.details.components.DetailTrailersSection
 import com.nuvio.app.features.details.components.EpisodeWatchedActionSheet
@@ -1021,6 +1023,30 @@ fun MetaDetailsScreen(
                                 )
                             }
                         }
+                        if (useDesktopDetailLayout) {
+                            DesktopDetailBackdrop(
+                                meta = meta,
+                                viewportHeight = viewportHeight,
+                                heroTrailerSourceUrl = heroTrailerSourceUrl,
+                                heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
+                                heroTrailerReady = heroTrailerReady,
+                                heroTrailerPlayWhenReady = heroTrailerPlayWhenReady,
+                                heroTrailerMuted = heroTrailerMuted,
+                                heroGradientColor = dominantBackdropColor.takeIf { dominantColorEnabled },
+                                onBackdropLoaded = { painter -> dominantBackdropPainter = painter },
+                                onHeroTrailerReady = {
+                                    if (!heroTrailerFinished) heroTrailerReady = true
+                                },
+                                onHeroTrailerEnded = {
+                                    heroTrailerReady = false
+                                    heroTrailerFinished = true
+                                },
+                                onHeroTrailerError = {
+                                    heroTrailerReady = false
+                                    heroTrailerFinished = true
+                                },
+                            )
+                        }
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
@@ -1038,32 +1064,12 @@ fun MetaDetailsScreen(
                                         playButtonLabel = playButtonLabel,
                                         isSaved = isSaved,
                                         isWatched = isWatched,
-                                        scrollOffset = heroScrollOffset,
                                         onHeightChanged = { heroHeightPx.intValue = it },
                                         heroTrailerSourceUrl = heroTrailerSourceUrl,
-                                        heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
                                         heroTrailerReady = heroTrailerReady,
-                                        heroTrailerPlayWhenReady = heroTrailerPlayWhenReady,
                                         heroTrailerMuted = heroTrailerMuted,
-                                        heroGradientColor = dominantBackdropColor.takeIf { dominantColorEnabled },
-                                        onBackdropLoaded = { painter ->
-                                            dominantBackdropPainter = painter
-                                        },
                                         onHeroTrailerMuteToggle = {
                                             HeroTrailerAudioState.toggleMuted()
-                                        },
-                                        onHeroTrailerReady = {
-                                            if (!heroTrailerFinished) {
-                                                heroTrailerReady = true
-                                            }
-                                        },
-                                        onHeroTrailerEnded = {
-                                            heroTrailerReady = false
-                                            heroTrailerFinished = true
-                                        },
-                                        onHeroTrailerError = {
-                                            heroTrailerReady = false
-                                            heroTrailerFinished = true
                                         },
                                         onPlayClick = onPrimaryPlayClick,
                                         onPlayLongClick = if (showManualPlayOption) onPrimaryPlayLongClick else null,
@@ -1289,7 +1295,9 @@ fun MetaDetailsScreen(
                                 .zIndex(2f),
                         )
 
-                        if (backgroundMode.usesBackdropBackground && deferredMetaWorkAllowed && heroHeightPx.intValue > 0) {
+                        if (!useDesktopDetailLayout && backgroundMode.usesBackdropBackground &&
+                            deferredMetaWorkAllowed && heroHeightPx.intValue > 0
+                        ) {
                             val blendColor = dominantBackdropColor.takeIf { dominantColorEnabled }
                                 ?: colorScheme.background
                             Box(
@@ -2403,16 +2411,3 @@ private fun detailTabletContentMaxWidth(maxWidth: Dp, isTablet: Boolean): Dp =
     } else {
         (maxWidth * 0.6f).coerceIn(520.dp, 680.dp)
     }
-
-private fun dominantBackdropBlendColor(dominantColor: Color, backgroundColor: Color): Color =
-    backgroundColor.blendTowards(dominantColor, fraction = 0.42f)
-
-private fun Color.blendTowards(target: Color, fraction: Float): Color {
-    val clamped = fraction.coerceIn(0f, 1f)
-    return Color(
-        red = red + (target.red - red) * clamped,
-        green = green + (target.green - green) * clamped,
-        blue = blue + (target.blue - blue) * clamped,
-        alpha = alpha + (target.alpha - alpha) * clamped,
-    )
-}
