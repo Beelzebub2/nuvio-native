@@ -91,6 +91,8 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.SidebarProfileSwitcherStack
 import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.compose_settings_page_root
+import com.nuvio.app.features.player.PlayerBackRequest
+import com.nuvio.app.features.player.PlayerBackReleaseGuard
 
 internal val DesktopSidebarCollapsedWidth = 84.dp
 private val DesktopSidebarExpandedWidth = 208.dp
@@ -169,6 +171,32 @@ internal data class AppTabActions(
     val onRequestedSettingsPageConsumed: () -> Unit = {},
     val onInitialHomeContentRendered: () -> Unit = {},
 )
+
+@Composable
+internal fun rememberGuardedPlayerPopBackStack(
+    navController: NuvioNavigator,
+    route: AppRoute,
+    beforePop: () -> Unit = {},
+): PlayerBackRequest {
+    val guard = remember(route) { PlayerBackReleaseGuard() }
+
+    return remember(navController, route, beforePop, guard) {
+        { releaseBeforeBack ->
+            guard.request(
+                canStart = {
+                    navController.currentRoute == route &&
+                        navController.canPopBackStack(expectedRoute = route)
+                },
+                releaseBeforeBack = releaseBeforeBack,
+                beforePop = beforePop,
+                pop = {
+                    navController.currentRoute == route &&
+                        navController.popBackStack(expectedRoute = route)
+                },
+            )
+        }
+    }
+}
 
 @Composable
 internal fun AppTabHost(

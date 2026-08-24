@@ -175,6 +175,7 @@ import com.nuvio.app.core.ui.AppPresenceState
 import com.nuvio.app.core.ui.PresenceSnapshot
 import kotlinx.coroutines.delay
 import androidx.compose.ui.ExperimentalComposeUiApi
+import com.nuvio.app.features.player.dispatchNavigationBack
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -227,6 +228,9 @@ internal fun MainAppContent(
             warmProfileBoundRepositories()
         }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
+        var registeredPlayerSystemBack by remember {
+            mutableStateOf<Pair<PlayerRoute, () -> Unit>?>(null)
+        }
         val liquidGlassNativeTabBarEnabled by remember {
             ThemeSettingsRepository.liquidGlassNativeTabBarEnabled
         }.collectAsStateWithLifecycle()
@@ -1252,7 +1256,16 @@ internal fun MainAppContent(
                 NavDisplay(
                     backStack = navBackStack,
                     modifier = Modifier.fillMaxSize(),
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        val routeAtRequest = navController.currentRoute
+                        dispatchNavigationBack(
+                            isPlayerRoute = routeAtRequest is PlayerRoute,
+                            playerBack = registeredPlayerSystemBack
+                                ?.takeIf { (route, _) -> route == routeAtRequest }
+                                ?.second,
+                            pop = { navController.popBackStack() },
+                        )
+                    },
                     entryDecorators = listOf(
                         rememberSaveableStateHolderNavEntryDecorator<NavKey>(),
                         routeDisposalDecorator,
@@ -1492,6 +1505,15 @@ internal fun MainAppContent(
                         onExternalPlayerLaunch = { launch -> lastExternalPlayerLaunch = launch },
                         launchExternalPlayer = launchExternalPlayer,
                         openExternalStreamUrl = ::openExternalStreamUrl,
+                        onSystemBackHandlerChanged = { playerRoute, handler ->
+                            if (handler == null) {
+                                if (registeredPlayerSystemBack?.first == playerRoute) {
+                                    registeredPlayerSystemBack = null
+                                }
+                            } else {
+                                registeredPlayerSystemBack = playerRoute to handler
+                            }
+                        },
                     )
                 }
                 entry<CatalogRoute> { route ->

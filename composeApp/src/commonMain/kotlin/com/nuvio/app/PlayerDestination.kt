@@ -26,8 +26,9 @@ internal fun PlayerDestination(
     onExternalPlayerLaunch: (PlayerLaunch) -> Unit,
     launchExternalPlayer: (ExternalPlayerIntentResult.Success) -> Boolean,
     openExternalStreamUrl: (String) -> Boolean,
+    onSystemBackHandlerChanged: (PlayerRoute, (() -> Unit)?) -> Unit,
 ) {
-    val onBack = rememberGuardedPopBackStack(
+    val popBack = rememberGuardedPopBackStack(
         navController = navController,
         route = route,
         beforePop = ResumePromptRepository::markPlayerExitedNormally,
@@ -35,10 +36,18 @@ internal fun PlayerDestination(
     val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
     if (launch == null) {
         LaunchedEffect(route.launchId) {
-            onBack()
+            popBack()
         }
         Box(modifier = Modifier.fillMaxSize())
         return
+    }
+    val onBack = rememberGuardedPlayerPopBackStack(
+        navController = navController,
+        route = route,
+        beforePop = ResumePromptRepository::markPlayerExitedNormally,
+    )
+    val registerSystemBack = remember(route, onSystemBackHandlerChanged) {
+        { handler: (() -> Unit)? -> onSystemBackHandlerChanged(route, handler) }
     }
     LaunchedEffect(launch.videoId) {
         launch.videoId?.let { ResumePromptRepository.markPlayerEntered(it) }
@@ -77,6 +86,7 @@ internal fun PlayerDestination(
         initialProgressFraction = launch.initialProgressFraction,
         contentLanguage = launch.contentLanguage,
         onBack = onBack,
+        onSystemBackHandlerChanged = registerSystemBack,
         onOpenInExternalPlayer = if (externalPlayerSupported) { { request ->
             val playerLaunch = PlayerLaunch(
                 profileId = launch.profileId,

@@ -22,6 +22,46 @@ import com.nuvio.app.features.watchprogress.WatchProgressUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
+internal data class PlayerSurfaceSource(
+    val sourceUrl: String,
+    val sourceAudioUrl: String?,
+    val sourceHeaders: Map<String, String>,
+    val sourceResponseHeaders: Map<String, String>,
+    val externalSubtitles: List<com.nuvio.app.features.streams.StreamSubtitle>,
+    val streamType: String?,
+    val initialPositionMs: Long?,
+    val initialPositionRequestKey: String?,
+)
+
+internal fun shouldRenderPlayerSurface(
+    hasCurrentSource: Boolean,
+    hasLifecycleController: Boolean,
+    releaseInFlight: Boolean,
+    desktop: Boolean,
+): Boolean = hasCurrentSource || (desktop && hasLifecycleController && releaseInFlight)
+
+internal class PlayerReleaseSurfaceRetention {
+    private var nextAttemptId = 0L
+    private var activeAttemptId: Long? = null
+
+    var inFlight by mutableStateOf(false)
+        private set
+
+    fun begin(): Long {
+        val attemptId = ++nextAttemptId
+        activeAttemptId = attemptId
+        inFlight = true
+        return attemptId
+    }
+
+    fun finish(attemptId: Long): Boolean {
+        if (activeAttemptId != attemptId) return false
+        activeAttemptId = null
+        inFlight = false
+        return true
+    }
+}
+
 internal class PlayerScreenRuntime(
     args: PlayerScreenArgs,
 ) {
@@ -129,6 +169,8 @@ internal class PlayerScreenRuntime(
     var layoutSize by mutableStateOf(IntSize.Zero)
     var playbackSnapshot by mutableStateOf(PlayerPlaybackSnapshot())
     var playerController by mutableStateOf<PlayerEngineController?>(null)
+    var playerLifecycleController by mutableStateOf<PlayerEngineController?>(null)
+    val playerReleaseSurfaceRetention = PlayerReleaseSurfaceRetention()
     var playerControllerSourceUrl by mutableStateOf<String?>(null)
     var errorMessage by mutableStateOf<String?>(null)
     var isScrubbingTimeline by mutableStateOf(false)
