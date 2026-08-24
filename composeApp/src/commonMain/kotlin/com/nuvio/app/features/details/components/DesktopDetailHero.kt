@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -81,10 +82,12 @@ fun DesktopDetailBackdrop(
     heroTrailerPlayWhenReady: Boolean,
     heroTrailerMuted: Boolean,
     heroGradientColor: Color? = null,
+    blurBackdrop: Boolean = false,
     onBackdropLoaded: (Painter) -> Unit = {},
     onHeroTrailerReady: () -> Unit,
     onHeroTrailerEnded: () -> Unit,
     onHeroTrailerError: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sideGradientColor = heroGradientColor ?: colorScheme.background
@@ -100,7 +103,7 @@ fun DesktopDetailBackdrop(
         label = "desktop_detail_hero_gradient_intensity",
     )
     BoxWithConstraints(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(sideGradientColor),
     ) {
@@ -116,6 +119,7 @@ fun DesktopDetailBackdrop(
             .align(Alignment.CenterEnd)
             .width(backdropWidth)
             .fillMaxHeight()
+        val artworkModifier = if (blurBackdrop) backdropModifier.blur(30.dp) else backdropModifier
         val bottomSpreadStrength = ((21f / 9f - aspectRatio) / (5f / 9f)).coerceIn(0f, 1f)
         val baseSideFade = Brush.horizontalGradient(
             colorStops = arrayOf(
@@ -132,7 +136,7 @@ fun DesktopDetailBackdrop(
             AsyncImage(
                 model = imageUrl,
                 contentDescription = meta.name,
-                modifier = backdropModifier,
+                modifier = artworkModifier,
                 alignment = BiasAlignment(0f, DesktopBackdropVerticalBias),
                 contentScale = if (useWideArtworkFrame && !cropSideBackdrop) ContentScale.Fit else ContentScale.Crop,
                 desktopImageScaling = NuvioDesktopImageScaling.Disabled,
@@ -149,7 +153,7 @@ fun DesktopDetailBackdrop(
                 playWhenReady = heroTrailerPlayWhenReady,
                 muted = heroTrailerMuted,
                 fillFrame = true,
-                modifier = backdropModifier.graphicsLayer { alpha = trailerAlpha },
+                modifier = artworkModifier.graphicsLayer { alpha = trailerAlpha },
                 onReady = onHeroTrailerReady,
                 onEnded = onHeroTrailerEnded,
                 onError = onHeroTrailerError,

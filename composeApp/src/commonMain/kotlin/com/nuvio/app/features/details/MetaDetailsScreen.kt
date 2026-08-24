@@ -158,13 +158,22 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 private val watchedMarkerDiagnosticLog = Logger.withTag("WatchedMarkerDiag")
-private const val DetailScrolledBackgroundMaxAlpha = 0.86f
+private const val DetailScrolledBackgroundDefaultMaxAlpha = 0.86f
+private const val DetailScrolledBackgroundCinematicMaxAlpha = 0.36f
 private const val DetailScrolledBackgroundFadeHeroFraction = 0.75f
 
-internal fun detailScrolledBackgroundAlpha(scrollOffsetPx: Float, heroHeightPx: Int): Float {
+internal fun detailScrolledBackgroundProgress(scrollOffsetPx: Float, heroHeightPx: Int): Float {
     if (scrollOffsetPx <= 0f || heroHeightPx <= 0) return 0f
     val fadeDistancePx = heroHeightPx * DetailScrolledBackgroundFadeHeroFraction
-    return (scrollOffsetPx / fadeDistancePx).coerceIn(0f, 1f) * DetailScrolledBackgroundMaxAlpha
+    return (scrollOffsetPx / fadeDistancePx).coerceIn(0f, 1f)
+}
+
+internal fun detailScrolledBackgroundAlpha(
+    scrollOffsetPx: Float,
+    heroHeightPx: Int,
+    maxAlpha: Float = DetailScrolledBackgroundDefaultMaxAlpha,
+): Float {
+    return detailScrolledBackgroundProgress(scrollOffsetPx, heroHeightPx) * maxAlpha.coerceIn(0f, 1f)
 }
 
 @Composable
@@ -1001,7 +1010,7 @@ fun MetaDetailsScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(colorScheme.background.copy(alpha = 0.92f)),
+                                        .background(colorScheme.background.copy(alpha = 0.48f)),
                                 )
                             }
                             MetaScreenBackgroundMode.DominantColor -> if (deferredMetaWorkAllowed) {
@@ -1036,6 +1045,30 @@ fun MetaDetailsScreen(
                                 },
                             )
 
+                            if (backgroundMode == MetaScreenBackgroundMode.Cinematic) {
+                                DesktopDetailBackdrop(
+                                    meta = meta,
+                                    viewportHeight = viewportHeight,
+                                    heroTrailerSourceUrl = null,
+                                    heroTrailerSourceAudioUrl = null,
+                                    heroTrailerReady = false,
+                                    heroTrailerPlayWhenReady = false,
+                                    heroTrailerMuted = true,
+                                    blurBackdrop = true,
+                                    onHeroTrailerReady = {},
+                                    onHeroTrailerEnded = {},
+                                    onHeroTrailerError = {},
+                                    modifier = Modifier
+                                        .zIndex(0.25f)
+                                        .graphicsLayer {
+                                            alpha = detailScrolledBackgroundProgress(
+                                                scrollOffsetPx = detailScrollOffsetPx(),
+                                                heroHeightPx = heroHeightPx.intValue,
+                                            )
+                                        },
+                                )
+                            }
+
                             val scrolledBackgroundColor = if (dominantColorEnabled) {
                                 dominantBackdropColor
                             } else {
@@ -1049,6 +1082,11 @@ fun MetaDetailsScreen(
                                         alpha = detailScrolledBackgroundAlpha(
                                             scrollOffsetPx = detailScrollOffsetPx(),
                                             heroHeightPx = heroHeightPx.intValue,
+                                            maxAlpha = if (backgroundMode == MetaScreenBackgroundMode.Cinematic) {
+                                                DetailScrolledBackgroundCinematicMaxAlpha
+                                            } else {
+                                                DetailScrolledBackgroundDefaultMaxAlpha
+                                            },
                                         )
                                     }
                                     .background(scrolledBackgroundColor),
