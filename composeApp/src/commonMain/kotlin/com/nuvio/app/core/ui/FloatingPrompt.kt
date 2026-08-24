@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -120,6 +121,7 @@ fun NuvioFloatingPrompt(
     ) {
         Box(
             modifier = Modifier
+                .widthIn(max = tokens.components.sheetMaxWidth)
                 .fillMaxWidth()
                 .padding(bottom = navBarBottom + NuvioTokens.Space.s72)
                 .padding(horizontal = tokens.spacing.screenHorizontal)
