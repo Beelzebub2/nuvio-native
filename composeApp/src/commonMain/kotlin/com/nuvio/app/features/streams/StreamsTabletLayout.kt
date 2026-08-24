@@ -1,6 +1,7 @@
 package com.nuvio.app.features.streams
 
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
@@ -51,6 +53,7 @@ import com.nuvio.app.core.ui.dominantBackdropBlendColor
 import com.nuvio.app.core.ui.nuvioDesktopDragScroll
 import com.kmpalette.extensions.painter.rememberPainterDominantColorState
 import com.nuvio.app.isIos
+import com.nuvio.app.isDesktop
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -80,6 +83,30 @@ internal fun TabletStreamsLayout(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (!isDesktop) {
+        LegacyTabletStreamsLayout(
+            isEpisode = isEpisode,
+            title = title,
+            logo = logo,
+            poster = poster,
+            background = background,
+            episodeThumbnail = episodeThumbnail,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
+            episodeTitle = episodeTitle,
+            uiState = uiState,
+            debridEnabled = debridEnabled,
+            appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+            resumePositionMs = resumePositionMs,
+            resumeProgressFraction = resumeProgressFraction,
+            onStreamSelected = onStreamSelected,
+            onStreamLongPress = onStreamLongPress,
+            onRefresh = onRefresh,
+            modifier = modifier,
+        )
+        return
+    }
+
     val hazeState = rememberHazeState()
     val opacity = com.nuvio.app.core.ui.NuvioTokens.Opacity
     val tabletBackdrop = remember(background, poster) {
@@ -256,6 +283,179 @@ internal fun TabletStreamsLayout(
                         resumeProgressFraction = resumeProgressFraction,
                         modifier = Modifier.weight(1f),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyTabletStreamsLayout(
+    isEpisode: Boolean,
+    title: String,
+    logo: String?,
+    poster: String?,
+    background: String?,
+    episodeThumbnail: String?,
+    seasonNumber: Int?,
+    episodeNumber: Int?,
+    episodeTitle: String?,
+    uiState: StreamsUiState,
+    debridEnabled: Boolean,
+    appendInstantServiceToDefaultName: Boolean,
+    resumePositionMs: Long?,
+    resumeProgressFraction: Float?,
+    onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
+    onStreamLongPress: (StreamItem) -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hazeState = rememberHazeState()
+    val tabletBackdrop = remember(background, poster) {
+        background ?: poster
+    }
+    var backdropVisible by remember(tabletBackdrop) { mutableStateOf(false) }
+
+    LaunchedEffect(tabletBackdrop) {
+        backdropVisible = tabletBackdrop == null
+        if (tabletBackdrop != null) {
+            backdropVisible = true
+        }
+    }
+
+    val backdropAlpha by animateFloatAsState(
+        targetValue = if (backdropVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 520),
+        label = "tablet_backdrop_alpha",
+    )
+    val backdropScale by animateFloatAsState(
+        targetValue = if (backdropVisible) 1f else 1.05f,
+        animationSpec = tween(durationMillis = 620),
+        label = "tablet_backdrop_scale",
+    )
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
+        ) {
+            if (tabletBackdrop != null) {
+                AsyncImage(
+                    model = tabletBackdrop,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = backdropAlpha
+                            scaleX = backdropScale
+                            scaleY = backdropScale
+                        },
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.2f),
+                                Color.Black.copy(alpha = 0.4f),
+                                Color.Black.copy(alpha = 0.6f),
+                            ),
+                        ),
+                    ),
+            )
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxHeight()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isEpisode && seasonNumber != null && episodeNumber != null) {
+                    TabletEpisodeInfoPanel(
+                        logo = logo,
+                        seasonNumber = seasonNumber,
+                        episodeNumber = episodeNumber,
+                        episodeTitle = episodeTitle,
+                        showTitle = title,
+                    )
+                } else {
+                    TabletMovieInfoPanel(
+                        title = title,
+                        logo = logo,
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(0.6f)
+                    .fillMaxHeight()
+                    .padding(
+                        top = if (isIos) 20.dp else 60.dp,
+                        end = 12.dp,
+                        bottom = 12.dp,
+                    ),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(24.dp))
+                        .hazeEffect(state = hazeState) {
+                            inputScale = HazeInputScale.Fixed(0.66f)
+                            blurRadius = 56.dp
+                        }
+                        .background(Color.Black.copy(alpha = 0.36f)),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                    ) {
+                        if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
+                            ResumeBanner(
+                                positionMs = resumePositionMs,
+                                progressFraction = resumeProgressFraction,
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
+                        }
+
+                        ProviderFilterRow(
+                            groups = uiState.groups,
+                            selectedFilter = uiState.selectedFilter,
+                            onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
+                            onRefresh = onRefresh,
+                        )
+
+                        ActiveScrapersStatusBlock(
+                            groups = uiState.groups,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+
+                        StreamList(
+                            uiState = uiState,
+                            debridEnabled = debridEnabled,
+                            appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                            onStreamSelected = onStreamSelected,
+                            onStreamLongPress = onStreamLongPress,
+                            resumePositionMs = resumePositionMs,
+                            resumeProgressFraction = resumeProgressFraction,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }

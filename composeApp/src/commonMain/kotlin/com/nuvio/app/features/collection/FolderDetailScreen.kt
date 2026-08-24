@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -32,18 +35,26 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
 import com.nuvio.app.core.ui.NuvioPosterCard
@@ -64,6 +75,7 @@ import com.nuvio.app.features.home.components.homeCatalogPreviewLimitForWidth
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.isDesktop
 import com.nuvio.app.navigation.LocalUseNativeNavigation
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -73,6 +85,8 @@ import nuvio.composeapp.generated.resources.collections_folder_empty_items
 import nuvio.composeapp.generated.resources.collections_folder_not_found
 import nuvio.composeapp.generated.resources.collections_tab_all
 import org.jetbrains.compose.resources.stringResource
+
+private val FolderCoverHeight = 176.dp
 
 @Composable
 fun FolderDetailScreen(
@@ -88,6 +102,19 @@ fun FolderDetailScreen(
     val folder = uiState.folder
     val useNativeNavigation = LocalUseNativeNavigation.current
     val coverImageUrl = folder?.coverImageUrl?.takeIf { it.isNotBlank() }
+
+    if (!isDesktop) {
+        MobileFolderDetailContent(
+            uiState = uiState,
+            watchedKeys = watchedUiState.watchedKeys,
+            coverImageUrl = coverImageUrl,
+            useNativeNavigation = useNativeNavigation,
+            onBack = onBack,
+            onCatalogClick = onCatalogClick,
+            onPosterClick = onPosterClick,
+        )
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -174,6 +201,130 @@ fun FolderDetailScreen(
 }
 
 @Composable
+private fun MobileFolderDetailContent(
+    uiState: FolderDetailUiState,
+    watchedKeys: Set<String>,
+    coverImageUrl: String?,
+    useNativeNavigation: Boolean,
+    onBack: () -> Unit,
+    onCatalogClick: (HomeCatalogSection) -> Unit,
+    onPosterClick: (MetaPreview) -> Unit,
+) {
+    val folder = uiState.folder
+    val density = LocalDensity.current
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val maxHeroHeightPx = with(density) { FolderCoverHeight.toPx() }
+    var heroHeightPx by remember(coverImageUrl, maxHeroHeightPx) {
+        mutableFloatStateOf(if (coverImageUrl != null) maxHeroHeightPx else 0f)
+    }
+    val heroScrollConnection = remember(coverImageUrl, maxHeroHeightPx) {
+        object : NestedScrollConnection {
+            fun consumeHeroDelta(deltaY: Float): Float {
+                if (coverImageUrl == null || deltaY == 0f) return 0f
+                val previousHeight = heroHeightPx
+                val nextHeight = (previousHeight + deltaY).coerceIn(0f, maxHeroHeightPx)
+                heroHeightPx = nextHeight
+                return nextHeight - previousHeight
+            }
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y >= 0f) return Offset.Zero
+                return Offset(x = 0f, y = consumeHeroDelta(available.y))
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y <= 0f) return Offset.Zero
+                return Offset(x = 0f, y = consumeHeroDelta(available.y))
+            }
+        }
+    }
+    val heroHeight = with(density) { heroHeightPx.toDp() }
+    val heroCollapseFraction = if (coverImageUrl == null || maxHeroHeightPx == 0f) {
+        1f
+    } else {
+        1f - (heroHeightPx / maxHeroHeightPx)
+    }
+    val contentModifier = if (coverImageUrl != null) {
+        Modifier.nestedScroll(heroScrollConnection)
+    } else {
+        Modifier
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        if (coverImageUrl != null && heroHeight > 0.dp) {
+            FolderCoverImage(
+                imageUrl = coverImageUrl,
+                title = folder?.title.orEmpty(),
+                modifier = Modifier.height(heroHeight),
+            )
+        }
+
+        if (!useNativeNavigation) {
+            NuvioScreenHeader(
+                title = folder?.title ?: uiState.collectionTitle,
+                modifier = Modifier.padding(horizontal = 16.dp),
+                includeStatusBarPadding = coverImageUrl == null,
+                topPadding = if (coverImageUrl != null) statusBarTop * heroCollapseFraction else null,
+                onBack = onBack,
+            )
+        }
+
+        if (folder == null && !uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(Res.string.collections_folder_not_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            return@Column
+        }
+
+        when (uiState.viewMode) {
+            FolderViewMode.TABBED_GRID -> TabbedGridContent(
+                uiState = uiState,
+                watchedKeys = watchedKeys,
+                modifier = Modifier.weight(1f).then(contentModifier),
+                onTabSelected = { FolderDetailRepository.selectTab(it) },
+                onPosterClick = onPosterClick,
+            )
+            FolderViewMode.ROWS,
+            FolderViewMode.FOLLOW_LAYOUT,
+            -> RowsContent(
+                uiState = uiState,
+                watchedKeys = watchedKeys,
+                modifier = Modifier.weight(1f).then(contentModifier),
+                onCatalogClick = onCatalogClick,
+                onPosterClick = onPosterClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FolderCoverImage(
+    imageUrl: String,
+    title: String,
+    modifier: Modifier = Modifier,
+) {
+    AsyncImage(
+        model = imageUrl,
+        contentDescription = title,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(FolderCoverHeight),
+        contentScale = ContentScale.Crop,
+    )
+}
+
+@Composable
 private fun TabbedGridContent(
     uiState: FolderDetailUiState,
     watchedKeys: Set<String>,
@@ -235,8 +386,12 @@ private fun TabbedGridContent(
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val posterCardStyle = rememberPosterCardStyleUiState()
-            val columns = remember(maxWidth, maxHeight, posterCardStyle.widthDp) {
-                posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+            val columns = remember(maxWidth, maxHeight, posterCardStyle.widthDp, isDesktop) {
+                if (isDesktop) {
+                    posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+                } else {
+                    folderDetailGridColumnsForWidth(maxWidth)
+                }
             }
 
             when {
@@ -326,14 +481,18 @@ private fun RowsContent(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val sectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
+        val sectionPadding = if (isDesktop) homeSectionHorizontalPaddingForWidth(maxWidth.value) else null
         val posterCardStyle = rememberPosterCardStyleUiState()
-        val catalogPreviewLimit = homeCatalogPreviewLimitForWidth(
-            maxWidthDp = maxWidth.value,
-            sectionPadding = sectionPadding,
-            basePosterWidthDp = posterCardStyle.widthDp,
-            useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
-        )
+        val catalogPreviewLimit = if (isDesktop) {
+            homeCatalogPreviewLimitForWidth(
+                maxWidthDp = maxWidth.value,
+                sectionPadding = sectionPadding ?: 0.dp,
+                basePosterWidthDp = posterCardStyle.widthDp,
+                useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
+            )
+        } else {
+            18
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -370,6 +529,15 @@ private fun RowsContent(
         )
     }
 }
+
+private fun folderDetailGridColumnsForWidth(screenWidth: Dp): Int =
+    when {
+        screenWidth >= 1400.dp -> 7
+        screenWidth >= 1200.dp -> 6
+        screenWidth >= 1000.dp -> 5
+        screenWidth >= 840.dp -> 4
+        else -> 3
+    }
 
 @Composable
 private fun PaginationLoadingFooter() {

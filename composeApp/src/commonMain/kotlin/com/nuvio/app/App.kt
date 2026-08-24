@@ -2409,12 +2409,16 @@ private fun MainAppContent(
                     )
                 }
                 entry<StreamRoute>(
-                    metadata = NavDisplay.transitionSpec {
-                        fadeIn(animationSpec = tween(160)) togetherWith
-                            fadeOut(animationSpec = tween(160))
-                    } + NavDisplay.popTransitionSpec {
-                        fadeIn(animationSpec = tween(160)) togetherWith
-                            fadeOut(animationSpec = tween(160))
+                    metadata = if (isDesktop) {
+                        NavDisplay.transitionSpec {
+                            fadeIn(animationSpec = tween(160)) togetherWith
+                                fadeOut(animationSpec = tween(160))
+                        } + NavDisplay.popTransitionSpec {
+                            fadeIn(animationSpec = tween(160)) togetherWith
+                                fadeOut(animationSpec = tween(160))
+                        }
+                    } else {
+                        emptyMap()
                     },
                 ) { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)

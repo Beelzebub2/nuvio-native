@@ -57,6 +57,8 @@ import com.nuvio.app.features.home.components.HomeEmptyStateCard
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.core.ui.posterGridColumnCountForViewport
+import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -232,12 +234,16 @@ fun SearchScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         val posterCardStyle = rememberPosterCardStyleUiState()
-        val discoverColumns = remember(maxWidth, maxHeight, posterCardStyle.widthDp) {
-            posterGridColumnCountForViewport(
-                screenWidth = maxWidth,
-                screenHeight = maxHeight,
-                basePosterWidthDp = posterCardStyle.widthDp,
-            )
+        val discoverColumns = remember(maxWidth, maxHeight, posterCardStyle.widthDp, isDesktop) {
+            if (isDesktop) {
+                posterGridColumnCountForViewport(
+                    screenWidth = maxWidth,
+                    screenHeight = maxHeight,
+                    basePosterWidthDp = posterCardStyle.widthDp,
+                )
+            } else {
+                posterGridColumnCountForWidth(maxWidth)
+            }
         }
         val homeSectionPadding = remember(maxWidth) {
             homeSectionHorizontalPaddingForWidth(maxWidth.value)

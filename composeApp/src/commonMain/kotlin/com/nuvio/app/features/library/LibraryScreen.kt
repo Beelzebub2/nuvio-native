@@ -78,6 +78,8 @@ import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.ScopedDisintegrationTracker
 import com.nuvio.app.core.ui.nuvioConsumePointerEvents
 import com.nuvio.app.core.ui.posterGridColumnCountForViewport
+import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
+import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
@@ -239,8 +241,12 @@ fun LibraryScreen(
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val posterCardStyle = rememberPosterCardStyleUiState()
-        val gridColumns = remember(maxWidth, maxHeight, posterCardStyle.widthDp) {
-            posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+        val gridColumns = remember(maxWidth, maxHeight, posterCardStyle.widthDp, isDesktop) {
+            if (isDesktop) {
+                posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
+            } else {
+                posterGridColumnCountForWidth(maxWidth)
+            }
         }
 
         NuvioScreen(

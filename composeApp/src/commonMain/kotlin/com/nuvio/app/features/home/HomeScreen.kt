@@ -826,12 +826,16 @@ fun HomeScreen(
         val homeSectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
         val continueWatchingLayout = rememberContinueWatchingLayout(maxWidth.value)
         val posterCardStyle = rememberPosterCardStyleUiState()
-        val homeCatalogPreviewLimit = homeCatalogPreviewLimitForWidth(
-            maxWidthDp = maxWidth.value,
-            sectionPadding = homeSectionPadding,
-            basePosterWidthDp = posterCardStyle.widthDp,
-            useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
-        )
+        val homeCatalogPreviewLimit = if (isDesktop) {
+            homeCatalogPreviewLimitForWidth(
+                maxWidthDp = maxWidth.value,
+                sectionPadding = homeSectionPadding,
+                basePosterWidthDp = posterCardStyle.widthDp,
+                useLandscapeMode = posterCardStyle.catalogLandscapeModeEnabled,
+            )
+        } else {
+            HOME_CATALOG_PREVIEW_LIMIT
+        }
         val nativeBottomNavigationOverlayHeight =
             if (LocalNuvioBottomNavigationOverlayPadding.current > 0.dp) {
                 nuvioSafeBottomPadding()
@@ -1088,6 +1092,7 @@ private fun LazyListScope.homeContinueWatchingSections(
     }
 }
 
+private const val HOME_CATALOG_PREVIEW_LIMIT = 18
 private const val HOME_CONTINUE_WATCHING_SECTION_KEY = "home_continue_watching"
 private const val HOME_UPCOMING_SECTION_KEY = "home_upcoming"
 internal const val HomeContinueWatchingMaxRecentProgressItems = 300

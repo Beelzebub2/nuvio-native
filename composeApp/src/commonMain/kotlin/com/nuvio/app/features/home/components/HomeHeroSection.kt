@@ -236,17 +236,28 @@ private fun HeroBackgroundLayers(
     val backgroundMotionStrength = if (desktopFrame) layout.backgroundMotionStrength else 1f
     layerPages.forEach { page ->
         val item = items[page]
+        val backgroundModifier = if (desktopFrame) {
+            Modifier
+                .fillMaxSize()
+                .heroStretchZoom { stretchPx() * backgroundMotionStrength }
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .height(layout.heroHeight)
+                .heroStretchZoom(stretchPx)
+        }
         AsyncImage(
             model = item.banner ?: item.poster,
             contentDescription = item.name,
-            modifier = Modifier
-                .fillMaxSize()
-                .heroStretchZoom { stretchPx() * backgroundMotionStrength }
+            modifier = backgroundModifier
                 .graphicsLayer {
                     val pageOffset = heroPageOffset(pagerState, page)
                     val scrollOffsetPx = heroScrollOffsetPx(listState, heroHeightPx)
-                    val scrollScale = 1f +
-                        (heroBackgroundScrollScale(scrollOffsetPx) - 1f) * backgroundMotionStrength
+                    val scrollScale = if (desktopFrame) {
+                        1f + (heroBackgroundScrollScale(scrollOffsetPx) - 1f) * backgroundMotionStrength
+                    } else {
+                        heroBackgroundScrollScale(scrollOffsetPx)
+                    }
 
                     alpha = heroPageVisibility(pageOffset)
                     translationX = -pageOffset * heroWidthPx * HERO_BACKGROUND_PARALLAX
@@ -255,8 +266,9 @@ private fun HeroBackgroundLayers(
                     } else {
                         heroBackgroundScrollTranslationY(scrollOffsetPx)
                     }
-                    scaleX = scrollScale
-                    scaleY = scrollScale
+                    val baseScale = if (desktopFrame) 1f else HERO_BACKGROUND_SCALE
+                    scaleX = baseScale * scrollScale
+                    scaleY = baseScale * scrollScale
                 },
             alignment = when {
                 desktopFrame -> BiasAlignment(
