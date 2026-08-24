@@ -449,7 +449,16 @@ void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpo
     // it is up. cursorActivity also arrives while hidden (mouse woke the UI) and
     // must re-activate compositing so the fade-in is actually shown.
     if (type) {
-        if (strncmp(type, "keyboard", 8) == 0) {
+        if (strcmp(type, "setPlaybackState") == 0 ||
+            strcmp(type, "setPlaybackStateQuiet") == 0) {
+            bool shouldPlay = value >= 0.5;
+            if (shouldPlay && (player->ended.load() || mpvGetFlag(player->mpv, "eof-reached"))) {
+                const char *cmd[] = {"seek", "0", "absolute", nullptr};
+                mpv_command(player->mpv, cmd);
+                player->ended.store(false);
+            }
+            mpvSetFlag(player->mpv, "pause", !shouldPlay);
+        } else if (strncmp(type, "keyboard", 8) == 0) {
             // Keyboard shortcuts (page keydown, real X focus): the page renders
             // its feedback toast without revealing the chrome, so neither latch
             // overlayActive (nothing would ever unlatch it — hideChrome only
