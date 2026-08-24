@@ -158,6 +158,14 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 private val watchedMarkerDiagnosticLog = Logger.withTag("WatchedMarkerDiag")
+private const val DetailScrolledBackgroundMaxAlpha = 0.86f
+private const val DetailScrolledBackgroundFadeHeroFraction = 0.75f
+
+internal fun detailScrolledBackgroundAlpha(scrollOffsetPx: Float, heroHeightPx: Int): Float {
+    if (scrollOffsetPx <= 0f || heroHeightPx <= 0) return 0f
+    val fadeDistancePx = heroHeightPx * DetailScrolledBackgroundFadeHeroFraction
+    return (scrollOffsetPx / fadeDistancePx).coerceIn(0f, 1f) * DetailScrolledBackgroundMaxAlpha
+}
 
 @Composable
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -1026,6 +1034,24 @@ fun MetaDetailsScreen(
                                     heroTrailerReady = false
                                     heroTrailerFinished = true
                                 },
+                            )
+
+                            val scrolledBackgroundColor = if (dominantColorEnabled) {
+                                dominantBackdropColor
+                            } else {
+                                colorScheme.background
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .zIndex(0.5f)
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        alpha = detailScrolledBackgroundAlpha(
+                                            scrollOffsetPx = detailScrollOffsetPx(),
+                                            heroHeightPx = heroHeightPx.intValue,
+                                        )
+                                    }
+                                    .background(scrolledBackgroundColor),
                             )
                         }
                         LazyColumn(
