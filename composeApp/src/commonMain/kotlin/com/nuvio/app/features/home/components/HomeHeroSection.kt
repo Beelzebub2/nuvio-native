@@ -66,6 +66,7 @@ import com.nuvio.app.core.ui.heroStretchHeight
 import com.nuvio.app.core.ui.heroStretchZoom
 import com.nuvio.app.core.ui.ultrawideViewportProgress
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -236,6 +237,7 @@ private fun HeroBackgroundLayers(
     val backgroundMotionStrength = if (desktopFrame) layout.backgroundMotionStrength else 1f
     layerPages.forEach { page ->
         val item = items[page]
+        val imageUrl = item.banner ?: item.poster
         val backgroundModifier = if (desktopFrame) {
             Modifier
                 .fillMaxSize()
@@ -247,7 +249,7 @@ private fun HeroBackgroundLayers(
                 .heroStretchZoom(stretchPx)
         }
         AsyncImage(
-            model = item.banner ?: item.poster,
+            model = if (desktopFrame) originalTmdbImageUrl(imageUrl) else imageUrl,
             contentDescription = item.name,
             modifier = backgroundModifier
                 .graphicsLayer {

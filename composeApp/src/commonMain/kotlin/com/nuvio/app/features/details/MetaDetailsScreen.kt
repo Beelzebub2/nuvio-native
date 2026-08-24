@@ -125,6 +125,7 @@ import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.streams.StreamAutoPlayPolicy
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktCommentReview
 import com.nuvio.app.features.trakt.TraktCommentsRepository
@@ -1023,7 +1024,7 @@ fun MetaDetailsScreen(
                             MetaScreenBackgroundMode.Normal -> Unit
                             MetaScreenBackgroundMode.Cinematic -> if (deferredMetaWorkAllowed && backdropUrl != null) {
                                 AsyncImage(
-                                    model = backdropUrl,
+                                    model = if (isDesktop) originalTmdbImageUrl(backdropUrl) else backdropUrl,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .fillMaxSize()

@@ -64,6 +64,7 @@ import com.nuvio.app.core.ui.isFullscreenActionSupported
 import com.nuvio.app.core.ui.WideDesktopViewportAspectRatio
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.formatRuntimeForDisplay
+import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.detail_logo_content_description
 import nuvio.composeapp.generated.resources.hero_add_to_library
@@ -134,7 +135,7 @@ fun DesktopDetailBackdrop(
         val imageUrl = meta.background ?: meta.poster
         if (imageUrl != null) {
             AsyncImage(
-                model = imageUrl,
+                model = originalTmdbImageUrl(imageUrl),
                 contentDescription = meta.name,
                 modifier = artworkModifier,
                 alignment = BiasAlignment(0f, DesktopBackdropVerticalBias),

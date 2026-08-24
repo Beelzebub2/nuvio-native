@@ -53,6 +53,8 @@ import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.heroStretchHeight
 import com.nuvio.app.core.ui.heroStretchZoom
 import com.nuvio.app.features.details.MetaDetails
+import com.nuvio.app.features.tmdb.originalTmdbImageUrl
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -117,7 +119,7 @@ fun DetailHero(
                 val backdropScale = if (isTablet) 1f else 1.08f
                 if (imageUrl != null) {
                     AsyncImage(
-                        model = imageUrl,
+                        model = if (isDesktop) originalTmdbImageUrl(imageUrl) else imageUrl,
                         contentDescription = meta.name,
                         modifier = Modifier
                             .align(Alignment.TopCenter)

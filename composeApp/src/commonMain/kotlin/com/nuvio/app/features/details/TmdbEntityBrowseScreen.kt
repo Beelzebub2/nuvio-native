@@ -62,6 +62,7 @@ import com.nuvio.app.features.tmdb.TmdbEntityKind
 import com.nuvio.app.features.tmdb.TmdbEntityMediaType
 import com.nuvio.app.features.tmdb.TmdbEntityRailType
 import com.nuvio.app.features.tmdb.TmdbMetadataService
+import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.isDesktop
 import com.nuvio.app.navigation.LocalUseNativeNavigation
@@ -179,7 +180,7 @@ private fun EntityBrowseContent(
     Box(modifier = Modifier.fillMaxSize()) {
         if (backgroundUrl != null) {
             AsyncImage(
-                model = backgroundUrl,
+                model = if (isDesktop) originalTmdbImageUrl(backgroundUrl) else backgroundUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
