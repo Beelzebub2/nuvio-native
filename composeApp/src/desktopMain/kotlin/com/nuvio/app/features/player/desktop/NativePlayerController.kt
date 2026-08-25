@@ -332,6 +332,11 @@ internal class NativePlayerController(
                         }
                         applyRememberedVolume()
                         updateControls(controlsState)
+                        try {
+                            setResizeMode(PlayerResizeMode.valueOf(controlsState.resizeModeLabel))
+                        } catch(_: IllegalArgumentException) {
+                            setResizeMode(PlayerResizeMode.Fit)
+                        }
                         applyPendingSubtitleSettings()
                     }
                 }.onFailure { error ->
