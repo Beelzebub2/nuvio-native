@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -62,9 +61,7 @@ import com.nuvio.app.features.tmdb.TmdbEntityKind
 import com.nuvio.app.features.tmdb.TmdbEntityMediaType
 import com.nuvio.app.features.tmdb.TmdbEntityRailType
 import com.nuvio.app.features.tmdb.TmdbMetadataService
-import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import com.nuvio.app.features.watched.WatchedRepository
-import com.nuvio.app.isDesktop
 import com.nuvio.app.navigation.LocalUseNativeNavigation
 
 private sealed interface EntityBrowseUiState {
@@ -164,29 +161,19 @@ private fun EntityBrowseContent(
         } else {
             TmdbEntityMediaType.TV
         }
-        val preferredItems = data.rails.firstOrNull { it.mediaType == preferredMediaType }?.items.orEmpty()
-        if (isDesktop) {
-            preferredItems.firstOrNull { !it.banner.isNullOrBlank() }?.banner
-                ?: data.rails.asSequence().flatMap { it.items.asSequence() }
-                    .firstOrNull { !it.banner.isNullOrBlank() }?.banner
-                ?: preferredItems.firstOrNull()?.poster
-                ?: data.rails.firstOrNull()?.items?.firstOrNull()?.poster
-        } else {
-            preferredItems.firstOrNull()?.poster
-                ?: data.rails.firstOrNull()?.items?.firstOrNull()?.poster
-        }
+        data.rails.firstOrNull { it.mediaType == preferredMediaType }
+            ?.items?.firstOrNull()?.poster
+            ?: data.rails.firstOrNull()?.items?.firstOrNull()?.poster
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (backgroundUrl != null) {
             AsyncImage(
-                model = if (isDesktop) originalTmdbImageUrl(backgroundUrl) else backgroundUrl,
+                model = backgroundUrl,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (isDesktop) Modifier.blur(22.dp) else Modifier),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = if (isDesktop) 0.68f else 0.10f,
+                alpha = 0.10f,
             )
         }
 
@@ -195,34 +182,10 @@ private fun EntityBrowseContent(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colorStops = if (isDesktop) {
-                            arrayOf(
-                                0f to MaterialTheme.colorScheme.background.copy(alpha = 0.52f),
-                                0.42f to MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
-                                1f to MaterialTheme.colorScheme.background.copy(alpha = 0.84f),
-                            )
-                        } else {
-                            arrayOf(
-                                0f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
-                                0.3f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-                                1f to MaterialTheme.colorScheme.background,
-                            )
-                        },
+                        0f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                        0.3f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                        1f to MaterialTheme.colorScheme.background,
                     ),
-                )
-                .then(
-                    if (isDesktop) {
-                        Modifier.background(
-                            Brush.horizontalGradient(
-                                0f to MaterialTheme.colorScheme.background.copy(alpha = 0.26f),
-                                0.32f to Color.Transparent,
-                                0.82f to Color.Transparent,
-                                1f to MaterialTheme.colorScheme.background.copy(alpha = 0.20f),
-                            ),
-                        )
-                    } else {
-                        Modifier
-                    },
                 ),
         )
 
