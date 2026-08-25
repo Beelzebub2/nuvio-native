@@ -337,6 +337,7 @@ let state = {
   subtitleColorSwatches: [],
   subtitleOutlineColorSwatches: [],
   closeModalsToken: 0,
+  submitIntroContentKey: "",
   notificationMessage: "",
   notificationToken: 0,
 };
@@ -365,6 +366,7 @@ let suppressNextPointerToggleClick = false;
 let pendingCustomSubtitleStyling = null;
 let pendingCustomSubtitleStylingTimer = 0;
 let submitIntroDraft = {
+  contentKey: "",
   segmentType: "intro",
   startTime: "00:00",
   endTime: "00:00",
@@ -908,12 +910,16 @@ const openPlayerModal = modal => {
   }
   activeModal = modal;
   if (modal === "submitIntro") {
-    submitIntroDraft = {
-      segmentType: state.submitIntroSegmentType || "intro",
-      startTime: state.submitIntroStartTime || "00:00",
-      endTime: state.submitIntroEndTime || "00:00",
-      status: "",
-    };
+    const contentKey = state.submitIntroContentKey || "";
+    if (submitIntroDraft.contentKey !== contentKey) {
+      submitIntroDraft = {
+        contentKey: contentKey,
+        segmentType: state.submitIntroSegmentType || "intro",
+        startTime: state.submitIntroStartTime || "00:00",
+        endTime: state.submitIntroEndTime || "00:00",
+        status: "",
+      };
+    }
   }
   if (modal === "subtitles") {
     resetSubtitleSelectionState();
@@ -2648,6 +2654,14 @@ captureEndButton.addEventListener("click", event => {
   renderSubmitIntroModal();
 });
 
+submitIntroStartInput.addEventListener("input", () => {
+  submitIntroDraft.startTime = submitIntroStartInput.value;
+});
+
+submitIntroEndInput.addEventListener("input", () => {
+  submitIntroDraft.endTime = submitIntroEndInput.value;
+});
+
 submitIntroCloseButton.addEventListener("click", event => {
   event.stopPropagation();
   closePlayerModal();
@@ -2806,6 +2820,7 @@ window.playerUpdate = update => {
 
 window.playerControls = nextState => {
   const previousCloseToken = Number(state.closeModalsToken) || 0;
+  const previousSubmitIntroSuccessToken = Number(state.submitIntroSuccessToken) || 0;
   const previousNotificationToken = Number(state.notificationToken) || 0;
   const previousResizeLabel = state.resizeModeLabel || "";
   const previousSpeedLabel = state.playbackSpeedLabel || "";
@@ -2822,8 +2837,15 @@ window.playerControls = nextState => {
   }
   hasReceivedPlayerControls = true;
   const closeToken = Number(state.closeModalsToken) || 0;
+  const submitIntroSuccessToken = Number(state.submitIntroSuccessToken) || 0;
   if (closeToken !== previousCloseToken) {
     closePlayerModal();
+  }
+  if (submitIntroSuccessToken !== previousSubmitIntroSuccessToken) {
+    submitIntroDraft.segmentType = "intro";
+    submitIntroDraft.startTime = "00:00";
+    submitIntroDraft.endTime = "00:00";
+    submitIntroDraft.status = "";
   }
   const notificationToken = Number(state.notificationToken) || 0;
   if (notificationToken !== previousNotificationToken) {
