@@ -337,6 +337,7 @@ let state = {
   subtitleColorSwatches: [],
   subtitleOutlineColorSwatches: [],
   closeModalsToken: 0,
+  submitIntroContentKey: "",
   notificationMessage: "",
   notificationToken: 0,
 };
@@ -365,6 +366,7 @@ let suppressNextPointerToggleClick = false;
 let pendingCustomSubtitleStyling = null;
 let pendingCustomSubtitleStylingTimer = 0;
 let submitIntroDraft = {
+  contentKey: "",
   segmentType: "intro",
   startTime: "00:00",
   endTime: "00:00",
@@ -908,10 +910,10 @@ const openPlayerModal = modal => {
   }
   activeModal = modal;
   if (modal === "submitIntro") {
-    if (submitIntroDraft.title !== state.title || submitIntroDraft.episodeText !== state.episodeText) {
+    const contentKey = state.submitIntroContentKey || "";
+    if (submitIntroDraft.contentKey !== contentKey) {
       submitIntroDraft = {
-        title: state.title,
-        episodeText: state.episodeText,
+        contentKey: contentKey,
         segmentType: state.submitIntroSegmentType || "intro",
         startTime: state.submitIntroStartTime || "00:00",
         endTime: state.submitIntroEndTime || "00:00",
@@ -2840,6 +2842,7 @@ window.playerControls = nextState => {
     closePlayerModal();
   }
   if (submitIntroSuccessToken !== previousSubmitIntroSuccessToken) {
+    submitIntroDraft.segmentType = "intro";
     submitIntroDraft.startTime = "00:00";
     submitIntroDraft.endTime = "00:00";
     submitIntroDraft.status = "";

@@ -1422,6 +1422,8 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         append(',')
         appendJsonField("submitIntroSegmentType", submitIntroSegmentType)
         append(',')
+        appendJsonField("submitIntroContentKey", submitIntroContentKey)
+        append(',')
         appendJsonField("submitIntroStartTime", submitIntroStartTime)
         append(',')
         appendJsonField("submitIntroEndTime", submitIntroEndTime)
