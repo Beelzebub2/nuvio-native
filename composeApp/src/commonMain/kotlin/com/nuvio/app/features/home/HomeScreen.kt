@@ -1014,7 +1014,13 @@ fun HomeScreen(
                                 item(key = keyedSettingsItem.lazyKey) {
                                     HomeCatalogRowSection(
                                         section = section,
-                                        entries = section.items.take(homeCatalogPreviewLimit),
+                                        entries = if (isDesktop) {
+                                            // The row is lazy, so desktop can expose the fetched catalog without
+                                            // composing every poster up front. Mobile keeps its compact preview.
+                                            section.items
+                                        } else {
+                                            section.items.take(homeCatalogPreviewLimit)
+                                        },
                                         modifier = Modifier.padding(bottom = 12.dp),
                                         sectionPadding = homeSectionPadding,
                                         onViewAllClick = if (section.canOpenCatalog(homeCatalogPreviewLimit)) {
