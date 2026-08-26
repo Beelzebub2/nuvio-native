@@ -1318,7 +1318,19 @@ gboolean destroyWebviewOnGtk(gpointer data) {
             }
         }
         player->savedFocusXid = 0;
+        // WebKit's dispose resets the tooltip (WebPageProxy::close ->
+        // resetState -> setToolTip("")), and GTK answers that with a
+        // pointer-position query — gtk_tooltip_trigger_tooltip_query ->
+        // gdk_device_get_window_at_position -> XIQueryPointer — which walks the
+        // very X tree this destroy is dismantling. The reply comes back
+        // BadWindow, and GDK escalates an untrapped X error to a fatal g_log,
+        // i.e. G_BREAKPOINT: the process dies on int3 with no Java stack. Seen
+        // at every episode boundary, where the next-episode swap disposes the
+        // player. Trap the destroy the same way the focus handover above does.
+        GdkDisplay *destroyDisplay = gtk_widget_get_display(player->gtkWindow);
+        gdk_x11_display_error_trap_push(destroyDisplay);
         gtk_widget_destroy(player->gtkWindow);
+        gdk_x11_display_error_trap_pop_ignored(destroyDisplay);
         player->gtkWindow = nullptr;
         player->webview = nullptr;
         player->overlayXid = 0;
@@ -1950,7 +1962,15 @@ JNIEXPORT void JNICALL NP(shutdownWebView2Warmup)(JNIEnv *, jobject) {
     g_main_context_invoke(nullptr,
                           +[](gpointer) -> gboolean {
                               if (gWarmupWindow) {
+                                  // Same fatal-X-error exposure as the overlay
+                                  // teardown (see destroyWebviewOnGtk): the
+                                  // webview's dispose queries the pointer
+                                  // position while this window is dying.
+                                  GdkDisplay *d =
+                                      gtk_widget_get_display(gWarmupWindow);
+                                  gdk_x11_display_error_trap_push(d);
                                   gtk_widget_destroy(gWarmupWindow);
+                                  gdk_x11_display_error_trap_pop_ignored(d);
                                   // The view/ucm die with their window — null
                                   // them too or the adoption gate could later
                                   // read dangling pointers.
