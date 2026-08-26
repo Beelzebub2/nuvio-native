@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.nuvio.app.core.ui.NuvioDesktopImageScaling
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.heroStretchHeight
 import com.nuvio.app.core.ui.heroStretchZoom
 import com.nuvio.app.features.details.MetaDetails
@@ -84,6 +85,13 @@ fun DetailHero(
         modifier = modifier.fillMaxWidth(),
     ) {
         val heroHeight = detailHeroHeight(maxWidth, viewportHeight, isTablet)
+        val foregroundHorizontalPadding = if (isDesktop) {
+            desktopPageHorizontalPaddingForWidth(maxWidth.value)
+        } else if (isTablet) {
+            32.dp
+        } else {
+            18.dp
+        }
         val trailerAlpha by animateFloatAsState(
             targetValue = if (heroTrailerReady) 1f else 0f,
             animationSpec = tween(durationMillis = 300),
@@ -185,7 +193,7 @@ fun DetailHero(
                             .align(Alignment.TopEnd)
                             .padding(
                                 top = heroChromeTopPadding,
-                                end = if (isTablet) 32.dp else 22.dp,
+                                end = if (isDesktop) foregroundHorizontalPadding else if (isTablet) 32.dp else 22.dp,
                             )
                             .graphicsLayer {
                                 alpha = trailerAlpha * 0.72f
@@ -233,7 +241,7 @@ fun DetailHero(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = if (isTablet) 32.dp else 18.dp)
+                        .padding(horizontal = foregroundHorizontalPadding)
                         .padding(bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

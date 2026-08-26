@@ -89,7 +89,7 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.PosterZoomAnchor
 import com.nuvio.app.core.ui.PosterZoomAnchorHolder
 import com.nuvio.app.core.ui.PosterZoomOverlayAction
-import com.nuvio.app.core.ui.fullscreenActionHorizontalInsetForWidth
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.nuvioDesktopDragScroll
 import com.nuvio.app.core.ui.TrackingListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
@@ -965,7 +965,14 @@ fun MetaDetailsScreen(
                     val isTablet = screenMaxWidth >= 720.dp
                     val useDesktopDetailLayout = isDesktop && screenMaxWidth >= 1000.dp
                     val viewportHeight = maxHeight
-                    val contentHorizontalPadding = if (isTablet) 32.dp else 18.dp
+                    val desktopPageHorizontalPadding = desktopPageHorizontalPaddingForWidth(screenMaxWidth.value)
+                    val contentHorizontalPadding = if (isDesktop) {
+                        desktopPageHorizontalPadding
+                    } else if (isTablet) {
+                        32.dp
+                    } else {
+                        18.dp
+                    }
                     val contentMaxWidth = detailTabletContentMaxWidth(screenMaxWidth, isTablet)
                     val backdropUrl = meta.background ?: meta.poster
                     val backgroundMode = metaScreenSettingsUiState.backgroundMode
@@ -1159,7 +1166,7 @@ fun MetaDetailsScreen(
                                     ),
                                     meta = meta,
                                     isTablet = true,
-                                    contentHorizontalPadding = 56.dp,
+                                    contentHorizontalPadding = desktopPageHorizontalPadding,
                                     contentMaxWidth = Dp.Unspecified,
                                     playButtonLabel = playButtonLabel,
                                     isSaved = isSaved,
@@ -1394,7 +1401,7 @@ fun MetaDetailsScreen(
                             )
                         }
 
-                        if (!useDesktopDetailLayout && showHeroBackButton) {
+                        if (!isDesktop && !useDesktopDetailLayout && showHeroBackButton) {
                             NuvioBackButton(
                                 onClick = onBackFromDetails,
                                 modifier = Modifier.padding(
@@ -1406,12 +1413,11 @@ fun MetaDetailsScreen(
                             )
                         }
 
-                        if (useDesktopDetailLayout && showHeroBackButton) {
-                            val actionHorizontalInset = fullscreenActionHorizontalInsetForWidth(screenMaxWidth.value)
+                        if (isDesktop) {
                             NuvioBackButton(
                                 onClick = onBackFromDetails,
                                 modifier = Modifier
-                                    .padding(start = actionHorizontalInset, top = 32.dp)
+                                    .padding(start = desktopPageHorizontalPadding, top = 32.dp)
                                     .zIndex(2f),
                                 containerColor = Color.Black.copy(alpha = 0.34f),
                                 contentColor = MaterialTheme.colorScheme.onBackground,

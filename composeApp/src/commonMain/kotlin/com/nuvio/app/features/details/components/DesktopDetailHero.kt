@@ -58,6 +58,7 @@ import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.DesktopBackdropVerticalBias
 import com.nuvio.app.core.ui.StandardDesktopViewportAspectRatio
 import com.nuvio.app.core.ui.FullscreenActionButton
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.fullscreenActionHorizontalInsetForWidth
 import com.nuvio.app.core.ui.expandingWideArtworkWidthDp
 import com.nuvio.app.core.ui.isFullscreenActionSupported
@@ -216,13 +217,14 @@ fun DesktopDetailHero(
             .onSizeChanged { onHeightChanged(it.height) },
     ) {
         val actionHorizontalInset = fullscreenActionHorizontalInsetForWidth(maxWidth.value)
+        val pageHorizontalPadding = desktopPageHorizontalPaddingForWidth(maxWidth.value)
 
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .widthIn(max = 760.dp)
                 .padding(
-                    start = space.s56,
+                    start = pageHorizontalPadding,
                     end = space.s32,
                     bottom = space.s40,
                 ),
