@@ -7,6 +7,10 @@ interface PlayerEngineController {
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)
+    fun trySeekTo(positionMs: Long): Boolean {
+        seekTo(positionMs)
+        return true
+    }
     fun seekBy(offsetMs: Long)
     fun retry()
     fun setPlaybackSpeed(speed: Float)

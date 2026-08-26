@@ -14,6 +14,7 @@ import com.nuvio.app.features.player.skip.PlayerNextEpisodeRules
 import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.player.skip.SkipIntervalLookup
 import com.nuvio.app.features.player.skip.autoSkipKey
+import com.nuvio.app.features.player.skip.autoSkipKeysCompletedBy
 import com.nuvio.app.features.player.skip.resolveSkipIntervalLookup
 import com.nuvio.app.features.streams.BingeGroupCacheRepository
 import com.nuvio.app.features.streams.StreamLinkCacheRepository
@@ -454,13 +455,29 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
 
     LaunchedEffect(
         playbackSnapshot.positionMs,
+        playbackSnapshot.isLoading,
         skipIntervals,
         playerSettingsUiState.autoSkipSegmentTypes,
+        playerController,
+        initialLoadCompleted,
+        activeInitialPositionMs,
+        activeInitialProgressFraction,
+        playbackSnapshot.durationMs,
     ) {
         if (skipIntervals.isEmpty()) {
             activeSkipInterval = null
             return@LaunchedEffect
         }
+        val initialProgressFraction = activeInitialProgressFraction
+        val initialPlaybackPositionMs = when {
+            activeInitialPositionMs > 0L -> activeInitialPositionMs
+            initialProgressFraction != null && playbackSnapshot.durationMs > 0L -> {
+                val fraction = initialProgressFraction.coerceIn(0f, 1f)
+                (playbackSnapshot.durationMs.toDouble() * fraction.toDouble()).toLong()
+            }
+            else -> 0L
+        }
+        autoSkippedIntervalKeys += skipIntervals.autoSkipKeysCompletedBy(initialPlaybackPositionMs)
         val positionSec = playbackSnapshot.positionMs / 1000.0
         val current = skipIntervals.firstOrNull { interval ->
             positionSec >= interval.startTime && positionSec < interval.endTime
@@ -474,14 +491,16 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
             val intervalKey = current.autoSkipKey()
             val controller = playerController
             if (
+                initialLoadCompleted &&
+                !playbackSnapshot.isLoading &&
                 controller != null &&
                 segmentType != null &&
                 segmentType in playerSettingsUiState.autoSkipSegmentTypes &&
                 intervalKey !in autoSkippedIntervalKeys
             ) {
-                autoSkippedIntervalKeys.add(intervalKey)
                 val seekPositionMs = (current.endTime * 1000).toLong()
-                controller.seekTo(seekPositionMs)
+                if (!controller.trySeekTo(seekPositionMs)) return@LaunchedEffect
+                autoSkippedIntervalKeys.add(intervalKey)
                 scheduleProgressSyncAfterSeek()
                 skipIntervalDismissed = true
                 playerNotificationMessage = getString(

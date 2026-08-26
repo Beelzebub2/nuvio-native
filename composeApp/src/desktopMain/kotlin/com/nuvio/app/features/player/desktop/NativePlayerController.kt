@@ -50,6 +50,7 @@ internal class NativePlayerController(
     private val host: NativePlayerHost,
     private val nativeCreate: NativePlayerCreate = NativePlayerBridge::create,
     private val nativeDispose: (Long) -> Unit = NativePlayerBridge::dispose,
+    private val nativeSeekTo: (Long, Long) -> Unit = NativePlayerBridge::seekTo,
     private val isHostDisplayable: () -> Boolean = { host.isDisplayable },
     private val resolveHostView: () -> Long = { AwtNativeViewResolver.resolveNativeViewPointer(host) },
     private val createWaitTimeoutMs: Long = 5_000L,
@@ -856,7 +857,14 @@ internal class NativePlayerController(
 
     override fun seekTo(positionMs: Long) {
         log.d { "seekTo positionMs=$positionMs handle=$handle" }
-        handle.takeIf { it != 0L }?.let { NativePlayerBridge.seekTo(it, positionMs) }
+        handle.takeIf { it != 0L }?.let { nativeSeekTo(it, positionMs) }
+    }
+
+    override fun trySeekTo(positionMs: Long): Boolean {
+        val current = handle.takeIf { it != 0L } ?: return false
+        log.d { "trySeekTo positionMs=$positionMs handle=$current" }
+        nativeSeekTo(current, positionMs)
+        return true
     }
 
     override fun seekBy(offsetMs: Long) {
