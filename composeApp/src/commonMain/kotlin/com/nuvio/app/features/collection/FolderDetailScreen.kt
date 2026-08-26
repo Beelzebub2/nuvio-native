@@ -61,6 +61,7 @@ import com.nuvio.app.core.ui.NuvioPosterCard
 import com.nuvio.app.core.ui.NuvioPosterShape
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.landscapePosterWidth
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.core.ui.posterGridColumnCountForViewport
@@ -151,53 +152,58 @@ fun FolderDetailScreen(
             )
         }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (!useNativeNavigation) {
-                NuvioScreenHeader(
-                    title = folder?.title ?: uiState.collectionTitle,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    backgroundColor = Color.Transparent,
-                    includeStatusBarPadding = true,
-                    onBack = onBack,
-                )
-            }
-
-            if (folder == null && !uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(Res.string.collections_folder_not_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val desktopPagePadding = desktopPageHorizontalPaddingForWidth(maxWidth.value)
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (!useNativeNavigation) {
+                    NuvioScreenHeader(
+                        title = folder?.title ?: uiState.collectionTitle,
+                        modifier = Modifier.padding(horizontal = desktopPagePadding),
+                        backgroundColor = Color.Transparent,
+                        includeStatusBarPadding = false,
+                        topPadding = 32.dp,
+                        onBack = onBack,
                     )
                 }
-                return@Column
-            }
 
-            when (uiState.viewMode) {
-                FolderViewMode.TABBED_GRID -> TabbedGridContent(
-                    uiState = uiState,
-                    watchedKeys = watchedUiState.watchedKeys,
-                    modifier = Modifier.weight(1f),
-                    onTabSelected = { FolderDetailRepository.selectTab(it) },
-                    onPosterClick = onPosterClick,
-                )
-                FolderViewMode.ROWS -> RowsContent(
-                    uiState = uiState,
-                    watchedKeys = watchedUiState.watchedKeys,
-                    modifier = Modifier.weight(1f),
-                    onCatalogClick = onCatalogClick,
-                    onPosterClick = onPosterClick,
-                )
-                FolderViewMode.FOLLOW_LAYOUT -> RowsContent(
-                    uiState = uiState,
-                    watchedKeys = watchedUiState.watchedKeys,
-                    modifier = Modifier.weight(1f),
-                    onCatalogClick = onCatalogClick,
-                    onPosterClick = onPosterClick,
-                )
+                if (folder == null && !uiState.isLoading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.collections_folder_not_found),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    return@Column
+                }
+
+                when (uiState.viewMode) {
+                    FolderViewMode.TABBED_GRID -> TabbedGridContent(
+                        uiState = uiState,
+                        watchedKeys = watchedUiState.watchedKeys,
+                        pageHorizontalPadding = desktopPagePadding,
+                        modifier = Modifier.weight(1f),
+                        onTabSelected = { FolderDetailRepository.selectTab(it) },
+                        onPosterClick = onPosterClick,
+                    )
+                    FolderViewMode.ROWS -> RowsContent(
+                        uiState = uiState,
+                        watchedKeys = watchedUiState.watchedKeys,
+                        modifier = Modifier.weight(1f),
+                        onCatalogClick = onCatalogClick,
+                        onPosterClick = onPosterClick,
+                    )
+                    FolderViewMode.FOLLOW_LAYOUT -> RowsContent(
+                        uiState = uiState,
+                        watchedKeys = watchedUiState.watchedKeys,
+                        modifier = Modifier.weight(1f),
+                        onCatalogClick = onCatalogClick,
+                        onPosterClick = onPosterClick,
+                    )
+                }
             }
         }
     }
@@ -331,6 +337,7 @@ private fun FolderCoverImage(
 private fun TabbedGridContent(
     uiState: FolderDetailUiState,
     watchedKeys: Set<String>,
+    pageHorizontalPadding: Dp = 16.dp,
     modifier: Modifier = Modifier,
     onTabSelected: (Int) -> Unit,
     onPosterClick: (MetaPreview) -> Unit,
@@ -356,8 +363,8 @@ private fun TabbedGridContent(
                 ScrollableTabRow(
                     selectedTabIndex = uiState.selectedTabIndex,
                     modifier = Modifier.fillMaxWidth(),
-                    edgePadding = 16.dp,
-                    containerColor = MaterialTheme.colorScheme.background,
+                    edgePadding = pageHorizontalPadding,
+                    containerColor = if (isDesktop) Color.Transparent else MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
                     divider = {},
                 ) {
@@ -420,8 +427,8 @@ private fun TabbedGridContent(
                             state = gridState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
+                                start = pageHorizontalPadding,
+                                end = pageHorizontalPadding,
                                 bottom = nuvioSafeBottomPadding(18.dp),
                             ),
                             horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 12.dp else 10.dp),
