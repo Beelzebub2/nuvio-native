@@ -926,7 +926,9 @@ fun HomeScreen(
                     )
                     item {
                         HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(
+                                horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                            ),
                             title = stringResource(Res.string.compose_search_empty_no_active_addons_title),
                             message = stringResource(Res.string.home_empty_no_active_addons_message),
                         )
@@ -949,7 +951,9 @@ fun HomeScreen(
                     )
                     items(3) {
                         HomeSkeletonRow(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(
+                                horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                            ),
                         )
                     }
                 }
@@ -961,7 +965,9 @@ fun HomeScreen(
                         if (networkStatusUiState.isOfflineLike) {
                             NuvioNetworkOfflineCard(
                                 condition = networkStatusUiState.condition,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(
+                                    horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                                ),
                                 onRetry = {
                                     NetworkStatusRepository.requestRefresh(force = true)
                                     HomeRepository.refresh(addonsUiState.addons.enabledAddons(), force = true)
@@ -969,7 +975,9 @@ fun HomeScreen(
                             )
                         } else {
                             HomeEmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(
+                                    horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                                ),
                                 title = stringResource(Res.string.home_empty_no_rows_title),
                                 message = homeUiState.errorMessage
                                     ?: stringResource(Res.string.home_empty_no_rows_message),
