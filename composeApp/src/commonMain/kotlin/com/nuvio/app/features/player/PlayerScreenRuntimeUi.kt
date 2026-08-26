@@ -220,7 +220,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             }
         }
     }.orEmpty()
-    val nativeSkipInterval = activeSkipInterval.takeIf { initialLoadCompleted && !pausedOverlayVisible }
+    val nativeSkipInterval = activeSkipInterval.takeIf {
+        initialLoadCompleted && !pausedOverlayVisible && !skipIntervalDismissed
+    }
     val nextEpisodeForControls = nextEpisodeInfo.takeIf { 
         isSeries && (showNextEpisodeCard || nextEpisodeAutoPlaySearching || nextEpisodeAutoPlayCountdown != null) 
     }
