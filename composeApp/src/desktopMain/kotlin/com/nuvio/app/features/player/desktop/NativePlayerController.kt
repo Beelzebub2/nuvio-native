@@ -66,6 +66,9 @@ internal class NativePlayerController(
 
         @Volatile
         var rememberedVolumeLevel: Float = DesktopPlayerVolumeStorage.loadVolumeLevel() ?: 1f
+
+        @Volatile
+        var rememberedResizeMode: PlayerResizeMode = PlayerResizeMode.Fit
     }
 
     private data class ReleaseCallback(
@@ -333,6 +336,7 @@ internal class NativePlayerController(
                         }
                         applyRememberedVolume()
                         updateControls(controlsState)
+                        setResizeMode(rememberedResizeMode)
                         applyPendingSubtitleSettings()
                     }
                 }.onFailure { error ->
@@ -449,6 +453,7 @@ internal class NativePlayerController(
     }
 
     fun setResizeMode(mode: PlayerResizeMode) {
+        rememberedResizeMode = mode
         handle.takeIf { it != 0L }?.let { current ->
             NativePlayerBridge.setResizeMode(
                 handle = current,
