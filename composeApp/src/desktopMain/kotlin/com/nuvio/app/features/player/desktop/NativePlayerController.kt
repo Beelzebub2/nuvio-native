@@ -392,11 +392,10 @@ internal class NativePlayerController(
         }
     }
 
-    // Linux: while the player is attached the controls overlay owns X input
-    // focus (granted by the bridge at webview creation). The AWT window gaining
-    // focus means the X server moved the keyboard back to the toplevel — push
-    // it to the overlay again. Returns the uninstaller; null until the host is
-    // inside a window (the ancestor does not exist before the first paint).
+    // The embedded controls WebView can lose keyboard focus when the desktop
+    // window is reactivated (for example after alt-tab). Re-apply native focus
+    // whenever the host window gains focus. Returns the uninstaller; null until
+    // the host is inside a window (the ancestor does not exist before first paint).
     fun installWindowFocusForwarding(): (() -> Unit)? {
         val window = SwingUtilities.getWindowAncestor(host) ?: return null
         val listener = object : WindowAdapter() {
