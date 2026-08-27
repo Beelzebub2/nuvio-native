@@ -616,7 +616,7 @@ jobs:
           sudo apt-get install -y flatpak flatpak-builder desktop-file-utils
 
           sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --system flathub org.gnome.Platform//50 org.gnome.Sdk//50 || true
+          sudo flatpak install -y --system flathub org.gnome.Platform//50 org.gnome.Sdk//50
           sudo flatpak install -y --system flathub org.freedesktop.Platform.VAAPI.Intel//25.08 || true
           sudo flatpak install -y --system flathub org.freedesktop.Platform.VAAPI.Nvidia//25.08 || true
 
@@ -853,6 +853,8 @@ jobs:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_DESKTOP_DSN: ${{ secrets.SENTRY_DESKTOP_DSN }}
       RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+      APPIMAGE_TOOL_VERSION: 1.9.1
+      APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
 
     steps:
       - name: Check out release source
@@ -881,14 +883,23 @@ jobs:
         run: |
           set -euo pipefail
 
+          appimagetool_path="${RUNNER_TEMP}/appimagetool-x86_64.AppImage"
+          curl -fsSL -o "${appimagetool_path}" \
+            "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGE_TOOL_VERSION}/appimagetool-x86_64.AppImage"
+            
+          actual_sha256="$(sha256sum "${appimagetool_path}" | awk '{print $1}')"
+          if [[ "${actual_sha256}" != "${APPIMAGETOOL_SHA256}" ]]; then
+            echo "appimagetool checksum mismatch." >&2
+            echo "Expected: ${APPIMAGETOOL_SHA256}" >&2
+            echo "Actual:   ${actual_sha256}" >&2
+            exit 1
+          fi
+
+          chmod +x "${appimagetool_path}"
+
           repo_owner="${GITHUB_REPOSITORY%%/*}"
           repo_name="${GITHUB_REPOSITORY#*/}"
           update_information="gh-releases-zsync|${repo_owner}|${repo_name}|latest|Nuvio-Linux-x86_64-*.AppImage.zsync"
-
-          appimagetool_path="${RUNNER_TEMP}/appimagetool-x86_64.AppImage"
-          curl -fsSL -o "${appimagetool_path}" \
-            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x "${appimagetool_path}"
 
           export APPIMAGETOOL="${appimagetool_path}"
           export APPIMAGE_WEBSITE_URL="https://github.com/NuvioMedia/NuvioDesktop"
