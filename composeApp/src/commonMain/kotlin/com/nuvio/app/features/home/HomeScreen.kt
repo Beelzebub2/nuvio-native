@@ -521,19 +521,20 @@ fun HomeScreen(
         mutableStateOf(0)
     }
 
-    val catalogRefreshKey = remember(enabledAddons) {
-        buildHomeCatalogRefreshSignature(enabledAddons)
-    }
-
-    LaunchedEffect(catalogRefreshKey) {
-        if (catalogRefreshKey.isEmpty()) return@LaunchedEffect
-        HomeCatalogSettingsRepository.syncCatalogs(enabledAddons)
-        HomeRepository.refresh(enabledAddons)
+    LaunchedEffect(enabledAddons) {
+        if (enabledAddons.none { addon -> addon.manifest?.catalogs?.isNotEmpty() == true }) {
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.Default) {
+            HomeCatalogSettingsRepository.syncCatalogs(enabledAddons)
+            HomeRepository.refresh(enabledAddons)
+        }
     }
 
     LaunchedEffect(collections, enabledAddons) {
-        HomeCatalogSettingsRepository.syncCollections(collections, enabledAddons)
-        HomeRepository.applyCurrentSettings()
+        withContext(Dispatchers.Default) {
+            HomeCatalogSettingsRepository.syncCollections(collections, enabledAddons)
+        }
     }
 
     LaunchedEffect(
@@ -1089,9 +1090,6 @@ internal const val HomeNextUpInitialResolutionLimit = 32
 private const val NEXT_UP_RESOLUTION_CONCURRENCY = 4
 private const val MAX_NEXT_UP_RESOLUTION_RETRIES = 3
 private const val NEXT_UP_RESOLUTION_RETRY_BASE_DELAY_MS = 1_500L
-
-private fun String.isHomeSeriesLikeType(): Boolean =
-    trim().lowercase() in setOf("series", "show", "tv", "tvshow")
 
 internal data class HomeNextUpResolutionPlan(
     val initialCandidates: List<CompletedSeriesCandidate>,

@@ -162,9 +162,12 @@ import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.navigation.*
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
@@ -174,7 +177,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import com.nuvio.app.core.ui.AppPresenceState
 import com.nuvio.app.core.ui.PresenceSnapshot
-import kotlinx.coroutines.delay
 import androidx.compose.ui.ExperimentalComposeUiApi
 import com.nuvio.app.features.player.dispatchNavigationBack
 
@@ -605,7 +607,11 @@ internal fun MainAppContent(
         val syncProfileId = activeProfileId?.takeIf {
             authenticatedState != null && !authenticatedState.isAnonymous
         }
-        syncProfileId?.let(SyncManager::pullAllForProfile)
+        if (syncProfileId != null) {
+            withContext(Dispatchers.Default) {
+                SyncManager.pullAllForProfile(syncProfileId)
+            }
+        }
         try {
             AppForegroundMonitor.events().collect { visibility ->
                 when (visibility) {
@@ -1447,7 +1453,9 @@ internal fun MainAppContent(
                                 try {
                                     ProfileRepository.switchToProfile(profile.profileIndex)
                                     warmProfileBoundRepositories()
-                                    SyncManager.pullAllForProfile(profile.profileIndex)
+                                    withContext(Dispatchers.Default) {
+                                        SyncManager.pullAllForProfile(profile.profileIndex)
+                                    }
                                     delay(300)
                                 } finally {
                                     profileSwitchLoading = false
