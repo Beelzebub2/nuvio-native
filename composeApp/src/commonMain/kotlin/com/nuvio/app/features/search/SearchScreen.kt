@@ -57,7 +57,7 @@ import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeEmptyStateCard
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.home.components.HomeSkeletonRow
-import com.nuvio.app.core.ui.posterGridColumnCountForViewport
+import com.nuvio.app.core.ui.posterGridColumnCountForCatalogWidth
 import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
 import com.nuvio.app.isDesktop
 import com.nuvio.app.features.watched.WatchedRepository
@@ -237,9 +237,8 @@ fun SearchScreen(
         val posterCardStyle = rememberPosterCardStyleUiState()
         val discoverColumns = remember(maxWidth, maxHeight, posterCardStyle.widthDp, isDesktop) {
             if (isDesktop) {
-                posterGridColumnCountForViewport(
+                posterGridColumnCountForCatalogWidth(
                     screenWidth = maxWidth,
-                    screenHeight = maxHeight,
                     basePosterWidthDp = posterCardStyle.widthDp,
                 )
             } else {

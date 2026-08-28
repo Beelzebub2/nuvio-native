@@ -19,6 +19,24 @@ internal fun posterGridColumnCountForWidth(screenWidth: Dp): Int =
         else -> PosterGridMinimumColumns
     }
 
+internal fun posterGridColumnCountForCatalogWidth(
+    screenWidth: Dp,
+    basePosterWidthDp: Int,
+    useDesktopSizing: Boolean = isDesktop,
+): Int {
+    val posterWidthDp = catalogPosterBaseWidthDp(
+        basePosterWidthDp = basePosterWidthDp,
+        useDesktopSizing = useDesktopSizing,
+    ).toFloat()
+    val availableWidthDp =
+        (screenWidth.value - PosterGridHorizontalPaddingDp * 2f).coerceAtLeast(0f)
+
+    return (
+        (availableWidthDp + PosterGridSpacingDp) /
+            (posterWidthDp + PosterGridSpacingDp)
+        ).toInt().coerceAtLeast(PosterGridMinimumColumns)
+}
+
 internal fun posterGridColumnCountForViewport(
     screenWidth: Dp,
     screenHeight: Dp,
