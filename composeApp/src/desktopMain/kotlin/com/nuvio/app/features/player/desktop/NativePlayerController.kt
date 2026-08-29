@@ -492,6 +492,10 @@ internal class NativePlayerController(
             }
             "volumeChange" -> setFallbackVolume(value.toFloat())
             "volumeChangeTemporary" -> setTemporaryVolume(value.toFloat())
+            "setPlaybackSpeed" -> {
+                val speed = value.toFloat()
+                setPlaybackSpeed(speed)
+            }
             else -> {
                 val eventHandled = onEvent(type, value)
                 if (type.shouldLogNativeControlEvent()) {
@@ -1253,6 +1257,8 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonField("p2pConsentEnableLabel", p2pConsentEnableLabel)
         append(',')
         appendJsonField("p2pConsentCancelLabel", p2pConsentCancelLabel)
+        append(',')
+        appendJsonField("speedPanelTitle", speedPanelTitle)
         append(',')
         appendJsonField("audioTracksPanelTitle", audioTracksPanelTitle)
         append(',')

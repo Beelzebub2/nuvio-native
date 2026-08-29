@@ -244,6 +244,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   opacity: 0;
   transform: translate3d(-50%, -12px, 0) scale(.98);
   pointer-events: none;
@@ -253,6 +254,17 @@ button:disabled {
     opacity 260ms var(--ease-out),
     transform 280ms var(--ease-out);
   will-change: opacity, transform;
+}
+
+.player-toast-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+
+.player-toast-icon[hidden] {
+  display: none !important;
 }
 
 .player-toast-text {
