@@ -1424,6 +1424,7 @@ fun MetaDetailsScreen(
                                     .padding(start = desktopPageHorizontalPadding, top = 32.dp)
                                     .zIndex(2f),
                                 containerColor = Color.Black.copy(alpha = 0.34f),
+                                showContainerOnDesktop = true,
                                 contentColor = MaterialTheme.colorScheme.onBackground,
                                 buttonSize = 48.dp,
                                 iconSize = 24.dp,
@@ -1710,15 +1711,30 @@ fun MetaDetailsScreen(
         }
 
         if (displayedMeta == null) {
-            NuvioBackButton(
-                onClick = onBack,
-                modifier = Modifier.padding(
-                    start = 12.dp,
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
-                ),
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-            )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val loadingBackButtonStartPadding = if (isDesktop) {
+                    desktopPageHorizontalPaddingForWidth(maxWidth.value)
+                } else {
+                    12.dp
+                }
+                val loadingBackButtonTopPadding = if (isDesktop) {
+                    32.dp
+                } else {
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp
+                }
+                NuvioBackButton(
+                    onClick = onBack,
+                    modifier = Modifier.padding(
+                        start = loadingBackButtonStartPadding,
+                        top = loadingBackButtonTopPadding,
+                    ),
+                    containerColor = if (isDesktop) Color.Black.copy(alpha = 0.34f) else Color.Transparent,
+                    showContainerOnDesktop = isDesktop,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    buttonSize = if (isDesktop) 48.dp else 40.dp,
+                    iconSize = 24.dp,
+                )
+            }
         }
         }
 
