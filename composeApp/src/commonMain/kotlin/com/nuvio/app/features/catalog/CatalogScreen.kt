@@ -56,6 +56,7 @@ import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
 import com.nuvio.app.core.ui.catalogPosterBaseWidthDp
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.landscapePosterWidth
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.desktopPosterHoverScale
@@ -173,6 +174,11 @@ fun CatalogScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
+        val pageHorizontalPadding = if (isDesktop) {
+            desktopPageHorizontalPaddingForWidth(maxWidth.value)
+        } else {
+            16.dp
+        }
         val columns = remember(maxWidth, maxHeight, posterCardStyle.widthDp, isDesktop) {
             if (isDesktop) {
                 posterGridColumnCountForViewport(maxWidth, maxHeight, posterCardStyle.widthDp)
@@ -199,9 +205,9 @@ fun CatalogScreen(
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 16.dp,
+                    start = pageHorizontalPadding,
                     top = with(androidx.compose.ui.platform.LocalDensity.current) { headerHeightPx.toDp() } + 12.dp,
-                    end = 16.dp,
+                    end = pageHorizontalPadding,
                     bottom = nuvioSafeBottomPadding(28.dp),
                 ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -284,6 +290,7 @@ fun CatalogScreen(
             CatalogHeader(
                 title = title,
                 subtitle = subtitle,
+                pageHorizontalPadding = pageHorizontalPadding,
                 modifier = Modifier.onSizeChanged { headerHeightPx = it.height },
                 onBack = onBack,
             )
@@ -295,6 +302,7 @@ fun CatalogScreen(
 private fun CatalogHeader(
     title: String,
     subtitle: String,
+    pageHorizontalPadding: Dp,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -312,13 +320,12 @@ private fun CatalogHeader(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp)
-            .padding(top = 52.dp, bottom = 12.dp),
+            .padding(horizontal = pageHorizontalPadding)
+            .padding(top = if (isDesktop) 32.dp else 52.dp, bottom = 12.dp),
     ) {
         NuvioBackButton(
             onClick = onBack,
-            modifier = Modifier
-                .size(40.dp),
+            modifier = Modifier.size(if (isDesktop) 48.dp else 40.dp),
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             iconSize = 24.dp,
