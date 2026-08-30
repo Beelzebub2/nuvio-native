@@ -63,11 +63,10 @@ actual object AppUpdaterPlatform {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
+            clearDir(updatesDir())
             val safeName = assetName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
             val destination = File(updatesDir(), safeName)
             val tempFile = File(updatesDir(), "$safeName.part")
-            if (destination.exists()) destination.delete()
-            if (tempFile.exists()) tempFile.delete()
 
             val request = HttpRequest.newBuilder()
                 .uri(URI(assetUrl))
@@ -127,6 +126,14 @@ actual object AppUpdaterPlatform {
 
     private fun updatesDir(): File =
         File(DesktopStorage.rootDir.resolve("updates").also { it.createDirectories() }.toUri())
+
+    private fun clearDir(dirPath: File) {
+        if (dirPath.exists() and dirPath.isDirectory) {
+            dirPath.listFiles()?.forEach { file ->
+                file.deleteRecursively()
+            }
+        }
+    }
 
     private fun launchInstaller(updateFile: File) {
         val command = when (currentOs) {
