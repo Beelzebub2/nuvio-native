@@ -405,7 +405,6 @@ let playerToastTimer = 0;
 let playerToastToken = 0;
 let pendingSettingToastCommand = "";
 let pendingSettingToastToken = 0;
-let pendingVolumeToast = false;
 const prefersReducedMotion = window.matchMedia &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const modalTransitionMs = prefersReducedMotion ? 1 : 240;
@@ -490,10 +489,16 @@ const settingToastLabel = command => {
   return "";
 };
 
+const maxVolumeLevel = 2;
+const standardMaxVolumeLevel = 1;
+const volumeStepLevel = 0.05;
+
+const clampVolumeLevel = level => Math.max(0, Math.min(maxVolumeLevel, level));
+
 const volumeToastLabel = (fallbackDelta = 0) => {
   const volumeLevel = state.volumeLevel;
   if (typeof volumeLevel === "number" && Number.isFinite(volumeLevel)) {
-    return `Volume ${Math.round(Math.max(0, Math.min(1, volumeLevel)) * 100)}%`;
+    return `Volume ${Math.round(clampVolumeLevel(volumeLevel) * 100)}%`;
   }
   return fallbackDelta < 0 ? "Volume down" : "Volume up";
 };
@@ -502,12 +507,14 @@ const syncVolumeControl = () => {
   if (!volumeControl || !volumeSlider || !volumeIcon) return;
   const volumeLevel = state.volumeLevel;
   const hasLevel = typeof volumeLevel === "number" && Number.isFinite(volumeLevel);
-  const clampedLevel = hasLevel ? Math.max(0, Math.min(1, volumeLevel)) : 1;
+  const clampedLevel = hasLevel ? clampVolumeLevel(volumeLevel) : 1;
   const percent = Math.round(clampedLevel * 100);
+  const sliderPosition = Math.round((clampedLevel / maxVolumeLevel) * 100);
   const label = `Volume ${percent}%`;
-  volumeControl.style.setProperty("--volume", `${percent}%`);
+  volumeControl.style.setProperty("--volume-position", `${sliderPosition}%`);
   volumeSlider.value = String(percent);
   volumeSlider.setAttribute("aria-label", label);
+  volumeSlider.setAttribute("aria-valuetext", percent > 100 ? `${percent}%, boosted` : `${percent}%`);
   volumeSlider.setAttribute("title", label);
   volumeIcon.setAttribute("href", percent === 0 ? "#icon-volume-muted" : "#icon-volume");
   if (volumeButton) {
@@ -515,15 +522,6 @@ const syncVolumeControl = () => {
     volumeButton.setAttribute("aria-label", btnLabel);
     volumeButton.setAttribute("title", btnLabel);
   }
-};
-
-const nextVolumeToastLabel = delta => {
-  const volumeLevel = state.volumeLevel;
-  if (typeof volumeLevel === "number" && Number.isFinite(volumeLevel)) {
-    const nextLevel = Math.max(0, Math.min(1, volumeLevel + (delta * 0.05)));
-    return `Volume ${Math.round(nextLevel * 100)}%`;
-  }
-  return volumeToastLabel(delta);
 };
 
 const seekToastLabel = command => {
@@ -2397,9 +2395,24 @@ const keepChromeVisibleFromKeyboard = () => {
 };
 
 const sendKeyboardVolume = delta => {
-  pendingVolumeToast = true;
-  showPlayerToast(nextVolumeToastLabel(delta));
-  send(delta < 0 ? "keyboardVolumeDown" : "keyboardVolumeUp", 0);
+  const currentLevel = typeof state.volumeLevel === "number" && Number.isFinite(state.volumeLevel)
+    ? state.volumeLevel
+    : 1;
+  if (delta > 0 && currentLevel >= standardMaxVolumeLevel) {
+    showPlayerToast(volumeToastLabel(delta));
+    return;
+  }
+  const adjustedLevel = currentLevel + (delta * volumeStepLevel);
+  const nextLevel = delta > 0
+    ? Math.min(standardMaxVolumeLevel, clampVolumeLevel(adjustedLevel))
+    : clampVolumeLevel(adjustedLevel);
+  state.volumeLevel = nextLevel;
+  if (nextLevel > 0) {
+    preMuteVolumeLevel = nextLevel;
+  }
+  syncVolumeControl();
+  showPlayerToast(volumeToastLabel(delta));
+  send("volumeChange", nextLevel);
 };
 
 const setChromeVisibleFromKeyboard = (visible, { focusAction = false } = {}) => {
@@ -2832,7 +2845,7 @@ seek.addEventListener("change", () => {
 
 volumeSlider.addEventListener("input", () => {
   noteChromeActivity();
-  const percent = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
+  const percent = Math.max(0, Math.min(maxVolumeLevel * 100, Number(volumeSlider.value) || 0));
   const nextLevel = percent / 100;
   state.volumeLevel = nextLevel;
   if (nextLevel > 0) {
@@ -2861,6 +2874,10 @@ if (volumeButton) {
 window.playerUpdate = update => {
   const durationMs = Math.round((Number(update.duration) || 0) * 1000);
   const positionMs = Math.round((Number(update.position) || 0) * 1000);
+  const reportedVolumeLevel = Number(update.volumeLevel);
+  const volumeLevel = Number.isFinite(reportedVolumeLevel)
+    ? clampVolumeLevel(reportedVolumeLevel)
+    : state.volumeLevel;
   const audioTracks = normalizeTracks(update.audioTracks);
   const subtitleTracks = normalizeTracks(update.subtitleTracks);
   const audioTracksChanged = trackListSignature(audioTracks) !== trackListSignature(state.audioTracks);
@@ -2878,9 +2895,13 @@ window.playerUpdate = update => {
     positionMs,
     isPlaying: pendingIsPlaying === null ? nativeIsPlaying : pendingIsPlaying,
     isLoading: Boolean(update.loading || update.isLoading),
+    volumeLevel,
     audioTracks,
     subtitleTracks,
   };
+  if (typeof volumeLevel === "number" && volumeLevel > 0) {
+    preMuteVolumeLevel = volumeLevel;
+  }
   if (subtitleTracksChanged && activeModal === "subtitles") {
     const selected = selectedSubtitleOption(subtitleSelectionOptions());
     if (selected) {
@@ -2901,14 +2922,19 @@ window.playerControls = nextState => {
   const previousNotificationToken = Number(state.notificationToken) || 0;
   const previousResizeLabel = state.resizeModeLabel || "";
   const previousSpeedLabel = state.playbackSpeedLabel || "";
-  const previousVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
   const previousEpisodeStreamsVisible = Boolean(state.episodeStreamsVisible);
   const previousSelectedSubtitleLanguageKey = state.selectedSubtitleLanguageKey || "__off__";
   const previousSelectedSubtitleOptionId = state.selectedSubtitleOptionId || "";
   const currentPlaybackState = pendingIsPlaying === null
     ? state.isPlaying
     : pendingIsPlaying;
-  state = { ...state, ...nextState, isPlaying: currentPlaybackState };
+  const currentVolumeLevel = state.volumeLevel;
+  state = {
+    ...state,
+    ...nextState,
+    isPlaying: currentPlaybackState,
+    volumeLevel: currentVolumeLevel ?? nextState.volumeLevel,
+  };
   if (typeof state.volumeLevel === "number" && state.volumeLevel > 0) {
     preMuteVolumeLevel = state.volumeLevel;
   }
@@ -2949,15 +2975,6 @@ window.playerControls = nextState => {
   } else if (pendingSettingToastCommand === "speed" && (state.playbackSpeedLabel || "") !== previousSpeedLabel) {
     pendingSettingToastCommand = "";
     showPlayerToast(settingToastLabel("speed"), { icon: "icon-speed" });
-  }
-  const nextVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
-  if (
-    pendingVolumeToast &&
-    Number.isFinite(nextVolumeLevel) &&
-    (!Number.isFinite(previousVolumeLevel) || Math.abs(nextVolumeLevel - previousVolumeLevel) > 0.001)
-  ) {
-    pendingVolumeToast = false;
-    showPlayerToast(volumeToastLabel());
   }
 };
 

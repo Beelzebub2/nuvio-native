@@ -1446,7 +1446,7 @@ button:disabled {
 }
 
 .volume-control {
-  --volume: 100%;
+  --volume-position: 50%;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1507,8 +1507,17 @@ button:disabled {
   background:
     linear-gradient(
       to right,
-      var(--theme-accent) 0 var(--volume),
-      rgba(255, 255, 255, .26) var(--volume) 100%
+      transparent 0 50%,
+      rgba(224, 189, 85, 0) 50%,
+      rgba(224, 189, 85, .18) 60%,
+      rgba(224, 189, 85, .46) 70%,
+      rgba(255, 173, 50, .78) 84%,
+      #ff4d4d 100%
+    ),
+    linear-gradient(
+      to right,
+      var(--theme-accent) 0 var(--volume-position),
+      rgba(255, 255, 255, .26) var(--volume-position) 100%
     );
 }
 
@@ -1519,7 +1528,7 @@ button:disabled {
   margin-top: -8px;
   border: 0;
   border-radius: 999px;
-  background: var(--theme-accent);
+  background: #fff;
   box-shadow: none;
 }
 
