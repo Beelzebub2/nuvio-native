@@ -72,6 +72,9 @@ const sourcesButton = document.getElementById("sourcesButton");
 const episodesButton = document.getElementById("episodesButton");
 const audioModal = document.getElementById("audioModal");
 const subtitleModal = document.getElementById("subtitleModal");
+const speedModal = document.getElementById("speedModal");
+const speedOptionList = document.getElementById("speedOptionList");
+const speedPanelTitle = document.getElementById("speedPanelTitle");
 const audioPanelTitle = document.getElementById("audioPanelTitle");
 const audioTrackList = document.getElementById("audioTrackList");
 const subtitleTrackList = document.getElementById("subtitleTrackList");
@@ -160,6 +163,8 @@ const p2pConsentBody = document.getElementById("p2pConsentBody");
 const p2pConsentCancelButton = document.getElementById("p2pConsentCancelButton");
 const p2pConsentEnableButton = document.getElementById("p2pConsentEnableButton");
 const playerToast = document.getElementById("playerToast");
+const playerToastIcon = document.getElementById("playerToastIcon");
+const playerToastIconUse = document.getElementById("playerToastIconUse");
 const playerToastText = document.getElementById("playerToastText");
 
 let state = {
@@ -449,20 +454,34 @@ const togglePlayerFullscreen = () => {
 
 const hidePlayerToast = token => {
   if (!playerToast || (token != null && token !== playerToastToken)) return;
+  if (isSpeedBoosting) {
+    showPlayerToast("2x", { icon: "icon-speed", persistent: true });
+    return;
+  }
   playerToast.classList.remove("visible");
   playerToast.setAttribute("aria-hidden", "true");
 };
 
-const showPlayerToast = (message, { durationMs = playerToastDurationMs } = {}) => {
+const showPlayerToast = (message, { durationMs = playerToastDurationMs, icon = null, persistent = false } = {}) => {
   const cleanMessage = String(message || "").trim();
   if (!playerToast || !playerToastText || !cleanMessage) return;
   window.clearTimeout(playerToastTimer);
   playerToastToken += 1;
   const token = playerToastToken;
   playerToastText.textContent = cleanMessage;
+  if (playerToastIcon && playerToastIconUse) {
+    if (icon) {
+      playerToastIconUse.setAttribute("href", icon.startsWith("#") ? icon : `#${icon}`);
+      playerToastIcon.removeAttribute("hidden");
+    } else {
+      playerToastIcon.setAttribute("hidden", "hidden");
+    }
+  }
   playerToast.setAttribute("aria-hidden", "false");
   playerToast.classList.add("visible");
-  playerToastTimer = window.setTimeout(() => hidePlayerToast(token), durationMs);
+  if (!persistent && durationMs > 0) {
+    playerToastTimer = window.setTimeout(() => hidePlayerToast(token), durationMs);
+  }
 };
 
 const settingToastLabel = command => {
@@ -528,7 +547,8 @@ const queueSettingToast = command => {
   const token = pendingSettingToastToken;
   window.setTimeout(() => {
     if (pendingSettingToastCommand !== command || pendingSettingToastToken !== token) return;
-    showPlayerToast(settingToastLabel(command));
+    const icon = command === "speed" ? "icon-speed" : command === "resize" ? "icon-aspect" : null;
+    showPlayerToast(settingToastLabel(command), { icon });
   }, 900);
   window.setTimeout(() => {
     if (pendingSettingToastCommand !== command || pendingSettingToastToken !== token) return;
@@ -845,6 +865,7 @@ const rangePositionMs = () => {
 const modalByName = {
   audio: audioModal,
   subtitles: subtitleModal,
+  speed: speedModal,
   sources: sourceModal,
   episodes: episodesModal,
   submitIntro: submitIntroModal,
@@ -953,6 +974,46 @@ const appendEmptyTrackState = (container, label) => {
   empty.className = "track-empty";
   empty.textContent = label;
   container.appendChild(empty);
+};
+
+const speedOptions = [
+  { value: 0.25, label: "0.25x" },
+  { value: 0.5, label: "0.5x" },
+  { value: 0.75, label: "0.75x" },
+  { value: 1.0, label: "1x (Normal)" },
+  { value: 1.25, label: "1.25x" },
+  { value: 1.5, label: "1.5x" },
+  { value: 1.75, label: "1.75x" },
+  { value: 2.0, label: "2x" },
+];
+
+const renderSpeedOptionList = () => {
+  if (!speedOptionList) return;
+  speedOptionList.textContent = "";
+  if (speedPanelTitle) {
+    speedPanelTitle.textContent = state.speedPanelTitle || "Playback Speed";
+  }
+
+  const currentSpeedStr = String(state.playbackSpeedLabel || "1x");
+  const currentSpeedNum = parseFloat(currentSpeedStr.replace("x", "")) || 1.0;
+
+  speedOptions.forEach(opt => {
+    const isSelected = Math.abs(currentSpeedNum - opt.value) < 0.05;
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `track-row${isSelected ? " selected" : ""}`;
+    row.addEventListener("click", event => {
+      event.stopPropagation();
+      send("setPlaybackSpeed", opt.value);
+      window.setTimeout(closePlayerModal, 120);
+    });
+    const labelElement = document.createElement("span");
+    labelElement.className = "track-label";
+    labelElement.textContent = opt.label;
+    row.appendChild(labelElement);
+    row.appendChild(buildCheckIcon());
+    speedOptionList.appendChild(row);
+  });
 };
 
 const renderAudioTrackList = () => {
@@ -1799,6 +1860,7 @@ const renderP2pConsentModal = () => {
 const renderActiveModal = () => {
   if (activeModal === "audio") renderAudioTrackList();
   if (activeModal === "subtitles") renderSubtitleModal();
+  if (activeModal === "speed") renderSpeedOptionList();
   if (activeModal === "sources") renderSourceModal();
   if (activeModal === "episodes") renderEpisodesModal();
   if (activeModal === "submitIntro") renderSubmitIntroModal();
@@ -2233,7 +2295,6 @@ const isInteractiveControlTarget = target => Boolean(
 const shortcutCommandForEvent = event => {
   if (event.metaKey || event.ctrlKey || event.altKey) return "";
   switch (event.code) {
-    case "Space":
     case "KeyK":
       return "keyboardToggle";
     case "ArrowLeft":
@@ -2446,6 +2507,18 @@ window.addEventListener("blur", () => {
   isChromeFocusInside = false;
   clearPressedButton();
   syncChromeAutoHideTimer(isOpeningOverlayActive());
+  if (speedBoostHoldTimer) {
+    window.clearTimeout(speedBoostHoldTimer);
+    speedBoostHoldTimer = null;
+  }
+  if (spaceHoldTimer) {
+    window.clearTimeout(spaceHoldTimer);
+    spaceHoldTimer = null;
+  }
+  if (isHoldSpeedActive || isSpaceBoosting || isSpeedBoosting) {
+    suppressNextRootClick = true;
+    stopSpeedBoost();
+  }
 });
 
 document.querySelectorAll("[data-command]").forEach(button => {
@@ -2470,6 +2543,10 @@ document.querySelectorAll("[data-command]").forEach(button => {
     }
     if (command === "subtitles") {
       openPlayerModal("subtitles");
+      return;
+    }
+    if (command === "speed") {
+      openPlayerModal("speed");
       return;
     }
     if (command === "sources") {
@@ -2868,10 +2945,10 @@ window.playerControls = nextState => {
   render();
   if (pendingSettingToastCommand === "resize" && (state.resizeModeLabel || "") !== previousResizeLabel) {
     pendingSettingToastCommand = "";
-    showPlayerToast(settingToastLabel("resize"));
+    showPlayerToast(settingToastLabel("resize"), { icon: "icon-aspect" });
   } else if (pendingSettingToastCommand === "speed" && (state.playbackSpeedLabel || "") !== previousSpeedLabel) {
     pendingSettingToastCommand = "";
-    showPlayerToast(settingToastLabel("speed"));
+    showPlayerToast(settingToastLabel("speed"), { icon: "icon-speed" });
   }
   const nextVolumeLevel = typeof state.volumeLevel === "number" ? state.volumeLevel : NaN;
   if (
@@ -2923,7 +3000,112 @@ const isControlsSurfaceEvent = event => {
   return false;
 };
 
+let preSpeedBoostRate = null;
+let isSpeedBoosting = false;
+let speedBoostHoldTimer = null;
+let isHoldSpeedActive = false;
+let suppressNextRootClick = false;
+let rootPointerStartX = 0;
+let rootPointerStartY = 0;
+let spaceHoldTimer = null;
+let isSpaceBoosting = false;
+
+const startSpeedBoost = () => {
+  if (isSpeedBoosting) return;
+  isSpeedBoosting = true;
+  if (preSpeedBoostRate == null) {
+    const currentSpeedStr = String(state.playbackSpeedLabel || "1x");
+    const currentSpeedNum = parseFloat(currentSpeedStr.replace("x", "")) || 1.0;
+    preSpeedBoostRate = currentSpeedNum === 2.0 ? 1.0 : currentSpeedNum;
+  }
+  showPlayerToast("2x", { icon: "icon-speed", persistent: true });
+  send("setPlaybackSpeed", 2.0);
+};
+
+const stopSpeedBoost = () => {
+  if (speedBoostHoldTimer) {
+    window.clearTimeout(speedBoostHoldTimer);
+    speedBoostHoldTimer = null;
+  }
+  if (spaceHoldTimer) {
+    window.clearTimeout(spaceHoldTimer);
+    spaceHoldTimer = null;
+  }
+  if (!isSpeedBoosting) return;
+  isSpeedBoosting = false;
+  isHoldSpeedActive = false;
+  isSpaceBoosting = false;
+  const restoreSpeed = preSpeedBoostRate != null ? preSpeedBoostRate : 1.0;
+  preSpeedBoostRate = null;
+  send("setPlaybackSpeed", restoreSpeed);
+  hidePlayerToast();
+};
+
+root.addEventListener("contextmenu", event => {
+  event.preventDefault();
+});
+
+root.addEventListener("pointerdown", event => {
+  if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
+  if (event.button !== 0) return;
+
+  rootPointerStartX = event.clientX;
+  rootPointerStartY = event.clientY;
+  isHoldSpeedActive = false;
+  suppressNextRootClick = false;
+
+  if (speedBoostHoldTimer) window.clearTimeout(speedBoostHoldTimer);
+  speedBoostHoldTimer = window.setTimeout(() => {
+    isHoldSpeedActive = true;
+    suppressNextRootClick = true;
+    startSpeedBoost();
+  }, 220);
+});
+
+window.addEventListener("pointermove", event => {
+  if (speedBoostHoldTimer && !isHoldSpeedActive) {
+    const dx = Math.abs(event.clientX - rootPointerStartX);
+    const dy = Math.abs(event.clientY - rootPointerStartY);
+    if (dx > 12 || dy > 12) {
+      window.clearTimeout(speedBoostHoldTimer);
+      speedBoostHoldTimer = null;
+    }
+  }
+});
+
+window.addEventListener("pointerup", () => {
+  if (speedBoostHoldTimer) {
+    window.clearTimeout(speedBoostHoldTimer);
+    speedBoostHoldTimer = null;
+  }
+  if (isHoldSpeedActive) {
+    suppressNextRootClick = true;
+    isHoldSpeedActive = false;
+    stopSpeedBoost();
+  }
+});
+
+window.addEventListener("pointercancel", () => {
+  if (speedBoostHoldTimer) {
+    window.clearTimeout(speedBoostHoldTimer);
+    speedBoostHoldTimer = null;
+  }
+  if (isHoldSpeedActive) {
+    suppressNextRootClick = true;
+    isHoldSpeedActive = false;
+    stopSpeedBoost();
+  }
+});
+
 root.addEventListener("click", event => {
+  if (event.button !== 0) return;
+  if (suppressNextRootClick) {
+    suppressNextRootClick = false;
+    window.clearTimeout(tapTimer);
+    event.stopPropagation();
+    event.preventDefault();
+    return;
+  }
   if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
   window.clearTimeout(tapTimer);
   tapTimer = window.setTimeout(() => {
@@ -2932,6 +3114,7 @@ root.addEventListener("click", event => {
 });
 
 root.addEventListener("dblclick", event => {
+  if (event.button !== 0) return;
   if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
   event.preventDefault();
   window.clearTimeout(tapTimer);
@@ -2947,14 +3130,61 @@ root.addEventListener("wheel", event => {
   }
 }, { passive: false });
 
+document.addEventListener("keyup", event => {
+  if (event.key === "Alt" || event.key === "Control" || event.key === "Meta" || event.metaKey || event.ctrlKey || event.altKey) {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+    }
+    return;
+  }
+  if (event.code === "Space") {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+      return;
+    }
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (activeModal || isTextEntryTarget(event.target)) return;
+    event.preventDefault();
+    focusShortcutRoot();
+    noteChromeActivity();
+    requestPlaybackState("setPlaybackStateQuiet", false);
+  }
+});
+
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && activeModal) {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+    }
     event.preventDefault();
     closePlayerModal(true);
     focusShortcutRoot();
     return;
   }
   if (event.key === "Escape") {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+    }
     event.preventDefault();
     if (state.isFullscreen) {
       togglePlayerFullscreen();
@@ -2966,12 +3196,48 @@ document.addEventListener("keydown", event => {
   if (playbackErrorText()) return;
   const isMacFullscreenShortcut = event.code === "KeyF" && event.metaKey && event.ctrlKey && !event.altKey;
   if (event.code === "F11" || isMacFullscreenShortcut) {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+    }
     event.preventDefault();
     focusShortcutRoot();
     togglePlayerFullscreen();
     return;
   }
+  if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
+    if (spaceHoldTimer) {
+      window.clearTimeout(spaceHoldTimer);
+      spaceHoldTimer = null;
+    }
+    if (isSpaceBoosting || isSpeedBoosting) {
+      isSpaceBoosting = false;
+      stopSpeedBoost();
+    }
+    return;
+  }
   if (activeModal || isTextEntryTarget(event.target)) {
+    return;
+  }
+  if (event.code === "Space") {
+    event.preventDefault();
+    if (event.repeat) {
+      if (!isSpeedBoosting) {
+        isSpaceBoosting = true;
+        startSpeedBoost();
+      }
+      return;
+    }
+    if (spaceHoldTimer) window.clearTimeout(spaceHoldTimer);
+    isSpaceBoosting = false;
+    spaceHoldTimer = window.setTimeout(() => {
+      isSpaceBoosting = true;
+      startSpeedBoost();
+    }, 220);
     return;
   }
   const command = shortcutCommandForEvent(event);
