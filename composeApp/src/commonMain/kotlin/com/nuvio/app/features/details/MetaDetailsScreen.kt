@@ -983,6 +983,10 @@ fun MetaDetailsScreen(
                     val dominantColorEnabled = backgroundMode == MetaScreenBackgroundMode.DominantColor &&
                         deferredMetaWorkAllowed &&
                         !backdropUrl.isNullOrBlank()
+                    val adaptiveScrollbarColorEnabled = useDesktopDetailLayout &&
+                        deferredMetaWorkAllowed &&
+                        !backdropUrl.isNullOrBlank()
+                    val backdropColorExtractionEnabled = dominantColorEnabled || adaptiveScrollbarColorEnabled
                     var dominantBackdropPainter by remember(meta.id, backdropUrl) {
                         mutableStateOf<Painter?>(null)
                     }
@@ -997,10 +1001,10 @@ fun MetaDetailsScreen(
                         defaultColor = colorScheme.background,
                         defaultOnColor = colorScheme.onBackground,
                     )
-                    LaunchedEffect(dominantColorEnabled, dominantBackdropImageBitmap, dominantBackdropPainter) {
+                    LaunchedEffect(backdropColorExtractionEnabled, dominantBackdropImageBitmap, dominantBackdropPainter) {
                         val imageBitmap = dominantBackdropImageBitmap
                         val painter = dominantBackdropPainter
-                        if (dominantColorEnabled) {
+                        if (backdropColorExtractionEnabled) {
                             when {
                                 imageBitmap != null -> runCatching {
                                     dominantImageBitmapColorState.updateFrom(imageBitmap)
@@ -1372,6 +1376,7 @@ fun MetaDetailsScreen(
                         }
                         NuvioDesktopVerticalScrollbar(
                             state = listState,
+                            backgroundColor = extractedDominantColor.takeIf { adaptiveScrollbarColorEnabled },
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .fillMaxHeight()
