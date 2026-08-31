@@ -3253,4 +3253,5 @@ svg {
   display: block;
   fill: currentColor;
   stroke: none;
+  pointer-events: none;
 }
