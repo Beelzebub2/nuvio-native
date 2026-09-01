@@ -35,6 +35,7 @@ import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
+import com.nuvio.app.features.addons.firstEnabledManifestError
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryRepository
 import com.nuvio.app.features.cloud.CloudLibraryUiState
@@ -536,16 +537,6 @@ fun HomeScreen(
         mutableStateOf(0)
     }
 
-    LaunchedEffect(enabledAddons) {
-        if (enabledAddons.none { addon -> addon.manifest?.catalogs?.isNotEmpty() == true }) {
-            return@LaunchedEffect
-        }
-        withContext(Dispatchers.Default) {
-            HomeCatalogSettingsRepository.syncCatalogs(enabledAddons)
-            HomeRepository.refresh(enabledAddons)
-        }
-    }
-
     LaunchedEffect(collections, enabledAddons) {
         withContext(Dispatchers.Default) {
             HomeCatalogSettingsRepository.syncCollections(collections, enabledAddons)
@@ -794,11 +785,9 @@ fun HomeScreen(
     }
 
     val hasActiveAddons = enabledAddons.any { it.manifest != null }
-    val showHeroSlot = homeSettingsUiState.heroEnabled
-    val isResolvingHeroSources = enabledAddons.any { it.isRefreshing } || homeUiState.isLoading
-    val showHeroSkeleton = showHeroSlot &&
-        homeUiState.heroItems.isEmpty() &&
-        isResolvingHeroSources
+    val addonManifestsLoading = enabledAddons.any { it.isRefreshing }
+    val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
+    val isResolvingHeroSources = addonManifestsLoading || homeUiState.isLoading
     var firstCatalogReported by remember { mutableStateOf(false) }
 
     LaunchedEffect(homeUiState.sections.firstOrNull()?.key, onFirstCatalogRendered) {
@@ -836,6 +825,21 @@ fun HomeScreen(
             item.isCollection && collectionsMap[item.key] != null
         }
     }
+    val hasRenderableHomeRows = homeUiState.sections.isNotEmpty() || hasRenderableCollectionRows
+    val showHeroSlot = shouldShowHomeHeroSlot(
+        heroEnabled = homeSettingsUiState.heroEnabled,
+        hasHeroItems = homeUiState.heroItems.isNotEmpty(),
+        isResolvingHeroSources = isResolvingHeroSources,
+        hasRenderableHomeRows = hasRenderableHomeRows,
+    )
+    val showHeroSkeleton = showHeroSlot &&
+        homeUiState.heroItems.isEmpty() &&
+        isResolvingHeroSources
+    val isInitialHomeContentLoading = shouldShowInitialHomeLoading(
+        hasRenderableHomeRows = hasRenderableHomeRows,
+        addonManifestsLoading = addonManifestsLoading,
+        homeCatalogLoading = homeUiState.isLoading,
+    )
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val homeSectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
@@ -931,32 +935,7 @@ fun HomeScreen(
             }
 
             when {
-                !hasActiveAddons && !hasRenderableCollectionRows -> {
-                    homeContinueWatchingSections(
-                        preferences = continueWatchingPreferences,
-                        continueWatchingItems = continueWatchingItems,
-                        upcomingItems = upcomingItems,
-                        dataSourceKey = effectiveWatchProgressSource,
-                        sectionPadding = homeSectionPadding,
-                        layout = continueWatchingLayout,
-                        continueWatchingListState = continueWatchingListState,
-                        upcomingListState = upcomingListState,
-                        onItemClick = onContinueWatchingClick,
-                        onItemLongPress = onContinueWatchingLongPress,
-                        disintegrationRequest = continueWatchingDisintegrationRequest,
-                    )
-                    item {
-                        HomeEmptyStateCard(
-                            modifier = Modifier.padding(
-                                horizontal = if (isDesktop) homeSectionPadding else 16.dp,
-                            ),
-                            title = stringResource(Res.string.compose_search_empty_no_active_addons_title),
-                            message = stringResource(Res.string.home_empty_no_active_addons_message),
-                        )
-                    }
-                }
-
-                homeUiState.isLoading && homeUiState.sections.isEmpty() && !hasRenderableCollectionRows -> {
+                isInitialHomeContentLoading -> {
                     homeContinueWatchingSections(
                         preferences = continueWatchingPreferences,
                         continueWatchingItems = continueWatchingItems,
@@ -979,11 +958,69 @@ fun HomeScreen(
                     }
                 }
 
+                !hasActiveAddons && !hasRenderableCollectionRows -> {
+                    homeContinueWatchingSections(
+                        preferences = continueWatchingPreferences,
+                        continueWatchingItems = continueWatchingItems,
+                        upcomingItems = upcomingItems,
+                        dataSourceKey = effectiveWatchProgressSource,
+                        sectionPadding = homeSectionPadding,
+                        layout = continueWatchingLayout,
+                        continueWatchingListState = continueWatchingListState,
+                        upcomingListState = upcomingListState,
+                        onItemClick = onContinueWatchingClick,
+                        onItemLongPress = onContinueWatchingLongPress,
+                        disintegrationRequest = continueWatchingDisintegrationRequest,
+                    )
+                    item {
+                        when {
+                            networkStatusUiState.isOfflineLike && addonManifestErrorMessage != null -> {
+                                NuvioNetworkOfflineCard(
+                                    condition = networkStatusUiState.condition,
+                                    modifier = Modifier.padding(
+                                        horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                                    ),
+                                    onRetry = {
+                                        NetworkStatusRepository.requestRefresh(force = true)
+                                        AddonRepository.refreshAll()
+                                    },
+                                )
+                            }
+
+                            addonManifestErrorMessage != null -> {
+                                HomeEmptyStateCard(
+                                    modifier = Modifier.padding(
+                                        horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                                    ),
+                                    title = stringResource(Res.string.home_load_failed_title),
+                                    message = addonManifestErrorMessage,
+                                    actionLabel = stringResource(Res.string.action_retry),
+                                    onActionClick = {
+                                        NetworkStatusRepository.requestRefresh(force = true)
+                                        AddonRepository.refreshAll()
+                                    },
+                                )
+                            }
+
+                            else -> {
+                                HomeEmptyStateCard(
+                                    modifier = Modifier.padding(
+                                        horizontal = if (isDesktop) homeSectionPadding else 16.dp,
+                                    ),
+                                    title = stringResource(Res.string.compose_search_empty_no_active_addons_title),
+                                    message = stringResource(Res.string.home_empty_no_active_addons_message),
+                                )
+                            }
+                        }
+                    }
+                }
+
                 homeUiState.sections.isEmpty() && homeUiState.heroItems.isEmpty() &&
                     (!continueWatchingPreferences.isVisible || !hasContinueWatchingRows) &&
                     !hasRenderableCollectionRows -> {
                     item {
-                        if (networkStatusUiState.isOfflineLike) {
+                        val loadFailed = !homeUiState.errorMessage.isNullOrBlank()
+                        if (networkStatusUiState.isOfflineLike && loadFailed) {
                             NuvioNetworkOfflineCard(
                                 condition = networkStatusUiState.condition,
                                 modifier = Modifier.padding(
@@ -999,9 +1036,24 @@ fun HomeScreen(
                                 modifier = Modifier.padding(
                                     horizontal = if (isDesktop) homeSectionPadding else 16.dp,
                                 ),
-                                title = stringResource(Res.string.home_empty_no_rows_title),
+                                title = stringResource(
+                                    if (loadFailed) {
+                                        Res.string.home_load_failed_title
+                                    } else {
+                                        Res.string.home_empty_no_rows_title
+                                    },
+                                ),
                                 message = homeUiState.errorMessage
                                     ?: stringResource(Res.string.home_empty_no_rows_message),
+                                actionLabel = if (loadFailed) stringResource(Res.string.action_retry) else null,
+                                onActionClick = if (loadFailed) {
+                                    {
+                                        NetworkStatusRepository.requestRefresh(force = true)
+                                        HomeRepository.refresh(addonsUiState.addons.enabledAddons(), force = true)
+                                    }
+                                } else {
+                                    null
+                                },
                             )
                         }
                     }
