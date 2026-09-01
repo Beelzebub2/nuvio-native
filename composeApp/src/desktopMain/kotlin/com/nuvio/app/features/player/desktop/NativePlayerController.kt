@@ -78,6 +78,7 @@ internal class NativePlayerController(
     )
 
     private val lifecycleLock = Any()
+    private var currentArtworkUrl: String = ""
 
     @Volatile
     private var handle: Long = 0L
@@ -340,6 +341,9 @@ internal class NativePlayerController(
                         applyRememberedVolume()
                         updateControls(controlsState)
                         setResizeMode(rememberedResizeMode)
+                        if (currentArtworkUrl.isNotEmpty()) {
+                            setNowPlayingArtwork(currentArtworkUrl)
+                        }
                         applyPendingSubtitleSettings()
                     }
                 }.onFailure { error ->
@@ -465,6 +469,14 @@ internal class NativePlayerController(
             host.requestFocusInWindow()
             val current = handle.takeIf { it != 0L } ?: return@invokeLater
             NativePlayerBridge.requestFocus(current)
+        }
+    }
+
+    fun setNowPlayingArtwork(artworkUrl: String?) {
+        if (DesktopHostOs.current != DesktopHostOs.MACOS) return
+        currentArtworkUrl = artworkUrl.orEmpty()
+        handle.takeIf { it != 0L }?.let { current ->
+            NativePlayerBridge.setNowPlayingArtwork(current, currentArtworkUrl)
         }
     }
 
