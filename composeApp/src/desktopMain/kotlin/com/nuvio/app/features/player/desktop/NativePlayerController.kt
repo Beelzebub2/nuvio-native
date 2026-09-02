@@ -78,6 +78,8 @@ internal class NativePlayerController(
     )
 
     private val lifecycleLock = Any()
+    private var currentNowPlayingTitle: String = ""
+    private var currentNowPlayingSubtitle: String = ""
     private var currentArtworkUrl: String = ""
 
     @Volatile
@@ -341,8 +343,8 @@ internal class NativePlayerController(
                         applyRememberedVolume()
                         updateControls(controlsState)
                         setResizeMode(rememberedResizeMode)
-                        if (currentArtworkUrl.isNotEmpty()) {
-                            setNowPlayingArtwork(currentArtworkUrl)
+                        if (currentNowPlayingTitle.isNotEmpty() || currentArtworkUrl.isNotEmpty()) {
+                            setNowPlayingMetadata(currentNowPlayingTitle, currentNowPlayingSubtitle, currentArtworkUrl)
                         }
                         applyPendingSubtitleSettings()
                     }
@@ -472,11 +474,18 @@ internal class NativePlayerController(
         }
     }
 
-    fun setNowPlayingArtwork(artworkUrl: String?) {
+    fun setNowPlayingMetadata(title: String?, subtitle: String?, artworkUrl: String?) {
         if (DesktopHostOs.current != DesktopHostOs.MACOS) return
+        currentNowPlayingTitle = title.orEmpty()
+        currentNowPlayingSubtitle = subtitle.orEmpty()
         currentArtworkUrl = artworkUrl.orEmpty()
         handle.takeIf { it != 0L }?.let { current ->
-            NativePlayerBridge.setNowPlayingArtwork(current, currentArtworkUrl)
+            NativePlayerBridge.setNowPlayingMetadata(
+                current,
+                currentNowPlayingTitle,
+                currentNowPlayingSubtitle,
+                currentArtworkUrl,
+            )
         }
     }
 

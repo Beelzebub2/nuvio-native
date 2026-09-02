@@ -142,6 +142,7 @@ static constexpr double kMaxVolumePercent = 200.0;
 - (void)activateRemoteCommands;
 - (void)deactivateRemoteCommands;
 - (void)setNowPlayingArtworkUrlString:(NSString *)urlString;
+- (void)setNowPlayingTitle:(NSString *)title subtitle:(NSString *)subtitle artworkUrl:(NSString *)artworkUrl;
 - (void)updateNowPlayingWithTitle:(NSString *)title
                          duration:(double)duration
                          position:(double)position
@@ -1058,6 +1059,9 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     NSString *_nowPlayingArtworkUrl;
     MPMediaItemArtwork *_nowPlayingArtwork;
     NSURLSessionDataTask *_nowPlayingArtworkTask;
+    NSString *_nowPlayingTitleOverride;
+    NSString *_nowPlayingSubtitle;
+    BOOL _nowPlayingMetadataDirty;
     JavaVM *_javaVm;
     jobject _eventSink;
     jmethodID _eventMethod;
@@ -2691,6 +2695,8 @@ static void nuvioMpvWakeup(void *ctx) {
     _nowPlayingArtworkTask = nil;
     _nowPlayingArtwork = nil;
     _nowPlayingArtworkUrl = nil;
+    _nowPlayingTitleOverride = nil;
+    _nowPlayingSubtitle = nil;
 }
 
 - (void)setNowPlayingArtworkUrlString:(NSString *)urlString {
@@ -2734,6 +2740,20 @@ static void nuvioMpvWakeup(void *ctx) {
     [_nowPlayingArtworkTask resume];
 }
 
+// Title/subtitle come from the app's own metadata (show name, "S1E4 - Episode")
+// rather than mpv's media-title, which for streams is just the file name.
+- (void)setNowPlayingTitle:(NSString *)title subtitle:(NSString *)subtitle artworkUrl:(NSString *)artworkUrl {
+    NSString *cleanTitle = title ?: @"";
+    NSString *cleanSubtitle = subtitle ?: @"";
+    if (![cleanTitle isEqualToString:_nowPlayingTitleOverride ?: @""]
+        || ![cleanSubtitle isEqualToString:_nowPlayingSubtitle ?: @""]) {
+        _nowPlayingTitleOverride = cleanTitle;
+        _nowPlayingSubtitle = cleanSubtitle;
+        _nowPlayingMetadataDirty = YES;
+    }
+    [self setNowPlayingArtworkUrlString:artworkUrl];
+}
+
 // Merges the artwork into whatever now-playing info is currently published,
 // without waiting for the next periodic update.
 - (void)pushNowPlayingArtwork {
@@ -2764,23 +2784,29 @@ static void nuvioMpvWakeup(void *ctx) {
     double expectedPosition = _lastNowPlayingPosition
         + (_lastNowPlayingPaused ? 0.0 : (now - _lastNowPlayingPushedAt) * _lastNowPlayingSpeed);
     BOOL seeked = fabs(position - expectedPosition) > 3.0;
-    BOOL changed = paused != _lastNowPlayingPaused
+    NSString *displayTitle = (_nowPlayingTitleOverride.length > 0) ? _nowPlayingTitleOverride : title;
+    BOOL changed = _nowPlayingMetadataDirty
+        || paused != _lastNowPlayingPaused
         || fabs(duration - _lastNowPlayingDuration) > 0.5
         || fabs(speed - _lastNowPlayingSpeed) > 0.01
         || seeked
-        || (title && ![title isEqualToString:_lastNowPlayingTitle ?: @""]);
+        || (displayTitle && ![displayTitle isEqualToString:_lastNowPlayingTitle ?: @""]);
     if (!changed) {
         return;
     }
+    _nowPlayingMetadataDirty = NO;
     _lastNowPlayingPaused = paused;
     _lastNowPlayingDuration = duration;
     _lastNowPlayingPosition = position;
     _lastNowPlayingSpeed = speed;
-    _lastNowPlayingTitle = title;
+    _lastNowPlayingTitle = displayTitle;
     _lastNowPlayingPushedAt = now;
     NSMutableDictionary *nowPlaying = [NSMutableDictionary dictionary];
     nowPlaying[MPNowPlayingInfoPropertyMediaType] = @(MPNowPlayingInfoMediaTypeVideo);
-    nowPlaying[MPMediaItemPropertyTitle] = (title.length > 0) ? title : @"Nuvio";
+    nowPlaying[MPMediaItemPropertyTitle] = (displayTitle.length > 0) ? displayTitle : @"Nuvio";
+    if (_nowPlayingSubtitle.length > 0) {
+        nowPlaying[MPMediaItemPropertyArtist] = _nowPlayingSubtitle;
+    }
     if (duration > 0.0) {
         nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration);
     }
@@ -2993,17 +3019,23 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_updateControls(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setNowPlayingArtwork(
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setNowPlayingMetadata(
     JNIEnv *env,
     jobject /* bridge */,
     jlong handle,
+    jstring title,
+    jstring subtitle,
     jstring artworkUrl
 ) {
     if (handle == 0) return;
+    std::string titleText = jstringToString(env, title);
+    std::string subtitleText = jstringToString(env, subtitle);
     std::string url = jstringToString(env, artworkUrl);
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     runOnMainAsync(^{
-        [player setNowPlayingArtworkUrlString:[NSString stringWithUTF8String:url.c_str()]];
+        [player setNowPlayingTitle:[NSString stringWithUTF8String:titleText.c_str()]
+                          subtitle:[NSString stringWithUTF8String:subtitleText.c_str()]
+                        artworkUrl:[NSString stringWithUTF8String:url.c_str()]];
     });
 }
 
