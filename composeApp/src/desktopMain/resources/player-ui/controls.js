@@ -2559,7 +2559,10 @@ window.addEventListener("blur", () => {
   clearPressedButton();
   syncChromeAutoHideTimer(isOpeningOverlayActive());
   clearSpeedBoostTimers();
-  if (isHoldSpeedActive || isSpaceBoosting || isSpeedBoosting) preventClickAndStopSpeedBoost();
+  if (isHoldSpeedActive || isSpaceBoosting || isSpeedBoosting) {
+    suppressNextRootClick = true;
+    stopSpeedBoost();
+  }
 });
 
 document.querySelectorAll("[data-command]").forEach(button => {
