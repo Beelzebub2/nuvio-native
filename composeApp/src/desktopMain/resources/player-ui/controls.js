@@ -1112,12 +1112,6 @@ const appendSubtitleLanguageRow = item => {
     pendingSubtitleOptionId = options.some(option => option.id === pendingSubtitleOptionId) ? pendingSubtitleOptionId : "";
     if (item.key === "__off__") send("selectBuiltInSubtitleTrack", -1);
     renderSubtitleModal();
-    if (event.detail === 0) {
-      window.setTimeout(() => {
-        const firstOption = addonSubtitleList.querySelector('button');
-        if (firstOption) firstOption.focus();
-      }, 50);
-    }
   });
   const label = document.createElement("span");
   label.className = "track-label";
@@ -2566,14 +2560,7 @@ window.addEventListener("blur", () => {
   isChromeFocusInside = false;
   clearPressedButton();
   syncChromeAutoHideTimer(isOpeningOverlayActive());
-  if (speedBoostHoldTimer) {
-    window.clearTimeout(speedBoostHoldTimer);
-    speedBoostHoldTimer = null;
-  }
-  if (spaceHoldTimer) {
-    window.clearTimeout(spaceHoldTimer);
-    spaceHoldTimer = null;
-  }
+  clearSpeedBoostTimers();
   if (isHoldSpeedActive || isSpaceBoosting || isSpeedBoosting) {
     suppressNextRootClick = true;
     stopSpeedBoost();
@@ -2947,13 +2934,10 @@ window.playerUpdate = update => {
     preMuteVolumeLevel = volumeLevel;
   }
   if (subtitleTracksChanged && activeModal === "subtitles") {
-    const options = subtitleSelectionOptions();
-    if (!options.some(option => option.id === pendingSubtitleOptionId)) {
-      const selected = selectedSubtitleOption(options);
-      if (selected) {
-        activeSubtitleLanguageKey = selected.languageKey;
-        pendingSubtitleOptionId = selected.id;
-      }
+    const selected = selectedSubtitleOption(subtitleSelectionOptions());
+    if (selected) {
+      activeSubtitleLanguageKey = selected.languageKey;
+      pendingSubtitleOptionId = selected.id;
     }
   }
   renderChrome();
@@ -3013,8 +2997,7 @@ window.playerControls = nextState => {
     ((state.selectedSubtitleLanguageKey || "__off__") !== previousSelectedSubtitleLanguageKey ||
       (state.selectedSubtitleOptionId || "") !== previousSelectedSubtitleOptionId)
   ) {
-    // Intentionally avoid resetting selection state while the modal is open 
-    // so user's manual selection doesn't glitch from delayed background state updates.
+    resetSubtitleSelectionState();
   }
   render();
   if (pendingSettingToastCommand === "resize" && (state.resizeModeLabel || "") !== previousResizeLabel) {
@@ -3074,6 +3057,44 @@ let rootPointerStartX = 0;
 let rootPointerStartY = 0;
 let spaceHoldTimer = null;
 let isSpaceBoosting = false;
+let pausedBeforeSpeedBoosting = false;
+
+const clearSpeedBoostHoldTimer = () => {
+  if (speedBoostHoldTimer) {
+    window.clearTimeout(speedBoostHoldTimer);
+    speedBoostHoldTimer = null;
+  }
+}
+
+const clearSpaceHoldTimer = () => {
+  if (spaceHoldTimer) {
+    window.clearTimeout(spaceHoldTimer);
+    spaceHoldTimer = null;
+  }
+}
+
+const clearSpeedBoostTimers = () => {
+  clearSpeedBoostHoldTimer();
+  clearSpaceHoldTimer();
+}
+
+const preventClickAndStopSpeedBoost = () => {
+  if (isHoldSpeedActive) {
+    suppressNextRootClick = true;
+    isHoldSpeedActive = false;
+    stopSpeedBoost();
+  }
+}
+
+const clearSpaceHoldTimerAndStopSpeedBoost = () => {
+  clearSpaceHoldTimer();
+  if (isSpaceBoosting || isSpeedBoosting) {
+    isSpaceBoosting = false;
+    stopSpeedBoost();
+    return true;
+  }
+  return false;
+}
 
 const startSpeedBoost = () => {
   if (isSpeedBoosting) return;
@@ -3083,33 +3104,32 @@ const startSpeedBoost = () => {
     const currentSpeedNum = parseFloat(currentSpeedStr.replace("x", "")) || 1.0;
     preSpeedBoostRate = currentSpeedNum === 2.0 ? 1.0 : currentSpeedNum;
   }
+  if (!state.isPlaying) {
+    pausedBeforeSpeedBoosting = true;
+    requestPlaybackState("setPlaybackStateQuiet", false);
+  }
   showPlayerToast("2x", { icon: "icon-speed", persistent: true });
   send("setPlaybackSpeed", 2.0);
 };
 
 const stopSpeedBoost = () => {
-  if (speedBoostHoldTimer) {
-    window.clearTimeout(speedBoostHoldTimer);
-    speedBoostHoldTimer = null;
-  }
-  if (spaceHoldTimer) {
-    window.clearTimeout(spaceHoldTimer);
-    spaceHoldTimer = null;
-  }
+  clearSpeedBoostTimers();
   if (!isSpeedBoosting) return;
   isSpeedBoosting = false;
   isHoldSpeedActive = false;
   isSpaceBoosting = false;
   const restoreSpeed = preSpeedBoostRate != null ? preSpeedBoostRate : 1.0;
   preSpeedBoostRate = null;
+  if (pausedBeforeSpeedBoosting) {
+    pausedBeforeSpeedBoosting = false;
+    requestPlaybackState("setPlaybackStateQuiet", false);
+  }
   send("setPlaybackSpeed", restoreSpeed);
   hidePlayerToast();
 };
 
 root.addEventListener("contextmenu", event => {
-  if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
   event.preventDefault();
-  requestPlaybackState("setPlaybackStateQuiet", false);
 });
 
 root.addEventListener("pointerdown", event => {
@@ -3121,7 +3141,7 @@ root.addEventListener("pointerdown", event => {
   isHoldSpeedActive = false;
   suppressNextRootClick = false;
 
-  if (speedBoostHoldTimer) window.clearTimeout(speedBoostHoldTimer);
+  clearSpeedBoostHoldTimer();
   speedBoostHoldTimer = window.setTimeout(() => {
     isHoldSpeedActive = true;
     suppressNextRootClick = true;
@@ -3133,51 +3153,41 @@ window.addEventListener("pointermove", event => {
   if (speedBoostHoldTimer && !isHoldSpeedActive) {
     const dx = Math.abs(event.clientX - rootPointerStartX);
     const dy = Math.abs(event.clientY - rootPointerStartY);
-    if (dx > 12 || dy > 12) {
-      window.clearTimeout(speedBoostHoldTimer);
-      speedBoostHoldTimer = null;
-    }
+    if (dx > 12 || dy > 12) clearSpeedBoostHoldTimer();
   }
 });
 
 window.addEventListener("pointerup", () => {
-  if (speedBoostHoldTimer) {
-    window.clearTimeout(speedBoostHoldTimer);
-    speedBoostHoldTimer = null;
-  }
-  if (isHoldSpeedActive) {
-    suppressNextRootClick = true;
-    isHoldSpeedActive = false;
-    stopSpeedBoost();
-  }
+  clearSpeedBoostHoldTimer();
+  preventClickAndStopSpeedBoost();
 });
 
 window.addEventListener("pointercancel", () => {
-  if (speedBoostHoldTimer) {
-    window.clearTimeout(speedBoostHoldTimer);
-    speedBoostHoldTimer = null;
-  }
-  if (isHoldSpeedActive) {
-    suppressNextRootClick = true;
-    isHoldSpeedActive = false;
-    stopSpeedBoost();
-  }
+  clearSpeedBoostHoldTimer();
+  preventClickAndStopSpeedBoost();
 });
 
 root.addEventListener("click", event => {
   if (event.button !== 0) return;
   if (suppressNextRootClick) {
     suppressNextRootClick = false;
+    window.clearTimeout(tapTimer);
     event.stopPropagation();
     event.preventDefault();
     return;
   }
+  if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
+  window.clearTimeout(tapTimer);
+  tapTimer = window.setTimeout(() => {
+    requestPlaybackState("setPlaybackStateQuiet", false);
+  }, 220);
 });
 
 root.addEventListener("dblclick", event => {
   if (event.button !== 0) return;
   if (playbackErrorText() || isControlsSurfaceEvent(event)) return;
   event.preventDefault();
+  window.clearTimeout(tapTimer);
   togglePlayerFullscreen();
 });
 
@@ -3202,26 +3212,11 @@ root.addEventListener("wheel", event => {
 
 document.addEventListener("keyup", event => {
   if (event.key === "Alt" || event.key === "Control" || event.key === "Meta" || event.metaKey || event.ctrlKey || event.altKey) {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-    }
+    clearSpaceHoldTimerAndStopSpeedBoost();
     return;
   }
   if (event.code === "Space") {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-      return;
-    }
+    if (clearSpaceHoldTimerAndStopSpeedBoost()) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (activeModal || isTextEntryTarget(event.target)) return;
     event.preventDefault();
@@ -3233,61 +3228,36 @@ document.addEventListener("keyup", event => {
 
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && activeModal) {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-    }
+    clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
     closePlayerModal(true);
     focusShortcutRoot();
     return;
   }
   if (event.key === "Escape") {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-    }
+    clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
-    send("back", 0);
+    if (state.isFullscreen) {
+      togglePlayerFullscreen();
+    } else {
+      send("back", 0);
+    }
     return;
   }
   if (playbackErrorText()) return;
   const isMacFullscreenShortcut = event.code === "KeyF" && event.metaKey && event.ctrlKey && !event.altKey;
   const isPlainKeyF = event.code === "KeyF" && !event.metaKey && !event.ctrlKey && !event.altKey;
   if (event.code === "F11" || isMacFullscreenShortcut || isPlainKeyF) {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-    }
+    clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
     focusShortcutRoot();
     togglePlayerFullscreen();
     return;
   }
   if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
-    if (spaceHoldTimer) {
-      window.clearTimeout(spaceHoldTimer);
-      spaceHoldTimer = null;
-    }
-    if (isSpaceBoosting || isSpeedBoosting) {
-      isSpaceBoosting = false;
-      stopSpeedBoost();
-    }
+    clearSpaceHoldTimerAndStopSpeedBoost();
     return;
   }
-
   if (isTextEntryTarget(event.target)) {
     return;
   }
@@ -3572,7 +3542,7 @@ document.addEventListener("keydown", event => {
       }
       return;
     }
-    if (spaceHoldTimer) window.clearTimeout(spaceHoldTimer);
+    clearSpaceHoldTimer();
     isSpaceBoosting = false;
     spaceHoldTimer = window.setTimeout(() => {
       isSpaceBoosting = true;
