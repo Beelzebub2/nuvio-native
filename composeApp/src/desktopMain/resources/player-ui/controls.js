@@ -501,9 +501,11 @@ const volumeToastLabel = (fallbackDelta = 0) => {
   const volumeLevel = state.volumeLevel;
   if (typeof volumeLevel === "number" && Number.isFinite(volumeLevel)) {
     const percent = Math.round(clampVolumeLevel(volumeLevel) * 100);
-    return percent === 0 ? "Muted" : `Volume ${percent}%`;
+    const mutedStr = state.mutedLabel || "Muted";
+    const volumeFormat = state.volumeLevelLabelFormat || "Volume %s";
+    return percent === 0 ? mutedStr : volumeFormat.replace("%s", `${percent}%`).replace("%1$s", `${percent}%`);
   }
-  return fallbackDelta < 0 ? "Volume down" : "Volume up";
+  return "";
 };
 
 const syncVolumeControl = () => {
@@ -513,7 +515,9 @@ const syncVolumeControl = () => {
   const clampedLevel = hasLevel ? clampVolumeLevel(volumeLevel) : 1;
   const percent = Math.round(clampedLevel * 100);
   const sliderPosition = Math.round((clampedLevel / maxVolumeLevel) * 100);
-  const label = `Volume ${percent}%`;
+  const mutedStr = state.mutedLabel || "Muted";
+  const volumeFormat = state.volumeLevelLabelFormat || "Volume %s";
+  const label = percent === 0 ? mutedStr : volumeFormat.replace("%s", `${percent}%`).replace("%1$s", `${percent}%`);
   volumeControl.style.setProperty("--volume-position", `${sliderPosition}%`);
   volumeSlider.value = String(percent);
   volumeSlider.setAttribute("aria-label", label);
@@ -3487,8 +3491,7 @@ document.addEventListener("keydown", event => {
     }
     syncVolumeControl();
     send("volumeChangeTemporary", state.volumeLevel);
-    const label = state.volumeLevel === 0 ? "Muted" : `${Math.round(state.volumeLevel * 100)}%`;
-    showPlayerToast(label, { icon: state.volumeLevel > 0 ? "icon-volume" : "icon-volume-muted" });
+    showPlayerToast(volumeToastLabel(0), { icon: state.volumeLevel > 0 ? "icon-volume" : "icon-volume-muted" });
     return;
   }
   if (event.code === "KeyO") {
