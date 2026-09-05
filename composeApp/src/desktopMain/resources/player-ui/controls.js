@@ -500,7 +500,8 @@ const clampVolumeLevel = level => Math.max(0, Math.min(maxVolumeLevel, level));
 const volumeToastLabel = (fallbackDelta = 0) => {
   const volumeLevel = state.volumeLevel;
   if (typeof volumeLevel === "number" && Number.isFinite(volumeLevel)) {
-    return `Volume ${Math.round(clampVolumeLevel(volumeLevel) * 100)}%`;
+    const percent = Math.round(clampVolumeLevel(volumeLevel) * 100);
+    return percent === 0 ? "Muted" : `Volume ${percent}%`;
   }
   return fallbackDelta < 0 ? "Volume down" : "Volume up";
 };
@@ -1112,6 +1113,12 @@ const appendSubtitleLanguageRow = item => {
     pendingSubtitleOptionId = options.some(option => option.id === pendingSubtitleOptionId) ? pendingSubtitleOptionId : "";
     if (item.key === "__off__") send("selectBuiltInSubtitleTrack", -1);
     renderSubtitleModal();
+    if (event.detail === 0 && item.key !== "__off__") {
+      window.requestAnimationFrame(() => {
+        const firstOption = addonSubtitleList.querySelector('.track-row:not([disabled]):not([hidden])');
+        if (firstOption) firstOption.focus();
+      });
+    }
   });
   const label = document.createElement("span");
   label.className = "track-label";
@@ -2876,7 +2883,8 @@ seek.addEventListener("change", () => {
   render();
 });
 
-volumeSlider.addEventListener("input", () => {
+volumeSlider.addEventListener("input", event => {
+  if (event && !event.isTrusted) return;
   noteChromeActivity();
   const percent = Math.max(0, Math.min(maxVolumeLevel * 100, Number(volumeSlider.value) || 0));
   const nextLevel = percent / 100;
@@ -2959,7 +2967,7 @@ window.playerControls = nextState => {
   const currentPlaybackState = pendingIsPlaying === null
     ? state.isPlaying
     : pendingIsPlaying;
-  const currentVolumeLevel = state.volumeLevel;
+  const currentVolumeLevel = hasReceivedPlayerControls ? state.volumeLevel : undefined;
   state = {
     ...state,
     ...nextState,
@@ -3246,7 +3254,8 @@ document.addEventListener("keydown", event => {
   }
   if (playbackErrorText()) return;
   const isMacFullscreenShortcut = event.code === "KeyF" && event.metaKey && event.ctrlKey && !event.altKey;
-  if (event.code === "F11" || isMacFullscreenShortcut) {
+  const isPlainKeyF = event.code === "KeyF" && !event.metaKey && !event.ctrlKey && !event.altKey;
+  if (event.code === "F11" || isMacFullscreenShortcut || isPlainKeyF) {
     clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
     focusShortcutRoot();
@@ -3255,6 +3264,45 @@ document.addEventListener("keydown", event => {
   }
   if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
     clearSpaceHoldTimerAndStopSpeedBoost();
+    return;
+  }
+  if (isTextEntryTarget(event.target)) {
+    return;
+  }
+
+  if ((activeModal === "episodes" || activeModal === "sources") && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
+    const chips = Array.from(document.querySelectorAll('.filter-chip:not([hidden])')).filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
+    if (chips.length > 0) {
+      let selectedIndex = chips.findIndex(el => el.classList.contains('selected'));
+      if (selectedIndex === -1) selectedIndex = 0;
+      let nextIndex = selectedIndex;
+      if (event.code === "ArrowRight") {
+        nextIndex = selectedIndex < chips.length - 1 ? selectedIndex + 1 : 0;
+      } else {
+        nextIndex = selectedIndex > 0 ? selectedIndex - 1 : chips.length - 1;
+      }
+      if (nextIndex !== selectedIndex) {
+        event.preventDefault();
+        chips[nextIndex].click();
+      }
+      return;
+    }
+  }
+
+  if (activeModal === "audio" && (event.code === "ArrowUp" || event.code === "ArrowDown")) {
+    event.preventDefault();
+    if (state.audioTracks && state.audioTracks.length > 0) {
+      const currentIndex = state.audioTracks.findIndex(t => t.selected);
+      let nextIndex = currentIndex;
+      if (event.code === "ArrowUp") {
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : state.audioTracks.length - 1;
+      } else {
+        nextIndex = currentIndex >= 0 && currentIndex < state.audioTracks.length - 1 ? currentIndex + 1 : 0;
+      }
+      if (nextIndex !== currentIndex && nextIndex >= 0) {
+        send("selectAudioTrack", trackIdValue(state.audioTracks[nextIndex]));
+      }
+    }
     return;
   }
 
@@ -3390,7 +3438,7 @@ document.addEventListener("keydown", event => {
   }
   if (event.code === "KeyV") {
     event.preventDefault();
-    const isOff = (state.selectedSubtitleLanguageKey || "__off__") === "__off__" && !state.selectedSubtitleOptionId;
+    const isOff = !normalizeTracks(state.subtitleTracks).some(t => t.selected);
     if (isOff) {
       if (window.lastActiveSubtitle) {
         if (window.lastActiveSubtitle.kind === "builtIn") send("selectBuiltInSubtitleTrack", window.lastActiveSubtitle.index);
@@ -3400,10 +3448,18 @@ document.addEventListener("keydown", event => {
         if (options.length > 0) {
           if (options[0].kind === "builtIn") send("selectBuiltInSubtitleTrack", options[0].index);
           else send("selectAddonSubtitle", options[0].index);
+        } else if (state.subtitleTracks && state.subtitleTracks.length > 0) {
+          send("selectBuiltInSubtitleTrack", state.subtitleTracks[0].index);
         }
       }
     } else {
-      window.lastActiveSubtitle = selectedSubtitleOption(subtitleSelectionOptions());
+      const activeOption = selectedSubtitleOption(subtitleSelectionOptions());
+      if (activeOption) {
+        window.lastActiveSubtitle = activeOption;
+      } else {
+        const activeTrack = normalizeTracks(state.subtitleTracks).find(t => t.selected);
+        if (activeTrack) window.lastActiveSubtitle = { kind: "builtIn", index: activeTrack.index };
+      }
       send("selectBuiltInSubtitleTrack", -1);
     }
     return;
@@ -3428,7 +3484,8 @@ document.addEventListener("keydown", event => {
     }
     syncVolumeControl();
     send("volumeChangeTemporary", state.volumeLevel);
-    showPlayerToast(`${Math.round(state.volumeLevel * 100)}%`, { icon: state.volumeLevel > 0 ? "icon-volume" : "icon-volume-muted" });
+    const label = state.volumeLevel === 0 ? "Muted" : `${Math.round(state.volumeLevel * 100)}%`;
+    showPlayerToast(label, { icon: state.volumeLevel > 0 ? "icon-volume" : "icon-volume-muted" });
     return;
   }
   if (event.code === "KeyO") {
