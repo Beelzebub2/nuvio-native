@@ -3349,7 +3349,7 @@ document.addEventListener("keydown", event => {
     }
   }
 
-  if (event.code.startsWith("Arrow") && document.activeElement && document.activeElement.tagName !== "BODY" && document.activeElement !== root) {
+  if (activeModal && event.code.startsWith("Arrow") && document.activeElement && document.activeElement.tagName !== "BODY" && document.activeElement !== root) {
     const focusable = Array.from(document.querySelectorAll('button:not([disabled]):not([hidden]), input:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"])'))
       .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
     if (focusable.length) {
@@ -3418,9 +3418,12 @@ document.addEventListener("keydown", event => {
   }
 
   if (event.code === "Enter" && state.skipPromptVisible) {
-    event.preventDefault();
-    send("skipInterval", 0);
-    return;
+    const activeEl = document.activeElement;
+    if (!activeEl || activeEl.tagName === "BODY" || activeEl === root) {
+      event.preventDefault();
+      send("skipInterval", 0);
+      return;
+    }
   }
   if (event.shiftKey && event.code === "KeyN") {
     event.preventDefault();
