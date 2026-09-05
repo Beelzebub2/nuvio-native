@@ -3246,8 +3246,7 @@ document.addEventListener("keydown", event => {
   }
   if (playbackErrorText()) return;
   const isMacFullscreenShortcut = event.code === "KeyF" && event.metaKey && event.ctrlKey && !event.altKey;
-  const isPlainKeyF = event.code === "KeyF" && !event.metaKey && !event.ctrlKey && !event.altKey;
-  if (event.code === "F11" || isMacFullscreenShortcut || isPlainKeyF) {
+  if (event.code === "F11" || isMacFullscreenShortcut) {
     clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
     focusShortcutRoot();
@@ -3256,45 +3255,6 @@ document.addEventListener("keydown", event => {
   }
   if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
     clearSpaceHoldTimerAndStopSpeedBoost();
-    return;
-  }
-  if (isTextEntryTarget(event.target)) {
-    return;
-  }
-
-  if ((activeModal === "episodes" || activeModal === "sources") && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
-    const chips = Array.from(document.querySelectorAll('.filter-chip:not([hidden])')).filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
-    if (chips.length > 0) {
-      let selectedIndex = chips.findIndex(el => el.classList.contains('selected'));
-      if (selectedIndex === -1) selectedIndex = 0;
-      let nextIndex = selectedIndex;
-      if (event.code === "ArrowRight") {
-        nextIndex = selectedIndex < chips.length - 1 ? selectedIndex + 1 : 0;
-      } else {
-        nextIndex = selectedIndex > 0 ? selectedIndex - 1 : chips.length - 1;
-      }
-      if (nextIndex !== selectedIndex) {
-        event.preventDefault();
-        chips[nextIndex].click();
-      }
-      return;
-    }
-  }
-
-  if (activeModal === "audio" && (event.code === "ArrowUp" || event.code === "ArrowDown")) {
-    event.preventDefault();
-    if (state.audioTracks && state.audioTracks.length > 0) {
-      const currentIndex = state.audioTracks.findIndex(t => t.selected);
-      let nextIndex = currentIndex;
-      if (event.code === "ArrowUp") {
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : state.audioTracks.length - 1;
-      } else {
-        nextIndex = currentIndex >= 0 && currentIndex < state.audioTracks.length - 1 ? currentIndex + 1 : 0;
-      }
-      if (nextIndex !== currentIndex && nextIndex >= 0) {
-        send("selectAudioTrack", trackIdValue(state.audioTracks[nextIndex]));
-      }
-    }
     return;
   }
 
