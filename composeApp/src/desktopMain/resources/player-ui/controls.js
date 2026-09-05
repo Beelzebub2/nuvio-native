@@ -501,8 +501,8 @@ const volumeToastLabel = (fallbackDelta = 0) => {
   const volumeLevel = state.volumeLevel;
   if (typeof volumeLevel === "number" && Number.isFinite(volumeLevel)) {
     const percent = Math.round(clampVolumeLevel(volumeLevel) * 100);
-    const mutedStr = state.mutedLabel || "Muted";
-    const volumeFormat = state.volumeLevelLabelFormat || "Volume %s";
+    const mutedStr = state.mutedLabel || "";
+    const volumeFormat = state.volumeLevelLabelFormat || "";
     return percent === 0 ? mutedStr : volumeFormat.replace("%s", `${percent}%`).replace("%1$s", `${percent}%`);
   }
   return "";
@@ -515,8 +515,8 @@ const syncVolumeControl = () => {
   const clampedLevel = hasLevel ? clampVolumeLevel(volumeLevel) : 1;
   const percent = Math.round(clampedLevel * 100);
   const sliderPosition = Math.round((clampedLevel / maxVolumeLevel) * 100);
-  const mutedStr = state.mutedLabel || "Muted";
-  const volumeFormat = state.volumeLevelLabelFormat || "Volume %s";
+  const mutedStr = state.mutedLabel || "";
+  const volumeFormat = state.volumeLevelLabelFormat || "";
   const label = percent === 0 ? mutedStr : volumeFormat.replace("%s", `${percent}%`).replace("%1$s", `${percent}%`);
   volumeControl.style.setProperty("--volume-position", `${sliderPosition}%`);
   volumeSlider.value = String(percent);
