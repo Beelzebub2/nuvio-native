@@ -74,6 +74,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 posterUrl = runtime.poster,
                 isPlaying = playbackSnapshot.isPlaying,
                 positionMs = playbackSnapshot.positionMs,
+                durationMs = playbackSnapshot.durationMs,
             ),
         )
     }
