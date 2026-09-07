@@ -736,8 +736,8 @@ const setProgress = (positionMs, durationMs) => {
   seek.style.setProperty("--progress", `${percent}%`);
   positionLabel.textContent = formatTime(positionMs);
   durationLabel.textContent = formatTime(durationMs);
-  durationMs = Math.floor(durationMs / 1000) * 1000;
   if (timeLabel) {
+    durationMs = Math.floor(durationMs / 1000) * 1000;
     let remainTimeLabel = timeLabelShowRemaining
     ? `-${formatTime(durationMs - positionMs + (positionMs % 1000 == 0 ? 0 : 1000))}`
     : `${formatTime(durationMs)}`;
