@@ -348,6 +348,7 @@ let state = {
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
+let timeLabelShowRemaining = false;
 let tapTimer = 0;
 let activeModal = "";
 let pressedButton = null;
@@ -735,8 +736,12 @@ const setProgress = (positionMs, durationMs) => {
   seek.style.setProperty("--progress", `${percent}%`);
   positionLabel.textContent = formatTime(positionMs);
   durationLabel.textContent = formatTime(durationMs);
+  durationMs = Math.floor(durationMs / 1000) * 1000;
   if (timeLabel) {
-    timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
+    let remainTimeLabel = timeLabelShowRemaining
+    ? `-${formatTime(durationMs - positionMs + (positionMs % 1000 == 0 ? 0 : 1000))}`
+    : `${formatTime(durationMs)}`;
+    timeLabel.textContent = `${formatTime(positionMs)} / ${remainTimeLabel}`;
   }
   syncVolumeControl();
 };
@@ -2912,6 +2917,12 @@ volumeButton.addEventListener("click", () => {
   }
   syncVolumeControl();
   send("volumeChangeTemporary", state.volumeLevel);
+});
+
+timeLabel.addEventListener("click", () => {
+  noteChromeActivity();
+  timeLabelShowRemaining = !timeLabelShowRemaining;
+  renderChrome();
 });
 
 window.playerUpdate = update => {
