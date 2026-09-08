@@ -296,6 +296,7 @@ let state = {
   showExternalPlayer: false,
   durationMs: 0,
   positionMs: 0,
+  timeLabelShowRemaining: false,
   audioTracks: [],
   subtitleTracks: [],
   sourceIsLoading: false,
@@ -348,7 +349,6 @@ let state = {
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
-let timeLabelShowRemaining = false;
 let tapTimer = 0;
 let activeModal = "";
 let pressedButton = null;
@@ -738,7 +738,7 @@ const setProgress = (positionMs, durationMs) => {
   durationLabel.textContent = formatTime(durationMs);
   if (timeLabel) {
     durationMs = Math.floor(durationMs / 1000) * 1000;
-    let remainTimeLabel = timeLabelShowRemaining
+    let remainTimeLabel = state.timeLabelShowRemaining
     ? `-${formatTime(durationMs - positionMs + (positionMs % 1000 == 0 ? 0 : 1000))}`
     : `${formatTime(durationMs)}`;
     timeLabel.textContent = `${formatTime(positionMs)} / ${remainTimeLabel}`;
@@ -2921,7 +2921,7 @@ volumeButton.addEventListener("click", () => {
 
 timeLabel.addEventListener("click", () => {
   noteChromeActivity();
-  timeLabelShowRemaining = !timeLabelShowRemaining;
+  state = { ...state, timeLabelShowRemaining: !state.timeLabelShowRemaining };
   renderChrome();
 });
 
