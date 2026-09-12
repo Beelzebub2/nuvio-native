@@ -7,11 +7,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Scaffold
@@ -36,8 +38,11 @@ import androidx.compose.ui.unit.max
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.LocalNuvioNavBarScrollState
+import com.nuvio.app.core.ui.NuvioNavBarScrollState
 import com.nuvio.app.core.ui.NuvioClassicNavigationBar
 import com.nuvio.app.core.ui.NuvioNavigationBar
+import com.nuvio.app.core.ui.FloatingNavigationBar
+import com.nuvio.app.core.ui.FloatingNavigationItem
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.rememberNuvioNavBarScrollState
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
@@ -51,6 +56,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_nav_home
 import nuvio.composeapp.generated.resources.compose_nav_library
+import nuvio.composeapp.generated.resources.compose_nav_profile
 import nuvio.composeapp.generated.resources.compose_nav_search
 import nuvio.composeapp.generated.resources.compose_nav_settings
 import nuvio.composeapp.generated.resources.sidebar_library
@@ -75,7 +81,7 @@ internal fun MainTabsDestination(
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
 ) {
-    PlatformBackHandler(enabled = true, onBack = onBack)
+    PlatformBackHandler(enabled = rootRouteActive, onBack = onBack)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val screenWidth = maxWidth
@@ -127,6 +133,42 @@ internal fun MainTabsDestination(
         } else {
             0.dp
         }
+        val navBarGlowEnabled by ThemeSettingsRepository.navBarGlowEnabled.collectAsStateWithLifecycle()
+        val floatingNavigationItems = listOf(
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Home,
+                onClick = { onTabSelected(AppScreenTab.Home) },
+                icon = Icons.Filled.Home,
+                label = stringResource(Res.string.compose_nav_home),
+            ),
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Search,
+                onClick = { onTabSelected(AppScreenTab.Search) },
+                drawable = Res.drawable.sidebar_search,
+                label = stringResource(Res.string.compose_nav_search),
+            ),
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Library,
+                onClick = { onTabSelected(AppScreenTab.Library) },
+                drawable = Res.drawable.sidebar_library,
+                label = stringResource(Res.string.compose_nav_library),
+            ),
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Settings,
+                onClick = { onTabSelected(AppScreenTab.Settings) },
+                label = stringResource(Res.string.compose_nav_profile),
+                content = {
+                    ProfileSwitcherTab(
+                        selected = selectedTab == AppScreenTab.Settings,
+                        onClick = { onTabSelected(AppScreenTab.Settings) },
+                        onProfileSelected = onProfileSelected,
+                        onAddProfileRequested = onAddProfileRequested,
+                        hazeState = navBarHazeState,
+                        popupBelowAnchor = isTabletLayout,
+                    )
+                },
+            ),
+        )
 
         Scaffold(
             modifier = Modifier
@@ -231,8 +273,24 @@ internal fun MainTabsDestination(
                     )
                 }
 
+                if (isTabletLayout && !useNativeBottomTabs && !isDesktop) {
+                    val tabletNavBarScrollState = remember { NuvioNavBarScrollState().apply { collapse() } }
+                    FloatingNavigationBar(
+                        modifier = Modifier.align(Alignment.TopCenter).widthIn(max = 416.dp),
+                        scrollState = tabletNavBarScrollState,
+                        hazeState = navBarHazeState,
+                        contentPadding = PaddingValues(
+                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp,
+                            bottom = 8.dp,
+                        ),
+                        compactSize = true,
+                        items = floatingNavigationItems,
+                        glowEnabled = navBarGlowEnabled,
+                    )
+                }
+
                 if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC) {
-                    NuvioNavigationBar(
+                    if (isDesktop) NuvioNavigationBar(
                         modifier = Modifier.align(Alignment.BottomCenter),
                         scrollState = navBarScrollState,
                         hazeState = navBarHazeState,
@@ -272,6 +330,19 @@ internal fun MainTabsDestination(
                                 hazeState = navBarHazeState,
                             )
                         }
+                    } else {
+                        when (navBarStyleSetting) {
+                            NavBarStyle.EXPANDED -> navBarScrollState.expand()
+                            NavBarStyle.COMPACT -> navBarScrollState.collapse()
+                            else -> {}
+                        }
+                        FloatingNavigationBar(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            scrollState = navBarScrollState,
+                            hazeState = navBarHazeState,
+                            items = floatingNavigationItems,
+                            glowEnabled = navBarGlowEnabled,
+                        )
                     }
                 }
             }

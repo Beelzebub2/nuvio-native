@@ -519,7 +519,6 @@ private fun NuvioPosterShape.cardWidth(basePosterWidthDp: Int): Dp =
         NuvioPosterShape.Square -> basePosterWidthDp.dp
         NuvioPosterShape.Landscape -> landscapePosterWidth(basePosterWidthDp)
     }
-
 @Composable
 internal fun Modifier.desktopPosterHoverScale(
     enabled: Boolean = true,

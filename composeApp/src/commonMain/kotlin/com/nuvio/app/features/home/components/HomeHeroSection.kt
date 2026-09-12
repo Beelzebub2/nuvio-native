@@ -127,6 +127,10 @@ fun HomeHeroSection(
     var pagerDragActive by remember { mutableStateOf(false) }
     val autoScrollPage = pagerState.currentPage
 
+    LaunchedEffect(pagerState) {
+        pagerState.scrollToPage(pagerState.currentPage)
+    }
+
     LaunchedEffect(autoScrollPage, items.size) {
         if (items.size <= 1) return@LaunchedEffect
         delay(HERO_AUTO_SCROLL_INTERVAL_MS)
@@ -1131,7 +1135,11 @@ private fun mobileHeroHeight(
 ): Dp {
     val viewportDrivenHeight = viewportHeightDp?.let { (it * MOBILE_HERO_VIEWPORT_RATIO).dp }
     val widthFallbackHeight = (maxWidthDp * 1.16f).dp
-    val baseHeight = viewportDrivenHeight ?: widthFallbackHeight
+    val baseHeight = if (mobileBelowSectionHeightHintDp == null) {
+        viewportDrivenHeight?.coerceAtMost(widthFallbackHeight) ?: widthFallbackHeight
+    } else {
+        viewportDrivenHeight ?: widthFallbackHeight
+    }
 
     val cappedHeight = if (viewportHeightDp != null && mobileBelowSectionHeightHintDp != null) {
         val maxAllowedFromViewport = (viewportHeightDp - mobileBelowSectionHeightHintDp).dp

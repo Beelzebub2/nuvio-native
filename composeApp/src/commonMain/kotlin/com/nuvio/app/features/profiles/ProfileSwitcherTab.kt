@@ -58,6 +58,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -81,17 +82,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
+import dev.chrisbanes.haze.HazeState
 import com.nuvio.app.isIos
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 import kotlin.math.max
 import kotlin.math.min
 
@@ -108,8 +109,8 @@ fun ProfileSwitcherTab(
     hazeState: HazeState? = null,
     popupAlignment: Alignment = Alignment.BottomCenter,
     modifier: Modifier = Modifier,
+    popupBelowAnchor: Boolean = false,
 ) {
-    val tokens = MaterialTheme.nuvio
     val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
     val activeProfile = profileState.activeProfile
     val profiles = profileState.profiles
@@ -120,7 +121,6 @@ fun ProfileSwitcherTab(
     }
 
     val haptic = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
     var showPopup by remember { mutableStateOf(false) }
@@ -146,6 +146,7 @@ fun ProfileSwitcherTab(
     }
 
     fun updateDragTarget(localPosition: Offset) {
+        if (pinProfile != null) return
         val trigger = triggerCoordinates ?: return
         val screenPosition = trigger.localToScreen(localPosition)
         val nextTargetProfileIndex = profileBubbleBounds.entries
@@ -176,39 +177,25 @@ fun ProfileSwitcherTab(
 
     // Popup entrance/exit animation
     val popupAlpha = remember { Animatable(0f) }
-    val popupScale = remember { Animatable(0.5f) }
-    val popupTranslateY = remember { Animatable(40f) }
+    val popupScale = remember { Animatable(0.96f) }
 
     LaunchedEffect(showPopup) {
         onPopupStateChanged?.invoke(showPopup)
         if (showPopup) {
             popupVisible = true
-            launch { popupAlpha.animateTo(1f, tween(220, easing = FastOutSlowInEasing)) }
+            launch { popupAlpha.animateTo(1f, tween(180, easing = FastOutSlowInEasing)) }
             launch {
                 popupScale.animateTo(
                     1f,
-                    spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                )
-            }
-            launch {
-                popupTranslateY.animateTo(
-                    0f,
-                    spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
+                    tween(180, easing = FastOutSlowInEasing),
                 )
             }
         } else {
             ProfileHoverHapticFeedback.release()
             // Animate out
-            launch { popupAlpha.animateTo(0f, tween(180, easing = FastOutSlowInEasing)) }
-            launch { popupScale.animateTo(0.85f, tween(200, easing = FastOutSlowInEasing)) }
+            launch { popupAlpha.animateTo(0f, tween(140, easing = FastOutSlowInEasing)) }
             launch {
-                popupTranslateY.animateTo(30f, tween(200, easing = FastOutSlowInEasing))
+                popupScale.animateTo(0.96f, tween(160, easing = FastOutSlowInEasing))
                 // Remove from composition after animation completes
                 popupVisible = false
                 pinProfile = null
@@ -237,6 +224,8 @@ fun ProfileSwitcherTab(
                         if (profiles.isNotEmpty()) {
                             performProfileHoldHaptic()
                             ProfileHoverHapticFeedback.prepare()
+                            profileBubbleBounds.clear()
+                            dragTargetProfileIndex = null
                             showPopup = true
                             updateDragTarget(startOffset)
                         }
@@ -270,117 +259,49 @@ fun ProfileSwitcherTab(
 
         // Floating profile popup (stays composed during exit animation)
         if (popupVisible && profiles.isNotEmpty()) {
-            val popupOffset = if (popupAlignment == Alignment.TopCenter) {
-                IntOffset(0, with(density) { 52.dp.roundToPx() })
-            } else {
-                IntOffset(0, with(density) { -NuvioTokens.Space.s64.roundToPx() })
-            }
-            val hasHaze = hazeState != null
             Popup(
-                alignment = popupAlignment,
-                offset = popupOffset,
+                popupPositionProvider = remember(density, popupBelowAnchor) {
+                    ProfilePopupPositionProvider(
+                        margin = with(density) { 16.dp.roundToPx() },
+                        gap = with(density) { 18.dp.roundToPx() },
+                        preferBelow = popupBelowAnchor,
+                    )
+                },
                 properties = PopupProperties(focusable = true),
-                onDismissRequest = { showPopup = false },
+                onDismissRequest = {
+                    if (pinProfile != null) pinProfile = null else showPopup = false
+                },
             ) {
-                Box(
-                    modifier = Modifier
-                        .imePadding()
-                        .graphicsLayer {
-                            alpha = popupAlpha.value
-                            scaleX = popupScale.value
-                            scaleY = popupScale.value
-                            translationY = popupTranslateY.value
-                        }
-                        .then(
-                            if (hasHaze) {
-                                Modifier
-                                    .clip(tokens.shapes.sheet)
-                                    .hazeEffect(state = hazeState) {
-                                        blurRadius = 24.dp
-                                    }
-                                    .background(
-                                        color = Color(0xFF1C1C1E).copy(alpha = 0.55f),
-                                        shape = tokens.shapes.sheet,
-                                    )
-                            } else {
-                                Modifier
-                                    .shadow(tokens.elevation.overlay, tokens.shapes.sheet)
-                                    .background(
-                                        tokens.colors.surfaceSheet,
-                                        tokens.shapes.sheet,
-                                    )
-                            }
+                ProfilePopupContent(
+                    profiles = profiles,
+                    avatars = avatars,
+                    activeProfileIndex = activeProfile?.profileIndex,
+                    hoveredProfileIndex = dragTargetProfileIndex,
+                    pinProfile = pinProfile,
+                    hazeState = hazeState,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = popupAlpha.value
+                        scaleX = popupScale.value
+                        scaleY = popupScale.value
+                        transformOrigin = TransformOrigin(
+                            0.5f,
+                            if (popupBelowAnchor) 0f else 1f,
                         )
-                        .padding(tokens.spacing.sheetPadding),
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Profile avatars row
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.cardPadding),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            profiles.forEachIndexed { index, profile ->
-                                val isActive =
-                                    profile.profileIndex == activeProfile?.profileIndex
-                                val isPinTarget =
-                                    pinProfile?.profileIndex == profile.profileIndex
-                                val isDragTarget =
-                                    dragTargetProfileIndex == profile.profileIndex
-
-                                PopupProfileBubble(
-                                    profile = profile,
-                                    avatars = avatars,
-                                    isActive = isActive,
-                                    isSelected = isPinTarget || isDragTarget,
-                                    delayMs = index * 50,
-                                    onBoundsChanged = { bounds ->
-                                        profileBubbleBounds[profile.profileIndex] = bounds
-                                    },
-                                    onClick = {
-                                        chooseProfile(profile)
-                                    },
-                                )
-                            }
-
-                            if (profiles.size < MAX_PROFILES) {
-                                PopupAddProfileBubble(
-                                    delayMs = profiles.size * 50,
-                                    onClick = {
-                                        showPopup = false
-                                        onAddProfileRequested()
-                                    },
-                                )
-                            }
+                    },
+                    onBoundsChanged = { index, bounds -> profileBubbleBounds[index] = bounds },
+                    onProfileSelected = ::chooseProfile,
+                    onAddProfileRequested = {
+                        showPopup = false
+                        onAddProfileRequested()
+                    },
+                    onPinCancelled = { pinProfile = null },
+                    onPinVerified = { profile ->
+                        if (showPopup && pinProfile?.profileIndex == profile.profileIndex) {
+                            onProfileSelected(profile)
+                            showPopup = false
                         }
-
-                        // Inline PIN entry for locked profiles
-                        AnimatedVisibility(
-                            visible = pinProfile != null,
-                            enter = expandVertically(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                ),
-                            ) + fadeIn(tween(200)),
-                            exit = shrinkVertically(tween(150)) + fadeOut(tween(100)),
-                        ) {
-                            pinProfile?.let { profile ->
-                                InlinePinEntry(
-                                    profileName = profile.name,
-                                    onVerified = {
-                                        onProfileSelected(profile)
-                                        showPopup = false
-                                    },
-                                    onCancel = { pinProfile = null },
-                                    verifyPin = { pin ->
-                                        ProfileRepository.verifyPin(profile.profileIndex, pin)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                    },
+                )
             }
         }
     }
@@ -1191,7 +1112,7 @@ private fun PopupProfileBubble(
     }
 }
 
-private fun LayoutCoordinates.boundsOnScreen(): Rect {
+internal fun LayoutCoordinates.boundsOnScreen(): Rect {
     val topLeft = localToScreen(Offset.Zero)
     val bottomRight = localToScreen(Offset(size.width.toFloat(), size.height.toFloat()))
     return Rect(
@@ -1200,204 +1121,6 @@ private fun LayoutCoordinates.boundsOnScreen(): Rect {
         right = max(topLeft.x, bottomRight.x),
         bottom = max(topLeft.y, bottomRight.y),
     )
-}
-
-/**
- * Compact inline PIN entry shown inside the popup when a PIN-protected
- * profile is tapped.
- */
-@Composable
-private fun InlinePinEntry(
-    profileName: String,
-    onVerified: () -> Unit,
-    onCancel: () -> Unit,
-    verifyPin: suspend (String) -> PinVerifyResult,
-) {
-    val tokens = MaterialTheme.nuvio
-    var pin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var isVerifying by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = tokens.spacing.cardPadding),
-    ) {
-        Text(
-            text = stringResource(Res.string.pin_enter_for, profileName),
-            style = MaterialTheme.typography.labelMedium,
-            color = tokens.colors.textMuted,
-        )
-
-        Spacer(modifier = Modifier.height(NuvioTokens.Space.s14))
-
-        // PIN dots with bounce animation
-        Row(horizontalArrangement = Arrangement.spacedBy(tokens.spacing.listGap)) {
-            repeat(4) { index ->
-                val filled = index < pin.length
-                val dotScale = remember { Animatable(1f) }
-                LaunchedEffect(filled) {
-                    if (filled) {
-                        dotScale.snapTo(1.4f)
-                        dotScale.animateTo(
-                            1f,
-                            spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessHigh,
-                            ),
-                        )
-                    }
-                }
-
-                val dotColor = when {
-                    error != null -> tokens.colors.danger
-                    filled -> tokens.colors.accent
-                    else -> tokens.colors.borderDefault
-                }
-                Box(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = dotScale.value
-                            scaleY = dotScale.value
-                        }
-                        .size(NuvioTokens.Space.s14)
-                        .clip(tokens.shapes.avatar)
-                        .then(
-                            if (filled) Modifier.background(dotColor)
-                            else Modifier.border(tokens.borders.medium, dotColor, tokens.shapes.avatar),
-                        ),
-                )
-            }
-        }
-
-        // Error text
-        AnimatedVisibility(
-            visible = error != null,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
-            Text(
-                text = error.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.colors.danger,
-                modifier = Modifier.padding(top = tokens.spacing.controlGap),
-            )
-        }
-
-        Spacer(modifier = Modifier.height(NuvioTokens.Space.s14))
-
-        // Compact number pad
-        CompactPinKeypad(
-            onDigit = { digit ->
-                if (pin.length < 4 && !isVerifying) {
-                    error = null
-                    pin += digit
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (pin.length == 4) {
-                        isVerifying = true
-                        scope.launch {
-                            val result = verifyPin(pin)
-                            if (result.unlocked) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onVerified()
-                            } else {
-                                error = if (result.retryAfterSeconds > 0) {
-                                    getString(Res.string.pin_locked_try_again, result.retryAfterSeconds)
-                                } else {
-                                    getString(Res.string.pin_incorrect)
-                                }
-                                pin = ""
-                            }
-                            isVerifying = false
-                        }
-                    }
-                }
-            },
-            onBackspace = {
-                if (pin.isNotEmpty() && !isVerifying) {
-                    pin = pin.dropLast(1)
-                    error = null
-                }
-            },
-        )
-
-        Spacer(modifier = Modifier.height(tokens.spacing.controlGap))
-
-        Text(
-            text = stringResource(Res.string.pin_cancel),
-            style = MaterialTheme.typography.labelMedium,
-            color = tokens.colors.accent,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .clip(tokens.shapes.compactCard)
-                .clickable(onClick = onCancel)
-                .padding(horizontal = tokens.spacing.cardPadding, vertical = NuvioTokens.Space.s6),
-        )
-    }
-}
-
-@Composable
-private fun CompactPinKeypad(
-    onDigit: (String) -> Unit,
-    onBackspace: () -> Unit,
-) {
-    val tokens = MaterialTheme.nuvio
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("", "0", "⌫"),
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.controlGap)) {
-        rows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(tokens.spacing.controlGap, Alignment.CenterHorizontally),
-            ) {
-                row.forEach { key ->
-                    when (key) {
-                        "" -> Spacer(modifier = Modifier.size(tokens.components.avatarSize))
-                        "⌫" -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(tokens.components.avatarSize)
-                                    .clip(tokens.shapes.avatar)
-                                    .background(tokens.colors.surfaceCard)
-                                    .clickable(onClick = onBackspace),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.Backspace,
-                                    contentDescription = stringResource(Res.string.pin_backspace),
-                                    tint = tokens.colors.textPrimary,
-                                    modifier = Modifier.size(tokens.icons.md),
-                                )
-                            }
-                        }
-                        else -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(tokens.components.avatarSize)
-                                    .clip(tokens.shapes.avatar)
-                                    .background(tokens.colors.surfaceCard)
-                                    .clickable { onDigit(key) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = key,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = tokens.colors.textPrimary,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

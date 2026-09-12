@@ -519,19 +519,6 @@ private fun MobileSettingsScreen(
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         }
-        val searchEntries = settingsSearchEntries(
-            pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
-            downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
-            notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
-            externalPlayerSupported = AppFeaturePolicy.externalPlayerSupported,
-            supportersContributorsPageEnabled = AppFeaturePolicy.supportersContributorsPageEnabled,
-            accountDeletionEnabled = AppFeaturePolicy.accountDeletionEnabled,
-            personalMediaAddonCopyEnabled = AppFeaturePolicy.personalMediaAddonCopyEnabled,
-            liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
-            switchProfileAvailable = onSwitchProfile != null,
-            checkForUpdatesAvailable = onCheckForUpdatesClick != null,
-        )
-
         fun openSearchTarget(target: SettingsSearchTarget) {
             when (target) {
                 is SettingsSearchTarget.Page -> when (target.page) {
@@ -601,7 +588,20 @@ private fun MobileSettingsScreen(
                 SettingsPage.Root -> {
                     settingsSearchRootContent(
                         query = settingsSearchQuery,
-                        entries = searchEntries,
+                        entries = {
+                            settingsSearchEntries(
+                                pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
+                                downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
+                                notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
+                                externalPlayerSupported = AppFeaturePolicy.externalPlayerSupported,
+                                supportersContributorsPageEnabled = AppFeaturePolicy.supportersContributorsPageEnabled,
+                                accountDeletionEnabled = AppFeaturePolicy.accountDeletionEnabled,
+                                personalMediaAddonCopyEnabled = AppFeaturePolicy.personalMediaAddonCopyEnabled,
+                                liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
+                                switchProfileAvailable = onSwitchProfile != null,
+                                checkForUpdatesAvailable = onCheckForUpdatesClick != null,
+                            )
+                        },
                         isTablet = false,
                         showSearchField = rootSearchVisible,
                         animateSearchField = rootSearchRevealAnimating,
@@ -949,7 +949,8 @@ private fun TabletSettingsScreen(
             var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
             val hapticFeedback = LocalHapticFeedback.current
             val hapticScope = rememberCoroutineScope()
-            val searchEntries = settingsSearchEntries(
+            val searchEntries: @Composable () -> List<SettingsSearchEntry> = {
+                settingsSearchEntries(
                 pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
                 downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
                 notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
@@ -960,8 +961,8 @@ private fun TabletSettingsScreen(
                 liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
                 switchProfileAvailable = onSwitchProfile != null,
                 checkForUpdatesAvailable = onCheckForUpdatesClick != null,
-            )
-
+                )
+            }
             fun openSearchTarget(target: SettingsSearchTarget) {
                 when (target) {
                     is SettingsSearchTarget.Page -> {

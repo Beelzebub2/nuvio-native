@@ -15,6 +15,9 @@ import java.util.concurrent.TimeUnit
 actual fun LockPlayerToLandscape() = Unit
 
 @Composable
+actual fun HidePlayerSystemBars() = Unit
+
+@Composable
 actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) {
     val keepAwakeController = remember { DesktopKeepAwakeController() }
 
