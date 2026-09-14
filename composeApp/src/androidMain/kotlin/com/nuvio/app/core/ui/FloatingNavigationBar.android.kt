@@ -17,16 +17,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -40,6 +41,7 @@ import com.nuvio.app.core.ui.jelly.JellyTabRow
 import com.nuvio.app.core.ui.jelly.JellyTabTargets
 import com.nuvio.app.core.ui.jelly.drawJellyGlow
 import com.nuvio.app.core.ui.jelly.drawJellyPill
+import com.nuvio.app.core.ui.jelly.jellyGlowBrush
 import com.nuvio.app.core.ui.jelly.jellyPillPath
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.abs
@@ -87,15 +89,8 @@ internal actual fun FloatingNavigationBar(
     LaunchedEffect(visualSelectedIndex, items.size) {
         motion.select(visualSelectedIndex)
     }
-    LaunchedEffect(motion.running) {
-        if (!motion.running) return@LaunchedEffect
-        var previous = withFrameNanos { it }
-        while (motion.running) {
-            withFrameNanos { now ->
-                motion.advance((now - previous) / 1_000_000_000.0)
-                previous = now
-            }
-        }
+    LaunchedEffect(motion) {
+        motion.animate()
     }
 
     Box(
@@ -114,40 +109,7 @@ internal actual fun FloatingNavigationBar(
                     motion.resize(it.width / density.density, it.height / density.density, items.size)
                 }
                 .pointerInput(motion, density, items.size, isRtl) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        motion.begin(down.position.x / density.density, down.position.y / density.density)
-                        var claimed = false
-                        var finished = false
-                        try {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                if (!motion.dragging) break
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (event.changes.count { it.pressed } > 1) break
-                                val delta = change.position - down.position
-                                if (max(abs(delta.x), abs(delta.y)) > viewConfiguration.touchSlop) claimed = true
-                                if (claimed) change.consume()
-                                awaitPointerEvent(PointerEventPass.Main)
-                                if (change.isConsumed && !claimed) break
-                                motion.drag(delta.x / density.density, delta.y / density.density)
-                                if (!change.pressed) {
-                                    val visualIndex = motion.finish()
-                                    val logicalIndex = logicalNavIndex(visualIndex, currentItems.size, currentIsRtl)
-                                    finished = true
-                                    currentItems.getOrNull(logicalIndex)?.onClick?.invoke()
-                                    change.consume()
-                                    break
-                                }
-                            }
-                        } finally {
-                            if (!finished) {
-                                val currentSelectedIndex = currentItems.indexOfFirst { it.selected }
-                                val currentVisualIndex = visualNavIndex(currentSelectedIndex, currentItems.size, currentIsRtl)
-                                motion.cancel(currentVisualIndex)
-                            }
-                        }
-                    }
+                    detectJellyTabGestures(motion, density.density, { currentItems }, { currentIsRtl })
                 },
         ) {
             Box(
@@ -180,21 +142,27 @@ internal actual fun FloatingNavigationBar(
                         Box(
                             Modifier.matchParentSize()
                                 .clip(RoundedCornerShape(50))
-                                .drawWithContent {
-                                    drawContent()
-                                    drawJellyGlow(motion.frame, accentColor.copy(alpha = accentColor.alpha * glowStrength))
+                                .drawWithCache {
+                                    val glowBrush = jellyGlowBrush(accentColor)
+                                    onDrawWithContent {
+                                        drawContent()
+                                        drawJellyGlow(motion.frame, glowBrush, glowStrength)
+                                    }
                                 },
                         ) {
                             GlassBarSurface(hazeState, Modifier.matchParentSize(), glowStrength)
                         }
                         Box(
-                            Modifier.matchParentSize().drawWithContent {
-                                if (selectedIndex >= 0) {
-                                    clipPath(jellyPillPath(motion.frame, items.size), ClipOp.Difference) {
-                                        this@drawWithContent.drawContent()
+                            Modifier.matchParentSize().drawWithCache {
+                                val path = Path()
+                                onDrawWithContent {
+                                    if (selectedIndex >= 0) {
+                                        clipPath(jellyPillPath(motion.frame, items.size, path), ClipOp.Difference) {
+                                            this@onDrawWithContent.drawContent()
+                                        }
+                                    } else {
+                                        drawContent()
                                     }
-                                } else {
-                                    drawContent()
                                 }
                             },
                         ) {
@@ -204,13 +172,19 @@ internal actual fun FloatingNavigationBar(
                             Box(
                                 Modifier.matchParentSize()
                                     .clearAndSetSemantics {}
-                                    .drawWithContent {
-                                        drawJellyPill(
-                                            motion.frame,
-                                            items.size,
-                                            selectedSurface,
-                                            accentColor.copy(alpha = accentColor.alpha * glowStrength),
-                                        ) { drawContent() }
+                                    .drawWithCache {
+                                        val path = Path()
+                                        val glowBrush = jellyGlowBrush(accentColor)
+                                        onDrawWithContent {
+                                            drawJellyPill(
+                                                motion.frame,
+                                                items.size,
+                                                path,
+                                                selectedSurface,
+                                                glowBrush,
+                                                glowStrength,
+                                            ) { drawContent() }
+                                        }
                                     },
                             ) {
                                 JellyTabRow(items, labelFraction, motion, active = true, compactSize = compactSize, modifier = Modifier.matchParentSize())
@@ -229,3 +203,53 @@ internal fun visualNavIndex(logicalIndex: Int, count: Int, isRtl: Boolean): Int 
 
 internal fun logicalNavIndex(visualIndex: Int, count: Int, isRtl: Boolean): Int =
     if (visualIndex in 0 until count && isRtl) count - 1 - visualIndex else visualIndex
+
+internal suspend fun PointerInputScope.detectJellyTabGestures(
+    motion: JellyMotion,
+    density: Float,
+    currentItems: () -> List<FloatingNavigationItem>,
+    isRtl: () -> Boolean,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        motion.begin(down.position.x / density, down.position.y / density)
+        var claimed = false
+        var finished = false
+        try {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (!motion.dragging) {
+                    finished = true
+                    break
+                }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (event.changes.count { it.pressed } > 1) break
+                val delta = change.position - down.position
+                if (max(abs(delta.x), abs(delta.y)) > viewConfiguration.touchSlop) claimed = true
+                if (claimed) change.consume()
+                awaitPointerEvent(PointerEventPass.Main)
+                if (!motion.dragging) {
+                    finished = true
+                    break
+                }
+                if (change.isConsumed && !claimed) break
+                motion.drag(delta.x / density, delta.y / density)
+                if (!change.pressed) {
+                    val visualIndex = motion.finish()
+                    val items = currentItems()
+                    val logicalIndex = logicalNavIndex(visualIndex, items.size, isRtl())
+                    finished = true
+                    items.getOrNull(logicalIndex)?.onClick?.invoke()
+                    change.consume()
+                    break
+                }
+            }
+        } finally {
+            if (!finished) {
+                val items = currentItems()
+                val selectedIndex = items.indexOfFirst { it.selected }
+                motion.cancel(visualNavIndex(selectedIndex, items.size, isRtl()))
+            }
+        }
+    }
+}

@@ -15,6 +15,14 @@ import java.util.concurrent.TimeUnit
 actual fun LockPlayerToLandscape() = Unit
 
 @Composable
+actual fun FullscreenPlayerDialog(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    content()
+}
+
+@Composable
 actual fun HidePlayerSystemBars() = Unit
 
 @Composable

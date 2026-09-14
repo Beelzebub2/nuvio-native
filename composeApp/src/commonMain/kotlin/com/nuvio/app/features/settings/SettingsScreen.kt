@@ -56,6 +56,7 @@ import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.LocalNuvioNavBarScrollState
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
 import com.nuvio.app.core.ui.NuvioScreen
+import com.nuvio.app.core.ui.ScreenBox
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
@@ -136,7 +137,7 @@ fun SettingsScreen(
     onTestUpdateBannerClick: (() -> Unit)? = null,
     onCollectionsClick: () -> Unit = {},
 ) {
-    BoxWithConstraints(
+    ScreenBox(
         modifier = modifier.fillMaxSize(),
     ) {
         val playerSettingsUiState by remember {
@@ -590,6 +591,7 @@ private fun MobileSettingsScreen(
                         query = settingsSearchQuery,
                         entries = {
                             settingsSearchEntries(
+                                isTablet = false,
                                 pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
                                 downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
                                 notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
@@ -952,6 +954,7 @@ private fun TabletSettingsScreen(
                 val hapticScope = rememberCoroutineScope()
                 val searchEntries: @Composable () -> List<SettingsSearchEntry> = {
                     settingsSearchEntries(
+                    isTablet = true,
                     pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
                     downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
                     notificationsEnabled = AppFeaturePolicy.notificationsEnabled,

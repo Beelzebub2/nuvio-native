@@ -28,24 +28,24 @@ internal actual fun FloatingNavigationBar(
             when {
                 item.icon != null -> NavItem(
                     selected = item.selected,
-                    onClick = item.onClick,
+                    onClick = item.onClick ?: {},
                     icon = item.icon,
                     contentDescription = item.label,
                     label = item.label,
                 )
                 item.drawable != null -> NavItem(
                     selected = item.selected,
-                    onClick = item.onClick,
+                    onClick = item.onClick ?: {},
                     icon = item.drawable,
                     contentDescription = item.label,
                     label = item.label,
                 )
                 else -> NavItem(
                     selected = item.selected,
-                    onClick = item.onClick,
+                    onClick = item.onClick ?: {},
                     label = item.label,
                 ) {
-                    item.content?.invoke()
+                    item.content?.invoke(item.onClick)
                 }
             }
         }
