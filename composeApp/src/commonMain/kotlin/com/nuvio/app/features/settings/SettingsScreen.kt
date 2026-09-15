@@ -27,6 +27,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.stopScroll
+import com.nuvio.app.core.ui.LocalScreenActive
+import com.nuvio.app.core.ui.ScreenActivityEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +59,6 @@ import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.LocalNuvioNavBarScrollState
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
 import com.nuvio.app.core.ui.NuvioScreen
-import com.nuvio.app.core.ui.ScreenBox
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
@@ -137,9 +139,10 @@ fun SettingsScreen(
     onTestUpdateBannerClick: (() -> Unit)? = null,
     onCollectionsClick: () -> Unit = {},
 ) {
-    ScreenBox(
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
+        val screenActive = LocalScreenActive.current
         val playerSettingsUiState by remember {
             PlayerSettingsRepository.ensureLoaded()
             PlayerSettingsRepository.uiState
@@ -257,9 +260,9 @@ fun SettingsScreen(
             }
         }
 
-        LaunchedEffect(rootActionRequests, rootActionsEnabled, page) {
+        ScreenActivityEffect(rootActionRequests, rootActionsEnabled, page) { active ->
+            if (!active || !rootActionsEnabled) return@ScreenActivityEffect
             rootActionRequests.collect {
-                if (!rootActionsEnabled) return@collect
                 val pageToOpen = page.previousPage()
                 if (pageToOpen != null) {
                     currentPage = pageToOpen.name
@@ -269,20 +272,20 @@ fun SettingsScreen(
             }
         }
 
-        LaunchedEffect(requestedPageName, rootActionsEnabled) {
-            val requestedPage = requestedPageName ?: return@LaunchedEffect
+        ScreenActivityEffect(requestedPageName, rootActionsEnabled) { active ->
+            if (!active || !rootActionsEnabled) return@ScreenActivityEffect
+            val requestedPage = requestedPageName ?: return@ScreenActivityEffect
             val targetPage = runCatching { SettingsPage.valueOf(requestedPage) }.getOrNull()
             if (targetPage == null || !targetPage.isEnabledByPolicy()) {
                 onRequestedPageConsumed()
-                return@LaunchedEffect
+                return@ScreenActivityEffect
             }
-            if (!rootActionsEnabled) return@LaunchedEffect
             currentPage = targetPage.name
             onRequestedPageConsumed()
         }
 
         PlatformBackHandler(
-            enabled = rootActionsEnabled && previousPage != null,
+            enabled = screenActive && rootActionsEnabled && previousPage != null,
             onBack = { previousPage?.let { currentPage = it.name } },
         )
 
@@ -505,6 +508,9 @@ private fun MobileSettingsScreen(
         var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
         var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
         val listState = rememberLazyListState()
+        ScreenActivityEffect(listState) { active ->
+            if (!active) listState.stopScroll()
+        }
         val hapticFeedback = LocalHapticFeedback.current
         val hapticScope = rememberCoroutineScope()
         val rootSearchRevealConnection = rememberSettingsRootSearchRevealConnection(
@@ -954,17 +960,17 @@ private fun TabletSettingsScreen(
                 val hapticScope = rememberCoroutineScope()
                 val searchEntries: @Composable () -> List<SettingsSearchEntry> = {
                     settingsSearchEntries(
-                    isTablet = true,
-                    pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
-                    downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
-                    notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
-                    externalPlayerSupported = AppFeaturePolicy.externalPlayerSupported,
-                    supportersContributorsPageEnabled = AppFeaturePolicy.supportersContributorsPageEnabled,
-                    accountDeletionEnabled = AppFeaturePolicy.accountDeletionEnabled,
-                    personalMediaAddonCopyEnabled = AppFeaturePolicy.personalMediaAddonCopyEnabled,
-                    liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
-                    switchProfileAvailable = onSwitchProfile != null,
-                    checkForUpdatesAvailable = onCheckForUpdatesClick != null,
+                        isTablet = true,
+                        pluginsEnabled = AppFeaturePolicy.pluginsEnabled,
+                        downloadsEnabled = AppFeaturePolicy.downloadsEnabled,
+                        notificationsEnabled = AppFeaturePolicy.notificationsEnabled,
+                        externalPlayerSupported = AppFeaturePolicy.externalPlayerSupported,
+                        supportersContributorsPageEnabled = AppFeaturePolicy.supportersContributorsPageEnabled,
+                        accountDeletionEnabled = AppFeaturePolicy.accountDeletionEnabled,
+                        personalMediaAddonCopyEnabled = AppFeaturePolicy.personalMediaAddonCopyEnabled,
+                        liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
+                        switchProfileAvailable = onSwitchProfile != null,
+                        checkForUpdatesAvailable = onCheckForUpdatesClick != null,
                     )
                 }
                 fun openSearchTarget(target: SettingsSearchTarget) {
@@ -986,6 +992,9 @@ private fun TabletSettingsScreen(
                 }
 
                 val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                ScreenActivityEffect(listState) { active ->
+                    if (!active) listState.stopScroll()
+                }
                 val bottomOverlayPadding = LocalNuvioBottomNavigationOverlayPadding.current
                 val rootSearchRevealConnection = rememberSettingsRootSearchRevealConnection(
                     page = page,

@@ -1624,7 +1624,6 @@ private fun BoxScope.RenderPlaybackOverlays(
                 p2pInitialLoadingMessage ?: playerLoadingStatusMessage(
                     showStatus = true,
                     controllerReady = playerController != null,
-                    subtitlesLoading = isLoadingAddonSubtitles,
                     buffering = playbackSnapshot.isLoading,
                 )
             } else null,

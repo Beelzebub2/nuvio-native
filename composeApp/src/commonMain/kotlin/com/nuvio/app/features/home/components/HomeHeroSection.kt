@@ -2,9 +2,11 @@ package com.nuvio.app.features.home.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,6 +65,7 @@ import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.isFullscreenActionSupported
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.heroStretchHeight
+import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.heroStretchZoom
 import com.nuvio.app.core.ui.ultrawideViewportProgress
 import com.nuvio.app.features.home.MetaPreview
@@ -125,23 +128,28 @@ fun HomeHeroSection(
     val pagerState = rememberPagerState(pageCount = { items.size })
     val coroutineScope = rememberCoroutineScope()
     var pagerDragActive by remember { mutableStateOf(false) }
-    val autoScrollPage = pagerState.currentPage
+    val autoScrollPage = pagerState.settledPage
 
     LaunchedEffect(pagerState) {
         pagerState.scrollToPage(pagerState.currentPage)
     }
 
-    LaunchedEffect(autoScrollPage, items.size) {
-        if (items.size <= 1) return@LaunchedEffect
+    ScreenActivityEffect(pagerState) { active ->
+        if (!active) {
+            pagerState.stopScroll(MutatePriority.PreventUserInput)
+            pagerState.scrollToPage(pagerState.currentPage)
+        }
+    }
+
+    ScreenActivityEffect(autoScrollPage, items.size) { active ->
+        if (!active || items.size <= 1) return@ScreenActivityEffect
         delay(HERO_AUTO_SCROLL_INTERVAL_MS)
         while (pagerState.isScrollInProgress) {
             delay(100L)
         }
 
         val nextPage = (pagerState.currentPage + 1) % items.size
-        coroutineScope.launch {
-            pagerState.animateScrollToPage(nextPage)
-        }
+        pagerState.animateScrollToPage(nextPage)
     }
 
     BoxWithConstraints(

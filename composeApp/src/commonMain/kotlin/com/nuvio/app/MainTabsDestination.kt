@@ -86,6 +86,7 @@ internal fun MainTabsDestination(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val screenWidth = maxWidth
         val isTabletLayout = useTabletFloatingTabBar || screenWidth >= 768.dp
+        val tabActions = remember(actions, isTabletLayout) { actions(isTabletLayout) }
         val useNativeBottomTabs = if (useNativeNavigation) {
             useNativeTabBar
         } else {
@@ -234,7 +235,7 @@ internal fun MainTabsDestination(
                             tabsRouteActiveState = tabsRouteActiveState,
                             topChromePadding = topChromePadding,
                         ),
-                        actions = actions(isTabletLayout),
+                        actions = tabActions,
                         modifier = Modifier
                             .fillMaxSize()
                             .then(if (requiresNavBarHaze) Modifier.hazeSource(state = navBarHazeState) else Modifier)
