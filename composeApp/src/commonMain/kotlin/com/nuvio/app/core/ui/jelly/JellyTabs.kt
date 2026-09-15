@@ -3,11 +3,15 @@ package com.nuvio.app.core.ui.jelly
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.Dp
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -52,14 +56,14 @@ internal fun JellyTabRow(
     active: Boolean,
     compactSize: Boolean,
     modifier: Modifier,
+    horizontalLabels: Boolean = false,
+    iconSize: Dp = if (compactSize) 24.dp else 28.dp,
 ) {
     val tokens = MaterialTheme.nuvio
     val palette = MaterialTheme.themePalette
-    val color = if (active) tokens.colors.accent else tokens.colors.textMuted
-    val iconSize = if (compactSize) 24.dp else 28.dp
-    val labelHeight = if (compactSize) 14.dp else 16.dp
-    val iconModifier = Modifier.size(iconSize)
-        .then(if (active) Modifier.gradientMask(palette.accentBrush()) else Modifier)
+    val color = if (horizontalLabels && active) tokens.colors.textPrimary else if (active) tokens.colors.accent else tokens.colors.textMuted
+    val iconModifier = Modifier.size(if (horizontalLabels) iconSize - 10.dp else iconSize)
+        .then(if (active && !horizontalLabels) Modifier.gradientMask(palette.accentBrush()) else Modifier)
     val iconTint = if (active) Color.White else color
     Row(
         modifier = modifier.padding(4.dp).clearAndSetSemantics {},
@@ -74,27 +78,10 @@ internal fun JellyTabRow(
                 },
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(iconSize).graphicsLayer { translationY = 2.dp.toPx() * labelFraction }) {
-                        when {
-                            item.icon != null -> Icon(item.icon, null, iconModifier, tint = iconTint)
-                            item.drawable != null -> Icon(painterResource(item.drawable), null, iconModifier, tint = iconTint)
-                        }
-                    }
-                    Box(Modifier.height(labelHeight * labelFraction).fillMaxWidth().clipToBounds().alpha(labelFraction)) {
-                        Text(
-                            text = item.label,
-                            color = color,
-                            style = TextStyle(
-                                fontSize = if (compactSize) 12.sp else 13.sp,
-                                lineHeight = if (compactSize) 14.sp else 16.sp,
-                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                textAlign = TextAlign.Center,
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                        )
+                JellyTabContent(item.label, labelFraction, compactSize, horizontalLabels, iconSize, color, active) {
+                    when {
+                        item.icon != null -> Icon(item.icon, null, iconModifier, tint = iconTint)
+                        item.drawable != null -> Icon(painterResource(item.drawable), null, iconModifier, tint = iconTint)
                     }
                 }
             }
@@ -109,6 +96,8 @@ internal fun JellyTabTargets(
     motion: JellyMotion,
     compactSize: Boolean,
     modifier: Modifier,
+    horizontalLabels: Boolean = false,
+    iconSize: Dp = if (compactSize) 24.dp else 28.dp,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Row(modifier.padding(horizontal = 4.dp).selectableGroup()) {
@@ -136,7 +125,7 @@ internal fun JellyTabTargets(
                 contentAlignment = Alignment.Center,
             ) {
                 if (item.content != null) {
-                    Column(
+                    Box(
                         modifier = Modifier.graphicsLayer {
                             val frame = motion.frame
                             val coverage = (1f - abs(frame.position - visualIndex)).coerceIn(0f, 1f)
@@ -144,18 +133,83 @@ internal fun JellyTabTargets(
                             scaleX = scale
                             scaleY = scale
                         },
-                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(
-                            Modifier
-                                .then(if (compactSize) Modifier.size(24.dp) else Modifier)
-                                .graphicsLayer { translationY = 2.dp.toPx() * labelFraction },
-                        ) {
+                        JellyTabContent(item.label, labelFraction, compactSize, horizontalLabels, iconSize, Color.Transparent, false) {
                             item.content(onClick)
                         }
-                        Spacer(Modifier.height((if (compactSize) 14.dp else 16.dp) * labelFraction))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JellyTabContent(
+    label: String,
+    labelFraction: Float,
+    compactSize: Boolean,
+    horizontal: Boolean,
+    iconSize: Dp,
+    color: Color,
+    active: Boolean,
+    icon: @Composable () -> Unit,
+) {
+    val labelStyle = if (horizontal) {
+        MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+    } else {
+        TextStyle(
+            fontSize = if (compactSize) 12.sp else 13.sp,
+            lineHeight = if (compactSize) 14.sp else 16.sp,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+        )
+    }
+    val iconContent: @Composable () -> Unit = {
+        Box(
+            Modifier.size(iconSize).graphicsLayer {
+                if (!horizontal) translationY = 2.dp.toPx() * labelFraction
+            },
+            contentAlignment = Alignment.Center,
+        ) { icon() }
+    }
+    val labelContent: @Composable () -> Unit = {
+        Text(
+            text = label,
+            color = color,
+            style = labelStyle,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.alpha(labelFraction)
+                .then(if (horizontal) Modifier else Modifier.fillMaxWidth().padding(horizontal = 4.dp)),
+        )
+    }
+    if (horizontal) {
+        Layout(
+            modifier = Modifier.padding(horizontal = 8.dp).clipToBounds(),
+            content = {
+                iconContent()
+                labelContent()
+            },
+        ) { measurables, constraints ->
+            val iconPlaceable = measurables[0].measure(constraints.copy(minWidth = 0, minHeight = 0))
+            val gap = 6.dp.roundToPx()
+            val labelPlaceable = measurables[1].measure(
+                constraints.copy(minWidth = 0, minHeight = 0, maxWidth = (constraints.maxWidth - iconPlaceable.width - gap).coerceAtLeast(0)),
+            )
+            val width = iconPlaceable.width + ((labelPlaceable.width + gap) * labelFraction).roundToInt()
+            val height = maxOf(iconPlaceable.height, labelPlaceable.height)
+            layout(constraints.constrainWidth(width), constraints.constrainHeight(height)) {
+                iconPlaceable.placeRelative(0, (height - iconPlaceable.height) / 2)
+                labelPlaceable.placeRelative(iconPlaceable.width + gap, (height - labelPlaceable.height) / 2)
+            }
+        }
+    } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            iconContent()
+            Box(Modifier.height((if (compactSize) 14.dp else 16.dp) * labelFraction).fillMaxWidth().clipToBounds()) {
+                labelContent()
             }
         }
     }

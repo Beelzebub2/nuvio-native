@@ -57,7 +57,7 @@ import nuvio.composeapp.generated.resources.settings_appearance_amoled_black
 import nuvio.composeapp.generated.resources.settings_appearance_amoled_description
 import nuvio.composeapp.generated.resources.settings_appearance_continue_watching_description
 import nuvio.composeapp.generated.resources.settings_appearance_desktop_navigation
-import nuvio.composeapp.generated.resources.settings_appearance_desktop_navigation_bottom_bar
+import nuvio.composeapp.generated.resources.settings_appearance_desktop_navigation_top_bar
 import nuvio.composeapp.generated.resources.settings_appearance_desktop_navigation_sheet_title
 import nuvio.composeapp.generated.resources.settings_appearance_hover_preview_description
 import nuvio.composeapp.generated.resources.settings_appearance_liquid_glass
@@ -154,7 +154,7 @@ internal fun LazyListScope.appearanceSettingsContent(
                     val desktopNavDescription = if (isTablet) {
                         stringResource(desktopNavigationLayout.labelRes)
                     } else {
-                        stringResource(Res.string.settings_appearance_desktop_navigation_bottom_bar)
+                        stringResource(Res.string.settings_appearance_desktop_navigation_top_bar)
                     }
                     SettingsNavigationRow(
                         title = stringResource(Res.string.settings_appearance_desktop_navigation),
@@ -172,7 +172,7 @@ internal fun LazyListScope.appearanceSettingsContent(
                     val isSidebarActive = isDesktop && isTablet && desktopNavigationLayout == DesktopNavigationLayout.Sidebar
                     val styleTitle = if (isSidebarActive) {
                         stringResource(Res.string.settings_appearance_sidebar_style)
-                    } else if (isDesktop && isTablet) {
+                    } else if (isDesktop) {
                         stringResource(Res.string.settings_appearance_top_bar_style)
                     } else {
                         stringResource(Res.string.settings_appearance_nav_bar_style)
@@ -497,7 +497,7 @@ private fun NavBarStyleBottomSheet(
     val isSidebarActive = isDesktop && isTablet && desktopNavigationLayout == DesktopNavigationLayout.Sidebar
     val availableStyles = remember(isDesktop, isTablet) {
         when {
-            isDesktop && isTablet -> listOf(NavBarStyle.ADAPTIVE, NavBarStyle.EXPANDED, NavBarStyle.COMPACT)
+            isDesktop -> listOf(NavBarStyle.ADAPTIVE, NavBarStyle.EXPANDED, NavBarStyle.COMPACT)
             isIos -> NavBarStyle.entries.filter { it != NavBarStyle.CLASSIC }
             else -> NavBarStyle.entries
         }

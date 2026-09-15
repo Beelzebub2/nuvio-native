@@ -109,7 +109,7 @@ internal class JellyMotion(initialIndex: Int, count: Int) {
     }
 
     fun finish(): Int {
-        val index = if (movedDistance < 4 && tabWidth > 0) indexAt(downX)
+        val index = if (movedDistance < 4 && tabWidth > 0) dragStartTarget.toInt().coerceIn(0, maxIndex)
         else floor(target + 0.5).toInt().coerceIn(0, maxIndex)
         dragging = false
         panel.velocity = 0.0

@@ -3,9 +3,10 @@ package com.nuvio.app.core.ui
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.nuvio.app.features.settings.NavBarStyle
 import dev.chrisbanes.haze.HazeState
 
-internal actual val floatingNavigationGlowSupported: Boolean = false
+internal actual val floatingNavigationGlowSupported: Boolean = true
 
 @Composable
 internal actual fun FloatingNavigationBar(
@@ -17,37 +18,13 @@ internal actual fun FloatingNavigationBar(
     compactSize: Boolean,
     glowEnabled: Boolean,
 ) {
-    NuvioNavigationBar(
+    DesktopNavigationBar(
+        items = items,
         modifier = modifier,
         scrollState = scrollState,
         hazeState = hazeState,
         contentPadding = contentPadding,
-        compactSize = compactSize,
-    ) {
-        items.forEach { item ->
-            when {
-                item.icon != null -> NavItem(
-                    selected = item.selected,
-                    onClick = item.onClick ?: {},
-                    icon = item.icon,
-                    contentDescription = item.label,
-                    label = item.label,
-                )
-                item.drawable != null -> NavItem(
-                    selected = item.selected,
-                    onClick = item.onClick ?: {},
-                    icon = item.drawable,
-                    contentDescription = item.label,
-                    label = item.label,
-                )
-                else -> NavItem(
-                    selected = item.selected,
-                    onClick = item.onClick ?: {},
-                    label = item.label,
-                ) {
-                    item.content?.invoke(item.onClick)
-                }
-            }
-        }
-    }
+        navBarStyle = if (compactSize || scrollState?.labelVisibility == 0f) NavBarStyle.COMPACT else NavBarStyle.EXPANDED,
+        glowEnabled = glowEnabled,
+    )
 }

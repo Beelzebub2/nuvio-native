@@ -1275,6 +1275,11 @@ kotlin {
             implementation(libs.supabase.storage)
             implementation(libs.reorderable)
         }
+        val desktopTest by getting {
+            dependencies {
+                implementation(compose.desktop.uiTestJUnit4)
+            }
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }

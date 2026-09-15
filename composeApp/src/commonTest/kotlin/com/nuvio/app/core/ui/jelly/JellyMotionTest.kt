@@ -62,6 +62,17 @@ class JellyMotionTest {
     }
 
     @Test
+    fun `resizing during a press keeps the tapped destination`() {
+        val motion = JellyMotion(0, 4)
+        motion.resize(200f, 48f, 4)
+        motion.begin(175f, 24f)
+        motion.resize(456f, 48f, 4)
+        assertEquals(3, motion.finish())
+        settle(motion)
+        assertEquals(3f, motion.frame.position)
+    }
+
+    @Test
     fun `cancel restores controlled tab and settles every distortion`() {
         val motion = JellyMotion(1, 4)
         motion.resize(320f, 64f, 4)
