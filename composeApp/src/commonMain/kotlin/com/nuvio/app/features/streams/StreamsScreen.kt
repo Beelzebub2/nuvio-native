@@ -320,7 +320,7 @@ fun StreamsScreen(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                .padding(start = 12.dp, top = 8.dp),
+                .padding(start = 12.dp, top = if (isDesktop) 28.dp else 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             NuvioBackButton(
