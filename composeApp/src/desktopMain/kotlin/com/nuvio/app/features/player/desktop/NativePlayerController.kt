@@ -459,9 +459,15 @@ internal class NativePlayerController(
         return NativePlayerBridge.reparentSurface(current, pointer)
     }
 
+    fun layoutNativeSubviews() {
+        val current = handle.takeIf { it != 0L } ?: return
+        NativePlayerBridge.layoutNativeSubviews(current)
+    }
+
     private fun requestKeyboardFocus() {
         SwingUtilities.invokeLater {
             if (!isHostDisplayable()) return@invokeLater
+            if (DesktopPlayerPictureInPicture.isEnabled) return@invokeLater
             host.requestFocusInWindow()
             val current = handle.takeIf { it != 0L } ?: return@invokeLater
             NativePlayerBridge.requestFocus(current)
