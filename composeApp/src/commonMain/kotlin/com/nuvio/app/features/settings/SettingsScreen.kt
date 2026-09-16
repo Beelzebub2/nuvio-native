@@ -118,13 +118,25 @@ private fun SettingsPage.isEnabledByPolicy(): Boolean =
     }
 
 @Composable
+private fun settingsPageTitles(): Map<SettingsPage, String> {
+    val titles = mutableMapOf<SettingsPage, String>()
+    SettingsPage.entries.forEach { page -> titles[page] = stringResource(page.titleRes) }
+    return titles
+}
+
+@Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     topChromePadding: Dp? = null,
+    initialPageName: String = SettingsPage.Root.name,
     rootActionRequests: Flow<Unit> = emptyFlow(),
     requestedPageName: String? = null,
     onRequestedPageConsumed: () -> Unit = {},
     rootActionsEnabled: Boolean = true,
+    isSelectedTab: Boolean = true,
+    onNavigatePage: ((pageName: String, title: String) -> Unit)? = null,
+    onExternalBack: (() -> Unit)? = null,
+    showInternalHeader: Boolean = true,
     onSwitchProfile: (() -> Unit)? = null,
     onHomescreenClick: () -> Unit = {},
     onMetaScreenClick: () -> Unit = {},
@@ -143,6 +155,7 @@ fun SettingsScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         val screenActive = LocalScreenActive.current
+        val pageStateHolder = rememberSaveableStateHolder()
         val playerSettingsUiState by remember {
             PlayerSettingsRepository.ensureLoaded()
             PlayerSettingsRepository.uiState
@@ -244,8 +257,9 @@ fun SettingsScreen(
             HomeCatalogSettingsRepository.syncCollections(collections)
         }
 
-        var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Root.name) }
+        var currentPage by rememberSaveable(initialPageName) { mutableStateOf(initialPageName) }
         val scrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+        val pageTitles = if (onNavigatePage != null) settingsPageTitles() else emptyMap()
         val page = remember(currentPage) {
             runCatching { SettingsPage.valueOf(currentPage) }
                 .getOrDefault(SettingsPage.Root)
@@ -253,6 +267,44 @@ fun SettingsScreen(
                 ?: SettingsPage.Root
         }
         val previousPage = page.previousPage()
+
+        fun openPage(targetPage: SettingsPage) {
+            if (!targetPage.isEnabledByPolicy()) return
+            val externalNavigator = onNavigatePage
+            if (externalNavigator == null) {
+                currentPage = targetPage.name
+                return
+            }
+            if (targetPage == SettingsPage.Root && onExternalBack != null) {
+                onExternalBack()
+                return
+            }
+            externalNavigator(targetPage.name, pageTitles.getValue(targetPage))
+        }
+
+        fun navigateBack() {
+            val parentPage = previousPage ?: return
+            if (onNavigatePage != null && onExternalBack != null) {
+                onExternalBack()
+            } else {
+                currentPage = parentPage.name
+            }
+        }
+
+        val openHomescreen = if (onNavigatePage != null) ({ openPage(SettingsPage.Homescreen) }) else onHomescreenClick
+        val openMetaScreen = if (onNavigatePage != null) ({ openPage(SettingsPage.MetaScreen) }) else onMetaScreenClick
+        val openContinueWatching = if (onNavigatePage != null) {
+            { openPage(SettingsPage.ContinueWatching) }
+        } else onContinueWatchingClick
+        val openAddons = if (onNavigatePage != null) ({ openPage(SettingsPage.Addons) }) else onAddonsClick
+        val openPlugins = if (onNavigatePage != null) ({ openPage(SettingsPage.Plugins) }) else onPluginsClick
+        val openAccount = if (onNavigatePage != null) ({ openPage(SettingsPage.Account) }) else onAccountClick
+        val openSupportersContributors = if (onNavigatePage != null) {
+            { openPage(SettingsPage.SupportersContributors) }
+        } else onSupportersContributorsClick
+        val openLicensesAttributions = if (onNavigatePage != null) {
+            { openPage(SettingsPage.LicensesAttributions) }
+        } else onLicensesAttributionsClick
 
         LaunchedEffect(page, currentPage) {
             if (page.name != currentPage) {
@@ -265,7 +317,7 @@ fun SettingsScreen(
             rootActionRequests.collect {
                 val pageToOpen = page.previousPage()
                 if (pageToOpen != null) {
-                    currentPage = pageToOpen.name
+                    navigateBack()
                 } else {
                     scrollToTopRequests.tryEmit(Unit)
                 }
@@ -280,21 +332,25 @@ fun SettingsScreen(
                 onRequestedPageConsumed()
                 return@ScreenActivityEffect
             }
-            currentPage = targetPage.name
+            openPage(targetPage)
             onRequestedPageConsumed()
         }
 
         PlatformBackHandler(
-            enabled = screenActive && rootActionsEnabled && previousPage != null,
-            onBack = { previousPage?.let { currentPage = it.name } },
+            enabled = screenActive && previousPage != null && (rootActionsEnabled || onExternalBack != null),
+            onBack = ::navigateBack,
         )
 
+        if (isSelectedTab || page == SettingsPage.Root) {
+            pageStateHolder.SaveableStateProvider("content") {
         if (maxWidth >= 960.dp) {
             TabletSettingsScreen(
                 page = page,
                 topChromePadding = topChromePadding,
                 scrollToTopRequests = scrollToTopRequests,
-                onPageChange = { currentPage = it.name },
+                onPageChange = ::openPage,
+                onNavigateBack = ::navigateBack,
+                showInternalHeader = showInternalHeader,
                 showLoadingOverlay = playerSettingsUiState.showLoadingOverlay,
                 holdToSpeedEnabled = playerSettingsUiState.holdToSpeedEnabled,
                 holdToSpeedValue = playerSettingsUiState.holdToSpeedValue,
@@ -348,8 +404,8 @@ fun SettingsScreen(
                 posterCardStyleUiState = posterCardStyleUiState,
                 onSwitchProfile = onSwitchProfile,
                 onDownloadsClick = onDownloadsClick,
-                onSupportersContributorsClick = onSupportersContributorsClick,
-                onLicensesAttributionsClick = onLicensesAttributionsClick,
+                onSupportersContributorsClick = openSupportersContributors,
+                onLicensesAttributionsClick = openLicensesAttributions,
                 onCheckForUpdatesClick = onCheckForUpdatesClick,
                 onTestUpdateBannerClick = onTestUpdateBannerClick,
                 onCollectionsClick = onCollectionsClick,
@@ -360,7 +416,9 @@ fun SettingsScreen(
                 isTabletLayout = maxWidth >= 768.dp,
                 topChromePadding = topChromePadding,
                 scrollToTopRequests = scrollToTopRequests,
-                onPageChange = { currentPage = it.name },
+                onPageChange = ::openPage,
+                onNavigateBack = ::navigateBack,
+                showInternalHeader = showInternalHeader,
                 showLoadingOverlay = playerSettingsUiState.showLoadingOverlay,
                 holdToSpeedEnabled = playerSettingsUiState.holdToSpeedEnabled,
                 holdToSpeedValue = playerSettingsUiState.holdToSpeedValue,
@@ -413,19 +471,21 @@ fun SettingsScreen(
                 continueWatchingPreferencesUiState = continueWatchingPreferencesUiState,
                 posterCardStyleUiState = posterCardStyleUiState,
                 onSwitchProfile = onSwitchProfile,
-                onHomescreenClick = onHomescreenClick,
-                onMetaScreenClick = onMetaScreenClick,
-                onContinueWatchingClick = onContinueWatchingClick,
-                onAddonsClick = onAddonsClick,
-                onPluginsClick = onPluginsClick,
+                onHomescreenClick = openHomescreen,
+                onMetaScreenClick = openMetaScreen,
+                onContinueWatchingClick = openContinueWatching,
+                onAddonsClick = openAddons,
+                onPluginsClick = openPlugins,
                 onDownloadsClick = onDownloadsClick,
-                onAccountClick = onAccountClick,
-                onSupportersContributorsClick = onSupportersContributorsClick,
-                onLicensesAttributionsClick = onLicensesAttributionsClick,
+                onAccountClick = openAccount,
+                onSupportersContributorsClick = openSupportersContributors,
+                onLicensesAttributionsClick = openLicensesAttributions,
                 onCheckForUpdatesClick = onCheckForUpdatesClick,
                 onTestUpdateBannerClick = onTestUpdateBannerClick,
                 onCollectionsClick = onCollectionsClick,
             )
+        }
+            }
         }
     }
 }
@@ -437,6 +497,8 @@ private fun MobileSettingsScreen(
     topChromePadding: Dp? = null,
     scrollToTopRequests: Flow<Unit>,
     onPageChange: (SettingsPage) -> Unit,
+    onNavigateBack: () -> Unit,
+    showInternalHeader: Boolean,
     showLoadingOverlay: Boolean,
     holdToSpeedEnabled: Boolean,
     holdToSpeedValue: Float,
@@ -582,13 +644,15 @@ private fun MobileSettingsScreen(
             topPadding = if (topChromePadding != null) 0.dp else null,
             listState = listState,
         ) {
-            stickyHeader {
-                val previousPage = page.previousPage()
-                NuvioScreenHeader(
-                    title = stringResource(page.titleRes),
-                    topPadding = topChromePadding,
-                    onBack = previousPage?.let { { onPageChange(it) } },
-                )
+            if (showInternalHeader) {
+                stickyHeader {
+                    val previousPage = page.previousPage()
+                    NuvioScreenHeader(
+                        title = stringResource(page.titleRes),
+                        topPadding = topChromePadding,
+                        onBack = previousPage?.let { { onNavigateBack() } },
+                    )
+                }
             }
 
             when (page) {
@@ -828,6 +892,8 @@ private fun TabletSettingsScreen(
     topChromePadding: Dp? = null,
     scrollToTopRequests: Flow<Unit>,
     onPageChange: (SettingsPage) -> Unit,
+    onNavigateBack: () -> Unit,
+    showInternalHeader: Boolean,
     showLoadingOverlay: Boolean,
     holdToSpeedEnabled: Boolean,
     holdToSpeedValue: Float,
@@ -1044,21 +1110,23 @@ private fun TabletSettingsScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
-                        item {
-                            val previousPage = page.previousPage()
-                            TabletPageHeader(
-                                title = if (page == SettingsPage.Root) {
-                                    if (settingsSearchQuery.isBlank()) {
-                                        stringResource(activeCategory.labelRes)
+                        if (showInternalHeader) {
+                            item {
+                                val previousPage = page.previousPage()
+                                TabletPageHeader(
+                                    title = if (page == SettingsPage.Root) {
+                                        if (settingsSearchQuery.isBlank()) {
+                                            stringResource(activeCategory.labelRes)
+                                        } else {
+                                            stringResource(Res.string.compose_settings_page_root)
+                                        }
                                     } else {
-                                        stringResource(Res.string.compose_settings_page_root)
-                                    }
-                                } else {
-                                    stringResource(page.titleRes)
-                                },
-                                showBack = previousPage != null,
-                                onBack = { previousPage?.let(onPageChange) },
-                            )
+                                        stringResource(page.titleRes)
+                                    },
+                                    showBack = previousPage != null,
+                                    onBack = { if (previousPage != null) onNavigateBack() },
+                                )
+                            }
                         }
                         when (page) {
                             SettingsPage.Root -> {

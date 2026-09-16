@@ -496,6 +496,10 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
 
         launch {
             val imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
+                ?: (metaUiState.meta ?: playerMeta)
+                    ?.takeIf { it.id == parentMetaId }
+                    ?.imdbId
+                    ?.takeIf { it.startsWith("tt") }
             val intervals = when (lookup) {
                 is SkipIntervalLookup.Imdb -> SkipIntroRepository.getSkipIntervals(
                     imdbId = lookup.imdbId,

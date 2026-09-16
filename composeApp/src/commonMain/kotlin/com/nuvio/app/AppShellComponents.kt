@@ -286,6 +286,8 @@ internal fun AppTabHost(
                     requestedPageName = state.requestedSettingsPageName,
                     onRequestedPageConsumed = actions.onRequestedSettingsPageConsumed,
                     rootActionsEnabled = state.tabsRouteActiveState.value,
+                    isSelectedTab = selectedTab == AppScreenTab.Settings,
+                    onNavigatePage = actions.onSettingsPageClick,
                     onSwitchProfile = actions.onSwitchProfile,
                     onHomescreenClick = actions.onHomescreenSettingsClick,
                     onMetaScreenClick = actions.onMetaScreenSettingsClick,

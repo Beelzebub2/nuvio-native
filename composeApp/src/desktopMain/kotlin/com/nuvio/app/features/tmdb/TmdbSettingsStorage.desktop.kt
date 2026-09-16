@@ -12,6 +12,7 @@ import kotlinx.serialization.json.put
 
 internal actual object TmdbSettingsStorage {
     private const val enabledKey = "tmdb_enabled"
+    private const val apiKeyKey = "tmdb_api_key"
     private const val languageKey = "tmdb_language"
     private const val useTrailersKey = "tmdb_use_trailers"
     private const val useArtworkKey = "tmdb_use_artwork"
@@ -45,6 +46,8 @@ internal actual object TmdbSettingsStorage {
 
     actual fun loadEnabled(): Boolean? = loadBoolean(enabledKey)
     actual fun saveEnabled(enabled: Boolean) = saveBoolean(enabledKey, enabled)
+    actual fun loadApiKey(): String? = loadString(apiKeyKey)
+    actual fun saveApiKey(apiKey: String) = saveString(apiKeyKey, apiKey)
     actual fun loadLanguage(): String? = loadString(languageKey)
     actual fun saveLanguage(language: String) = saveString(languageKey, language)
     actual fun loadUseTrailers(): Boolean? = loadBoolean(useTrailersKey)

@@ -483,7 +483,8 @@ val macosNotaryAppSpecificPassword = macosNotaryPassword
     ?.takeUnless { it.startsWith("@keychain:", ignoreCase = true) }
 
 val appVersionConfigFile = rootProject.file("iosApp/Configuration/Version.xcconfig")
-val releaseAppVersionName = readXcconfigValue(appVersionConfigFile, "MARKETING_VERSION")
+val releaseAppVersionName = providers.gradleProperty("nuvio.app.versionName").orNull
+    ?: readXcconfigValue(appVersionConfigFile, "MARKETING_VERSION")
     ?: error("MARKETING_VERSION is missing from ${appVersionConfigFile.path}")
 val releaseAppVersionCode = readXcconfigValue(appVersionConfigFile, "CURRENT_PROJECT_VERSION")
     ?.toIntOrNull()
