@@ -2628,6 +2628,7 @@ static LRESULT CALLBACK pipWindowSubclassProc(HWND hwnd, UINT message, WPARAM wP
                     player->syncNativeBounds(w, h);
                 }
                 player->notifyNativeResizeEnded();
+                player->requestFocus();
             }
         }
         return res;

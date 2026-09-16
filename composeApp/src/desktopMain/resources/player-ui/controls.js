@@ -3123,6 +3123,40 @@ let isSpeedBoosting = false;
 let speedBoostHoldTimer = null;
 let isHoldSpeedActive = false;
 let suppressNextRootClick = false;
+let suppressClickTimer = null;
+
+const setSuppressNextRootClick = () => {
+  suppressNextRootClick = true;
+  if (suppressClickTimer) {
+    window.clearTimeout(suppressClickTimer);
+  }
+  suppressClickTimer = window.setTimeout(() => {
+    suppressNextRootClick = false;
+    suppressClickTimer = null;
+  }, 250);
+};
+
+const clearSuppressNextRootClick = () => {
+  suppressNextRootClick = false;
+  if (suppressClickTimer) {
+    window.clearTimeout(suppressClickTimer);
+    suppressClickTimer = null;
+  }
+};
+
+window.nuvioNativeViewportChanged = () => {
+  root.classList.add("native-resizing");
+};
+
+window.nuvioNativeResizeEnded = () => {
+  pipPointerDown = false;
+  clearSuppressNextRootClick();
+  root.classList.remove("native-resizing");
+  if (document.body.style.cursor && document.body.style.cursor.includes("resize")) {
+    document.body.style.cursor = "";
+  }
+};
+
 let rootPointerStartX = 0;
 let rootPointerStartY = 0;
 let pipPointerStartX = 0;
@@ -3270,7 +3304,7 @@ window.addEventListener("pointermove", event => {
     const dy = Math.abs(event.clientY - pipPointerStartY);
     if (dx > 6 || dy > 6) {
       pipPointerDown = false;
-      suppressNextRootClick = true;
+      setSuppressNextRootClick();
       if (event.target && event.target.releasePointerCapture) {
         try { event.target.releasePointerCapture(event.pointerId); } catch (_) {}
       }
@@ -3287,12 +3321,14 @@ window.addEventListener("pointerup", () => {
 
 window.addEventListener("pointercancel", () => {
   pipPointerDown = false;
+  clearSuppressNextRootClick();
   clearSpeedBoostHoldTimer();
   preventClickAndStopSpeedBoost();
 });
 
 window.addEventListener("blur", () => {
   pipPointerDown = false;
+  clearSuppressNextRootClick();
   if (document.body.style.cursor && document.body.style.cursor.includes("resize")) {
     document.body.style.cursor = "";
   }
@@ -3302,7 +3338,7 @@ root.addEventListener("click", event => {
   if (event.button !== 0) return;
   if (isPipLocked) return;
   if (suppressNextRootClick) {
-    suppressNextRootClick = false;
+    clearSuppressNextRootClick();
     window.clearTimeout(tapTimer);
     event.stopPropagation();
     event.preventDefault();
@@ -3326,7 +3362,7 @@ root.addEventListener("pointerdown", event => {
     if (edge) {
       event.preventDefault();
       event.stopPropagation();
-      suppressNextRootClick = true;
+      setSuppressNextRootClick();
       pipPointerDown = false;
       root.classList.add("native-resizing");
       if (event.target && event.target.releasePointerCapture) {

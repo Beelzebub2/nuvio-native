@@ -25,7 +25,7 @@ internal object DesktopPlayerPictureInPicture {
 
     private var host: NativePlayerHost? = null
     private var controller: NativePlayerController? = null
-    private var pipWindow: DesktopPlayerPipWindow? = null
+    internal var pipWindow: DesktopPlayerPipWindow? = null
     private var windowTitle = ""
     private var lastVideoSize = IntSize.Zero
     private var transition = false
@@ -97,6 +97,7 @@ internal object DesktopPlayerPictureInPicture {
             ownerWindow = null,
             onCloseRequested = ::clear,
             onResized = { controller?.layoutNativeSubviews() },
+            onFocusGained = { controller?.requestKeyboardFocus() },
         ).apply {
             aspectRatio = videoAspectRatio()
             updateWindowTitle(windowTitle)

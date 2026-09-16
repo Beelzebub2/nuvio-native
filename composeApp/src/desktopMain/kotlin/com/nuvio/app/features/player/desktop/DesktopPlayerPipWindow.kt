@@ -17,6 +17,7 @@ internal class DesktopPlayerPipWindow(
     ownerWindow: Window?,
     private val onCloseRequested: () -> Unit,
     private val onResized: () -> Unit = {},
+    private val onFocusGained: () -> Unit = {},
 ) : JDialog(ownerWindow) {
     /** Heavyweight host required by the native HWND/NSView reparenting bridge. */
     val videoHolderPanel = Panel(BorderLayout())
@@ -38,6 +39,11 @@ internal class DesktopPlayerPipWindow(
         addWindowListener(object : WindowAdapter() {
             override fun windowClosing(event: WindowEvent) {
                 onCloseRequested()
+            }
+        })
+        addWindowFocusListener(object : WindowAdapter() {
+            override fun windowGainedFocus(event: WindowEvent) {
+                onFocusGained()
             }
         })
         videoHolderPanel.addComponentListener(object : ComponentAdapter() {
