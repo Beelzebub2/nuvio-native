@@ -182,7 +182,7 @@ fun DetailActionButtons(
                     color = if (actionsExpanded) {
                         MaterialTheme.colorScheme.onBackground
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
+                        MaterialTheme.colorScheme.surfaceVariant
                     },
                     contentColor = if (actionsExpanded) {
                         MaterialTheme.colorScheme.background
