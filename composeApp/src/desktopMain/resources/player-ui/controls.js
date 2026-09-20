@@ -3327,8 +3327,6 @@ document.addEventListener("keydown", event => {
     event.preventDefault();
     if (state.isInPip) {
       send("pictureInPicture", 0);
-    } else if (state.isFullscreen) {
-      togglePlayerFullscreen();
     } else {
       send("back", 0);
     }
