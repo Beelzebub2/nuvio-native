@@ -3,6 +3,7 @@
 #endif
 #include <windows.h>
 #include <dwmapi.h>
+#include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
 #include <jni.h>
@@ -60,6 +61,13 @@ namespace {
 HMODULE gModule = nullptr;
 constexpr UINT WM_NUVIO_TASK = WM_APP + 0x4E50;
 constexpr UINT_PTR NUVIO_TIMER_ID = 0x4E50;
+
+// Caps on waiting for the player's own UI thread during teardown. Exceeding these means that
+// thread is wedged; shutdown gives up rather than blocking the caller forever.
+constexpr UINT kUiTaskTimeoutMs = 2000;
+constexpr UINT kShutdownJoinTimeoutMs = 3000;
+constexpr double kMaxVolumePercent = 200.0;
+
 const wchar_t *kMessageWindowClass = L"NuvioPlayerBridgeMessageWindow";
 const wchar_t *kContainerWindowClass = L"NuvioPlayerBridgeContainerWindow";
 constexpr DWORD kDwmwaUseImmersiveDarkMode = 20;
@@ -76,6 +84,82 @@ struct BorderlessFullscreenState {
 
 std::mutex gBorderlessFullscreenMutex;
 std::unordered_map<HWND, BorderlessFullscreenState> gBorderlessFullscreenStates;
+
+// Remembered so the dark chrome can be restored after leaving borderless fullscreen:
+// re-adding WS_CAPTION otherwise flashes a default white title bar.
+struct DwmChromeColors {
+    bool darkMode = false;
+    COLORREF caption = 0;
+    COLORREF border = 0;
+    COLORREF text = 0;
+};
+
+std::mutex gDwmChromeMutex;
+std::unordered_map<HWND, DwmChromeColors> gDwmChromeColors;
+
+struct DisplaySleepInhibitRequest {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool stop = false;
+};
+
+std::mutex gDisplaySleepInhibitMutex;
+std::shared_ptr<DisplaySleepInhibitRequest> gDisplaySleepInhibitRequest;
+std::thread *gDisplaySleepInhibitThread = nullptr;
+
+void displaySleepInhibitThreadMain(std::shared_ptr<DisplaySleepInhibitRequest> request) {
+    SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+
+    std::unique_lock<std::mutex> lock(request->mutex);
+    request->condition.wait(lock, [request] { return request->stop; });
+    lock.unlock();
+
+    SetThreadExecutionState(ES_CONTINUOUS);
+}
+
+bool setDisplaySleepInhibited(bool inhibited) {
+    if (inhibited) {
+        std::lock_guard<std::mutex> stateLock(gDisplaySleepInhibitMutex);
+        if (gDisplaySleepInhibitThread != nullptr) return true;
+
+        auto request = std::make_shared<DisplaySleepInhibitRequest>();
+        try {
+            gDisplaySleepInhibitThread = new std::thread(displaySleepInhibitThreadMain, request);
+            gDisplaySleepInhibitRequest = request;
+            return true;
+        } catch (...) {
+            gDisplaySleepInhibitRequest.reset();
+            return false;
+        }
+    }
+
+    std::shared_ptr<DisplaySleepInhibitRequest> request;
+    std::thread *threadToJoin = nullptr;
+    {
+        std::lock_guard<std::mutex> stateLock(gDisplaySleepInhibitMutex);
+        if (gDisplaySleepInhibitThread == nullptr) return true;
+
+        request = gDisplaySleepInhibitRequest;
+        threadToJoin = gDisplaySleepInhibitThread;
+        gDisplaySleepInhibitThread = nullptr;
+        gDisplaySleepInhibitRequest.reset();
+    }
+
+    if (request) {
+        {
+            std::lock_guard<std::mutex> requestLock(request->mutex);
+            request->stop = true;
+        }
+        request->condition.notify_all();
+    }
+    if (threadToJoin != nullptr) {
+        if (threadToJoin->joinable()) {
+            threadToJoin->join();
+        }
+        delete threadToJoin;
+    }
+    return true;
+}
 
 std::wstring toWide(const std::string &value) {
     if (value.empty()) return std::wstring();
@@ -203,6 +287,23 @@ void applyDwmWindowChrome(HWND hwnd, bool darkMode, COLORREF captionColor, COLOR
     setDwmWindowAttribute(hwnd, kDwmwaCaptionColor, &captionColor, sizeof(captionColor));
     setDwmWindowAttribute(hwnd, kDwmwaBorderColor, &borderColor, sizeof(borderColor));
     setDwmWindowAttribute(hwnd, kDwmwaTextColor, &textColor, sizeof(textColor));
+
+    {
+        std::lock_guard<std::mutex> lock(gDwmChromeMutex);
+        gDwmChromeColors[hwnd] = DwmChromeColors{darkMode, captionColor, borderColor, textColor};
+    }
+}
+
+// Re-apply the previously stored dark chrome for a window (used after leaving fullscreen).
+void reapplyDwmWindowChrome(HWND hwnd) {
+    DwmChromeColors colors;
+    {
+        std::lock_guard<std::mutex> lock(gDwmChromeMutex);
+        auto it = gDwmChromeColors.find(hwnd);
+        if (it == gDwmChromeColors.end()) return;
+        colors = it->second;
+    }
+    applyDwmWindowChrome(hwnd, colors.darkMode, colors.caption, colors.border, colors.text);
 }
 
 void setBorderlessFullscreen(HWND hwnd, bool fullscreen, int x, int y, int width, int height) {
@@ -226,6 +327,12 @@ void setBorderlessFullscreen(HWND hwnd, bool fullscreen, int x, int y, int width
             ShowWindow(hwnd, SW_RESTORE);
         }
 
+        // Every step below (frame change, then the inset nudge) would otherwise repaint the window
+        // while Compose is still laid out at the old framed size, and those intermediate frames are
+        // what shows as a flash on the way into fullscreen. Suppress painting for the whole
+        // transition and draw exactly once at the end.
+        SendMessageW(hwnd, WM_SETREDRAW, FALSE, 0);
+
         LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
         LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         style &= ~(LONG_PTR)(WS_CAPTION | WS_THICKFRAME);
@@ -240,8 +347,25 @@ void setBorderlessFullscreen(HWND hwnd, bool fullscreen, int x, int y, int width
             fullscreenRect.top,
             fullscreenRect.right - fullscreenRect.left,
             fullscreenRect.bottom - fullscreenRect.top,
-            SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOACTIVATE
+            SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOREDRAW
         );
+
+        // Removing the caption/frame changes the client insets but NOT the outer window rect when
+        // the window was previously maximized (both are the full monitor). AWT only recomputes a
+        // top-level window's insets on an actual size change, so without one it keeps laying Compose
+        // out at the old, inset (framed) client size, leaving an unpainted strip on the right and
+        // bottom (the "white border"). Nudge the size by 1px to force AWT to recompute insets to
+        // zero and re-lay-out its children to fill the borderless client.
+        const int fsWidth = fullscreenRect.right - fullscreenRect.left;
+        const int fsHeight = fullscreenRect.bottom - fullscreenRect.top;
+        SetWindowPos(hwnd, nullptr, 0, 0, fsWidth, fsHeight - 1,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOREDRAW);
+        SetWindowPos(hwnd, nullptr, 0, 0, fsWidth, fsHeight,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOREDRAW);
+
+        SendMessageW(hwnd, WM_SETREDRAW, TRUE, 0);
+        reapplyDwmWindowChrome(hwnd);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
         return;
     }
 
@@ -269,6 +393,11 @@ void setBorderlessFullscreen(HWND hwnd, bool fullscreen, int x, int y, int width
         0,
         SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE
     );
+
+    // Re-adding the caption re-exposes a default (white) title bar; restore the dark chrome and
+    // force a non-client redraw before the placement change so it never flashes through.
+    reapplyDwmWindowChrome(hwnd);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
 
     state.placement.length = sizeof(WINDOWPLACEMENT);
     const bool restoreMaximized = state.placement.showCmd == SW_SHOWMAXIMIZED;
@@ -331,22 +460,27 @@ std::wstring moduleDirectory() {
     return path.substr(0, separator);
 }
 
-std::wstring tempUserDataDirectory() {
-    wchar_t tempPath[MAX_PATH] = {};
-    DWORD length = GetTempPathW(MAX_PATH, tempPath);
-    std::wstring result = length > 0 ? std::wstring(tempPath, tempPath + length) : L".\\";
-    if (!result.empty() && result.back() != L'\\' && result.back() != L'/') {
-        result.push_back(L'\\');
-    }
-    result += L"NuvioWebView2";
-    CreateDirectoryW(result.c_str(), nullptr);
-    return result;
-}
-
 std::string hresultMessage(const char *operation, HRESULT hr) {
     std::ostringstream builder;
     builder << operation << " failed: 0x" << std::hex << (unsigned long)hr;
     return builder.str();
+}
+
+std::wstring webViewUserDataDirectory() {
+    PWSTR localAppData = nullptr;
+    HRESULT result = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &localAppData);
+    if (FAILED(result) || !localAppData) {
+        if (localAppData) CoTaskMemFree(localAppData);
+        throw std::runtime_error(hresultMessage("SHGetKnownFolderPath", result));
+    }
+    std::wstring directory(localAppData);
+    CoTaskMemFree(localAppData);
+    directory += L"\\Nuvio\\WebView2";
+    int createResult = SHCreateDirectoryExW(nullptr, directory.c_str(), nullptr);
+    if (createResult != ERROR_SUCCESS && createResult != ERROR_ALREADY_EXISTS && createResult != ERROR_FILE_EXISTS) {
+        throw std::runtime_error("Failed to create WebView2 user data directory");
+    }
+    return directory;
 }
 
 struct MpvApi {
@@ -529,7 +663,7 @@ void runWebView2WarmupThread(std::string controlsUrl) {
         return;
     }
 
-    std::wstring userDataDir = tempUserDataDirectory();
+    std::wstring userDataDir = webViewUserDataDirectory();
     HRESULT envCallResult = CreateCoreWebView2EnvironmentWithOptions(
         nullptr,
         userDataDir.c_str(),
@@ -747,9 +881,41 @@ public:
         }
     }
 
+    // Waits a bounded time for a thread to finish, then gives up and detaches it. Shutdown must
+    // always complete: a thread that never returns must not strand the player's windows alive.
+    static void joinOrDetach(std::thread &thread) {
+        if (!thread.joinable()) return;
+        auto finished = std::make_shared<std::atomic_bool>(false);
+        std::thread waiter([&thread, finished]() {
+            thread.join();
+            finished->store(true);
+        });
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kShutdownJoinTimeoutMs);
+        while (!finished->load() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (finished->load()) {
+            waiter.join();
+        } else {
+            waiter.detach();
+        }
+    }
+
     void shutdown() {
         if (shuttingDown.exchange(true)) {
             return;
+        }
+
+        // Hide the player's window immediately, asynchronously, before anything below can block.
+        // If the UI thread has stopped pumping, the steps after this can stall and the window is
+        // then never destroyed, leaving a zombie child sitting over the AWT host that swallows
+        // every mouse and key event while video keeps playing. SWP_ASYNCWINDOWPOS posts rather
+        // than sends, so it cannot block on the stalled thread.
+        if (containerHwnd && IsWindow(containerHwnd)) {
+            SetWindowPos(
+                containerHwnd, nullptr, 0, 0, 0, 0,
+                SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
+            );
         }
 
         sendUiTask([self = shared_from_this()]() {
@@ -764,9 +930,8 @@ public:
                 mpvApi().wakeup(mpv);
             }
         }
-        if (eventThread.joinable()) {
-            eventThread.join();
-        }
+        // Bounded: if a thread will not finish we detach rather than block dispose forever.
+        joinOrDetach(eventThread);
         {
             std::lock_guard<std::mutex> lock(mpvMutex);
             if (mpv) {
@@ -774,8 +939,8 @@ public:
                 mpv = nullptr;
             }
         }
-        if (uiThread.joinable() && GetCurrentThreadId() != uiThreadId) {
-            uiThread.join();
+        if (GetCurrentThreadId() != uiThreadId) {
+            joinOrDetach(uiThread);
         }
 
         if (eventSink) {
@@ -827,6 +992,32 @@ public:
         });
     }
 
+    void beginWindowDrag() {
+        if (!containerHwnd) return;
+        HWND rootWindow = GetAncestor(containerHwnd, GA_ROOT);
+        if (!rootWindow || !IsWindow(rootWindow)) return;
+        ReleaseCapture();
+        POINT pt;
+        GetCursorPos(&pt);
+        PostMessageW(rootWindow, WM_NCLBUTTONDOWN, HTCAPTION, MAKELPARAM(pt.x, pt.y));
+    }
+
+    void reparentSurface(HWND newHost) {
+        if (!newHost || !IsWindow(newHost)) return;
+        sendUiTask([self = shared_from_this(), newHost]() {
+            if (self->shuttingDown.load() || !IsWindow(newHost) || !self->containerHwnd) return;
+            self->hostHwnd = newHost;
+            SetParent(self->containerHwnd, newHost);
+            LONG_PTR style = GetWindowLongPtrW(self->containerHwnd, GWL_STYLE);
+            style |= WS_CHILD;
+            style &= ~WS_POPUP;
+            SetWindowLongPtrW(self->containerHwnd, GWL_STYLE, style);
+            self->layoutNativeSubviews();
+            ShowWindow(self->containerHwnd, SW_SHOW);
+            self->focusNativeControls();
+        });
+    }
+
     void setPaused(bool paused) {
         std::lock_guard<std::mutex> lock(mpvMutex);
         if (!mpv) return;
@@ -870,19 +1061,19 @@ public:
         if (!mpv) return;
         double current = 100.0;
         mpvApi().getProperty(mpv, "volume", MPV_FORMAT_DOUBLE, &current);
-        double next = std::max(0.0, std::min(100.0, current + delta));
+        double next = std::max(0.0, std::min(kMaxVolumePercent, current + delta));
         mpvApi().setProperty(mpv, "volume", MPV_FORMAT_DOUBLE, &next);
     }
 
     void setVolume(double level) {
         std::lock_guard<std::mutex> lock(mpvMutex);
         if (!mpv) return;
-        double next = std::max(0.0, std::min(100.0, level * 100.0));
+        double next = std::max(0.0, std::min(kMaxVolumePercent, level * 100.0));
         mpvApi().setProperty(mpv, "volume", MPV_FORMAT_DOUBLE, &next);
     }
 
     double volume() {
-        return std::max(0.0, std::min(100.0, doubleProperty("volume", 100.0))) / 100.0;
+        return std::max(0.0, std::min(kMaxVolumePercent, doubleProperty("volume", 100.0))) / 100.0;
     }
 
     void setResizeMode(int mode) {
@@ -923,10 +1114,9 @@ public:
         bool paused = isPaused();
         bool eofReached = isEnded();
         bool idle = flagProperty("core-idle", true);
-        bool seeking = flagProperty("seeking", false);
         bool bufferingCache = flagProperty("paused-for-cache", false);
         bool fileReady = doubleProperty("duration", 0.0) > 0.0 || int64Property("track-list/count", 0) > 0;
-        return !fileReady || (idle && !paused && !eofReached) || seeking || bufferingCache;
+        return !fileReady || (idle && !paused && !eofReached) || bufferingCache;
     }
 
     bool isEnded() {
@@ -993,28 +1183,95 @@ public:
         double outlineSize,
         bool bold,
         double fontSize,
-        int subPos
+        int subPos,
+        bool useLibass,
+        bool stripSdh
     ) {
-        setStringProperty("sub-ass-override", "force");
-        setStringProperty("sub-color", textColor.empty() ? "#FFFFFFFF" : textColor);
-        setStringProperty("sub-back-color", backgroundColor.empty() ? "#00000000" : backgroundColor);
-        setStringProperty("sub-outline-color", outlineColor.empty() ? "#FF000000" : outlineColor);
-        setStringProperty(
-            "sub-border-style",
-            backgroundColor.rfind("#00", 0) == 0 ? "outline-and-shadow" : "opaque-box"
-        );
-        setStringProperty("sub-bold", bold ? "yes" : "no");
+        double size = std::max(18.0, std::min(96.0, fontSize));
+        int64_t position = std::max(0, std::min(150, subPos));
+        double scale = useLibass ? size / 54.0 : 1.0;
+        double outline = std::max(0.0, std::min(8.0, outlineSize));
+        std::string resolvedTextColor = textColor.empty() ? "#FFFFFFFF" : textColor;
+        std::string resolvedBackgroundColor = backgroundColor.empty() ? "#00000000" : backgroundColor;
+        std::string resolvedOutlineColor = outlineColor.empty() ? "#FF000000" : outlineColor;
 
-        {
+        bool modeChanged = !hasAppliedSubtitleStyle || appliedSubtitleUseLibass != useLibass;
+        bool sizeChanged = !hasAppliedSubtitleStyle || appliedSubtitleFontSize != size;
+        bool positionChanged = !hasAppliedSubtitleStyle || appliedSubtitlePosition != position;
+        bool boldChanged = !hasAppliedSubtitleStyle || appliedSubtitleBold != bold;
+        bool textColorChanged = !hasAppliedSubtitleStyle || appliedSubtitleTextColor != resolvedTextColor;
+        bool backgroundColorChanged =
+            !hasAppliedSubtitleStyle || appliedSubtitleBackgroundColor != resolvedBackgroundColor;
+        bool outlineColorChanged =
+            !hasAppliedSubtitleStyle || appliedSubtitleOutlineColor != resolvedOutlineColor;
+        bool outlineSizeChanged = !hasAppliedSubtitleStyle || appliedSubtitleOutlineSize != outline;
+        bool stripSdhChanged = !hasAppliedSubtitleStyle || appliedSubtitleStripSdh != stripSdh;
+
+        if (modeChanged) {
+            setStringProperty("sub-ass-override", useLibass ? "scale" : "force");
+        }
+        if (modeChanged || (!useLibass && boldChanged)) {
             std::lock_guard<std::mutex> lock(mpvMutex);
             if (!mpv) return;
-            double outline = std::max(0.0, std::min(8.0, outlineSize));
-            double size = std::max(18.0, std::min(96.0, fontSize));
-            int64_t position = std::max(0, std::min(150, subPos));
-            mpvApi().setProperty(mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
-            mpvApi().setProperty(mpv, "sub-font-size", MPV_FORMAT_DOUBLE, &size);
-            mpvApi().setProperty(mpv, "sub-pos", MPV_FORMAT_INT64, &position);
+            const char *styleOverridesCommand[] = {
+                "change-list",
+                "sub-ass-style-overrides",
+                useLibass ? "clr" : "set",
+                useLibass ? "" : (bold ? "Bold=1" : "Bold=0"),
+                nullptr,
+            };
+            mpvApi().command(mpv, styleOverridesCommand);
         }
+        if (modeChanged || sizeChanged || positionChanged) {
+            std::lock_guard<std::mutex> lock(mpvMutex);
+            if (!mpv) return;
+            if (modeChanged || sizeChanged) {
+                mpvApi().setProperty(mpv, "sub-scale", MPV_FORMAT_DOUBLE, &scale);
+                mpvApi().setProperty(mpv, "sub-font-size", MPV_FORMAT_DOUBLE, &size);
+            }
+            if (modeChanged || positionChanged) {
+                mpvApi().setProperty(mpv, "sub-pos", MPV_FORMAT_INT64, &position);
+            }
+        }
+
+        if (!useLibass) {
+            if (modeChanged || textColorChanged) {
+                setStringProperty("sub-color", resolvedTextColor);
+            }
+            if (modeChanged || backgroundColorChanged) {
+                setStringProperty("sub-back-color", resolvedBackgroundColor);
+                setStringProperty(
+                    "sub-border-style",
+                    resolvedBackgroundColor.rfind("#00", 0) == 0 ? "outline-and-shadow" : "opaque-box"
+                );
+            }
+            if (modeChanged || outlineColorChanged) {
+                setStringProperty("sub-outline-color", resolvedOutlineColor);
+            }
+            if (modeChanged || boldChanged) {
+                setStringProperty("sub-bold", bold ? "yes" : "no");
+            }
+            if (modeChanged || outlineSizeChanged) {
+                std::lock_guard<std::mutex> lock(mpvMutex);
+                if (!mpv) return;
+                mpvApi().setProperty(mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
+            }
+        }
+        if (stripSdhChanged) {
+            setStringProperty("sub-filter-sdh", stripSdh ? "yes" : "no");
+            setStringProperty("sub-filter-sdh-harder", stripSdh ? "yes" : "no");
+        }
+
+        hasAppliedSubtitleStyle = true;
+        appliedSubtitleUseLibass = useLibass;
+        appliedSubtitleTextColor = resolvedTextColor;
+        appliedSubtitleBackgroundColor = resolvedBackgroundColor;
+        appliedSubtitleOutlineColor = resolvedOutlineColor;
+        appliedSubtitleOutlineSize = outline;
+        appliedSubtitleBold = bold;
+        appliedSubtitleFontSize = size;
+        appliedSubtitlePosition = position;
+        appliedSubtitleStripSdh = stripSdh;
     }
 
 private:
@@ -1040,6 +1297,17 @@ private:
     std::atomic_bool stopping = false;
     std::atomic_bool shuttingDown = false;
     std::atomic_bool hwdecLogged = false;  // one-shot log for hwdec-current
+
+    bool hasAppliedSubtitleStyle = false;
+    bool appliedSubtitleUseLibass = false;
+    std::string appliedSubtitleTextColor;
+    std::string appliedSubtitleBackgroundColor;
+    std::string appliedSubtitleOutlineColor;
+    double appliedSubtitleOutlineSize = 0.0;
+    bool appliedSubtitleBold = false;
+    double appliedSubtitleFontSize = 0.0;
+    int64_t appliedSubtitlePosition = 0;
+    bool appliedSubtitleStripSdh = false;
 
     JavaVM *javaVm = nullptr;
     jobject eventSink = nullptr;
@@ -1220,14 +1488,22 @@ private:
                 doneCv->notify_one();
             });
         }
-        SendMessageW(messageHwnd, WM_NUVIO_TASK, 0, 0);
+        // Both of these were unbounded, so a UI thread that had stopped pumping (already quit, or
+        // stuck inside WebView2 teardown) blocked the caller forever. During shutdown that left the
+        // player's windows alive on top of the AWT host, swallowing all input while video kept
+        // playing. Bound both: a stalled UI thread now costs a short delay, not a permanent hang.
+        DWORD_PTR sendResult = 0;
+        SendMessageTimeoutW(
+            messageHwnd, WM_NUVIO_TASK, 0, 0,
+            SMTO_ABORTIFHUNG | SMTO_NORMAL, kUiTaskTimeoutMs, &sendResult
+        );
 
         std::unique_lock<std::mutex> waitLock(*doneMutex);
-        doneCv->wait(waitLock, [&]() { return *done; });
+        doneCv->wait_for(waitLock, std::chrono::milliseconds(kUiTaskTimeoutMs), [&]() { return *done; });
     }
 
     void startWebView(const std::string &controlsUrl) {
-        std::wstring userDataDir = tempUserDataDirectory();
+        std::wstring userDataDir = webViewUserDataDirectory();
         auto weakSelf = weak_from_this();
         HRESULT result = CreateCoreWebView2EnvironmentWithOptions(
             nullptr,
@@ -1351,12 +1627,14 @@ private:
             setMpvOptionStringLocked("input-default-bindings", "yes");
             setMpvOptionStringLocked("input-vo-keyboard", "no");
             setMpvOptionStringLocked("keep-open", "yes");
+            setMpvOptionStringLocked("volume-max", "200");
             setMpvOptionStringLocked("vo", "gpu-next");
-            setMpvOptionStringLocked("gpu-api", "d3d11");
             if (nvidiaRtxSuperResolutionEnabled) {
+                setMpvOptionStringLocked("gpu-api", "d3d11");
                 setMpvOptionStringLocked("hwdec", "d3d11va");
                 setMpvOptionStringLocked("d3d11-adapter", "NVIDIA");
             } else {
+                setMpvOptionStringLocked("gpu-api", "auto");
                 setMpvOptionStringLocked("hwdec", "auto");
             }
             setMpvOptionStringLocked("hwdec-codecs", "all");
@@ -1382,7 +1660,7 @@ private:
             setMpvOptionStringLocked("demuxer-max-bytes", "512MiB");
             setMpvOptionStringLocked("demuxer-max-back-bytes", "256MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
-            setMpvOptionStringLocked("cache-secs", "120");
+            setMpvOptionStringLocked("cache-secs", "36000");
             setMpvOptionStringLocked("hr-seek", "no");
 
             int64_t wid = (int64_t)(intptr_t)containerHwnd;
@@ -1488,6 +1766,7 @@ private:
         if (!webView) return;
         double duration = doubleProperty("duration", 0.0);
         double position = doubleProperty("time-pos", 0.0);
+        double volumeLevel = volume();
         bool paused = isPaused();
         bool loading = isLoading();
         std::string audioTracks = audioTracksJson();
@@ -1496,6 +1775,7 @@ private:
         std::ostringstream script;
         script << "window.playerUpdate({duration:" << duration
                << ",position:" << position
+               << ",volumeLevel:" << volumeLevel
                << ",paused:" << (paused ? "true" : "false")
                << ",loading:" << (loading ? "true" : "false")
                << ",audioTracks:" << audioTracks
@@ -1524,6 +1804,19 @@ private:
         if (type == "selectSubtitleTrack") {
             selectSubtitleTrackId((int)std::llround(value));
             syncControls();
+            return;
+        }
+        if (type == "setPlaybackState" || type == "setPlaybackStateQuiet") {
+            bool shouldPlay = value >= 0.5;
+            if (shouldPlay && isEnded()) {
+                seekToMilliseconds(0);
+            }
+            setPaused(!shouldPlay);
+            sendPlayerEvent(type, value);
+            return;
+        }
+        if (type == "dragWindow") {
+            beginWindowDrag();
             return;
         }
         sendPlayerEvent(type, value);
@@ -2025,6 +2318,11 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_shutdownWebView2Wa
     stopWebView2Warmup();
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setWindowsDisplaySleepInhibited(JNIEnv *, jobject, jboolean inhibited) {
+    return setDisplaySleepInhibited(inhibited == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_dispose(JNIEnv *, jobject, jlong handle) {
     if (handle == 0) return;
@@ -2045,6 +2343,39 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_requestFocus(JNIEnv *, jobject, jlong handle) {
     auto player = playerFromHandle(handle);
     if (player) player->requestFocus();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_beginWindowDrag(JNIEnv *, jobject, jlong handle) {
+    auto player = playerFromHandle(handle);
+    if (player) player->beginWindowDrag();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setWindowResizable(
+    JNIEnv *, jobject, jlong windowHwnd, jboolean enabled
+) {
+    HWND window = (HWND)(intptr_t)windowHwnd;
+    if (!window || !IsWindow(window)) return;
+    LONG_PTR style = GetWindowLongPtrW(window, GWL_STYLE);
+    if (enabled == JNI_TRUE) {
+        style |= WS_THICKFRAME;
+        style &= ~(WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+    } else {
+        style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+    }
+    SetWindowLongPtrW(window, GWL_STYLE, style);
+    COLORREF black = RGB(0, 0, 0);
+    DwmSetWindowAttribute(window, DWMWA_BORDER_COLOR, &black, sizeof(black));
+    DwmSetWindowAttribute(window, DWMWA_CAPTION_COLOR, &black, sizeof(black));
+    SetWindowPos(window, nullptr, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_reparentSurfaceNative(JNIEnv *, jobject, jlong handle, jlong hostViewPtr) {
+    auto player = playerFromHandle(handle);
+    if (player) player->reparentSurface((HWND)(intptr_t)hostViewPtr);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -2189,13 +2520,21 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applyWindowChrome(
     jint borderColorRgb,
     jint textColorRgb
 ) {
+    HWND hwnd = (HWND)(intptr_t)windowHwnd;
     applyDwmWindowChrome(
-        (HWND)(intptr_t)windowHwnd,
+        hwnd,
         darkMode == JNI_TRUE,
         rgbIntToColorRef(captionColorRgb),
         rgbIntToColorRef(borderColorRgb),
         rgbIntToColorRef(textColorRgb)
     );
+
+    // The window's default class brush is white, so any region Windows erases before Skia
+    // repaints it flashes white. Erase to black instead; against the near-black UI it is
+    // invisible even if a repaint lags.
+    if (hwnd && IsWindow(hwnd)) {
+        SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, (LONG_PTR)GetStockObject(BLACK_BRUSH));
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -2219,6 +2558,54 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setWindowBorderles
     );
 }
 
+// A plain SetForegroundWindow from a process that isn't already foreground is routinely denied by
+// Windows' focus-stealing prevention. AttachThreadInput alone (tried first) is often not enough
+// when the JVM was launched as a child of a long-lived build-tool process (e.g. the Gradle
+// daemon, via `:composeApp:run`) rather than directly by the user double-clicking an exe: Windows'
+// check also wants "recent real input" from this thread, which a build-tool-spawned process never
+// has. A synthesized, harmless Alt key tap satisfies that check - the standard combined technique
+// for reliably forcing a just-created window to the real foreground instead of merely flashing its
+// taskbar button.
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_forceForegroundWindow(
+    JNIEnv *,
+    jobject,
+    jlong windowHwnd
+) {
+    HWND hwnd = (HWND)(intptr_t)windowHwnd;
+    if (!hwnd || !IsWindow(hwnd)) return;
+
+    if (IsIconic(hwnd)) {
+        ShowWindow(hwnd, SW_RESTORE);
+    }
+
+    if (GetForegroundWindow() == hwnd) {
+        SetActiveWindow(hwnd);
+        BringWindowToTop(hwnd);
+        SetFocus(hwnd);
+        return;
+    }
+
+    HWND foregroundHwnd = GetForegroundWindow();
+    DWORD foregroundThreadId = foregroundHwnd ? GetWindowThreadProcessId(foregroundHwnd, nullptr) : 0;
+    DWORD currentThreadId = GetCurrentThreadId();
+    bool attached = foregroundThreadId != 0
+        && foregroundThreadId != currentThreadId
+        && AttachThreadInput(foregroundThreadId, currentThreadId, TRUE);
+
+    keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY, 0);
+    keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+
+    SetForegroundWindow(hwnd);
+    SetActiveWindow(hwnd);
+    BringWindowToTop(hwnd);
+    SetFocus(hwnd);
+
+    if (attached) {
+        AttachThreadInput(foregroundThreadId, currentThreadId, FALSE);
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setSubtitleDelayMs(JNIEnv *, jobject, jlong handle, jint delayMs) {
     auto player = playerFromHandle(handle);
@@ -2236,7 +2623,9 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applySubtitleStyle
     jfloat outlineSize,
     jboolean bold,
     jfloat fontSize,
-    jint subPos
+    jint subPos,
+    jboolean useLibass,
+    jboolean stripSdh
 ) {
     auto player = playerFromHandle(handle);
     if (!player) return;
@@ -2247,6 +2636,8 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applySubtitleStyle
         outlineSize,
         bold == JNI_TRUE,
         fontSize,
-        subPos
+        subPos,
+        useLibass == JNI_TRUE,
+        stripSdh == JNI_TRUE
     );
 }

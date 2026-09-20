@@ -1,7 +1,7 @@
 package com.nuvio.app.features.player.desktop
 
+import com.nuvio.app.core.storage.DesktopCache
 import java.io.File
-import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal fun interface NativePlayerEventSink {
@@ -26,6 +26,14 @@ internal object NativePlayerBridge {
         loadNativeLibrary()
     }
 
+    /**
+     * Linux only: initialize GTK before any AWT/Compose/Skia code runs, so GDK's
+     * types are registered once and canonically (prevents a GdkDisplayManager
+     * GType conflict with Skiko on some JDK builds). Must be the first thing
+     * main() calls. Approach from skoruppa's linux-webkitgtk branch.
+     */
+    external fun initGtkEarly(): Boolean
+
     external fun create(
         hostViewPtr: Long,
         sourceUrl: String,
@@ -41,6 +49,12 @@ internal object NativePlayerBridge {
     external fun dispose(handle: Long)
     external fun updateControls(handle: Long, controlsJson: String)
     external fun requestFocus(handle: Long)
+    external fun beginWindowDrag(handle: Long)
+    external fun setWindowResizable(windowHwnd: Long, enabled: Boolean)
+    private external fun reparentSurfaceNative(handle: Long, hostViewPtr: Long)
+
+    fun reparentSurface(handle: Long, hostViewPtr: Long): Boolean =
+        runCatching { reparentSurfaceNative(handle, hostViewPtr) }.isSuccess
     external fun setPaused(handle: Long, paused: Boolean)
     external fun seekTo(handle: Long, positionMs: Long)
     external fun seekBy(handle: Long, offsetMs: Long)
@@ -78,6 +92,8 @@ internal object NativePlayerBridge {
         width: Int,
         height: Int,
     )
+    external fun setMacosWindowFullscreen(windowViewPtr: Long, fullscreen: Boolean)
+    external fun forceForegroundWindow(windowHwnd: Long)
 
     external fun setSubtitleDelayMs(handle: Long, delayMs: Int)
     external fun applySubtitleStyle(
@@ -89,9 +105,12 @@ internal object NativePlayerBridge {
         bold: Boolean,
         fontSize: Float,
         subPos: Int,
+        useLibass: Boolean,
+        stripSdh: Boolean,
     )
     external fun warmupWebView2(controlsPageUrl: String): Boolean
     external fun shutdownWebView2Warmup()
+    external fun setWindowsDisplaySleepInhibited(inhibited: Boolean): Boolean
 
     val controlsPageUrl: String by lazy { controlsPageAssets.url }
     private val controlsPageAssets: ControlsPageAssets by lazy { exportControlsPageAssets() }
@@ -102,7 +121,11 @@ internal object NativePlayerBridge {
             val controlsPage = runCatching { controlsPageAssets }
                 .getOrNull()
                 ?: return@Thread
-            if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+            // Linux warms the WebKitGTK engine through the same entry point
+            // (the bridge maps warmupWebView2 to a hidden WebKitGTK view).
+            if (DesktopHostOs.current == DesktopHostOs.WINDOWS ||
+                DesktopHostOs.current == DesktopHostOs.LINUX
+            ) {
                 runCatching { warmupWebView2(controlsPage.url) }
             }
         }.apply {
@@ -110,7 +133,9 @@ internal object NativePlayerBridge {
             isDaemon = true
             start()
         }
-        if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+        if (DesktopHostOs.current == DesktopHostOs.WINDOWS ||
+            DesktopHostOs.current == DesktopHostOs.LINUX
+        ) {
             Runtime.getRuntime().addShutdownHook(
                 Thread {
                     runCatching { shutdownWebView2Warmup() }
@@ -123,12 +148,21 @@ internal object NativePlayerBridge {
 
     private fun loadNativeLibrary() {
         val platform = DesktopHostOs.current
-        require(platform == DesktopHostOs.MACOS || platform == DesktopHostOs.WINDOWS) {
+        require(
+            platform == DesktopHostOs.MACOS ||
+                platform == DesktopHostOs.WINDOWS ||
+                platform == DesktopHostOs.LINUX
+        ) {
             "Native desktop playback is not implemented for $platform yet."
         }
 
         val libraryName = nativeLibraryName(platform)
         val platformDir = nativeDirectoryName(platform)
+        findPackagedApplicationLibrary(platformDir, libraryName)?.let { packagedLibrary ->
+            loadNativeRuntimeDependencies(platform, packagedLibrary.parentFile)
+            System.load(packagedLibrary.absolutePath)
+            return
+        }
         findLocalBuildLibrary(platformDir, libraryName)?.let { localLibrary ->
             copyLocalRuntimeResources(platformDir, localLibrary.parentFile)
             loadNativeRuntimeDependencies(platform, localLibrary.parentFile)
@@ -137,18 +171,23 @@ internal object NativePlayerBridge {
         }
 
         val resource = "/native/$platformDir/$libraryName"
-        val input = NativePlayerBridge::class.java.getResourceAsStream(resource)
-            ?: error("Missing bundled native player bridge: $resource")
-        val dir = File(System.getProperty("java.io.tmpdir"), "native-player-bridge").apply { mkdirs() }
-        val suffix = libraryName.substringAfter("player_bridge", ".dylib")
-        val file = Files.createTempFile(dir.toPath(), "player-bridge-", suffix).toFile()
-        file.deleteOnExit()
-        extractBundledRuntimeResources(platformDir, dir)
-        input.use { source ->
-            file.outputStream().use { target -> source.copyTo(target) }
+        val files = buildMap {
+            put(libraryName, readResourceBytes(resource))
+            bundledRuntimeResourceNames(platformDir).forEach { name ->
+                resourceBytesOrNull("/native/$platformDir/$name")?.let { bytes -> put(name, bytes) }
+            }
         }
-        loadNativeRuntimeDependencies(platform, dir)
-        System.load(file.absolutePath)
+        val directory = DesktopCache.installVersionedFiles("native-player-bridge/$platformDir", files).toFile()
+        loadNativeRuntimeDependencies(platform, directory)
+        System.load(directory.resolve(libraryName).absolutePath)
+    }
+
+    private fun findPackagedApplicationLibrary(platformDir: String, libraryName: String): File? {
+        val resourcesDir = System.getProperty("compose.application.resources.dir")
+            ?.takeIf(String::isNotBlank)
+            ?.let(::File)
+            ?: return null
+        return resourcesDir.resolve("native/$platformDir/$libraryName").takeIf(File::isFile)
     }
 
     private fun loadNativeRuntimeDependencies(platform: DesktopHostOs, directory: File) {
@@ -159,19 +198,6 @@ internal object NativePlayerBridge {
             if (dependency.exists()) {
                 System.load(dependency.absolutePath)
             }
-        }
-    }
-
-    private fun extractBundledRuntimeResources(platformDir: String, dir: File) {
-        val runtimeNames = bundledRuntimeResourceNames(platformDir)
-        runtimeNames.forEach { name ->
-            val resource = "/native/$platformDir/$name"
-            val input = NativePlayerBridge::class.java.getResourceAsStream(resource) ?: return@forEach
-            val target = dir.resolve(name)
-            input.use { source ->
-                target.outputStream().use { output -> source.copyTo(output) }
-            }
-            target.deleteOnExit()
         }
     }
 
@@ -194,18 +220,35 @@ internal object NativePlayerBridge {
     }
 
     private fun findLocalBuildLibrary(platformDir: String, libraryName: String): File? {
-        val candidates = listOf(
-            File("composeApp/build/native/$platformDir/$libraryName"),
-            File("build/native/$platformDir/$libraryName"),
+        val architectureDirectories = nativeArchitectureDirectoryNames(platformDir)
+        val roots = listOf(
+            File("composeApp/build/native/$platformDir"),
+            File("build/native/$platformDir"),
         )
+        val candidates = roots.map { it.resolve(libraryName) } + roots.flatMap { root ->
+            architectureDirectories.map { architecture -> root.resolve(architecture).resolve(libraryName) }
+        }
         return candidates.firstOrNull { it.exists() }
     }
 
+    private fun nativeArchitectureDirectoryNames(platformDir: String): List<String> =
+        when (platformDir) {
+            "macos" -> when (System.getProperty("os.arch").lowercase()) {
+                "aarch64", "arm64" -> listOf("arm64", "aarch64")
+                "amd64", "x64", "x86_64" -> listOf("x86_64")
+                else -> emptyList()
+            }
+            else -> emptyList()
+        }
+
     private fun copyLocalRuntimeResources(platformDir: String, targetDir: File) {
-        val runtimeDirs = listOf(
+        val runtimeRoots = listOf(
             File("composeApp/build/native/$platformDir-runtime"),
             File("build/native/$platformDir-runtime"),
         )
+        val runtimeDirs = runtimeRoots.flatMap { root ->
+            nativeArchitectureDirectoryNames(platformDir).map(root::resolve)
+        } + runtimeRoots
         runtimeDirs.firstOrNull(File::isDirectory)
             ?.listFiles { file -> file.isFile }
             ?.forEach { runtimeFile ->
@@ -233,36 +276,25 @@ internal object NativePlayerBridge {
         }
 
     private fun exportControlsPageAssets(): ControlsPageAssets {
-        val root = File(System.getProperty("java.io.tmpdir"), "nuvio-player-ui").apply { mkdirs() }
-        val fontsDir = root.resolve("fonts").apply { mkdirs() }
-        val htmlFile = root.resolve("controls.html")
-        writeTextIfChanged(
-            target = htmlFile,
-            text = readTextResource("/player-ui/controls.html"),
+        val files = linkedMapOf(
+            "controls.html" to readResourceBytes("/player-ui/controls.html"),
+            "controls.css" to readTextResource("/player-ui/controls.css")
+                .replace("/* __NUVIO_PLAYER_FONT_FACES__ */", nativePlayerFontFaces())
+                .toByteArray(Charsets.UTF_8),
+            "controls.js" to readResourceBytes("/player-ui/controls.js"),
+            "fonts/jetbrains_sans_regular.ttf" to readResourceBytes(
+                "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_regular.ttf",
+            ),
+            "fonts/jetbrains_sans_semibold.ttf" to readResourceBytes(
+                "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_semibold.ttf",
+            ),
+            "fonts/jetbrains_sans_bold.ttf" to readResourceBytes(
+                "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_bold.ttf",
+            ),
         )
-        writeTextIfChanged(
-            target = root.resolve("controls.css"),
-            text = readTextResource("/player-ui/controls.css")
-                .replace("/* __NUVIO_PLAYER_FONT_FACES__ */", nativePlayerFontFaces()),
-        )
-        copyResourceIfChanged(
-            resource = "/player-ui/controls.js",
-            target = root.resolve("controls.js"),
-        )
-        copyResourceIfChanged(
-            resource = "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_regular.ttf",
-            target = fontsDir.resolve("jetbrains_sans_regular.ttf"),
-        )
-        copyResourceIfChanged(
-            resource = "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_semibold.ttf",
-            target = fontsDir.resolve("jetbrains_sans_semibold.ttf"),
-        )
-        copyResourceIfChanged(
-            resource = "/composeResources/nuvio.composeapp.generated.resources/font/jetbrains_sans_bold.ttf",
-            target = fontsDir.resolve("jetbrains_sans_bold.ttf"),
-        )
+        val root = DesktopCache.installVersionedFiles("player-ui", files).toFile()
         return ControlsPageAssets(
-            url = htmlFile.toURI().toASCIIString(),
+            url = root.resolve("controls.html").toURI().toASCIIString(),
         )
     }
 
@@ -292,25 +324,13 @@ internal object NativePlayerBridge {
         """.trimIndent()
 
     private fun readTextResource(resource: String): String =
-        NativePlayerBridge::class.java.getResourceAsStream(resource)
-            ?.bufferedReader(Charsets.UTF_8)
-            ?.use { it.readText() }
-            ?: error("Missing native player controls resource: $resource")
+        readResourceBytes(resource).toString(Charsets.UTF_8)
 
-    private fun writeTextIfChanged(target: File, text: String) {
-        val bytes = text.toByteArray(Charsets.UTF_8)
-        if (target.exists() && target.readBytes().contentEquals(bytes)) return
-        target.writeBytes(bytes)
-    }
+    private fun readResourceBytes(resource: String): ByteArray =
+        resourceBytesOrNull(resource) ?: error("Missing native player resource: $resource")
 
-    private fun copyResourceIfChanged(resource: String, target: File) {
-        val bytes = NativePlayerBridge::class.java.getResourceAsStream(resource)
-            ?.use { it.readBytes() }
-            ?: error("Missing native player controls resource: $resource")
-        if (target.exists() && target.readBytes().contentEquals(bytes)) return
-        Files.createDirectories(target.parentFile.toPath())
-        target.writeBytes(bytes)
-    }
+    private fun resourceBytesOrNull(resource: String): ByteArray? =
+        NativePlayerBridge::class.java.getResourceAsStream(resource)?.use { it.readBytes() }
 
     private data class ControlsPageAssets(
         val url: String,
@@ -318,7 +338,10 @@ internal object NativePlayerBridge {
 }
 
 internal fun preloadNativePlayerBridgeAsync() {
-    if (DesktopHostOs.current == DesktopHostOs.MACOS || DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+    if (DesktopHostOs.current == DesktopHostOs.MACOS ||
+        DesktopHostOs.current == DesktopHostOs.WINDOWS ||
+        DesktopHostOs.current == DesktopHostOs.LINUX
+    ) {
         runCatching {
             NativePlayerBridge.preloadAsync()
         }
