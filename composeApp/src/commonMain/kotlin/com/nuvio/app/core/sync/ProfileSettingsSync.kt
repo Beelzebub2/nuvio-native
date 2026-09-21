@@ -371,12 +371,15 @@ object ProfileSettingsSync {
         json.encodeToString(MobileProfileSettingsBlob.serializer(), blob)
 
     private fun currentObservedStateSignature(): String = listOf(
-        "theme=${ThemeSettingsRepository.selectedTheme.value.name}",
+        "theme=${ThemeSettingsRepository.selectedThemePreference.value?.name}",
+        "custom_theme_colors=${ThemeSettingsRepository.customThemePreference.value}",
         "amoled=${ThemeSettingsRepository.amoledEnabled.value}",
         "liquid_glass_tab_bar=${ThemeSettingsRepository.liquidGlassNativeTabBarEnabled.value}",
         "desktop_navigation_layout=${ThemeSettingsRepository.desktopNavigationLayout.value.name}",
+        "nav_bar_glow_enabled=${ThemeSettingsRepository.navBarGlowEnabled.value}",
         "nav_bar_style=${ThemeSettingsRepository.navBarStyle.value.key}",
         "poster_card_style=${PosterCardStyleRepository.uiState.value}",
+        "custom_poster_url=${CustomPosterUrlRepository.pattern.value}",
         "card_depth_style=${CardDepthStyleRepository.uiState.value}",
         "player=${PlayerSettingsRepository.uiState.value}",
         "stream_badges=${StreamBadgeSettingsRepository.uiState.value}",
