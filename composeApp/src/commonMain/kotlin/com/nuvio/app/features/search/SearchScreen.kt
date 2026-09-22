@@ -292,7 +292,7 @@ fun SearchScreen(
                                 .focusRequester(focusRequester)
                                 .onFocusChanged {
                                     isSearchFocused = it.isFocused
-                                    if(query.isNotBlank()) focusRequester.captureFocus()
+                                    if (query.isNotBlank()) focusRequester.captureFocus()
                                 },
                             trailingContent = if (query.isNotBlank()) {
                                 {
