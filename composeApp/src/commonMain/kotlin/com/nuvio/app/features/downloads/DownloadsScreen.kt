@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -38,6 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
+import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.NuvioToastController
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -45,13 +48,18 @@ import org.jetbrains.compose.resources.stringResource
 fun DownloadsScreen(
     onBack: () -> Unit,
     onOpenDownload: (DownloadItem) -> Unit,
+    initialShowId: String? = null,
+    onNavigateToShow: ((showId: String, title: String) -> Unit)? = null,
+    onBackFromShow: (() -> Unit)? = null,
 ) {
     val uiState by remember {
         DownloadsRepository.ensureLoaded()
         DownloadsRepository.uiState
     }.collectAsStateWithLifecycle()
 
-    var selectedShowId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedShowId by rememberSaveable(initialShowId) { mutableStateOf(initialShowId) }
+    var downloadPendingDeletionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openDownloadsDirectoryFailedText = stringResource(Res.string.downloads_open_directory_failed)
 
     val completedEpisodes = remember(uiState.items) {
         uiState.completedItems
@@ -75,9 +83,23 @@ fun DownloadsScreen(
                 },
                 onBack = {
                     if (selectedShowId != null) {
-                        selectedShowId = null
+                        onBackFromShow?.invoke() ?: run { selectedShowId = null }
                     } else {
                         onBack()
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
+                                NuvioToastController.show(openDownloadsDirectoryFailedText)
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Folder,
+                            contentDescription = stringResource(Res.string.downloads_open_directory),
+                        )
                     }
                 },
             )
@@ -87,22 +109,43 @@ fun DownloadsScreen(
             downloadsRootContent(
                 uiState = uiState,
                 onOpenDownload = onOpenDownload,
-                onOpenShow = { showId -> selectedShowId = showId },
+                onOpenShow = { showId, title ->
+                    onNavigateToShow?.invoke(showId, title) ?: run { selectedShowId = showId }
+                },
+                onDeleteDownload = { downloadPendingDeletionId = it },
             )
         } else {
             downloadsShowContent(
                 showId = selectedShowId.orEmpty(),
                 episodes = completedEpisodes,
                 onOpenDownload = onOpenDownload,
+                onDeleteDownload = { downloadPendingDeletionId = it },
             )
         }
+    }
+
+    val pendingDeletionId = downloadPendingDeletionId
+    if (pendingDeletionId != null) {
+        NuvioStatusModal(
+            title = stringResource(Res.string.action_delete_confirm_title),
+            message = stringResource(Res.string.action_delete_confirm_message),
+            isVisible = true,
+            confirmText = stringResource(Res.string.action_yes),
+            dismissText = stringResource(Res.string.action_no),
+            onConfirm = {
+                DownloadsRepository.cancelDownload(pendingDeletionId)
+                downloadPendingDeletionId = null
+            },
+            onDismiss = { downloadPendingDeletionId = null },
+        )
     }
 }
 
 private fun LazyListScope.downloadsRootContent(
     uiState: DownloadsUiState,
     onOpenDownload: (DownloadItem) -> Unit,
-    onOpenShow: (String) -> Unit,
+    onOpenShow: (showId: String, title: String) -> Unit,
+    onDeleteDownload: (String) -> Unit,
 ) {
     val activeItems = uiState.activeItems
     val completedMovies = uiState.completedItems.filterNot(DownloadItem::isEpisode)
@@ -130,7 +173,7 @@ private fun LazyListScope.downloadsRootContent(
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { DownloadsRepository.cancelDownload(item.id) },
+                onDelete = { onDeleteDownload(item.id) },
             )
         }
     }
@@ -149,7 +192,7 @@ private fun LazyListScope.downloadsRootContent(
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { DownloadsRepository.cancelDownload(item.id) },
+                onDelete = { onDeleteDownload(item.id) },
             )
         }
     }
@@ -166,7 +209,7 @@ private fun LazyListScope.downloadsRootContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .clickable { onOpenShow(item.parentMetaId) },
+                    .clickable { onOpenShow(item.parentMetaId, item.title) },
                 shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceContainer,
             ) {
@@ -226,6 +269,7 @@ private fun LazyListScope.downloadsShowContent(
     showId: String,
     episodes: List<DownloadItem>,
     onOpenDownload: (DownloadItem) -> Unit,
+    onDeleteDownload: (String) -> Unit,
 ) {
     val showEpisodes = episodes
         .filter { it.parentMetaId == showId }
@@ -281,7 +325,7 @@ private fun LazyListScope.downloadsShowContent(
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { DownloadsRepository.cancelDownload(item.id) },
+                onDelete = { onDeleteDownload(item.id) },
             )
         }
     }

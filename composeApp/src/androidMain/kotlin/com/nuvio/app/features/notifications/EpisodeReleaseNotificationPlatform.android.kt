@@ -15,15 +15,17 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Operation
 import androidx.work.WorkManager
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.features.settings.AppIconPlatform
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
@@ -53,7 +55,7 @@ internal actual object EpisodeReleaseNotificationPlatform {
     private var currentActivity: ComponentActivity? = null
     private var pendingPermissionContinuation: kotlin.coroutines.Continuation<Boolean>? = null
     private val httpClient by lazy {
-        HttpClient(Android) {
+        HttpClient(OkHttp) {
             install(HttpTimeout) {
                 requestTimeoutMillis = 15_000
                 connectTimeoutMillis = 15_000
@@ -205,7 +207,10 @@ internal actual object EpisodeReleaseNotificationPlatform {
     ): android.app.Notification {
         val pendingIntent = buildPendingIntent(context, request)
         val backdropBitmap = loadBackdropBitmap(request.backdropUrl)
-        val appIconBitmap = BitmapFactory.decodeResource(context.resources, com.nuvio.app.R.mipmap.ic_launcher)
+        val appIconBitmap = ContextCompat.getDrawable(
+            context,
+            AppIconPlatform.currentLauncherIconResource(context),
+        )?.toBitmap()
 
         return NotificationCompat.Builder(context, channelId)
             .setSmallIcon(com.nuvio.app.R.drawable.ic_notification_small)
@@ -238,7 +243,8 @@ internal actual object EpisodeReleaseNotificationPlatform {
         context: Context,
         request: EpisodeReleaseNotificationRequest,
     ): PendingIntent {
-        val launchIntent = Intent(context, com.nuvio.app.MainActivity::class.java).apply {
+        val launchIntent = Intent().apply {
+            component = AppIconPlatform.currentLauncherComponent(context)
             action = Intent.ACTION_VIEW
             data = android.net.Uri.parse(request.deepLinkUrl)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or

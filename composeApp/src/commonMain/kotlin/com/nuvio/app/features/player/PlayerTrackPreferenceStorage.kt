@@ -7,10 +7,12 @@ data class PersistedPlayerTrackPreference(
     val subtitleTrackId: String? = null,
     val addonSubtitleId: String? = null,
     val addonSubtitleUrl: String? = null,
+    val addonSubtitleItemId: String? = null,
     val addonSubtitleAddonName: String? = null,
     val audioLanguage: String? = null,
     val audioName: String? = null,
     val audioTrackId: String? = null,
+    val subtitleIsForced: Boolean? = null,
 )
 
 object PersistedSubtitleSelectionType {

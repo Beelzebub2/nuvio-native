@@ -22,8 +22,9 @@ import com.nuvio.app.features.mdblist.MdbListSettings
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_save
-import nuvio.composeapp.generated.resources.settings_mdb_add_api_key_first
-import nuvio.composeapp.generated.resources.settings_mdb_api_key_description
+import nuvio.composeapp.generated.resources.settings_mdb_ratings_credentials_required
+import nuvio.composeapp.generated.resources.settings_mdb_ratings_key_override_description
+import nuvio.composeapp.generated.resources.settings_mdb_ratings_connected_account
 import nuvio.composeapp.generated.resources.settings_mdb_api_key_label
 import nuvio.composeapp.generated.resources.settings_mdb_api_key_title
 import nuvio.composeapp.generated.resources.settings_mdb_enable_ratings
@@ -34,6 +35,7 @@ import nuvio.composeapp.generated.resources.settings_mdb_section_title
 import nuvio.composeapp.generated.resources.source_audience_score
 import nuvio.composeapp.generated.resources.source_imdb
 import nuvio.composeapp.generated.resources.source_letterboxd
+import nuvio.composeapp.generated.resources.source_mal
 import nuvio.composeapp.generated.resources.source_metacritic
 import nuvio.composeapp.generated.resources.source_rotten_tomatoes
 import nuvio.composeapp.generated.resources.source_tmdb
@@ -45,7 +47,7 @@ internal fun LazyListScope.mdbListSettingsContent(
     isTablet: Boolean,
     settings: MdbListSettings,
 ) {
-    val providerControlsEnabled = settings.enabled && settings.hasApiKey
+    val providerControlsEnabled = settings.enabled
 
     item {
         SettingsSection(
@@ -57,15 +59,14 @@ internal fun LazyListScope.mdbListSettingsContent(
                     title = stringResource(Res.string.settings_mdb_enable_ratings),
                     description = stringResource(Res.string.settings_mdb_enable_ratings_description),
                     checked = settings.enabled,
-                    enabled = settings.hasApiKey,
                     isTablet = isTablet,
                     onCheckedChange = MdbListSettingsRepository::setEnabled,
                 )
-                if (!settings.hasApiKey) {
+                if (!settings.hasCredentials) {
                     SettingsGroupDivider(isTablet = isTablet)
                     MdbListInfoRow(
                         isTablet = isTablet,
-                        text = stringResource(Res.string.settings_mdb_add_api_key_first),
+                        text = stringResource(Res.string.settings_mdb_ratings_credentials_required),
                     )
                 }
             }
@@ -81,6 +82,7 @@ internal fun LazyListScope.mdbListSettingsContent(
                 MdbListApiKeyRow(
                     isTablet = isTablet,
                     value = settings.apiKey,
+                    usingConnectedAccount = settings.accountScope != null && !settings.hasApiKey,
                     onApiKeyCommitted = MdbListSettingsRepository::setApiKey,
                 )
             }
@@ -117,6 +119,7 @@ private fun ProviderRows(
         MdbListMetadataService.PROVIDER_TRAKT to Res.string.source_trakt,
         MdbListMetadataService.PROVIDER_LETTERBOXD to Res.string.source_letterboxd,
         MdbListMetadataService.PROVIDER_AUDIENCE to Res.string.source_audience_score,
+        MdbListMetadataService.PROVIDER_MAL to Res.string.source_mal,
     )
 
     providers.forEachIndexed { index, (providerId, providerLabelRes) ->
@@ -139,6 +142,7 @@ private fun ProviderRows(
 private fun MdbListApiKeyRow(
     isTablet: Boolean,
     value: String,
+    usingConnectedAccount: Boolean,
     onApiKeyCommitted: (String) -> Unit,
 ) {
     val horizontalPadding = if (isTablet) 20.dp else 16.dp
@@ -160,9 +164,17 @@ private fun MdbListApiKeyRow(
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = stringResource(Res.string.settings_mdb_api_key_description),
+                text = stringResource(Res.string.settings_mdb_ratings_key_override_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (usingConnectedAccount) {
+            Text(
+                text = stringResource(Res.string.settings_mdb_ratings_connected_account),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 

@@ -136,11 +136,12 @@ object NetworkStatusRepository {
             return NetworkCondition.NoInternet
         }
 
-        val backendConfig = SyncBackendRepository.selectedBackend
-        val supabaseReachable = probeReachable(
-            url = "${backendConfig.normalizedSupabaseUrl}/rest/v1/",
-            headers = mapOf("apikey" to backendConfig.anonKey),
-        )
+        val supabaseReachable = SupabaseEndpointConfig.restEndpointUrls().any { url ->
+            probeReachable(
+                url = url,
+                headers = mapOf("apikey" to ServerConfigurationRepository.active.value.publishableKey),
+            )
+        }
         if (!supabaseReachable) {
             return NetworkCondition.ServersUnreachable
         }

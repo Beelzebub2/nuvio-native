@@ -1,158 +1,72 @@
 package com.nuvio.app.features.downloads
 
 import android.content.Context
-import kotlinx.coroutines.CancellationException
+import android.content.Intent
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import okhttp3.Call
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import nuvio.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.getString
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.takeWhile
 import java.io.File
-import java.io.FileOutputStream
 import java.net.URI
-import java.util.concurrent.TimeUnit
-
-private val downloadHttpClient = OkHttpClient.Builder()
-    .connectTimeout(60, TimeUnit.SECONDS)
-    .readTimeout(60, TimeUnit.SECONDS)
-    .writeTimeout(60, TimeUnit.SECONDS)
-    .followRedirects(true)
-    .followSslRedirects(true)
-    .build()
 
 internal actual object DownloadsPlatformDownloader {
     private var appContext: Context? = null
+    private var downloadScheduler: AndroidDownloadScheduler? = null
+    private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     fun initialize(context: Context) {
-        appContext = context.applicationContext
+        scheduler(context)
     }
+
+    @Synchronized
+    internal fun scheduler(context: Context): AndroidDownloadScheduler {
+        appContext = context.applicationContext
+        return downloadScheduler ?: AndroidDownloadScheduler(context.applicationContext).also { downloadScheduler = it }
+    }
+
+    internal fun managedTransfers(): List<AndroidDownloadTransfer> =
+        downloadScheduler?.store?.transfers?.value?.values?.toList().orEmpty()
+
+    actual fun restoreItem(item: DownloadItem): DownloadItem = downloadScheduler?.restore(item)
+        ?: if (item.status == DownloadStatus.Downloading) item.copy(status = DownloadStatus.Paused) else item
 
     actual fun start(
         request: DownloadPlatformRequest,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onSuccess: (localFileUri: String, totalBytes: Long?) -> Unit,
         onFailure: (message: String) -> Unit,
+        onPaused: () -> Unit,
     ): DownloadsTaskHandle {
-        val job = SupervisorJob()
-        val scope = CoroutineScope(job + Dispatchers.IO)
-        var call: Call? = null
-
-        scope.launch {
-            val context = appContext
-            if (context == null) {
-                onFailure(runBlocking { getString(Res.string.downloads_error_not_initialized) })
-                return@launch
-            }
-
-            val downloadsDir = File(context.filesDir, "downloads").apply { mkdirs() }
-            val destination = File(downloadsDir, request.destinationFileName)
-            val tempFile = File(downloadsDir, "${request.destinationFileName}.part")
-
-            try {
-                var resumeFromBytes = tempFile.takeIf { it.exists() }?.length()?.coerceAtLeast(0L) ?: 0L
-
-                fun buildRequest(rangeStart: Long?): Request {
-                    val requestBuilder = Request.Builder().url(request.sourceUrl)
-                    request.sourceHeaders.forEach { (key, value) ->
-                        requestBuilder.header(key, value)
+        val scheduler = checkNotNull(downloadScheduler) { "Downloads are not initialized" }
+        val transfer = scheduler.enqueue(request.item)
+        val observer = observerScope.launch {
+            scheduler.store.transfers.map { it[request.destinationFileName] }
+                .distinctUntilChanged()
+                .takeWhile { current ->
+                    if (current == null || current.generation != transfer.generation) return@takeWhile false
+                    val item = current.item
+                    when (item.status) {
+                        DownloadStatus.Downloading -> onProgress(item.downloadedBytes, item.totalBytes)
+                        DownloadStatus.Completed -> onSuccess(checkNotNull(item.localFileUri), item.totalBytes)
+                        DownloadStatus.Failed -> onFailure(item.errorMessage ?: "Download failed")
+                        DownloadStatus.Paused -> onPaused()
                     }
-                    if (rangeStart != null && rangeStart > 0L) {
-                        requestBuilder.header("Range", "bytes=$rangeStart-")
-                    }
-                    return requestBuilder.get().build()
+                    item.status == DownloadStatus.Downloading
+                }.collect()
+        }
+        return object : DownloadsTaskHandle {
+            override fun cancel() {
+                observer.cancel()
+                if (scheduler.store.get(request.destinationFileName)?.generation == transfer.generation) {
+                    scheduler.pause(request.destinationFileName)
                 }
-
-                var attemptedRangeRequest = resumeFromBytes > 0L
-                var httpRequest = buildRequest(if (attemptedRangeRequest) resumeFromBytes else null)
-                call = downloadHttpClient.newCall(httpRequest)
-                var response = call?.execute() ?: error(
-                    runBlocking { getString(Res.string.downloads_error_request_failed) },
-                )
-
-                if (attemptedRangeRequest && response.code == 416) {
-                    response.close()
-                    tempFile.delete()
-                    resumeFromBytes = 0L
-                    attemptedRangeRequest = false
-                    httpRequest = buildRequest(null)
-                    call = downloadHttpClient.newCall(httpRequest)
-                    response = call?.execute() ?: error(
-                        runBlocking { getString(Res.string.downloads_error_request_failed) },
-                    )
-                }
-
-                response.use { response ->
-                    if (!response.isSuccessful) {
-                        error(
-                            runBlocking {
-                                getString(Res.string.downloads_error_http_failed, response.code)
-                            },
-                        )
-                    }
-
-                    val isPartialResume = attemptedRangeRequest && response.code == 206 && resumeFromBytes > 0L
-                    val appendToTemp = isPartialResume
-                    val startingBytes = if (appendToTemp) resumeFromBytes else 0L
-
-                    if (!appendToTemp && tempFile.exists()) {
-                        tempFile.delete()
-                    }
-
-                    val body = response.body ?: error(
-                        runBlocking { getString(Res.string.downloads_error_empty_body) },
-                    )
-                    val totalBytes = resolveTotalBytes(
-                        startingBytes = startingBytes,
-                        isPartialResume = isPartialResume,
-                        contentRangeHeader = response.header("Content-Range"),
-                        contentLength = body.contentLength().takeIf { it > 0L },
-                    )
-                    var downloadedBytes = startingBytes
-                    onProgress(downloadedBytes, totalBytes)
-
-                    body.byteStream().use { input ->
-                        FileOutputStream(tempFile, appendToTemp).use { output ->
-                            val buffer = ByteArray(16 * 1024)
-                            while (true) {
-                                ensureActive()
-                                val read = input.read(buffer)
-                                if (read <= 0) break
-                                output.write(buffer, 0, read)
-                                downloadedBytes += read.toLong()
-                                onProgress(downloadedBytes, totalBytes)
-                            }
-                            output.flush()
-                        }
-                    }
-
-                    if (destination.exists()) {
-                        destination.delete()
-                    }
-                    if (!tempFile.renameTo(destination)) {
-                        tempFile.copyTo(destination, overwrite = true)
-                        tempFile.delete()
-                    }
-
-                    val finalSize = destination.length()
-                    onSuccess(destination.toURI().toString(), totalBytes ?: finalSize)
-                }
-            } catch (error: Throwable) {
-                onFailure(error.message ?: runBlocking { getString(Res.string.download_failed) })
             }
         }
-
-        job.invokeOnCompletion {
-            call?.cancel()
-        }
-
-        return AndroidDownloadsTaskHandle(job)
     }
 
     actual fun removeFile(localFileUri: String?): Boolean {
@@ -162,11 +76,9 @@ internal actual object DownloadsPlatformDownloader {
     }
 
     actual fun removePartialFile(destinationFileName: String): Boolean {
-        val context = appContext ?: return false
-        val downloadsDir = File(context.filesDir, "downloads")
-        val tempFile = File(downloadsDir, "$destinationFileName.part")
-        if (!tempFile.exists()) return true
-        return runCatching { tempFile.delete() }.getOrDefault(false)
+        val scheduler = downloadScheduler ?: return false
+        scheduler.remove(destinationFileName)
+        return true
     }
 
     actual fun resolveLocalFileUri(localFileUri: String?, destinationFileName: String): String? {
@@ -186,13 +98,41 @@ internal actual object DownloadsPlatformDownloader {
         val localFile = File(downloadsDir, fileName)
         return localFile.takeIf { it.exists() }?.toURI()?.toString()
     }
-}
 
-private class AndroidDownloadsTaskHandle(
-    private val job: Job,
-) : DownloadsTaskHandle {
-    override fun cancel() {
-        job.cancel()
+    actual fun openDownloadsDirectory(): Boolean {
+        val context = appContext ?: return false
+        val downloadsDir = File(context.filesDir, "downloads").apply { mkdirs() }
+        val uri = runCatching {
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                downloadsDir,
+            )
+        }.getOrNull() ?: return false
+
+        val intents = listOf(
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "resource/folder")
+            },
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "vnd.android.document/directory")
+            },
+            Intent(Intent.ACTION_VIEW).apply {
+                data = uri
+            },
+        )
+
+        return intents.any { intent ->
+            intent.addCategory(Intent.CATEGORY_DEFAULT)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+
+            runCatching {
+                context.startActivity(intent)
+                true
+            }.getOrDefault(false)
+        }
     }
 }
 
@@ -204,29 +144,4 @@ private fun String.toLocalFileOrNull(): File? {
             File(this)
         }
     }.getOrNull()
-}
-
-private fun resolveTotalBytes(
-    startingBytes: Long,
-    isPartialResume: Boolean,
-    contentRangeHeader: String?,
-    contentLength: Long?,
-): Long? {
-    parseContentRangeTotal(contentRangeHeader)?.let { return it }
-    val normalizedLength = contentLength?.takeIf { it > 0L } ?: return null
-    return if (isPartialResume && startingBytes > 0L) {
-        startingBytes + normalizedLength
-    } else {
-        normalizedLength
-    }
-}
-
-private fun parseContentRangeTotal(headerValue: String?): Long? {
-    val value = headerValue?.trim().orEmpty()
-    if (value.isBlank()) return null
-    val slashIndex = value.lastIndexOf('/')
-    if (slashIndex == -1 || slashIndex == value.lastIndex) return null
-    val totalPart = value.substring(slashIndex + 1).trim()
-    if (totalPart == "*") return null
-    return totalPart.toLongOrNull()?.takeIf { it > 0L }
 }

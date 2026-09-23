@@ -59,6 +59,7 @@ data class DetailSecondaryAction(
 fun DetailActionButtons(
     modifier: Modifier = Modifier,
     playLabel: String = stringResource(Res.string.action_play),
+    playEnabled: Boolean = true,
     secondaryActions: List<DetailSecondaryAction> = emptyList(),
     actionsMenuLabel: String = stringResource(Res.string.details_actions_menu_label),
     isTablet: Boolean = false,
@@ -96,13 +97,14 @@ fun DetailActionButtons(
                     .weight(1f)
                     .height(buttonHeight),
                 shape = playShape,
-                color = MaterialTheme.colorScheme.onBackground,
-                contentColor = MaterialTheme.colorScheme.background,
+                color = if (playEnabled) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (playEnabled) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .combinedClickable(
+                            enabled = playEnabled,
                             onClick = {
                                 onPlayClick()
                             },
@@ -215,7 +217,7 @@ fun DetailActionButtons(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DetailIconAction(
+internal fun DetailIconAction(
     label: String,
     icon: ImageVector,
     active: Boolean,
@@ -243,7 +245,6 @@ private fun DetailIconAction(
             MaterialTheme.colorScheme.onSurface
         },
         tonalElevation = 6.dp,
-        shadowElevation = 8.dp,
     ) {
         Box(
             modifier = Modifier

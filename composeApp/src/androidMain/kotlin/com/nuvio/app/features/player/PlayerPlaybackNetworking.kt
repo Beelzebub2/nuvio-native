@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import com.nuvio.app.core.diagnostics.SentryNetworkBreadcrumbInterceptor
 import com.nuvio.app.core.network.IPv4FirstDns
 import okhttp3.OkHttpClient
 import java.net.HttpURLConnection
@@ -18,15 +19,13 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 internal object PlayerPlaybackNetworking {
-    private val DEFAULT_STREAM_HEADERS = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-            "Chrome/120.0.0.0 Safari/537.36",
-    )
-
     internal const val DEFAULT_USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+    private val DEFAULT_STREAM_HEADERS = mapOf(
+        "User-Agent" to DEFAULT_USER_AGENT,
+    )
 
     private val trustAllManager = object : X509TrustManager {
         override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
@@ -55,13 +54,32 @@ internal object PlayerPlaybackNetworking {
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
+            .addInterceptor(SentryNetworkBreadcrumbInterceptor())
             .build()
     }
 
-    fun createHttpDataSourceFactory(defaultHeaders: Map<String, String> = emptyMap()): DataSource.Factory {
+    private val loopbackPlaybackHttpClient: OkHttpClient by lazy {
+        playbackHttpClient.newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val requestChain = if (isLoopbackHost(request.url.host)) {
+                    chain.withReadTimeout(65, TimeUnit.SECONDS)
+                } else {
+                    chain
+                }
+                requestChain.proceed(request)
+            }
+            .build()
+    }
+
+    fun createHttpDataSourceFactory(
+        defaultHeaders: Map<String, String> = emptyMap(),
+        useLongReadTimeout: Boolean = false,
+    ): DataSource.Factory {
         val requestHeaders = sanitizeHeaders(defaultHeaders)
+        val baseClient = if (useLongReadTimeout) loopbackPlaybackHttpClient else playbackHttpClient
         val client = requestHeaders.headerValue("Authorization")?.let { authorization ->
-            playbackHttpClient.newBuilder()
+            baseClient.newBuilder()
                 .addNetworkInterceptor { chain ->
                     val request = chain.request()
                     if (request.header("Authorization") == null) {
@@ -75,7 +93,7 @@ internal object PlayerPlaybackNetworking {
                     }
                 }
                 .build()
-        } ?: playbackHttpClient
+        } ?: baseClient
 
         return OkHttpDataSource.Factory(client).apply {
             setDefaultRequestProperties(requestHeaders)
@@ -88,8 +106,12 @@ internal object PlayerPlaybackNetworking {
     fun createDataSourceFactory(
         context: Context,
         defaultHeaders: Map<String, String> = emptyMap(),
+        useLongReadTimeout: Boolean = false,
     ): DataSource.Factory {
-        return DefaultDataSource.Factory(context, createHttpDataSourceFactory(defaultHeaders))
+        return DefaultDataSource.Factory(
+            context,
+            createHttpDataSourceFactory(defaultHeaders, useLongReadTimeout),
+        )
     }
 
     fun openConnection(
@@ -130,6 +152,11 @@ internal object PlayerPlaybackNetworking {
                 key to value
             }
         }.toMap()
+
+    private fun isLoopbackHost(host: String): Boolean = when (host.lowercase()) {
+        "127.0.0.1", "localhost", "::1" -> true
+        else -> false
+    }
 
     private fun withDefaultUserAgent(headers: Map<String, String>): Map<String, String> {
         val sanitized = sanitizeHeaders(headers)

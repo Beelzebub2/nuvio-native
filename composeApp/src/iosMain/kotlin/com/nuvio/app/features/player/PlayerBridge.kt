@@ -20,6 +20,12 @@ interface NuvioPlayerBridge {
     fun seekTo(positionMs: Long)
     fun seekBy(offsetMs: Long)
     fun retry()
+    fun updateNowPlayingMetadata(
+        title: String,
+        subtitle: String?,
+        artworkUrl: String?,
+    )
+    fun clearNowPlayingInfo()
     fun configureVideoOutput(
         hardwareDecoder: String,
         targetColorspaceHint: Boolean,
@@ -39,6 +45,7 @@ interface NuvioPlayerBridge {
     fun setPlaybackSpeed(speed: Float)
     fun setMuted(muted: Boolean)
     fun setResizeMode(mode: Int) // 0=Fit, 1=Fill, 2=Zoom
+    fun syncVideoSurfaceLayout(width: Double, height: Double)
     fun getAudioTrackCount(): Int
     fun getAudioTrackIndex(at: Int): Int
     fun getAudioTrackId(at: Int): String
@@ -52,6 +59,7 @@ interface NuvioPlayerBridge {
     fun getSubtitleTrackLang(at: Int): String
     fun isSubtitleTrackSelected(at: Int): Boolean
     fun selectAudioTrack(trackId: Int)
+    fun applyAudioLanguagePreferences(languages: List<String>)
     fun selectSubtitleTrack(trackId: Int)
     fun setSubtitleUrl(url: String)
     fun clearExternalSubtitle()
@@ -65,6 +73,7 @@ interface NuvioPlayerBridge {
         bold: Boolean,
         fontSize: Float,
         subPos: Int,
+        stripSdh: Boolean,
     )
     fun getIsLoading(): Boolean
     fun getIsPlaying(): Boolean

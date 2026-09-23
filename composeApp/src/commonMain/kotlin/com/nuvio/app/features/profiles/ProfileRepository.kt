@@ -5,6 +5,10 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.isAnonymous
 import com.nuvio.app.core.network.SupabaseProvider
+import com.nuvio.app.core.poster.CustomPosterUrlRepository
+import com.nuvio.app.core.sync.ProfileSettingsSync
+import com.nuvio.app.core.sync.putSyncOriginClientId
+import com.nuvio.app.core.tracking.ensureTrackingProvidersRegistered
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.collection.CollectionMobileSettingsRepository
 import com.nuvio.app.features.collection.CollectionRepository
@@ -12,18 +16,21 @@ import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeRepository
+import com.nuvio.app.core.ui.CardDepthStyleRepository
 import com.nuvio.app.core.ui.PosterCardStyleRepository
 import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.LibraryDisplaySettingsRepository
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.search.SearchHistoryRepository
+import com.nuvio.app.features.search.SearchRepository
 import com.nuvio.app.features.settings.ThemeSettingsRepository
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
-import com.nuvio.app.features.trakt.TraktAuthRepository
-import com.nuvio.app.features.trakt.TraktSettingsRepository
+import com.nuvio.app.features.tracking.TrackingProviderRegistry
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
@@ -156,6 +163,7 @@ object ProfileRepository {
 
     private fun selectProfile(profileIndex: Int) {
         activeProfileIndex = profileIndex
+        CustomPosterUrlRepository.onProfileChanged()
         val selectedProfile = _state.value.profiles.find { it.profileIndex == profileIndex }
         _state.value = _state.value.copy(
             activeProfile = selectedProfile,
@@ -163,9 +171,11 @@ object ProfileRepository {
         )
         persist()
         WatchedRepository.onProfileChanged(profileIndex)
-        TraktSettingsRepository.onProfileChanged()
-        TraktAuthRepository.onProfileChanged()
+        TrackingSettingsRepository.onProfileChanged()
+        ensureTrackingProvidersRegistered()
+        TrackingProviderRegistry.onProfileChanged()
         LibraryRepository.onProfileChanged(profileIndex)
+        LibraryDisplaySettingsRepository.onProfileChanged()
         WatchProgressRepository.onProfileChanged(profileIndex)
         AddonRepository.onProfileChanged(profileIndex)
         if (com.nuvio.app.core.build.AppFeaturePolicy.pluginsEnabled) {
@@ -173,6 +183,7 @@ object ProfileRepository {
         }
         ThemeSettingsRepository.onProfileChanged()
         PosterCardStyleRepository.onProfileChanged()
+        CardDepthStyleRepository.onProfileChanged()
         PlayerSettingsRepository.onProfileChanged()
         StreamBadgeSettingsRepository.onProfileChanged()
         P2pSettingsRepository.onProfileChanged()
@@ -185,9 +196,11 @@ object ProfileRepository {
         TmdbSettingsRepository.onProfileChanged()
         MdbListSettingsRepository.onProfileChanged()
         SearchHistoryRepository.onProfileChanged()
+        SearchRepository.reset()
         CollectionRepository.onProfileChanged()
         CollectionMobileSettingsRepository.onProfileChanged()
         DownloadsRepository.onProfileChanged()
+        ProfileSettingsSync.onProfileChanged()
     }
 
     suspend fun pushProfiles(profiles: List<ProfilePushPayload>) {
@@ -199,6 +212,7 @@ object ProfileRepository {
             val params = buildJsonObject {
                 put("p_client_max_profiles", MAX_PROFILES)
                 put("p_profiles", json.encodeToJsonElement(profiles))
+                putSyncOriginClientId()
             }
             SupabaseProvider.client.postgrest.rpc("sync_push_profiles", params)
             pullProfiles()
@@ -227,6 +241,8 @@ object ProfileRepository {
                 usesPrimaryPlugins = profile.usesPrimaryPlugins,
                 avatarId = profile.avatarId,
                 avatarUrl = profile.avatarUrl,
+                profileBackgroundId = profile.profileBackgroundId,
+                profileBackgroundUrl = profile.profileBackgroundUrl,
             )
         } + ProfilePushPayload(
             profileIndex = nextIndex,
@@ -246,6 +262,8 @@ object ProfileRepository {
         avatarColorHex: String,
         avatarId: String? = null,
         avatarUrl: String? = null,
+        profileBackgroundId: String? = null,
+        profileBackgroundUrl: String? = null,
         usesPrimaryAddons: Boolean = false,
     ) {
         val allPayloads = _state.value.profiles.map { profile ->
@@ -257,6 +275,8 @@ object ProfileRepository {
                     usesPrimaryAddons = usesPrimaryAddons,
                     avatarId = avatarId,
                     avatarUrl = avatarUrl,
+                    profileBackgroundId = profileBackgroundId,
+                    profileBackgroundUrl = profileBackgroundUrl,
                 )
             } else {
                 ProfilePushPayload(
@@ -267,6 +287,8 @@ object ProfileRepository {
                     usesPrimaryPlugins = profile.usesPrimaryPlugins,
                     avatarId = profile.avatarId,
                     avatarUrl = profile.avatarUrl,
+                    profileBackgroundId = profile.profileBackgroundId,
+                    profileBackgroundUrl = profile.profileBackgroundUrl,
                 )
             }
         }
@@ -289,7 +311,10 @@ object ProfileRepository {
             return
         }
         try {
-            val params = buildJsonObject { put("p_profile_id", profileIndex) }
+            val params = buildJsonObject {
+                put("p_profile_id", profileIndex)
+                putSyncOriginClientId()
+            }
             SupabaseProvider.client.postgrest.rpc("sync_delete_profile_data", params)
             pullProfiles()
         } catch (e: Throwable) {
@@ -311,6 +336,7 @@ object ProfileRepository {
             val result = SupabaseProvider.client.postgrest.rpc("verify_profile_pin", params)
             result.decodeSingle<PinVerifyResult>().also { verifyResult ->
                 if (verifyResult.unlocked) {
+                    pullProfiles()
                     rememberVerifiedPin(profileIndex = profileIndex, pin = pin)
                 }
             }
@@ -398,6 +424,8 @@ object ProfileRepository {
                 avatarColorHex = p.avatarColorHex,
                 avatarId = p.avatarId,
                 avatarUrl = p.avatarUrl,
+                profileBackgroundId = p.profileBackgroundId,
+                profileBackgroundUrl = p.profileBackgroundUrl,
                 usesPrimaryAddons = p.usesPrimaryAddons,
                 usesPrimaryPlugins = p.usesPrimaryPlugins,
             )

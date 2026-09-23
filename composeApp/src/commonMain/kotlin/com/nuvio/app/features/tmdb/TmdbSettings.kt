@@ -15,7 +15,4 @@ data class TmdbSettings(
     val useSeasonPosters: Boolean = true,
     val useMoreLikeThis: Boolean = true,
     val useCollections: Boolean = true,
-) {
-    val hasApiKey: Boolean
-        get() = apiKey.isNotBlank()
-}
+)

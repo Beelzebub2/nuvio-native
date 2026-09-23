@@ -235,6 +235,15 @@ internal class DesktopAppFullscreenController {
         // here only reintroduces the bug. wasMaximized/windowState are unused now but kept in the
         // signature/state in case that automatic sync ever needs a manual fallback.
         if (window is Frame) {
+        if (window is Frame) {
+            if (wasMaximized) {
+                window.extendedState = Frame.NORMAL
+                window.extendedState = Frame.MAXIMIZED_BOTH
+                windowState?.placement = WindowPlacement.Maximized
+            } else {
+                window.extendedState = Frame.NORMAL
+                windowState?.placement = WindowPlacement.Floating
+            }
             window.revalidate()
             window.repaint()
         }

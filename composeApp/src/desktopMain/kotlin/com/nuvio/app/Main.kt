@@ -2,6 +2,7 @@ package com.nuvio.app
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.awt.SwingWindow
 import androidx.compose.ui.configureSwingGlobalsForCompose
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,7 @@ import com.nuvio.app.features.player.desktop.DesktopWindowModeStorage
 import com.nuvio.app.features.player.desktop.NativePlayerBridge
 import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import com.nuvio.app.features.player.desktop.forceDesktopWindowForeground
+import com.nuvio.app.features.player.desktop.configureMacosWindowBeforePeer
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
 import com.nuvio.app.features.player.desktop.preloadNativePlayerBridgeAsync
 import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
@@ -49,6 +51,7 @@ import javax.swing.JComponent
 private val NuvioDesktopNativeBackground = AwtColor(0x0D, 0x0D, 0x0D)
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
+@OptIn(ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
     // On Linux, initialize GTK BEFORE AWT/Compose/Skia to prevent GdkDisplayManager
     // type registration conflict (Skiko partially loads GDK without full GTK init).
@@ -121,6 +124,7 @@ fun main(args: Array<String>) {
         val fullscreenController = remember { DesktopAppFullscreenController() }
 
         Window(
+        SwingWindow(
             onCloseRequest = {
                 P2pStreamingEngine.shutdown()
                 DiscordPresenceManager.shutdown()
@@ -130,6 +134,7 @@ fun main(args: Array<String>) {
             title = if (smokePlayerUrl == null) "Nuvio" else "Nuvio Player Smoke",
             state = windowState,
             icon = painterResource(appIconState.selected.transparentPreviewResource),
+            init = ::configureMacosWindowBeforePeer,
         ) {
             SideEffect {
                 window.background = NuvioDesktopNativeBackground
@@ -159,6 +164,7 @@ fun main(args: Array<String>) {
                 if (DesktopHostOs.current == DesktopHostOs.WINDOWS && wasFullscreenOnLastExit) {
                     delay(300)
                 }
+                installLinuxExtendedMouseButtons()
                 // Windows fullscreen is emulated natively and isn't reflected by
                 // WindowPlacement, so it must be re-applied once the window peer exists.
                 fullscreenController.applyRestoredFullscreenState(window, windowState, wasFullscreenOnLastExit)

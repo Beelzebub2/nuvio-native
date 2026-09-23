@@ -7,6 +7,7 @@ import com.nuvio.app.features.debrid.toastMessage
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadSubtitles
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
@@ -48,6 +49,18 @@ internal fun PlayerScreenRuntime.p2pSentinelUrl(infoHash: String, fileIdx: Int?)
 
 internal fun PlayerScreenRuntime.isP2pStream(stream: StreamItem): Boolean =
     stream.needsLocalDebridResolve && stream.p2pInfoHash != null
+
+internal fun PlayerScreenRuntime.openExternalSourceUrl(stream: StreamItem): Boolean {
+    if (!stream.shouldOpenExternally) return false
+    val url = stream.externalOpenUrl ?: return false
+    val openExternalUrl = args.onOpenExternalUrl ?: return false
+    openExternalUrl(url)
+    showSourcesPanel = false
+    showEpisodesPanel = false
+    controlsVisible = true
+    PlayerStreamsRepository.pauseSearchForPlayback()
+    return true
+}
 
 internal fun StreamItem.playerSourceIdentityKey(): String? {
     p2pInfoHash?.trim()?.lowercase()?.takeIf { it.isNotBlank() }?.let { hash ->
@@ -160,6 +173,7 @@ internal fun PlayerScreenRuntime.switchToP2pSourceStream(stream: StreamItem) {
         season = activeSeasonNumber,
         episode = activeEpisodeNumber,
     )
+    externalSubtitles = stream.externalSubtitles
     activeSourceUrl = p2pSentinelUrl(infoHash, stream.p2pFileIdx)
     activeSourceAudioUrl = null
     activeSourceHeaders = emptyMap()
@@ -179,6 +193,7 @@ internal fun PlayerScreenRuntime.switchToP2pSourceStream(stream: StreamItem) {
     activeInitialProgressFraction = null
     showSourcesPanel = false
     controlsVisible = true
+    PlayerStreamsRepository.pauseSearchForPlayback()
 }
 
 internal fun PlayerScreenRuntime.switchToP2pEpisodeStream(
@@ -203,6 +218,7 @@ internal fun PlayerScreenRuntime.switchToP2pEpisodeStream(
         season = episode.season,
         episode = episode.episode,
     )
+    externalSubtitles = stream.externalSubtitles
     activeSourceUrl = p2pSentinelUrl(infoHash, stream.p2pFileIdx)
     activeSourceAudioUrl = null
     activeSourceHeaders = emptyMap()
@@ -240,6 +256,7 @@ internal fun PlayerScreenRuntime.switchToSource(stream: StreamItem) {
         switchToP2pSourceStream(stream)
         return
     }
+    if (openExternalSourceUrl(stream)) return
     val url = stream.playableDirectUrl ?: return
     val sourceIdentityKey = stream.playerSourceIdentityKey()
     if (url == activeSourceUrl) {
@@ -253,6 +270,7 @@ internal fun PlayerScreenRuntime.switchToSource(stream: StreamItem) {
     if (playerSettingsUiState.streamReuseLastLinkEnabled && currentVideoId != null) {
         saveDirectStreamForReuse(stream, url, currentVideoId, activeSeasonNumber, activeEpisodeNumber)
     }
+    externalSubtitles = stream.externalSubtitles
     activeSourceUrl = url
     activeSourceAudioUrl = null
     activeSourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request)
@@ -268,6 +286,7 @@ internal fun PlayerScreenRuntime.switchToSource(stream: StreamItem) {
     activeInitialProgressFraction = null
     showSourcesPanel = false
     controlsVisible = true
+    PlayerStreamsRepository.pauseSearchForPlayback()
 }
 
 internal fun PlayerScreenRuntime.switchToEpisodeStream(stream: StreamItem, episode: MetaVideo) {
@@ -292,6 +311,7 @@ internal fun PlayerScreenRuntime.switchToEpisodeStream(stream: StreamItem, episo
         switchToP2pEpisodeStream(stream, episode)
         return
     }
+    if (openExternalSourceUrl(stream)) return
     val url = stream.playableDirectUrl ?: return
     resetEpisodePanelAndNextEpisodeState()
     flushWatchProgress()
@@ -301,6 +321,7 @@ internal fun PlayerScreenRuntime.switchToEpisodeStream(stream: StreamItem, episo
     if (playerSettingsUiState.streamReuseLastLinkEnabled) {
         saveDirectStreamForReuse(stream, url, epVideoId, episode.season, episode.episode)
     }
+    externalSubtitles = stream.externalSubtitles
     activeSourceUrl = url
     activeSourceAudioUrl = null
     activeSourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request)
@@ -322,13 +343,19 @@ internal fun PlayerScreenRuntime.switchToDownloadedEpisode(downloadItem: Downloa
         fallbackVideoId = episode.id,
     )
     val resolvedVideoId = episode.id.takeIf { it.isNotBlank() } ?: fallbackVideoId
-    val epEntry = WatchProgressRepository.progressForVideo(resolvedVideoId)
+    val epEntry = WatchProgressRepository.progressForVideo(
+        videoId = resolvedVideoId,
+        parentMetaId = parentMetaId,
+        seasonNumber = episode.season,
+        episodeNumber = episode.episode,
+    )
         ?.takeIf { !it.isCompleted }
     val epResumeFraction = epEntry?.progressPercent
         ?.takeIf { it > 0f }
         ?.let { (it / 100f).coerceIn(0f, 1f) }
     val epResumePositionMs = epEntry?.lastPositionMs?.takeIf { it > 0L } ?: 0L
 
+    externalSubtitles = DownloadSubtitles.localSubtitles(localFileUri)
     activeSourceUrl = localFileUri
     activeSourceAudioUrl = null
     activeSourceHeaders = emptyMap()
@@ -346,6 +373,7 @@ internal fun PlayerScreenRuntime.switchToDownloadedEpisode(downloadItem: Downloa
     activeEpisodeNumber = episode.episode
     activeEpisodeTitle = episode.title
     activeEpisodeThumbnail = episode.thumbnail
+    activePauseDescription = episode.overview
     activeVideoId = resolvedVideoId
     activeInitialPositionMs = epResumePositionMs
     activeInitialProgressFraction = epResumeFraction
@@ -353,6 +381,8 @@ internal fun PlayerScreenRuntime.switchToDownloadedEpisode(downloadItem: Downloa
 }
 
 internal fun PlayerScreenRuntime.playNextEpisode() {
+    if (nextEpisodeAutoPlaySearching || nextEpisodeAutoPlayCountdown != null) return
+
     scope.launchPlayerNextEpisodeAutoPlay(
         previousJob = nextEpisodeAutoPlayJob,
         nextEpisodeInfo = nextEpisodeInfo,
@@ -365,6 +395,7 @@ internal fun PlayerScreenRuntime.playNextEpisode() {
         onDownloadedEpisodeSelected = { item, episode -> switchToDownloadedEpisode(item, episode) },
         onEpisodeStreamSelected = { stream, episode -> switchToEpisodeStream(stream, episode) },
         onManualSelectionRequired = { nextVideo ->
+            nextEpisodeCardDismissed = true
             episodeStreamsPanelState = EpisodeStreamsPanelState(
                 showStreams = true,
                 selectedEpisode = nextVideo,
@@ -426,7 +457,10 @@ private fun PlayerScreenRuntime.resolveEpisodeResume(epVideoId: String, episode:
         fallbackVideoId = epVideoId,
     )
     val epEntry = WatchProgressRepository.progressForVideo(
-        epVideoId.takeIf { it.isNotBlank() } ?: epResumeVideoId,
+        videoId = epVideoId.takeIf { it.isNotBlank() } ?: epResumeVideoId,
+        parentMetaId = parentMetaId,
+        seasonNumber = episode.season,
+        episodeNumber = episode.episode,
     )?.takeIf { !it.isCompleted }
     val epResumeFraction = epEntry?.progressPercent
         ?.takeIf { it > 0f }
@@ -450,6 +484,7 @@ private fun PlayerScreenRuntime.applyEpisodeStreamMetadata(
     activeEpisodeNumber = episode.episode
     activeEpisodeTitle = episode.title
     activeEpisodeThumbnail = episode.thumbnail
+    activePauseDescription = episode.overview
     activeVideoId = episode.id
     activeInitialPositionMs = resume.positionMs
     activeInitialProgressFraction = resume.fraction
@@ -482,9 +517,6 @@ private fun PlayerScreenRuntime.saveDirectStreamForReuse(
         videoSize = stream.behaviorHints.videoSize,
         bingeGroup = stream.behaviorHints.bingeGroup,
         streamType = stream.streamType,
-        contentLanguage = resolveContentLanguage(
-            language = metaUiState.meta?.language,
-            country = metaUiState.meta?.country,
-        ),
+        contentLanguage = contentLanguage,
     )
 }

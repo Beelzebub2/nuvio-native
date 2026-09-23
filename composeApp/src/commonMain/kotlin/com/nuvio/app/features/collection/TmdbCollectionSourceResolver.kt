@@ -15,7 +15,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.collections_editor_tmdb_discover
-import nuvio.composeapp.generated.resources.collections_tmdb_api_key_required
 import nuvio.composeapp.generated.resources.collections_tmdb_collection_not_found
 import nuvio.composeapp.generated.resources.collections_tmdb_company_not_found
 import nuvio.composeapp.generated.resources.collections_tmdb_discover_no_data
@@ -35,8 +34,7 @@ object TmdbCollectionSourceResolver {
 
     suspend fun resolve(source: CollectionSource, page: Int = 1): CatalogPage = withContext(Dispatchers.Default) {
         val settings = TmdbSettingsRepository.snapshot()
-        val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-            ?: error(getString(Res.string.collections_tmdb_api_key_required))
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
         val language = normalizeTmdbLanguage(settings.language)
         val sourceType = source.tmdbType()
 
@@ -54,8 +52,7 @@ object TmdbCollectionSourceResolver {
     suspend fun importMetadata(sourceType: TmdbCollectionSourceType, id: Int): TmdbSourceImportMetadata =
         withContext(Dispatchers.Default) {
             val settings = TmdbSettingsRepository.snapshot()
-            val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-                ?: error(getString(Res.string.collections_tmdb_api_key_required))
+            val apiKey = TmdbSettingsRepository.effectiveApiKey()
             val language = normalizeTmdbLanguage(settings.language)
             when (sourceType) {
                 TmdbCollectionSourceType.LIST -> {
@@ -121,9 +118,7 @@ object TmdbCollectionSourceResolver {
     suspend fun searchCompanies(query: String): List<TmdbCompanySearchResult> = withContext(Dispatchers.Default) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext emptyList()
-        val settings = TmdbSettingsRepository.snapshot()
-        val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-            ?: error(getString(Res.string.collections_tmdb_api_key_required))
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
         fetch<TmdbCompanySearchResponse>(
             endpoint = "search/company",
             apiKey = apiKey,
@@ -135,8 +130,7 @@ object TmdbCollectionSourceResolver {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext emptyList()
         val settings = TmdbSettingsRepository.snapshot()
-        val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-            ?: error(getString(Res.string.collections_tmdb_api_key_required))
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
         val language = normalizeTmdbLanguage(settings.language)
         fetch<TmdbCollectionSearchResponse>(
             endpoint = "search/collection",
@@ -148,9 +142,7 @@ object TmdbCollectionSourceResolver {
     suspend fun searchKeywords(query: String): Map<Int, String> = withContext(Dispatchers.Default) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext emptyMap()
-        val settings = TmdbSettingsRepository.snapshot()
-        val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-            ?: error(getString(Res.string.collections_tmdb_api_key_required))
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
         fetch<TmdbKeywordSearchResponse>(
             endpoint = "search/keyword",
             apiKey = apiKey,
@@ -165,8 +157,7 @@ object TmdbCollectionSourceResolver {
 
     suspend fun genres(mediaType: TmdbCollectionMediaType): Map<Int, String> = withContext(Dispatchers.Default) {
         val settings = TmdbSettingsRepository.snapshot()
-        val apiKey = settings.apiKey.trim().takeIf { it.isNotBlank() }
-            ?: error(getString(Res.string.collections_tmdb_api_key_required))
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
         val language = normalizeTmdbLanguage(settings.language)
         val endpoint = when (mediaType) {
             TmdbCollectionMediaType.MOVIE -> "genre/movie/list"
@@ -312,7 +303,7 @@ object TmdbCollectionSourceResolver {
         )
     }
 
-    private fun buildDiscoverQuery(
+    internal fun buildDiscoverQuery(
         source: CollectionSource,
         sourceType: TmdbCollectionSourceType,
         mediaType: TmdbCollectionMediaType,
@@ -331,18 +322,26 @@ object TmdbCollectionSourceResolver {
             val companyId = source.tmdbId?.toString().takeIf { sourceType == TmdbCollectionSourceType.COMPANY }
             val networkId = source.tmdbId?.toString().takeIf { sourceType == TmdbCollectionSourceType.NETWORK }
             putIfNotBlank("with_companies", companyId ?: filters.withCompanies)
+            putIfNotBlank("without_companies", filters.withoutCompanies)
             putIfNotBlank("with_networks", networkId ?: filters.withNetworks)
             putIfNotBlank("with_genres", filters.withGenres)
+            putIfNotBlank("without_genres", filters.withoutGenres)
             putIfNotBlank("vote_count.gte", filters.voteCountGte?.toString())
             putIfNotBlank("vote_average.gte", filters.voteAverageGte?.toString())
             putIfNotBlank("vote_average.lte", filters.voteAverageLte?.toString())
             putIfNotBlank("with_original_language", filters.withOriginalLanguage)
             putIfNotBlank("with_origin_country", filters.withOriginCountry)
             putIfNotBlank("with_keywords", filters.withKeywords)
-            if (!filters.withWatchProviders.isNullOrBlank()) {
-                put("with_watch_providers", filters.withWatchProviders)
+            putIfNotBlank("without_keywords", filters.withoutKeywords)
+            val withWatchProviders = filters.withWatchProviders?.takeIf { it.isNotBlank() }
+            val withoutWatchProviders = filters.withoutWatchProviders?.takeIf { it.isNotBlank() }
+            if (withWatchProviders != null || withoutWatchProviders != null) {
+                putIfNotBlank("with_watch_providers", withWatchProviders)
+                putIfNotBlank("without_watch_providers", withoutWatchProviders)
                 put("watch_region", filters.watchRegion?.takeIf { it.isNotBlank() } ?: "US")
-                put("with_watch_monetization_types", "flatrate|free|ads|rent|buy")
+                if (withWatchProviders != null) {
+                    put("with_watch_monetization_types", "flatrate|free|ads|rent|buy")
+                }
             }
             putIfNotBlank("year", filters.year?.takeIf { mediaType == TmdbCollectionMediaType.MOVIE }?.toString())
             putIfNotBlank("first_air_date_year", filters.year?.takeIf { mediaType == TmdbCollectionMediaType.TV }?.toString())

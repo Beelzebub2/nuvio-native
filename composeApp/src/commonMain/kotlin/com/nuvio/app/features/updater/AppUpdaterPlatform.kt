@@ -17,6 +17,10 @@ data class AppUpdateAssetSelector(
 
 expect object AppUpdaterPlatform {
     val isSupported: Boolean
+    val isDebugBuild: Boolean
+    val hasSingleUpdateChannel: Boolean
+
+    fun getSupportedAbis(): List<String>
 
     val releaseSource: AppUpdateReleaseSource
 
@@ -27,6 +31,12 @@ expect object AppUpdaterPlatform {
     fun getIgnoredTag(): String?
 
     fun setIgnoredTag(tag: String?)
+
+    fun getUpdateChannel(): String?
+
+    fun setUpdateChannel(channel: String)
+
+    fun deleteDownloadedUpdate(path: String)
 
     suspend fun downloadUpdateAsset(
         assetUrl: String,

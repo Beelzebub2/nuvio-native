@@ -1,126 +1,159 @@
 package com.nuvio.app.features.watching.sync
 
 import co.touchlab.kermit.Logger
-import com.nuvio.app.features.addons.httpGetTextWithHeaders
+import com.nuvio.app.features.addons.RawHttpResponse
 import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.features.tracking.TrackingProviderId
+import com.nuvio.app.features.tracking.TrackingWatchedProvider
 import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktEpisodeMappingService
 import com.nuvio.app.features.trakt.TraktPlatformClock
+import com.nuvio.app.features.trakt.TraktWatchedHttpEngine
+import com.nuvio.app.features.trakt.TraktWatchedPageClient
+import com.nuvio.app.features.trakt.TraktWatchedShowSnapshotRepository
+import com.nuvio.app.features.trakt.TraktWatchedSnapshotIds
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watched.normalizeWatchedMarkedAtEpochMs
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private const val BASE_URL = "https://api.trakt.tv"
+private const val WATCHED_PAGE_LIMIT = 250
+private const val WATCHED_MAX_PAGES = 1_000
+
+private val platformTraktWatchedHttpEngine = TraktWatchedHttpEngine { url, headers, maxResponseBodyBytes ->
+    httpRequestRaw(
+        method = "GET",
+        url = url,
+        headers = headers,
+        body = "",
+        maxResponseBodyBytes = maxResponseBodyBytes,
+    )
+}
 
 
-object TraktWatchedSyncAdapter : WatchedSyncAdapter {
+object TraktWatchedSyncAdapter : TrackingWatchedProvider {
+    override val providerId: TrackingProviderId = TrackingProviderId.TRAKT
     private val log = Logger.withTag("TraktWatchedSync")
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = false
         explicitNulls = false
     }
+    private val pageClient = TraktWatchedPageClient(platformTraktWatchedHttpEngine)
+    private val extraWatchedKeysLock = SynchronizedObject()
+    private val extraWatchedKeysByProfile = mutableMapOf<Int, Set<String>>()
 
     // ── pull ────────────────────────────────────────────────────────────
     override suspend fun pull(
         profileId: Int,
         pageSize: Int,
     ): List<WatchedItem> {
-        val headers = TraktAuthRepository.authorizedHeaders() ?: return emptyList()
+        val headers = TraktAuthRepository.authorizedHeaders() ?: run {
+            setExtraWatchedKeys(profileId, emptySet())
+            return emptyList()
+        }
 
-        val (moviesPayload, showsPayload) = coroutineScope {
-            val movies = async {
-                httpGetTextWithHeaders(
-                    url = "$BASE_URL/sync/watched/movies",
-                    headers = headers,
-                )
-            }
-            val shows = async {
-                httpGetTextWithHeaders(
-                    url = "$BASE_URL/sync/watched/shows",
-                    headers = headers,
-                )
-            }
+        val (movieItems, showItems) = coroutineScope {
+            val movies = async { fetchWatchedMoviePages(headers) }
+            val shows = async { TraktWatchedShowSnapshotRepository.get(headers) }
             movies.await() to shows.await()
         }
 
-        val movieItems = runCatching {
-            json.decodeFromString<List<TraktWatchedMovieDto>>(moviesPayload)
-        }.getOrDefault(emptyList())
-
-        val showItems = runCatching {
-            json.decodeFromString<List<TraktWatchedShowDto>>(showsPayload)
-        }.getOrDefault(emptyList())
-
-        val result = mutableListOf<WatchedItem>()
+        val candidates = mutableListOf<TraktWatchedProjectionCandidate>()
 
         movieItems.forEach { item ->
             val movie = item.movie ?: return@forEach
-            val id = normalizeId(movie.ids) ?: return@forEach
-            result += WatchedItem(
-                id = id,
-                type = "movie",
-                name = movie.title ?: id,
-                season = null,
-                episode = null,
-                markedAtEpochMs = rankedTimestamp(item.lastWatchedAt),
+            val contentIds = movie.ids.watchedContentIds()
+            val id = contentIds.firstOrNull() ?: return@forEach
+            candidates += TraktWatchedProjectionCandidate(
+                item = WatchedItem(
+                    id = id,
+                    type = "movie",
+                    name = movie.title ?: id,
+                    season = null,
+                    episode = null,
+                    markedAtEpochMs = rankedTimestamp(item.lastWatchedAt),
+                ),
+                contentIds = contentIds,
             )
         }
 
-        showItems.forEach { item ->
+        val showItemsWithIds = showItems.map { item -> item to item.show?.ids.watchedContentIds() }
+        val ambiguousShowIds = ambiguousTraktWatchedShowIds(
+            showItemsWithIds.map { (_, contentIds) -> contentIds },
+        )
+        showItemsWithIds.forEach { (item, contentIds) ->
             val show = item.show ?: return@forEach
-            val showId = normalizeId(show.ids) ?: return@forEach
+            val safeContentIds = contentIds.filterNot(ambiguousShowIds::contains)
+            val showId = safeContentIds.firstOrNull() ?: return@forEach
             val showName = show.title ?: showId
 
-            // Add per-episode watched entries
             item.seasons.orEmpty().forEach seasonLoop@{ season ->
                 val seasonNumber = season.number ?: return@seasonLoop
                 season.episodes.orEmpty().forEach episodeLoop@{ episode ->
                     val episodeNumber = episode.number ?: return@episodeLoop
-                    result += WatchedItem(
-                        id = showId,
-                        type = "series",
-                        name = showName,
-                        season = seasonNumber,
-                        episode = episodeNumber,
-                        markedAtEpochMs = rankedTimestamp(episode.lastWatchedAt ?: item.lastWatchedAt),
+                    if ((episode.plays ?: 1) <= 0) return@episodeLoop
+                    candidates += TraktWatchedProjectionCandidate(
+                        item = WatchedItem(
+                            id = showId,
+                            type = "series",
+                            name = showName,
+                            season = seasonNumber,
+                            episode = episodeNumber,
+                            markedAtEpochMs = rankedTimestamp(episode.lastWatchedAt ?: item.lastWatchedAt),
+                        ),
+                        contentIds = safeContentIds,
                     )
                 }
             }
         }
 
-        // Apply reverse mapping for anime: if Trakt uses absolute numbering (S1E1..S1EN)
-        // but addon uses multi-season, remap pulled episodes to addon numbering.
-        val remappedResult = mutableListOf<WatchedItem>()
-        for (item in result) {
-            if (item.season == null || item.episode == null || item.type != "series") {
-                remappedResult += item
-                continue
-            }
-            val mapped = runCatching {
-                TraktEpisodeMappingService.resolveAddonEpisodeMapping(
-                    contentId = item.id,
-                    contentType = item.type,
-                    season = item.season,
-                    episode = item.episode,
-                )
-            }.getOrNull()
-            if (mapped != null && (mapped.season != item.season || mapped.episode != item.episode)) {
-                remappedResult += item.copy(season = mapped.season, episode = mapped.episode)
-            } else {
-                remappedResult += item
-            }
-        }
-
-        return remappedResult
+        val projection = buildTraktWatchedProjection(candidates)
+        setExtraWatchedKeys(profileId, projection.extraWatchedKeys)
+        return projection.items
     }
+
+    override suspend fun pullExtraWatchedKeys(profileId: Int): Set<String> =
+        synchronized(extraWatchedKeysLock) { extraWatchedKeysByProfile[profileId].orEmpty() }
+
+    override fun observeExtraWatchedKeys(profileId: Int) = emptyFlow<Set<String>>()
+
+    private suspend fun fetchWatchedMoviePages(headers: Map<String, String>): List<TraktWatchedMovieDto> {
+        val items = mutableListOf<TraktWatchedMovieDto>()
+        var page = 1
+        while (page <= WATCHED_MAX_PAGES) {
+            val response = pageClient.get(
+                url = "$BASE_URL/sync/watched/movies?page=$page&limit=$WATCHED_PAGE_LIMIT",
+                headers = headers,
+            )
+            val pageItems = json.decodeFromString<List<TraktWatchedMovieDto>>(response.body)
+            val pageCount = response.headerInt("x-pagination-page-count")
+            if (pageItems.isEmpty()) break
+            items.addAll(pageItems)
+            if (pageCount != null && page >= pageCount) break
+            page += 1
+        }
+        if (page > WATCHED_MAX_PAGES) {
+            error("Trakt watched movies exceeded max pages")
+        }
+        return items
+    }
+
+    private fun RawHttpResponse.headerInt(name: String): Int? =
+        headers[name.lowercase()]
+            ?.substringBefore(",")
+            ?.trim()
+            ?.toIntOrNull()
 
     // ── push (add to history) ───────────────────────────────────────────
     override suspend fun push(
@@ -231,6 +264,9 @@ object TraktWatchedSyncAdapter : WatchedSyncAdapter {
             if (episodeItems.isNotEmpty()) {
                 retryWithRemappedEpisodes(headers, episodeItems)
             }
+        }
+        if (shows.isNotEmpty()) {
+            TraktWatchedShowSnapshotRepository.clear()
         }
     }
 
@@ -395,6 +431,9 @@ object TraktWatchedSyncAdapter : WatchedSyncAdapter {
         if (shouldRetryRemap) {
             retryDeleteWithRemappedEpisodes(headers, episodeItems)
         }
+        if (shows.isNotEmpty()) {
+            TraktWatchedShowSnapshotRepository.clear()
+        }
     }
 
     private suspend fun retryDeleteWithRemappedEpisodes(
@@ -455,12 +494,26 @@ object TraktWatchedSyncAdapter : WatchedSyncAdapter {
 
     // ── helpers ─────────────────────────────────────────────────────────
 
-    private fun normalizeId(ids: TraktSyncIdsDto?): String? {
-        if (ids == null) return null
-        ids.imdb?.takeIf { it.isNotBlank() }?.let { return it }
-        ids.tmdb?.let { return "tmdb:$it" }
-        ids.trakt?.let { return "trakt:$it" }
-        return null
+    private fun TraktSyncIdsDto?.watchedContentIds(): List<String> = traktWatchedContentIds(
+        imdb = this?.imdb,
+        tmdb = this?.tmdb,
+        tvdb = this?.tvdb,
+        trakt = this?.trakt,
+        slug = this?.slug,
+    )
+
+    private fun TraktWatchedSnapshotIds?.watchedContentIds(): List<String> = traktWatchedContentIds(
+        imdb = this?.imdb,
+        tmdb = this?.tmdb,
+        tvdb = this?.tvdb,
+        trakt = this?.trakt,
+        slug = this?.slug,
+    )
+
+    private fun setExtraWatchedKeys(profileId: Int, keys: Set<String>) {
+        synchronized(extraWatchedKeysLock) {
+            extraWatchedKeysByProfile[profileId] = keys
+        }
     }
 
     private fun parseIds(rawId: String): TraktSyncIdsDto? {
@@ -474,14 +527,20 @@ object TraktWatchedSyncAdapter : WatchedSyncAdapter {
             val value = trimmed.substringAfter(':').toIntOrNull() ?: return null
             return TraktSyncIdsDto(tmdb = value)
         }
+        if (trimmed.startsWith("tvdb:", ignoreCase = true)) {
+            val value = trimmed.substringAfter(':').toIntOrNull() ?: return null
+            return TraktSyncIdsDto(tvdb = value)
+        }
         if (trimmed.startsWith("trakt:", ignoreCase = true)) {
             val value = trimmed.substringAfter(':').toIntOrNull() ?: return null
             return TraktSyncIdsDto(trakt = value)
         }
-
         val numeric = trimmed.substringBefore(':').toIntOrNull()
         if (numeric != null) {
             return TraktSyncIdsDto(trakt = numeric)
+        }
+        if (':' !in trimmed) {
+            return TraktSyncIdsDto(slug = trimmed)
         }
 
         return null
@@ -601,27 +660,6 @@ private data class TraktWatchedMovieDto(
     @SerialName("plays") val plays: Int? = null,
     @SerialName("last_watched_at") val lastWatchedAt: String? = null,
     @SerialName("movie") val movie: TraktSyncMediaDto? = null,
-)
-
-@Serializable
-private data class TraktWatchedShowDto(
-    @SerialName("plays") val plays: Int? = null,
-    @SerialName("last_watched_at") val lastWatchedAt: String? = null,
-    @SerialName("show") val show: TraktSyncMediaDto? = null,
-    @SerialName("seasons") val seasons: List<TraktWatchedSeasonDto>? = null,
-)
-
-@Serializable
-private data class TraktWatchedSeasonDto(
-    @SerialName("number") val number: Int? = null,
-    @SerialName("episodes") val episodes: List<TraktWatchedEpisodeDto>? = null,
-)
-
-@Serializable
-private data class TraktWatchedEpisodeDto(
-    @SerialName("number") val number: Int? = null,
-    @SerialName("plays") val plays: Int? = null,
-    @SerialName("last_watched_at") val lastWatchedAt: String? = null,
 )
 
 @Serializable

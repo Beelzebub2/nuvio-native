@@ -1,7 +1,11 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.features.tmdb.TmdbService
-import com.nuvio.app.features.trakt.TraktScrobbleRepository
+import com.nuvio.app.features.tracking.TrackingMediaReference
+import com.nuvio.app.features.tracking.TrackingScrobbleAction
+import com.nuvio.app.features.tracking.TrackingScrobbleCoordinator
+import com.nuvio.app.features.tracking.TrackingScrobbleEvent
+import com.nuvio.app.features.tracking.buildTrackingMediaReference
 import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
@@ -9,6 +13,25 @@ import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+internal fun PlayerScreenRuntime.finishTimelineScrub(positionMs: Long) {
+    lastManualSkipSeekPositions = playbackSnapshot.positionMs to positionMs
+    isScrubbingTimeline = false
+    scrubbingPositionMs = positionMs.takeIf { playbackSnapshot.isLoading }
+}
+
+internal fun PlayerScreenRuntime.updatePlaybackSnapshot(snapshot: PlayerPlaybackSnapshot) {
+    playbackSnapshot = snapshot
+    val targetPositionMs = scrubbingPositionMs ?: return
+    if (!isScrubbingTimeline && (
+            !snapshot.isLoading || snapshot.isEnded ||
+                abs(snapshot.positionMs - targetPositionMs) <= 1_000L
+            )
+    ) {
+        scrubbingPositionMs = null
+    }
+}
 
 internal val PlayerScreenRuntime.activePlaybackIdentity: String
     get() = activeTorrentInfoHash
@@ -39,7 +62,7 @@ internal val PlayerScreenRuntime.playbackSession: WatchProgressPlaybackSession
         providerAddonId = activeProviderAddonId,
         lastStreamTitle = activeStreamTitle,
         lastStreamSubtitle = activeStreamSubtitle,
-        pauseDescription = pauseDescription,
+        pauseDescription = activePauseDescription,
         lastSourceUrl = activeSourceUrl,
     )
 
@@ -55,11 +78,9 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
             (activeInitialProgressFraction == null || activeInitialProgressFraction!! <= 0f)
         lastProgressPersistEpochMs = 0L
         previousIsPlaying = false
-        pendingScrobbleStartAfterSeek = false
+        pendingSeekScrobbleRestart = false
         autoFetchedAddonSubtitlesForKey = null
-        trackPreferenceRestoreApplied = false
-        preferredAudioSelectionApplied = false
-        preferredSubtitleSelectionApplied = false
+        resetTrackSelectionState()
     }
 
     val videoIdentity = "$identity:$activeVideoId:$activeSeasonNumber:$activeEpisodeNumber"
@@ -67,10 +88,25 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         lastResetVideoIdentity = videoIdentity
         hasRequestedScrobbleStartForCurrentItem = false
         scrobbleStartRequestGeneration = 0L
-        pendingScrobbleStartAfterSeek = false
+        pendingSeekScrobbleRestart = false
         hasSentCompletionScrobbleForCurrentItem = false
-        currentTraktScrobbleItem = null
+        currentTrackingMedia = null
+        resetTrackSelectionState()
     }
+}
+
+private fun PlayerScreenRuntime.resetTrackSelectionState() {
+    trackPreferenceRestoreApplied = false
+    preferredAudioSelectionApplied = false
+    appliedAudioPreferences = null
+    isUserExplicitAudioSelection = false
+    preferredSubtitleSelectionApplied = false
+    isUserExplicitSubtitleSelection = false
+    hasScannedTextTracksOnce = false
+    subtitleTracks = emptyList()
+    selectedSubtitleIndex = -1
+    selectedAddonSubtitleId = null
+    useCustomSubtitles = false
 }
 
 internal fun PlayerScreenRuntime.currentPlaybackProgressPercent(
@@ -81,7 +117,7 @@ internal fun PlayerScreenRuntime.currentPlaybackProgressPercent(
         .coerceIn(0f, 100f)
 }
 
-internal data class TraktScrobbleItemInputs(
+internal data class TrackingScrobbleItemInputs(
     val contentType: String,
     val parentMetaId: String,
     val videoId: String?,
@@ -91,7 +127,7 @@ internal data class TraktScrobbleItemInputs(
     val episodeTitle: String?,
 )
 
-internal fun PlayerScreenRuntime.snapshotTraktScrobbleItemInputs() = TraktScrobbleItemInputs(
+internal fun PlayerScreenRuntime.snapshotTrackingScrobbleItemInputs() = TrackingScrobbleItemInputs(
     contentType = contentType ?: parentMetaType,
     parentMetaId = parentMetaId,
     videoId = activeVideoId,
@@ -101,8 +137,8 @@ internal fun PlayerScreenRuntime.snapshotTraktScrobbleItemInputs() = TraktScrobb
     episodeTitle = activeEpisodeTitle,
 )
 
-private suspend fun TraktScrobbleItemInputs.buildItem() =
-    TraktScrobbleRepository.buildItem(
+private fun TrackingScrobbleItemInputs.buildMedia(): TrackingMediaReference =
+    buildTrackingMediaReference(
         contentType = contentType,
         parentMetaId = parentMetaId,
         videoId = videoId,
@@ -112,70 +148,122 @@ private suspend fun TraktScrobbleItemInputs.buildItem() =
         episodeTitle = episodeTitle,
     )
 
-internal suspend fun PlayerScreenRuntime.currentTraktScrobbleItem() =
-    snapshotTraktScrobbleItemInputs().buildItem()
+internal fun PlayerScreenRuntime.currentTrackingMedia(): TrackingMediaReference =
+    snapshotTrackingScrobbleItemInputs().buildMedia()
 
-internal fun PlayerScreenRuntime.emitTraktScrobbleStart() {
+internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     if (hasRequestedScrobbleStartForCurrentItem) return
     hasRequestedScrobbleStartForCurrentItem = true
     val requestGeneration = scrobbleStartRequestGeneration + 1L
     scrobbleStartRequestGeneration = requestGeneration
 
     scope.launch {
-        val item = currentTraktScrobbleItem()
-        if (item == null) {
+        val media = currentTrackingMedia()
+        if (!media.hasResolvableIdentity) {
             hasRequestedScrobbleStartForCurrentItem = false
             return@launch
         }
         if (requestGeneration != scrobbleStartRequestGeneration || !hasRequestedScrobbleStartForCurrentItem) {
             return@launch
         }
-        currentTraktScrobbleItem = item
-        TraktScrobbleRepository.scrobbleStart(
+        currentTrackingMedia = media
+        TrackingScrobbleCoordinator.scrobble(
             profileId = profileId,
-            item = item,
-            progressPercent = currentPlaybackProgressPercent(),
+            action = TrackingScrobbleAction.START,
+            event = TrackingScrobbleEvent(
+                media = media,
+                progressPercent = currentPlaybackProgressPercent().toDouble(),
+            ),
         )
     }
 }
 
-internal fun PlayerScreenRuntime.emitTraktScrobbleStop(progressPercent: Float? = null) {
+internal fun PlayerScreenRuntime.emitTrackingScrobblePause(progressPercent: Float? = null) {
+    emitTrackingScrobbleTerminal(
+        action = TrackingScrobbleAction.PAUSE,
+        progressPercent = progressPercent,
+    )
+}
+
+internal fun PlayerScreenRuntime.emitTrackingScrobbleStop(progressPercent: Float? = null) {
+    emitTrackingScrobbleTerminal(
+        action = TrackingScrobbleAction.STOP,
+        progressPercent = progressPercent,
+    )
+}
+
+private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
+    action: TrackingScrobbleAction,
+    progressPercent: Float?,
+) {
     val provided = progressPercent
     if (!hasRequestedScrobbleStartForCurrentItem && (provided ?: 0f) < 80f) return
 
     val percent = provided ?: currentPlaybackProgressPercent()
-    val itemSnapshot = currentTraktScrobbleItem
-    val inputsSnapshot = snapshotTraktScrobbleItemInputs()
+    val mediaSnapshot = currentTrackingMedia
+    val inputsSnapshot = snapshotTrackingScrobbleItemInputs()
     scope.launch(NonCancellable) {
-        val item = itemSnapshot ?: inputsSnapshot.buildItem() ?: return@launch
-        TraktScrobbleRepository.scrobbleStop(
+        val media = mediaSnapshot ?: inputsSnapshot.buildMedia()
+        if (!media.hasResolvableIdentity) return@launch
+        TrackingScrobbleCoordinator.scrobble(
             profileId = profileId,
-            item = item,
-            progressPercent = percent,
+            action = action,
+            event = TrackingScrobbleEvent(media = media, progressPercent = percent.toDouble()),
         )
     }
-    currentTraktScrobbleItem = null
+    currentTrackingMedia = null
     hasRequestedScrobbleStartForCurrentItem = false
+    pendingSeekScrobbleRestart = false
     scrobbleStartRequestGeneration += 1L
 }
 
 internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
     val progressPercent = currentPlaybackProgressPercent()
-    if (progressPercent >= 1f && progressPercent < 80f) {
-        emitTraktScrobbleStop(progressPercent)
+    if (!shouldSendStopScrobble(hasRequestedScrobbleStartForCurrentItem, progressPercent)) {
+        return
+    }
+    if (progressPercent < 80f) {
+        emitTrackingScrobbleStop(progressPercent)
         return
     }
 
     if (progressPercent >= 80f && !hasSentCompletionScrobbleForCurrentItem) {
         hasSentCompletionScrobbleForCurrentItem = true
-        emitTraktScrobbleStop(progressPercent)
+        emitTrackingScrobbleStop(progressPercent)
+    }
+}
+
+internal fun shouldSendStopScrobble(
+    hasActiveScrobble: Boolean,
+    progressPercent: Float,
+): Boolean = hasActiveScrobble || progressPercent >= 80f
+
+internal fun shouldUpdateTrackingScrobbleAfterSeek(
+    hasActiveScrobble: Boolean,
+    progressPercent: Float,
+): Boolean = hasActiveScrobble && progressPercent >= 1f && progressPercent < 80f
+
+internal fun PlayerScreenRuntime.emitTrackingSeekScrobbleStart() {
+    val mediaSnapshot = currentTrackingMedia
+    val inputsSnapshot = snapshotTrackingScrobbleItemInputs()
+    scope.launch {
+        val media = mediaSnapshot ?: inputsSnapshot.buildMedia()
+        if (!media.hasResolvableIdentity) return@launch
+        TrackingScrobbleCoordinator.scrobbleSeek(
+            profileId = profileId,
+            action = TrackingScrobbleAction.START,
+            event = TrackingScrobbleEvent(
+                media = media,
+                progressPercent = currentPlaybackProgressPercent().toDouble(),
+            ),
+        )
     }
 }
 
 internal fun PlayerScreenRuntime.tryShowParentalGuide() {
+    if (!playerSettingsUiState.showParentalGuide) return
     if (!parentalGuideHasShown && parentalWarnings.isNotEmpty() && !playbackStartedForParentalGuide) {
         playbackStartedForParentalGuide = true
-        controlsVisible = true
         showParentalGuide = true
         parentalGuideHasShown = true
     }
@@ -184,6 +272,12 @@ internal fun PlayerScreenRuntime.tryShowParentalGuide() {
 internal suspend fun PlayerScreenRuntime.resolveParentalGuideImdbId(): String? {
     val candidates = listOf(parentMetaId, activeVideoId)
     candidates.firstNotNullOfOrNull(::extractParentalGuideImdbId)?.let { return it }
+    // Fallback: use imdb_id from addon meta response
+    val metaImdbId = (metaUiState.meta ?: playerMeta)
+        ?.takeIf { it.id == parentMetaId }
+        ?.imdbId
+        ?.takeIf { it.startsWith("tt") }
+    if (metaImdbId != null) return metaImdbId
     val tmdbId = candidates.firstNotNullOfOrNull(::extractParentalGuideTmdbId) ?: return null
     return TmdbService.tmdbToImdb(
         tmdbId = tmdbId,
@@ -191,8 +285,14 @@ internal suspend fun PlayerScreenRuntime.resolveParentalGuideImdbId(): String? {
     )
 }
 
-internal fun PlayerScreenRuntime.flushWatchProgress() {
-    emitStopScrobbleForCurrentProgress()
+internal fun PlayerScreenRuntime.flushWatchProgress(
+    scrobbleAction: TrackingScrobbleAction = TrackingScrobbleAction.STOP,
+) {
+    when (scrobbleAction) {
+        TrackingScrobbleAction.PAUSE -> emitTrackingScrobblePause()
+        TrackingScrobbleAction.STOP -> emitStopScrobbleForCurrentProgress()
+        TrackingScrobbleAction.START -> Unit
+    }
     WatchProgressRepository.flushPlaybackProgress(
         session = playbackSession,
         snapshot = playbackSnapshot,
@@ -210,14 +310,39 @@ internal fun PlayerScreenRuntime.scheduleProgressSyncAfterSeek() {
         )
 
         val progressPercent = currentPlaybackProgressPercent()
-        if (progressPercent >= 1f && progressPercent < 80f) {
-            emitTraktScrobbleStop(progressPercent)
-            val shouldRestartScrobbleNow = shouldRestartScrobbleAfterSeek && shouldPlay
-            if (shouldRestartScrobbleNow && playbackSnapshot.isPlaying) {
-                pendingScrobbleStartAfterSeek = false
-                emitTraktScrobbleStart()
-            } else if (shouldRestartScrobbleNow) {
-                pendingScrobbleStartAfterSeek = true
+        if (
+            !shouldUpdateTrackingScrobbleAfterSeek(
+                hasActiveScrobble = hasRequestedScrobbleStartForCurrentItem,
+                progressPercent = progressPercent,
+            )
+        ) {
+            return@launch
+        }
+
+        val media = currentTrackingMedia ?: currentTrackingMedia()
+        if (!media.hasResolvableIdentity) return@launch
+        val stopEvent = TrackingScrobbleEvent(
+            media = media,
+            progressPercent = progressPercent.toDouble(),
+        )
+        scope.launch {
+            TrackingScrobbleCoordinator.scrobbleSeek(
+                profileId = profileId,
+                action = TrackingScrobbleAction.STOP,
+                event = stopEvent,
+            )
+            if (!shouldRestartScrobbleAfterSeek || !shouldPlay || playbackSnapshot.isEnded) return@launch
+            if (playbackSnapshot.isPlaying) {
+                pendingSeekScrobbleRestart = false
+                TrackingScrobbleCoordinator.scrobbleSeek(
+                    profileId = profileId,
+                    action = TrackingScrobbleAction.START,
+                    event = stopEvent.copy(
+                        progressPercent = currentPlaybackProgressPercent().toDouble(),
+                    ),
+                )
+            } else {
+                pendingSeekScrobbleRestart = true
             }
         }
     }

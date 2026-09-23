@@ -230,11 +230,12 @@ internal fun SettingsSection(
 @Composable
 internal fun SettingsNavigationRow(
     title: String,
-    description: String,
+    description: String?,
     icon: ImageVector? = null,
     iconPainter: Painter? = null,
     enabled: Boolean = true,
     isTablet: Boolean,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -294,15 +295,18 @@ internal fun SettingsNavigationRow(
                     color = tokens.colors.textPrimary,
                     fontWeight = FontWeight.Medium,
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.colors.textMuted,
-                    modifier = Modifier.alpha(0.92f),
-                )
+                if (!description.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colors.textMuted,
+                        modifier = Modifier.alpha(0.92f),
+                    )
+                }
             }
         }
+        trailingContent?.invoke(this)
     }
 }
 
@@ -513,6 +517,33 @@ internal fun HomescreenCatalogRow(
                     ),
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun SettingsDialogSurface(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = tokens.shapes.dialog,
+        color = tokens.colors.surfaceDialog,
+    ) {
+        Column(
+            modifier = Modifier.padding(tokens.spacing.dialogPadding),
+            verticalArrangement = Arrangement.spacedBy(tokens.spacing.listGap),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = tokens.colors.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            content()
+            Spacer(modifier = Modifier.height(NuvioTokens.Space.s2))
         }
     }
 }

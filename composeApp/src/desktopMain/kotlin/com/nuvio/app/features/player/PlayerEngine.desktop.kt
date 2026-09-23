@@ -1,14 +1,22 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -18,9 +26,11 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.LocalNuvioPlatformDensity
 import com.nuvio.app.features.player.desktop.DesktopHostOs
-import com.nuvio.app.features.player.desktop.DesktopPlayerLaunchShield
+import com.nuvio.app.features.player.desktop.DesktopPlayerPictureInPicture
 import com.nuvio.app.features.player.desktop.NativePlayerController
 import com.nuvio.app.features.player.desktop.NativePlayerHost
 import com.nuvio.app.features.player.desktop.desktopFullscreenChanges
@@ -38,31 +48,40 @@ actual fun PlatformPlayerSurface(
     useYoutubeChunkedPlayback: Boolean,
     modifier: Modifier,
     playWhenReady: Boolean,
+    initialPositionMs: Long?,
+    initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
-    initialPositionMs: Long,
     useNativeController: Boolean,
     playerControlsState: PlayerControlsState,
     onPlayerControlsAction: (PlayerControlsAction) -> Boolean,
     onPlayerControlsEvent: (String, Double) -> Boolean,
     onPlayerControlsScrubChange: (Long) -> Boolean,
     onPlayerControlsScrubFinished: (Long) -> Boolean,
+    onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
+    sourceAvailable: Boolean,
 ) {
-    if (DesktopHostOs.current == DesktopHostOs.MACOS || DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+    if (DesktopHostOs.current == DesktopHostOs.MACOS ||
+        DesktopHostOs.current == DesktopHostOs.WINDOWS ||
+        DesktopHostOs.current == DesktopHostOs.LINUX
+    ) {
         NativePlayerSurface(
             sourceUrl = sourceUrl,
+            sourceAvailable = sourceAvailable,
             sourceHeaders = sourceHeaders,
             modifier = modifier,
             playWhenReady = playWhenReady,
             resizeMode = resizeMode,
-            initialPositionMs = initialPositionMs,
+            initialPositionMs = initialPositionMs ?: 0L,
+            initialPositionRequestKey = initialPositionRequestKey,
             playerControlsState = playerControlsState,
             onPlayerControlsAction = onPlayerControlsAction,
             onPlayerControlsEvent = onPlayerControlsEvent,
             onPlayerControlsScrubChange = onPlayerControlsScrubChange,
             onPlayerControlsScrubFinished = onPlayerControlsScrubFinished,
+            onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
             onError = onError,
@@ -72,6 +91,8 @@ actual fun PlatformPlayerSurface(
 
     DesktopStubPlayerSurface(
         modifier = modifier,
+        initialPositionRequestKey = initialPositionRequestKey,
+        onInitialPositionHandled = onInitialPositionHandled,
         onControllerReady = onControllerReady,
         onSnapshot = onSnapshot,
     )
@@ -80,42 +101,47 @@ actual fun PlatformPlayerSurface(
 @Composable
 private fun NativePlayerSurface(
     sourceUrl: String,
+    sourceAvailable: Boolean,
     sourceHeaders: Map<String, String>,
     modifier: Modifier,
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
     initialPositionMs: Long,
+    initialPositionRequestKey: String?,
     playerControlsState: PlayerControlsState,
     onPlayerControlsAction: (PlayerControlsAction) -> Boolean,
     onPlayerControlsEvent: (String, Double) -> Boolean,
     onPlayerControlsScrubChange: (Long) -> Boolean,
     onPlayerControlsScrubFinished: (Long) -> Boolean,
+    onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
 ) {
+    val platformDensity = LocalNuvioPlatformDensity.current
     val host = remember { NativePlayerHost() }
     val controller = remember(host) { NativePlayerController(host) }
     val hostFirstPaintComplete = remember { mutableStateOf(false) }
     val hostFirstFullSizePaintComplete = remember { mutableStateOf(false) }
-    LaunchedEffect(sourceUrl) {
-        DesktopPlayerLaunchShield.showForActiveWindow()
-    }
     val playbackHeaders = remember(sourceHeaders) { sanitizePlaybackHeaders(sourceHeaders) }
     val latestOnPlayerControlsAction = rememberUpdatedState(onPlayerControlsAction)
     val latestOnPlayerControlsEvent = rememberUpdatedState(onPlayerControlsEvent)
     val latestOnPlayerControlsScrubChange = rememberUpdatedState(onPlayerControlsScrubChange)
     val latestOnPlayerControlsScrubFinished = rememberUpdatedState(onPlayerControlsScrubFinished)
+    val latestOnInitialPositionHandled = rememberUpdatedState(onInitialPositionHandled)
     val latestOnError = rememberUpdatedState(onError)
+    val latestPlayerControlsState = rememberUpdatedState(playerControlsState)
     val playerSettings by PlayerSettingsRepository.uiState.collectAsState()
     val decoderPriority = playerSettings.decoderPriority
     val nvidiaRtxSuperResolutionEnabled = playerSettings.nvidiaRtxSuperResolutionEnabled
 
-    LaunchedEffect(controller, sourceUrl, playbackHeaders) {
+    SideEffect {
         onControllerReady(controller)
     }
 
     DisposableEffect(host) {
+        DesktopPlayerPictureInPicture.setHost(host)
+        DesktopPlayerPictureInPicture.setController(controller)
         host.onDisplayableChanged = { displayable ->
             if (!displayable) {
                 hostFirstPaintComplete.value = false
@@ -127,13 +153,12 @@ private fun NativePlayerSurface(
         }
         host.onFirstFullSizePaint = {
             hostFirstFullSizePaintComplete.value = true
-            DesktopPlayerLaunchShield.hideAfter()
         }
         onDispose {
+            DesktopPlayerPictureInPicture.release()
             host.onDisplayableChanged = null
             host.onFirstPaint = null
             host.onFirstFullSizePaint = null
-            DesktopPlayerLaunchShield.hide()
         }
     }
 
@@ -146,12 +171,35 @@ private fun NativePlayerSurface(
         )
     }
 
-    DisposableEffect(controller, sourceUrl, playbackHeaders) {
+    DisposableEffect(controller, sourceAvailable, sourceUrl, playbackHeaders) {
         onDispose { controller.dispose() }
     }
 
-    LaunchedEffect(controller, sourceUrl, playbackHeaders, decoderPriority, nvidiaRtxSuperResolutionEnabled, hostFirstFullSizePaintComplete.value) {
-        if (!hostFirstFullSizePaintComplete.value) {
+    // The controls overlay owns the player shortcuts. After alt-tab, desktop
+    // window focus can return to the AWT/Compose host instead of the embedded
+    // WebView, so explicitly hand keyboard focus back to the native controls
+    // whenever the player window becomes active again.
+    DisposableEffect(controller, hostFirstFullSizePaintComplete.value) {
+        val uninstall = if (hostFirstFullSizePaintComplete.value) {
+            controller.installWindowFocusForwarding()
+        } else {
+            null
+        }
+        onDispose { uninstall?.invoke() }
+    }
+
+    LaunchedEffect(
+        controller,
+        sourceAvailable,
+        sourceUrl,
+        playbackHeaders,
+        decoderPriority,
+        nvidiaRtxSuperResolutionEnabled,
+        hostFirstFullSizePaintComplete.value,
+        initialPositionMs,
+        initialPositionRequestKey,
+    ) {
+        if (!sourceAvailable || !hostFirstFullSizePaintComplete.value) {
             return@LaunchedEffect
         }
         delay(16L)
@@ -164,10 +212,14 @@ private fun NativePlayerSurface(
             nvidiaRtxSuperResolutionEnabled = nvidiaRtxSuperResolutionEnabled,
             onError = { message -> latestOnError.value(message) },
         )
+        initialPositionRequestKey?.let { key ->
+            latestOnInitialPositionHandled.value(key, initialPositionMs > 0L)
+        }
         onControllerReady(controller)
     }
 
-    LaunchedEffect(controller, playWhenReady) {
+    LaunchedEffect(controller, sourceAvailable, playWhenReady) {
+        if (!sourceAvailable) return@LaunchedEffect
         if (playWhenReady) {
             controller.play()
         } else {
@@ -181,6 +233,13 @@ private fun NativePlayerSurface(
 
     LaunchedEffect(controller, playerControlsState) {
         controller.updateControls(playerControlsState)
+        DesktopPlayerPictureInPicture.setWindowTitle(playerControlsState.pipWindowTitle)
+    }
+
+    LaunchedEffect(controller) {
+        DesktopPlayerPictureInPicture.changes.drop(1).collect {
+            controller.updateControls(latestPlayerControlsState.value)
+        }
     }
 
     LaunchedEffect(controller) {
@@ -196,30 +255,70 @@ private fun NativePlayerSurface(
         }
     }
 
+    val pipChanges by DesktopPlayerPictureInPicture.changes.collectAsState()
+    val isInPip = pipChanges >= 0 && DesktopPlayerPictureInPicture.isEnabled
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
+        contentAlignment = Alignment.Center,
     ) {
-        SwingPanel(
-            factory = {
-                host
-            },
-            modifier = if (hostFirstPaintComplete.value) {
-                Modifier.fillMaxSize()
-            } else {
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .requiredSize(1.dp)
-            },
-            background = Color.Black,
-        )
+        // SwingPanel keeps the stable AWT host. PiP moves only the native player
+        // surface to the independent window, so Compose never loses its host peer.
+        CompositionLocalProvider(LocalDensity provides platformDensity) {
+            SwingPanel(
+                factory = { host },
+                modifier = if (isInPip) {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .requiredSize(1.dp)
+                } else if (hostFirstPaintComplete.value) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .requiredSize(1.dp)
+                },
+                background = Color.Black,
+            )
+        }
+
+        // Placeholder overlay shown when video has moved to PiP window
+        if (isInPip) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(24.dp),
+                ) {
+                    Text(
+                        text = playerControlsState.pipPlaceholderTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { DesktopPlayerPictureInPicture.clear() },
+                    ) {
+                        Text(playerControlsState.pipRestoreLabel)
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun DesktopStubPlayerSurface(
     modifier: Modifier,
+    initialPositionRequestKey: String?,
+    onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
 ) {
@@ -228,6 +327,10 @@ private fun DesktopStubPlayerSurface(
     LaunchedEffect(controller) {
         onControllerReady(controller)
         onSnapshot(PlayerPlaybackSnapshot(isLoading = false))
+    }
+
+    LaunchedEffect(initialPositionRequestKey) {
+        initialPositionRequestKey?.let { key -> onInitialPositionHandled(key, false) }
     }
 
     Box(
@@ -253,6 +356,7 @@ private class DesktopStubPlayerController : PlayerEngineController {
     override fun setPlaybackSpeed(speed: Float) = Unit
     override fun getAudioTracks(): List<AudioTrack> = emptyList()
     override fun getSubtitleTracks(): List<SubtitleTrack> = emptyList()
+    override fun applyAudioLanguagePreferences(languages: List<String>) = Unit
     override fun selectAudioTrack(index: Int) = Unit
     override fun selectSubtitleTrack(index: Int) = Unit
     override fun setSubtitleUri(url: String) = Unit

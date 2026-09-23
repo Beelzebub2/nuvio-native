@@ -9,7 +9,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -27,20 +25,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.nuvioDesktopDragScroll
+import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaExternalRating
 import com.nuvio.app.features.details.formatRuntimeForDisplay
@@ -49,9 +47,12 @@ import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_AUDIENCE
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_IMDB
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_LETTERBOXD
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_METACRITIC
+import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_MAL
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TMDB
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TOMATOES
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TRAKT
+import com.nuvio.app.features.mdblist.RottenTomatoesStatus
+import com.nuvio.app.features.mdblist.rottenTomatoesStatus
 import nuvio.composeapp.generated.resources.*
 import nuvio.composeapp.generated.resources.rating_audience_score
 import nuvio.composeapp.generated.resources.rating_imdb
@@ -72,6 +73,9 @@ import kotlin.math.roundToInt
 fun DetailMetaInfo(
     meta: MetaDetails,
     modifier: Modifier = Modifier,
+    horizontalScrollPadding: Dp = 0.dp,
+    showOverallRatings: Boolean = true,
+    isMdbListActive: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -82,13 +86,13 @@ fun DetailMetaInfo(
         val releaseLine = formatMetaReleaseLineForDetails(meta)
         val runtimeText = formatRuntimeForDisplay(meta.runtime)
         val ageBadge = meta.ageRating?.trim()?.takeIf { it.isNotBlank() }
-        val hasMdbImdbRating = meta.externalRatings.any { it.source == PROVIDER_IMDB }
         val validImdbRating = meta.imdbRating
+            ?.takeIf { showOverallRatings && !isMdbListActive }
             ?.takeIf { raw -> raw.toDoubleOrNull()?.let { it > 0.0 } == true }
         val hasMetaRow = releaseLine != null ||
             runtimeText != null ||
             ageBadge != null ||
-            (validImdbRating != null && !hasMdbImdbRating)
+            validImdbRating != null
         if (hasMetaRow) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -113,7 +117,7 @@ fun DetailMetaInfo(
                 ageBadge?.let { badge ->
                     DetailHeroMetaBadge(text = badge)
                 }
-                if (validImdbRating != null && !hasMdbImdbRating) {
+                if (validImdbRating != null) {
                     val imdbTextStyle = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.sp,
@@ -137,12 +141,13 @@ fun DetailMetaInfo(
         }
 
         AnimatedVisibility(
-            visible = meta.externalRatings.isNotEmpty(),
+            visible = isMdbListActive && meta.externalRatings.isNotEmpty(),
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically(),
         ) {
             DetailRatingsRow(
                 ratings = meta.externalRatings,
+                horizontalScrollPadding = horizontalScrollPadding,
             )
         }
 
@@ -161,38 +166,11 @@ fun DetailMetaInfo(
         }
 
         if (!meta.description.isNullOrBlank()) {
-            var expanded by remember { mutableStateOf(false) }
-            var canExpand by remember(meta.description) { mutableStateOf(false) }
-            Column(
-                modifier = Modifier.animateContentSize(),
-            ) {
-                Text(
-                    text = meta.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (expanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 22.sp,
-                    onTextLayout = { result ->
-                        if (!expanded) {
-                            canExpand = result.hasVisualOverflow
-                        }
-                    },
-                )
-                if (canExpand) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (expanded) {
-                            stringResource(Res.string.details_show_less)
-                        } else {
-                            stringResource(Res.string.details_show_more)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { expanded = !expanded },
-                    )
-                }
-            }
+            ExpandableDescription(
+                text = meta.description,
+                collapsedMaxLines = 3,
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+            )
         }
     }
 }
@@ -201,6 +179,7 @@ fun DetailMetaInfo(
 internal fun DetailRatingsRow(
     ratings: List<MetaExternalRating>,
     modifier: Modifier = Modifier,
+    horizontalScrollPadding: Dp = 0.dp,
 ) {
     val orderedRatings = remember(ratings) {
         val bySource = ratings.associateBy { it.source }
@@ -214,9 +193,11 @@ internal fun DetailRatingsRow(
 
     Row(
         modifier = modifier
+            .nuvioHorizontalScrollBleed(horizontalScrollPadding)
             .fillMaxWidth()
             .nuvioDesktopDragScroll(scrollState)
-            .horizontalScroll(scrollState),
+            .horizontalScroll(scrollState)
+            .padding(horizontal = horizontalScrollPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -234,10 +215,14 @@ internal fun DetailRatingsRow(
                         storeTextColor = visuals.valueColor,
                     )
                 } else {
+                    val logoHeight = when (rating.rottenTomatoesStatus) {
+                        RottenTomatoesStatus.CERTIFIED_FRESH, RottenTomatoesStatus.VERIFIED_HOT -> 24.dp
+                        else -> 16.dp
+                    }
                     Image(
-                        painter = painterResource(visuals.logo),
+                        painter = painterResource(visuals.logoFor(rating)),
                         contentDescription = visuals.displayName,
-                        modifier = Modifier.size(width = visuals.logoWidth, height = 16.dp),
+                        modifier = Modifier.size(width = maxOf(visuals.logoWidth, logoHeight), height = logoHeight),
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
@@ -257,20 +242,28 @@ private fun ImdbRatingSourceLabel(
     storeTextColor: Color,
 ) {
     if (AppFeaturePolicy.imdbRatingLogoEnabled) {
-        Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = ImdbYellow,
-        ) {
-            Text(
-                text = stringResource(Res.string.source_imdb),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.sp,
-                ),
-                color = ImdbBlack,
+        if (isDesktop) {
+            Image(
+                painter = painterResource(Res.drawable.rating_imdb),
+                contentDescription = stringResource(Res.string.source_imdb),
+                modifier = Modifier.size(width = 30.dp, height = 16.dp),
             )
+        } else {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = ImdbYellow,
+            ) {
+                Text(
+                    text = stringResource(Res.string.source_imdb),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.sp,
+                    ),
+                    color = ImdbBlack,
+                )
+            }
         }
     } else {
         Text(
@@ -338,6 +331,17 @@ private data class RatingVisuals(
     val format: (Double) -> String,
 )
 
+private fun RatingVisuals.logoFor(rating: MetaExternalRating): DrawableResource =
+    when (rating.rottenTomatoesStatus) {
+        RottenTomatoesStatus.FRESH -> Res.drawable.rating_rotten_tomatoes
+        RottenTomatoesStatus.ROTTEN -> Res.drawable.rating_rotten_tomatoes_rotten
+        RottenTomatoesStatus.CERTIFIED_FRESH -> Res.drawable.rating_rotten_tomatoes_certified
+        RottenTomatoesStatus.HOT -> Res.drawable.rating_audience_score
+        RottenTomatoesStatus.STALE -> Res.drawable.rating_audience_stale
+        RottenTomatoesStatus.VERIFIED_HOT -> Res.drawable.rating_audience_verified_hot
+        null -> logo
+    }
+
 private val ratingVisuals = listOf(
     RatingVisuals(
         source = PROVIDER_IMDB,
@@ -353,22 +357,6 @@ private val ratingVisuals = listOf(
         logo = Res.drawable.rating_tmdb,
         logoWidth = 16.dp,
         valueColor = Color(0xFF01B4E4),
-        format = ::formatWhole,
-    ),
-    RatingVisuals(
-        source = PROVIDER_TOMATOES,
-        displayName = "Rotten Tomatoes",
-        logo = Res.drawable.rating_rotten_tomatoes,
-        logoWidth = 16.dp,
-        valueColor = Color(0xFFFA320A),
-        format = ::formatPercent,
-    ),
-    RatingVisuals(
-        source = PROVIDER_METACRITIC,
-        displayName = "Metacritic",
-        logo = Res.drawable.rating_metacritic,
-        logoWidth = 16.dp,
-        valueColor = Color(0xFFFFCC33),
         format = ::formatWhole,
     ),
     RatingVisuals(
@@ -388,12 +376,36 @@ private val ratingVisuals = listOf(
         format = ::formatOneDecimal,
     ),
     RatingVisuals(
+        source = PROVIDER_MAL,
+        displayName = "MyAnimeList",
+        logo = Res.drawable.rating_mal,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFF2E51A2),
+        format = ::formatOneDecimal,
+    ),
+    RatingVisuals(
+        source = PROVIDER_TOMATOES,
+        displayName = "Rotten Tomatoes",
+        logo = Res.drawable.rating_rotten_tomatoes,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFFFA320A),
+        format = ::formatPercent,
+    ),
+    RatingVisuals(
         source = PROVIDER_AUDIENCE,
         displayName = runBlocking { getString(Res.string.rating_audience_score) },
         logo = Res.drawable.rating_audience_score,
         logoWidth = 16.dp,
         valueColor = Color(0xFFFA320A),
         format = ::formatPercent,
+    ),
+    RatingVisuals(
+        source = PROVIDER_METACRITIC,
+        displayName = "Metacritic",
+        logo = Res.drawable.rating_metacritic,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFFFFCC33),
+        format = ::formatWhole,
     ),
 )
 

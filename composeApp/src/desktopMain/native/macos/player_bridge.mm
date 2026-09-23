@@ -42,6 +42,8 @@
 #define NX_KEYTYPE_REWIND 20
 #endif
 
+static constexpr double kMaxVolumePercent = 200.0;
+
 @class PlayerMetalView;
 @class MpvWebPlayer;
 @class NuvioPlayerOpenGLLayer;
@@ -93,6 +95,9 @@
                       eventMethod:(jmethodID)eventMethod;
 - (void)shutdown;
 - (void)updateControlsJson:(NSString *)controlsJson;
+- (void)requestFocus;
+- (void)beginWindowDrag;
+- (void)reparentSurfaceToHostView:(NSView *)hostView;
 - (void)setPaused:(BOOL)paused;
 - (BOOL)isPaused;
 - (void)seekToMilliseconds:(long long)positionMs;
@@ -121,8 +126,15 @@
                              outlineSize:(double)outlineSize
                                     bold:(BOOL)bold
                                 fontSize:(double)fontSize
-                                  subPos:(int)subPos;
+                                  subPos:(int)subPos
+                               useLibass:(BOOL)useLibass
+                                stripSdh:(BOOL)stripSdh;
 - (void)handleScriptMessage:(NSDictionary *)message;
+- (void)startMpvEventDrain;
+- (void)applyVolumeSplit:(double)percent;
+- (void)scheduleMpvEventDrain;
+- (void)drainMpvEvents;
+- (void)stopMpvEventDrain;
 - (void)focusControlsWebViewIfNeeded;
 - (void)layoutNativeSubviews;
 - (void)dispatchMediaKeyPlayerEvent:(NSString *)type;
@@ -1033,6 +1045,14 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     NSString *_lastConfiguredHdrKey;
     NSString *_lastResizeRefreshKey;
     dispatch_queue_t _mpvEventQueue;
+    // Drains mpv's event queue (property observations, async replies, log lines).
+    dispatch_queue_t _mpvDrainQueue;
+    std::atomic_bool _mpvDrainStopped;
+    // True once mpv reports current-ao == avfoundation. That AO buffers deeply
+    // inside AVSampleBufferAudioRenderer, so softvol changes lag; its own
+    // renderer volume (ao-volume) applies instantly.
+    std::atomic_bool _aoIsAvfoundation;
+    std::atomic<double> _requestedVolumePercent;
     BOOL _didFocusControlsWebView;
     BOOL _controlsWebReady;
     BOOL _fullscreenTransitionActive;
@@ -1051,6 +1071,16 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     std::atomic_bool _cachedPaused;
     std::atomic_bool _cachedLoading;
     std::atomic_bool _cachedEnded;
+    BOOL _hasAppliedSubtitleStyle;
+    BOOL _appliedSubtitleUseLibass;
+    NSString *_appliedSubtitleTextColor;
+    NSString *_appliedSubtitleBackgroundColor;
+    NSString *_appliedSubtitleOutlineColor;
+    double _appliedSubtitleOutlineSize;
+    BOOL _appliedSubtitleBold;
+    double _appliedSubtitleFontSize;
+    int64_t _appliedSubtitlePosition;
+    BOOL _appliedSubtitleStripSdh;
 }
 
 - (instancetype)initWithHostView:(NSView *)hostView
@@ -1076,6 +1106,10 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     _cachedLoading.store(true);
     _cachedEnded.store(false);
     _mpvEventQueue = dispatch_queue_create("com.nuvio.desktop.mpv-events", DISPATCH_QUEUE_SERIAL);
+    _mpvDrainQueue = dispatch_queue_create("com.nuvio.desktop.mpv-drain", DISPATCH_QUEUE_SERIAL);
+    _mpvDrainStopped.store(false);
+    _aoIsAvfoundation.store(false);
+    _requestedVolumePercent.store(100.0);
     _javaVm = javaVm;
     _eventSink = eventSink;
     _eventMethod = eventMethod;
@@ -1167,8 +1201,52 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     if (_didFocusControlsWebView || !_webView || !_webView.window) {
         return;
     }
+    [self requestFocus];
+}
+
+- (void)requestFocus {
+    if (!_webView || !_webView.window) {
+        return;
+    }
     _didFocusControlsWebView = YES;
     [_webView.window makeFirstResponder:_webView];
+}
+
+- (void)beginWindowDrag {
+    // AppKit requires the original mouse event for performWindowDragWithEvent:;
+    // the native view remains movable through the window manager on macOS.
+}
+
+- (void)reparentSurfaceToHostView:(NSView *)newHostView {
+    if (!newHostView || !newHostView.window) return;
+    NSView *oldHostView = _hostView;
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                      name:NSViewFrameDidChangeNotification
+                                                    object:oldHostView];
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                      name:NSViewBoundsDidChangeNotification
+                                                    object:oldHostView];
+    [_videoView removeFromSuperview];
+    [_webView removeFromSuperview];
+    _hostView = newHostView;
+    _hostView.wantsLayer = YES;
+    _hostView.layer.backgroundColor = NSColor.blackColor.CGColor;
+    [_hostView setPostsFrameChangedNotifications:YES];
+    [_hostView setPostsBoundsChangedNotifications:YES];
+    [_hostView addSubview:_videoView];
+    [_hostView addSubview:_webView positioned:NSWindowAbove relativeTo:_videoView];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(hostViewFrameDidChange:)
+                                                 name:NSViewFrameDidChangeNotification
+                                               object:_hostView];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(hostViewBoundsDidChange:)
+                                                 name:NSViewBoundsDidChangeNotification
+                                               object:_hostView];
+    _didFocusControlsWebView = NO;
+    [self layoutNativeSubviews];
+    [_videoView updateMetalLayerLayout];
+    [self requestFocus];
 }
 
 - (void)layoutControlsWebViewToBounds:(NSRect)bounds immediate:(BOOL)immediate {
@@ -1407,12 +1485,12 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     setMpvOptionString(_mpv, "input-default-bindings", "yes");
     setMpvOptionString(_mpv, "input-vo-keyboard", "no");
     setMpvOptionString(_mpv, "keep-open", "yes");
+    setMpvOptionString(_mpv, "volume-max", "200");
     setMpvOptionString(_mpv, "vo", "libmpv");
     setMpvOptionString(_mpv, "ao", "avfoundation,coreaudio,");
     setMpvOptionString(_mpv, "audio-channels", "auto");
     setMpvOptionString(_mpv, "hwdec", "auto");
     setMpvOptionString(_mpv, "gpu-hwdec-interop", "auto");
-    setMpvOptionString(_mpv, "hwdec-codecs", "all");
     if (decoderPriority == 0) {
         setMpvOptionString(_mpv, "vd-lavc-software-fallback", "no");
     } else if (decoderPriority == 2) {
@@ -1421,19 +1499,14 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     } else {
         setMpvOptionString(_mpv, "vd-lavc-software-fallback", "yes");
     }
-    setMpvOptionString(_mpv, "vd-lavc-threads", "4");
+    setMpvOptionString(_mpv, "vd-lavc-threads", "0");
     setMpvOptionString(_mpv, "target-colorspace-hint", "yes");
     setMpvOptionString(_mpv, "target-colorspace-hint-mode", "source");
     setMpvOptionString(_mpv, "target-colorspace-hint-strict", "no");
     setMpvOptionString(_mpv, "tone-mapping", "auto");
     setMpvOptionString(_mpv, "hdr-compute-peak", "no");
     setMpvOptionString(_mpv, "dither-depth", "auto");
-    setMpvOptionString(_mpv, "deband", "yes");
-    setMpvOptionString(_mpv, "scale", "spline36");
-    setMpvOptionString(_mpv, "cscale", "spline36");
-    setMpvOptionString(_mpv, "demuxer-max-bytes", "512MiB");
-    setMpvOptionString(_mpv, "demuxer-max-back-bytes", "256MiB");
-    setMpvOptionString(_mpv, "demuxer-seekable-cache", "yes");
+    setMpvOptionString(_mpv, "demuxer-max-bytes", "150MiB");
     setMpvOptionString(_mpv, "cache-secs", "120");
     setMpvOptionString(_mpv, "hr-seek", "no");
 
@@ -1453,6 +1526,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
         NSString *reason = [NSString stringWithFormat:@"mpv_initialize failed: %s", mpv_error_string(initResult)];
         @throw [NSException exceptionWithName:@"PlayerBridgeError" reason:reason userInfo:nil];
     }
+    [self startMpvEventDrain];
 
     NSString *renderError = nil;
     if (![_videoView createMpvRenderContext:_mpv error:&renderError]) {
@@ -1503,6 +1577,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
 
             double duration = [self doubleProperty:"duration" fallback:0.0];
             double position = [self doubleProperty:"time-pos" fallback:0.0];
+            double volumeLevel = [self volume];
             double cacheAhead = [self cacheAheadSecondsForPosition:position];
             BOOL paused = [self rawIsPaused];
             BOOL ended = [self rawIsEnded];
@@ -1527,9 +1602,10 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
                 }
                 [self applyHdrForPolledGamma:gamma primaries:primaries reason:@"sync" force:NO];
                 NSString *script = [NSString stringWithFormat:
-                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
+                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
                     duration,
                     position,
+                    volumeLevel,
                     paused ? @"true" : @"false",
                     loading ? @"true" : @"false",
                     audioTracks,
@@ -1750,6 +1826,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     if (_mpvEventQueue) {
         dispatch_sync(_mpvEventQueue, ^{});
     }
+    [self stopMpvEventDrain];
     [_videoView destroyMpvRenderContext];
     if (_mpv) {
         mpv_terminate_destroy(_mpv);
@@ -1826,21 +1903,129 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     return [self doubleProperty:"speed" fallback:_cachedSpeed.load()];
 }
 
+static void nuvioMpvWakeup(void *ctx) {
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)ctx;
+    [player scheduleMpvEventDrain];
+}
+
+- (void)startMpvEventDrain {
+    mpv_handle *mpv = _mpv;
+    if (!mpv) return;
+    _mpvDrainStopped.store(false);
+    mpv_observe_property(mpv, 2, "current-ao", MPV_FORMAT_STRING);
+    mpv_set_wakeup_callback(mpv, nuvioMpvWakeup, (__bridge void *)self);
+}
+
+- (void)scheduleMpvEventDrain {
+    if (_mpvDrainStopped.load()) return;
+    dispatch_queue_t queue = _mpvDrainQueue;
+    if (!queue) return;
+    dispatch_async(queue, ^{
+        [self drainMpvEvents];
+    });
+}
+
+- (void)drainMpvEvents {
+    if (_mpvDrainStopped.load()) return;
+    mpv_handle *mpv = _mpv;
+    if (!mpv) return;
+    for (;;) {
+        mpv_event *event = mpv_wait_event(mpv, 0);
+        if (!event || event->event_id == MPV_EVENT_NONE) break;
+        switch (event->event_id) {
+            case MPV_EVENT_PROPERTY_CHANGE: {
+                mpv_event_property *prop = (mpv_event_property *)event->data;
+                if (event->reply_userdata == 2 && prop && prop->format == MPV_FORMAT_STRING) {
+                    const char *ao = prop->data ? *(const char **)prop->data : NULL;
+                    BOOL isAvf = ao && strcmp(ao, "avfoundation") == 0;
+                    BOOL was = _aoIsAvfoundation.exchange(isAvf);
+                    if (isAvf && !was) {
+                        // The AO just came up: move the requested level onto the
+                        // renderer volume now, so the first user change later does
+                        // not have to migrate it (which would dip audibly while the
+                        // old softvol drained out of the renderer's queue).
+                        [self applyVolumeSplit:_requestedVolumePercent.load()];
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+- (void)stopMpvEventDrain {
+    _mpvDrainStopped.store(true);
+    if (_mpv) {
+        mpv_set_wakeup_callback(_mpv, NULL, NULL);
+    }
+    if (_mpvDrainQueue) {
+        dispatch_sync(_mpvDrainQueue, ^{});
+    }
+}
+
 - (void)adjustVolume:(double)delta {
     if (!_mpv) return;
-    double current = [self doubleProperty:"volume" fallback:100.0];
-    double next = fmax(0.0, fmin(100.0, current + delta));
-    mpv_set_property(_mpv, "volume", MPV_FORMAT_DOUBLE, &next);
+    double current = [self volume] * 100.0;
+    [self writeVolumePercent:current + delta];
 }
 
 - (void)setVolume:(double)level {
     if (!_mpv) return;
-    double next = fmax(0.0, fmin(100.0, level * 100.0));
-    mpv_set_property(_mpv, "volume", MPV_FORMAT_DOUBLE, &next);
+    [self writeVolumePercent:level * 100.0];
+}
+
+/**
+ * Posts the write straight to the mpv core from whatever thread asked.
+ *
+ * mpv_set_property_async enqueues the request and returns — unlike
+ * mpv_set_property it never waits on the core — so there is nothing to move off
+ * the calling thread.
+ *
+ * In particular this must NOT be dispatched to _mpvEventQueue. That queue is
+ * serial and also carries the 500ms syncControls batch, which makes a dozen
+ * *blocking* property reads (track lists, HDR params). Queueing a volume write
+ * behind that batch reintroduces exactly the latency this path exists to remove,
+ * and during a sustained scroll the whole gesture serialises behind it.
+ */
+- (void)writeVolumePercent:(double)percent {
+    double next = fmax(0.0, fmin(kMaxVolumePercent, percent));
+    _requestedVolumePercent.store(next);
+    [self applyVolumeSplit:next];
+}
+
+/**
+ * Applies a requested level to mpv.
+ *
+ * With avfoundation the audible path is: softvol gain -> mpv buffer ->
+ * AVSampleBufferAudioRenderer's queue -> output. mpv reports that AO as
+ * "device buffer: 96000 samples" plus a 96000-sample soft buffer — at 48 kHz
+ * that is up to ~4 s of audio already carrying the old gain, which is how long a
+ * softvol change took to become audible. The renderer's own volume applies at
+ * the output instantly, and mpv exposes it as ao-volume (0..100). So the
+ * 0..100% part of the level rides ao-volume and softvol stays at unity; only
+ * the boost above 100% goes through softvol, where the lag is tolerable.
+ *
+ * With any other AO everything goes through softvol, as before.
+ */
+- (void)applyVolumeSplit:(double)percent {
+    mpv_handle *mpv = _mpv;
+    if (!mpv) return;
+    if (_aoIsAvfoundation.load()) {
+        double device = fmin(100.0, percent);
+        double soft = fmax(100.0, percent);
+        mpv_set_property_async(mpv, 0, "ao-volume", MPV_FORMAT_DOUBLE, &device);
+        mpv_set_property_async(mpv, 0, "volume", MPV_FORMAT_DOUBLE, &soft);
+    } else {
+        mpv_set_property_async(mpv, 0, "volume", MPV_FORMAT_DOUBLE, &percent);
+    }
 }
 
 - (double)volume {
-    return [self doubleProperty:"volume" fallback:100.0] / 100.0;
+    double soft = [self doubleProperty:"volume" fallback:100.0];
+    double device = _aoIsAvfoundation.load() ? [self doubleProperty:"ao-volume" fallback:100.0] : 100.0;
+    return fmax(0.0, fmin(kMaxVolumePercent, soft * device / 100.0)) / 100.0;
 }
 
 - (void)setResizeMode:(int)mode {
@@ -1936,11 +2121,10 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
 
 - (BOOL)rawLoadingWithPaused:(BOOL)paused ended:(BOOL)eofReached duration:(double)duration {
     BOOL idle = [self flagProperty:"core-idle" fallback:YES];
-    BOOL seeking = [self flagProperty:"seeking" fallback:NO];
     BOOL bufferingCache = [self flagProperty:"paused-for-cache" fallback:NO];
     BOOL fileReady = duration > 0.0
         || [self int64Property:"track-list/count" fallback:0] > 0;
-    return !fileReady || (idle && !paused && !eofReached) || seeking || bufferingCache;
+    return !fileReady || (idle && !paused && !eofReached) || bufferingCache;
 }
 
 - (BOOL)isEnded {
@@ -2025,24 +2209,85 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
                              outlineSize:(double)outlineSize
                                     bold:(BOOL)bold
                                 fontSize:(double)fontSize
-                                  subPos:(int)subPos {
+                                  subPos:(int)subPos
+                               useLibass:(BOOL)useLibass
+                                stripSdh:(BOOL)stripSdh {
     if (!_mpv) return;
-    [self setStringProperty:"sub-ass-override" value:@"force"];
-    [self setStringProperty:"sub-color" value:textColor ?: @"#FFFFFFFF"];
-    [self setStringProperty:"sub-back-color" value:backgroundColor ?: @"#00000000"];
-    [self setStringProperty:"sub-outline-color" value:outlineColor ?: @"#FF000000"];
-    [self setStringProperty:"sub-border-style"
-                      value:[(backgroundColor ?: @"") hasPrefix:@"#00"] ? @"outline-and-shadow" : @"opaque-box"];
-    [self setStringProperty:"sub-bold" value:bold ? @"yes" : @"no"];
-
-    double outline = MAX(0.0, MIN(8.0, outlineSize));
-    mpv_set_property(_mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
-
     double size = MAX(18.0, MIN(96.0, fontSize));
-    mpv_set_property(_mpv, "sub-font-size", MPV_FORMAT_DOUBLE, &size);
-
+    double scale = useLibass ? size / 54.0 : 1.0;
     int64_t position = MAX(0, MIN(150, subPos));
-    mpv_set_property(_mpv, "sub-pos", MPV_FORMAT_INT64, &position);
+    double outline = MAX(0.0, MIN(8.0, outlineSize));
+    NSString *resolvedTextColor = textColor ?: @"#FFFFFFFF";
+    NSString *resolvedBackgroundColor = backgroundColor ?: @"#00000000";
+    NSString *resolvedOutlineColor = outlineColor ?: @"#FF000000";
+
+    BOOL modeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleUseLibass != useLibass;
+    BOOL sizeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleFontSize != size;
+    BOOL positionChanged = !_hasAppliedSubtitleStyle || _appliedSubtitlePosition != position;
+    BOOL boldChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleBold != bold;
+    BOOL textColorChanged = !_hasAppliedSubtitleStyle || ![_appliedSubtitleTextColor isEqualToString:resolvedTextColor];
+    BOOL backgroundColorChanged =
+        !_hasAppliedSubtitleStyle || ![_appliedSubtitleBackgroundColor isEqualToString:resolvedBackgroundColor];
+    BOOL outlineColorChanged =
+        !_hasAppliedSubtitleStyle || ![_appliedSubtitleOutlineColor isEqualToString:resolvedOutlineColor];
+    BOOL outlineSizeChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleOutlineSize != outline;
+    BOOL stripSdhChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleStripSdh != stripSdh;
+
+    if (modeChanged) {
+        [self setStringProperty:"sub-ass-override" value:useLibass ? @"scale" : @"force"];
+    }
+    if (modeChanged || (!useLibass && boldChanged)) {
+        const char *styleOverridesCommand[] = {
+            "change-list",
+            "sub-ass-style-overrides",
+            useLibass ? "clr" : "set",
+            useLibass ? "" : (bold ? "Bold=1" : "Bold=0"),
+            NULL,
+        };
+        mpv_command(_mpv, styleOverridesCommand);
+    }
+    if (modeChanged || sizeChanged) {
+        mpv_set_property(_mpv, "sub-scale", MPV_FORMAT_DOUBLE, &scale);
+        mpv_set_property(_mpv, "sub-font-size", MPV_FORMAT_DOUBLE, &size);
+    }
+    if (modeChanged || positionChanged) {
+        mpv_set_property(_mpv, "sub-pos", MPV_FORMAT_INT64, &position);
+    }
+
+    if (!useLibass) {
+        if (modeChanged || textColorChanged) {
+            [self setStringProperty:"sub-color" value:resolvedTextColor];
+        }
+        if (modeChanged || backgroundColorChanged) {
+            [self setStringProperty:"sub-back-color" value:resolvedBackgroundColor];
+            [self setStringProperty:"sub-border-style"
+                              value:[resolvedBackgroundColor hasPrefix:@"#00"] ? @"outline-and-shadow" : @"opaque-box"];
+        }
+        if (modeChanged || outlineColorChanged) {
+            [self setStringProperty:"sub-outline-color" value:resolvedOutlineColor];
+        }
+        if (modeChanged || boldChanged) {
+            [self setStringProperty:"sub-bold" value:bold ? @"yes" : @"no"];
+        }
+        if (modeChanged || outlineSizeChanged) {
+            mpv_set_property(_mpv, "sub-outline-size", MPV_FORMAT_DOUBLE, &outline);
+        }
+    }
+    if (stripSdhChanged) {
+        [self setStringProperty:"sub-filter-sdh" value:stripSdh ? @"yes" : @"no"];
+        [self setStringProperty:"sub-filter-sdh-harder" value:stripSdh ? @"yes" : @"no"];
+    }
+
+    _hasAppliedSubtitleStyle = YES;
+    _appliedSubtitleUseLibass = useLibass;
+    _appliedSubtitleTextColor = resolvedTextColor;
+    _appliedSubtitleBackgroundColor = resolvedBackgroundColor;
+    _appliedSubtitleOutlineColor = resolvedOutlineColor;
+    _appliedSubtitleOutlineSize = outline;
+    _appliedSubtitleBold = bold;
+    _appliedSubtitleFontSize = size;
+    _appliedSubtitlePosition = position;
+    _appliedSubtitleStripSdh = stripSdh;
 }
 
 - (double)doubleProperty:(const char *)name fallback:(double)fallback {
@@ -2284,6 +2529,17 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
         [self syncControls];
         return;
     }
+    if ([type isEqualToString:@"setPlaybackState"] || [type isEqualToString:@"setPlaybackStateQuiet"]) {
+        BOOL shouldPlay = value && value.doubleValue >= 0.5;
+        if (shouldPlay && [self isEnded]) {
+            [self seekToMilliseconds:0];
+        }
+        [self setPaused:!shouldPlay];
+        if (_eventSink && _eventMethod) {
+            [self sendPlayerEvent:type value:shouldPlay ? 1.0 : 0.0];
+        }
+        return;
+    }
     if ([type isEqualToString:@"toggleFullscreen"]) {
         [self beginFullscreenTransitionWithReason:@"control-toggle"];
     }
@@ -2426,6 +2682,26 @@ static NSArray<NSString *> *jstringArrayToNSArray(JNIEnv *env, jobjectArray valu
     return result;
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setMacosWindowFullscreen(
+    JNIEnv * /* env */,
+    jobject /* bridge */,
+    jlong windowViewPtr,
+    jboolean fullscreen
+) {
+    NSView *windowView = (__bridge NSView *)(void *)(intptr_t)windowViewPtr;
+    if (!windowView) return;
+    BOOL requestedFullscreen = fullscreen == JNI_TRUE;
+    runOnMainAsync(^{
+        NSWindow *window = windowView.window;
+        if (!window) return;
+        BOOL isFullscreen = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
+        if (isFullscreen != requestedFullscreen) {
+            [window toggleFullScreen:nil];
+        }
+    });
+}
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_create(
     JNIEnv *env,
@@ -2523,6 +2799,44 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_updateControls(
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     runOnMainAsync(^{
         [player updateControlsJson:[NSString stringWithUTF8String:controls.c_str()]];
+    });
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_requestFocus(
+    JNIEnv *,
+    jobject,
+    jlong handle
+) {
+    if (handle == 0) return;
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
+    runOnMainAsync(^{
+        [player requestFocus];
+    });
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_beginWindowDrag(
+    JNIEnv *, jobject, jlong handle
+) {
+    if (handle == 0) return;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setWindowResizable(
+    JNIEnv *, jobject, jlong, jboolean
+) {
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_reparentSurfaceNative(
+    JNIEnv *, jobject, jlong handle, jlong hostViewPtr
+) {
+    if (handle == 0 || hostViewPtr == 0) return;
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
+    NSView *hostView = (__bridge NSView *)(void *)(intptr_t)hostViewPtr;
+    runOnMainSync(^{
+        [player reparentSurfaceToHostView:hostView];
     });
 }
 
@@ -2831,7 +3145,9 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applySubtitleStyle
     jfloat outlineSize,
     jboolean bold,
     jfloat fontSize,
-    jint subPos
+    jint subPos,
+    jboolean useLibass,
+    jboolean stripSdh
 ) {
     if (handle == 0) return;
     std::string text = jstringToString(env, textColor);
@@ -2845,6 +3161,8 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applySubtitleStyle
                                      outlineSize:(double)outlineSize
                                             bold:bold == JNI_TRUE
                                         fontSize:(double)fontSize
-                                          subPos:(int)subPos];
+                                          subPos:(int)subPos
+                                       useLibass:useLibass == JNI_TRUE
+                                        stripSdh:stripSdh == JNI_TRUE];
     });
 }

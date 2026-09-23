@@ -18,6 +18,10 @@ internal object DesktopStorage {
         resolveAppDataDir().also { Files.createDirectories(it) }
     }
 
+    val cacheDir: Path by lazy {
+        resolveCacheDir().also { Files.createDirectories(it) }
+    }
+
     fun store(name: String): Store = synchronized(stores) {
         stores.getOrPut(name) { Store(rootDir.resolve("$name.properties")) }
     }
@@ -52,6 +56,22 @@ internal object DesktopStorage {
         }
     }
 
+    private fun resolveCacheDir(): Path {
+        val osName = System.getProperty("os.name").orEmpty().lowercase(Locale.ROOT)
+        val userHome = Paths.get(System.getProperty("user.home").orEmpty())
+        return when {
+            osName.contains("mac") -> userHome.resolve("Library/Caches/Nuvio")
+            osName.contains("win") -> {
+                val localAppData = System.getenv("LOCALAPPDATA")?.takeIf { it.isNotBlank() }
+                (localAppData?.let(Paths::get) ?: userHome.resolve("AppData/Local")).resolve("Nuvio/Cache")
+            }
+            else -> {
+                val xdgCache = System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() }
+                (xdgCache?.let(Paths::get) ?: userHome.resolve(".cache")).resolve("nuvio")
+            }
+        }
+    }
+
     internal class Store(
         private val file: Path,
     ) {
@@ -71,12 +91,12 @@ internal object DesktopStorage {
 
         fun putString(key: String, value: String?) = synchronized(lock) {
             ensureLoaded()
-            if (value == null) {
-                properties.remove(key)
+            val changed = if (value == null) {
+                properties.remove(key) != null
             } else {
-                properties.setProperty(key, value)
+                properties.setProperty(key, value) != value
             }
-            persist()
+            if (changed) persist()
         }
 
         fun getBoolean(key: String): Boolean? =
@@ -111,14 +131,16 @@ internal object DesktopStorage {
 
         fun remove(key: String) = synchronized(lock) {
             ensureLoaded()
-            properties.remove(key)
-            persist()
+            if (properties.remove(key) != null) persist()
         }
 
         fun removeAll(keys: Iterable<String>) = synchronized(lock) {
             ensureLoaded()
-            keys.forEach(properties::remove)
-            persist()
+            var changed = false
+            keys.forEach { key ->
+                if (properties.remove(key) != null) changed = true
+            }
+            if (changed) persist()
         }
 
         fun clearInMemory() = synchronized(lock) {

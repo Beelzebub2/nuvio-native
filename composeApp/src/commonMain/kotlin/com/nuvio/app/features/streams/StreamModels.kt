@@ -1,10 +1,7 @@
 package com.nuvio.app.features.streams
 
 import com.nuvio.app.core.build.AppFeaturePolicy
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
-import nuvio.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.getString
 
 @Serializable
 data class StreamSubtitle(
@@ -35,22 +32,32 @@ data class StreamItem(
     val badges: List<StreamBadge> = emptyList(),
 ) {
     val streamLabel: String
-        get() = name ?: runBlocking { getString(Res.string.stream_default_name) }
+        get() = name?.takeIf { it.isNotBlank() } ?: "Stream"
 
     val streamSubtitle: String?
         get() = description
 
     val directPlaybackUrl: String?
-        get() = url ?: externalUrl
+        get() = url?.trim()?.takeIf { it.isNotEmpty() }
 
     /**
      * First URL that can be handed directly to a player or HTTP consumer.
-     * `magnet:` and `torrent://` URLs are filtered out, falling back to
-     * [externalUrl] when [url] carries one of those schemes.
+     * `magnet:` and `torrent://` URLs are filtered out. `externalUrl` is not
+     * a media URL in the Stremio SDK contract and must be opened externally.
      */
     val playableDirectUrl: String?
-        get() = listOfNotNull(url, externalUrl)
-            .firstOrNull { !it.isMagnetLink() && !it.isTorrentSchemeUrl() }
+        get() = directPlaybackUrl?.takeIf { !it.isMagnetLink() && !it.isTorrentSchemeUrl() }
+
+    val externalOpenUrl: String?
+        get() = externalUrl
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.isMagnetLink() && !it.isTorrentSchemeUrl() }
+
+    val shouldOpenExternally: Boolean
+        get() = url.isNullOrBlank() &&
+            infoHash.isNullOrBlank() &&
+            clientResolve == null &&
+            externalOpenUrl != null
 
     val torrentMagnetUri: String?
         get() = listOfNotNull(url, externalUrl)
@@ -166,6 +173,7 @@ private fun String?.extractBtihInfoHash(): String? {
 
 fun StreamItem.isSelectableForPlayback(debridEnabled: Boolean): Boolean =
     playableDirectUrl != null ||
+        shouldOpenExternally ||
         (AppFeaturePolicy.p2pEnabled && needsLocalDebridResolve && p2pInfoHash != null) ||
         (debridEnabled && isAddonDebridCandidate)
 
@@ -280,6 +288,7 @@ enum class StreamsEmptyStateReason {
 
 data class StreamsUiState(
     val requestToken: String? = null,
+    val autoPlayDecided: Boolean = false,
     val groups: List<AddonStreamGroup> = emptyList(),
     val activeAddonIds: Set<String> = emptySet(),
     val selectedFilter: String? = null,

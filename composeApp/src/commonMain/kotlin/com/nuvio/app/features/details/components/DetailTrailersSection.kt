@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,10 +36,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
+import com.nuvio.app.core.ui.NuvioCardDepthSurface
+import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.nuvioDesktopDragScroll
+import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
+import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.details.MetaTrailer
 import nuvio.composeapp.generated.resources.*
 import nuvio.composeapp.generated.resources.detail_tab_trailer
@@ -52,6 +58,7 @@ fun DetailTrailersSection(
     onTrailerClick: (MetaTrailer) -> Unit,
     modifier: Modifier = Modifier,
     showHeader: Boolean = true,
+    horizontalScrollPadding: Dp = 0.dp,
 ) {
     if (trailers.isEmpty()) return
 
@@ -75,13 +82,15 @@ fun DetailTrailersSection(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val selectedTrailers = grouped[selectedCategory].orEmpty()
+    val posterCardStyle = rememberPosterCardStyleUiState()
+    val userCornerRadius = posterCardStyle.cornerRadiusDp.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val sizing = trailerSectionSizing(maxWidth.value)
+            val sizing = trailerSectionSizing(maxWidth.value, userCornerRadius)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -155,13 +164,15 @@ fun DetailTrailersSection(
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val sizing = trailerSectionSizing(maxWidth.value)
+            val sizing = trailerSectionSizing(maxWidth.value, userCornerRadius)
             val rowState = rememberLazyListState()
             LazyRow(
                 state = rowState,
                 modifier = Modifier
+                    .nuvioHorizontalScrollBleed(horizontalScrollPadding)
                     .fillMaxWidth()
                     .nuvioDesktopDragScroll(rowState),
+                contentPadding = PaddingValues(horizontal = horizontalScrollPadding),
                 horizontalArrangement = Arrangement.spacedBy(sizing.cardSpacing),
             ) {
                 itemsIndexed(
@@ -199,6 +210,10 @@ private fun TrailerCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(cornerRadius))
+                .nuvioCardDepth(
+                    shape = RoundedCornerShape(cornerRadius),
+                    surface = NuvioCardDepthSurface.Trailers,
+                )
                 .clickable(onClick = onClick),
         ) {
             AsyncImage(
@@ -253,12 +268,12 @@ private data class TrailerSectionSizing(
     val metaFontSize: androidx.compose.ui.unit.TextUnit,
 )
 
-private fun trailerSectionSizing(maxWidthDp: Float): TrailerSectionSizing =
+private fun trailerSectionSizing(maxWidthDp: Float, userCornerRadius: androidx.compose.ui.unit.Dp = 16.dp): TrailerSectionSizing =
     when {
         maxWidthDp >= 1200f -> TrailerSectionSizing(
             cardWidth = 280.dp,
             cardSpacing = 16.dp,
-            cardRadius = 20.dp,
+            cardRadius = userCornerRadius,
             selectorRadius = 20.dp,
             selectorHorizontalPadding = 14.dp,
             selectorVerticalPadding = 8.dp,
@@ -270,7 +285,7 @@ private fun trailerSectionSizing(maxWidthDp: Float): TrailerSectionSizing =
         maxWidthDp >= 1024f -> TrailerSectionSizing(
             cardWidth = 260.dp,
             cardSpacing = 14.dp,
-            cardRadius = 18.dp,
+            cardRadius = userCornerRadius,
             selectorRadius = 18.dp,
             selectorHorizontalPadding = 12.dp,
             selectorVerticalPadding = 6.dp,
@@ -282,7 +297,7 @@ private fun trailerSectionSizing(maxWidthDp: Float): TrailerSectionSizing =
         maxWidthDp >= 768f -> TrailerSectionSizing(
             cardWidth = 240.dp,
             cardSpacing = 12.dp,
-            cardRadius = 16.dp,
+            cardRadius = userCornerRadius,
             selectorRadius = 16.dp,
             selectorHorizontalPadding = 10.dp,
             selectorVerticalPadding = 5.dp,
@@ -294,7 +309,7 @@ private fun trailerSectionSizing(maxWidthDp: Float): TrailerSectionSizing =
         else -> TrailerSectionSizing(
             cardWidth = 200.dp,
             cardSpacing = 12.dp,
-            cardRadius = 16.dp,
+            cardRadius = userCornerRadius,
             selectorRadius = 16.dp,
             selectorHorizontalPadding = 10.dp,
             selectorVerticalPadding = 5.dp,

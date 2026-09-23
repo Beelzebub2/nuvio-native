@@ -27,6 +27,13 @@
     <string name="addons_badge_unavailable">Nicht verfügbar</string>
     <string name="addons_configure">Addon konfigurieren</string>
     <string name="addons_delete">Addon löschen</string>
+    <string name="addons_appstore_add_description">Bring deine Mediathek mit den Addons, die du nutzt, zu Nuvio.</string>
+    <string name="addons_appstore_empty_subtitle">Füge ein Addon hinzu, um deine Mediathek aufzubauen.</string>
+    <string name="addons_appstore_empty_title">Richte Nuvio für dich ein.</string>
+    <string name="addons_appstore_input_placeholder">Addon-URL</string>
+    <string name="addons_appstore_install_button">Addon hinzufügen</string>
+    <string name="store_empty_unavailable_title">Hier gibt es noch nichts</string>
+    <string name="store_empty_unavailable_message">Deine aktuellen Addons zeigen hier noch nichts an.</string>
     <string name="addons_empty_subtitle">Füge eine Manifest-URL hinzu, um Kataloge, Metadaten, Streams oder Untertitel in Nuvio zu laden.</string>
     <string name="addons_empty_title">Noch keine Addons installiert.</string>
     <string name="addons_error_enter_url">Gib eine Addon-URL ein.</string>
@@ -293,6 +300,7 @@
     <string name="compose_nav_library">Bibliothek</string>
     <string name="compose_nav_profile">Profil</string>
     <string name="compose_nav_search">Suche</string>
+    <string name="compose_nav_settings">Einstellungen</string>
     <string name="compose_player_audio_tracks">Tonspuren</string>
     <string name="compose_player_audio">Audio</string>
     <string name="compose_player_built_in">Integriert</string>
@@ -368,6 +376,7 @@
     <string name="compose_settings_page_integrations">Integrationen</string>
     <string name="compose_settings_page_mdblist_ratings">MDBList-Bewertungen</string>
     <string name="compose_settings_page_meta_screen">Meta-Bildschirm</string>
+    <string name="settings_appearance_section_detail_page">META-BILDSCHIRM</string>
     <string name="compose_settings_page_notifications">Benachrichtigungen</string>
     <string name="compose_settings_page_playback">Wiedergabe</string>
     <string name="compose_settings_page_plugins">Plugins</string>
@@ -383,7 +392,9 @@
     <string name="compose_settings_root_check_updates_description">Suche nach neuen Versionen der App.</string>
     <string name="compose_settings_root_check_updates_title">Nach Updates suchen</string>
     <string name="compose_settings_root_content_discovery_description">Verwalte Addons und Entdeckungsquellen.</string>
+    <string name="compose_settings_root_content_discovery_description_appstore">Verwalte Addons und wähle aus, was in Nuvio angezeigt wird.</string>
     <string name="compose_settings_root_downloads_description">Verwalte deine heruntergeladenen Filme und Episoden.</string>
+    <string name="compose_settings_root_downloads_description_appstore">Verwalte, was du auf diesem Gerät gespeichert hast.</string>
     <string name="compose_settings_root_downloads_title">Downloads</string>
     <string name="compose_settings_root_general_section">ALLGEMEIN</string>
     <string name="compose_settings_root_integrations_description">TMDB- und MDBList-Dienste verbinden.</string>
@@ -519,6 +530,7 @@
     <string name="settings_content_discovery_section_home">START</string>
     <string name="settings_content_discovery_section_sources">QUELLEN</string>
     <string name="settings_content_discovery_addons_description">Installiere, entferne, aktualisiere und sortiere deine Inhaltsquellen.</string>
+    <string name="settings_content_discovery_addons_description_appstore">Füge die Addons hinzu, die du mit Nuvio nutzt, und verwalte sie.</string>
     <string name="settings_content_discovery_plugins_description">Installiere JavaScript-Scraper-Repositories und teste Anbieter intern.</string>
     <string name="settings_content_discovery_homescreen_description">Lege fest, welche Kataloge auf der Startseite und in welcher Reihenfolge erscheinen.</string>
     <string name="settings_content_discovery_meta_screen_description">Detail-Abschnitte deaktivieren und alles unterhalb des Hero neu anordnen.</string>
@@ -656,6 +668,13 @@
     <string name="settings_playback_option_device_language">Gerätesprache</string>
     <string name="settings_playback_option_forced">Erzwungen</string>
     <string name="settings_playback_option_none">Keine</string>
+    <string name="settings_playback_addon_subtitle_startup_all">Alle Addon-Untertitel</string>
+    <string name="settings_playback_addon_subtitle_startup_all_description">Alle Add-on-Untertitel vor der Wiedergabe vorab laden und anhängen. Langsamster Start.</string>
+    <string name="settings_playback_addon_subtitle_startup_fast">Schneller Start</string>
+    <string name="settings_playback_addon_subtitle_startup_fast_description">Wiedergabe sofort starten. Durch die Auswahl von Addon-Untertiteln wird der Player möglicherweise einmal neu geladen.</string>
+    <string name="settings_playback_addon_subtitle_startup_mode">Addon-Untertitel laden</string>
+    <string name="settings_playback_addon_subtitle_startup_preferred">Bevorzugte Sprachen</string>
+    <string name="settings_playback_addon_subtitle_startup_preferred_description">Add-on-Untertitel vor der Wiedergabe vorab laden und bevorzugte/sekundäre Sprachspuren anhängen.</string>
     <string name="settings_playback_prefer_binge_group">Binge-Gruppe bevorzugen</string>
     <string name="settings_playback_prefer_binge_group_description">Bei automatischer Wiedergabe einen Stream aus derselben Binge-Gruppe wie den aktuellen bevorzugen.</string>
     <string name="settings_playback_preferred_audio_language">Bevorzugte Audiosprache</string>
@@ -730,11 +749,8 @@
     <string name="settings_playback_timeout_unlimited">Unbegrenzt</string>
     <string name="settings_playback_tunneled_playback">Tunneled-Wiedergabe</string>
     <string name="settings_playback_tunneled_playback_description">Tunneled-Wiedergabe für niedrigere Latenz bei Audio-/Video-Synchronisation aktivieren.</string>
-    <string name="settings_tmdb_add_api_key_first">Füge unten deinen eigenen TMDB-API-Schlüssel hinzu, bevor du die Anreicherung aktivierst.</string>
-    <string name="settings_tmdb_api_key_label">TMDB-API-Schlüssel</string>
     <string name="settings_tmdb_enable_enrichment">TMDB-Anreicherung aktivieren</string>
-    <string name="settings_tmdb_enable_enrichment_description">Verwende deinen TMDB-API-Schlüssel, um Addon-Metadaten auf dem Detail-Bildschirm anzureichern, wenn eine TMDB- oder IMDb-ID verfügbar ist.</string>
-    <string name="settings_tmdb_enter_api_key">Gib deinen TMDB-v3-API-Schlüssel ein.</string>
+    <string name="settings_tmdb_enable_enrichment_description">TMDB als Metadatenquelle zur Verbesserung der Add-on-Daten verwenden</string>
     <string name="settings_tmdb_language_code_label">Sprachcode</string>
     <string name="settings_tmdb_module_artwork">Artwork</string>
     <string name="settings_tmdb_module_artwork_description">Backdrop, Poster und Logo durch TMDB-Artwork ersetzen.</string>
@@ -758,10 +774,8 @@
     <string name="settings_tmdb_module_season_posters_description">TMDB-Staffel-Poster im Staffel-Auswahl-Bildschirm der Metadaten für Serien verwenden.</string>
     <string name="settings_tmdb_module_trailers">Trailer</string>
     <string name="settings_tmdb_module_trailers_description">TMDB-Trailer-Videos auf Detailseiten abrufen und anzeigen.</string>
-    <string name="settings_tmdb_personal_api_key">Persönlicher API-Schlüssel</string>
     <string name="settings_tmdb_preferred_language">Bevorzugte Sprache</string>
     <string name="settings_tmdb_preferred_language_description">Lege den TMDB-Sprachcode für lokalisierte Metadaten fest, zum Beispiel `de`, `de-DE` oder `en-US`.</string>
-    <string name="settings_tmdb_section_credentials">ANMELDEDATEN</string>
     <string name="settings_tmdb_section_localization">LOKALISIERUNG</string>
     <string name="settings_tmdb_section_modules">MODULE</string>
     <string name="settings_tmdb_section_title">TMDB</string>

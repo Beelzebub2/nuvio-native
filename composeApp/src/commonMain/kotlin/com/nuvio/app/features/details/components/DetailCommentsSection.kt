@@ -1,17 +1,12 @@
 package com.nuvio.app.features.details.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,16 +24,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nuvio.app.core.ui.SkeletonBlock
 import com.nuvio.app.core.ui.nuvioDesktopDragScroll
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.trakt.TraktCommentReview
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -57,6 +54,7 @@ fun DetailCommentsSection(
     onCommentClick: (TraktCommentReview) -> Unit,
     modifier: Modifier = Modifier,
     showHeader: Boolean = true,
+    horizontalScrollPadding: Dp = 0.dp,
 ) {
     val listState = rememberLazyListState()
 
@@ -85,8 +83,10 @@ fun DetailCommentsSection(
                 LazyRow(
                     state = loadingListState,
                     modifier = Modifier
+                        .nuvioHorizontalScrollBleed(horizontalScrollPadding)
                         .fillMaxWidth()
                         .nuvioDesktopDragScroll(loadingListState),
+                    contentPadding = PaddingValues(horizontal = horizontalScrollPadding),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(3) {
@@ -126,8 +126,10 @@ fun DetailCommentsSection(
                 LazyRow(
                     state = listState,
                     modifier = Modifier
+                        .nuvioHorizontalScrollBleed(horizontalScrollPadding)
                         .fillMaxWidth()
                         .nuvioDesktopDragScroll(listState),
+                    contentPadding = PaddingValues(horizontal = horizontalScrollPadding),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(
@@ -211,34 +213,40 @@ private fun CommentCard(
                     fontWeight = FontWeight.SemiBold,
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (review.review) {
-                        CommentChip(text = stringResource(Res.string.detail_comments_badge_review))
-                    }
-                    if (review.hasSpoilerContent) {
-                        CommentChip(text = stringResource(Res.string.detail_comments_badge_spoiler))
-                    }
-                    review.rating?.let { rating ->
-                        CommentChip(text = stringResource(Res.string.detail_comments_badge_rating, rating))
-                    }
+                if (review.review) {
+                    CommentChip(text = stringResource(Res.string.detail_comments_badge_review))
                 }
 
                 Text(
                     text = bodyText,
                     style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (review.hasSpoilerContent) {
+                        MaterialTheme.nuvio.colors.warning
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 5,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
 
-                Text(
-                    text = stringResource(Res.string.detail_comments_likes, review.likes),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    review.rating?.let { rating ->
+                        Text(
+                            text = stringResource(Res.string.detail_comments_badge_rating, rating),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            maxLines = 1,
+                        )
+                    }
+                    Text(
+                        text = stringResource(Res.string.detail_comments_likes, review.likes),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -265,28 +273,28 @@ private fun CommentChip(text: String) {
 
 @Composable
 private fun LoadingCommentCard() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shimmer_alpha",
-    )
-
     BoxWithConstraints {
         val isTablet = maxWidth >= 720.dp
         val cardWidth = if (isTablet) 340.dp else 280.dp
         val cardHeight = if (isTablet) 210.dp else 190.dp
 
-        Box(
-            modifier = Modifier
-                .width(cardWidth)
-                .height(cardHeight)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)),
-        )
+        Surface(
+            modifier = Modifier.width(cardWidth).height(cardHeight),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SkeletonBlock(width = 96.dp, height = 14.dp)
+                Spacer(modifier = Modifier.height(6.dp))
+                SkeletonBlock(modifier = Modifier.fillMaxWidth(), height = 12.dp)
+                SkeletonBlock(modifier = Modifier.fillMaxWidth(0.94f), height = 12.dp)
+                SkeletonBlock(modifier = Modifier.fillMaxWidth(0.68f), height = 12.dp)
+                Spacer(modifier = Modifier.weight(1f))
+                SkeletonBlock(width = 64.dp, height = 10.dp)
+            }
+        }
     }
 }

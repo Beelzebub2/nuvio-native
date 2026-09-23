@@ -7,6 +7,7 @@ data class MetaDetails(
     val id: String,
     val type: String,
     val name: String,
+    val imdbId: String? = null,
     val poster: String? = null,
     val background: String? = null,
     val logo: String? = null,
@@ -30,12 +31,14 @@ data class MetaDetails(
     val language: String? = null,
     val website: String? = null,
     val hasScheduledVideos: Boolean = false,
+    val defaultVideoId: String? = null,
     val moreLikeThis: List<MetaPreview> = emptyList(),
     val moreLikeThisSource: MoreLikeThisSource? = null,
     val collectionName: String? = null,
     val collectionItems: List<MetaPreview> = emptyList(),
     val trailers: List<MetaTrailer> = emptyList(),
     val links: List<MetaLink> = emptyList(),
+    val seasonPosters: Map<Int, String> = emptyMap(),
     val videos: List<MetaVideo> = emptyList(),
 )
 
@@ -47,6 +50,7 @@ enum class MoreLikeThisSource {
 data class MetaExternalRating(
     val source: String,
     val value: Double,
+    val isCertified: Boolean = false,
 )
 
 data class MetaTrailer(
@@ -60,6 +64,7 @@ data class MetaTrailer(
     val publishedAt: String? = null,
     val seasonNumber: Int? = null,
     val displayName: String? = null,
+    val iso6391: String? = null,
 )
 
 data class MetaPerson(
@@ -85,12 +90,14 @@ data class MetaVideo(
     val id: String,
     val title: String,
     val released: String? = null,
+    val available: Boolean = true,
     val thumbnail: String? = null,
     val seasonPoster: String? = null,
     val season: Int? = null,
     val episode: Int? = null,
     val overview: String? = null,
     val runtime: Int? = null,
+    val rating: Double? = null,
     val streams: List<StreamItem> = emptyList(),
 )
 

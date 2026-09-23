@@ -1,11 +1,18 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.nuvio.app.core.storage
 
 import platform.Foundation.NSUserDefaults
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSHomeDirectory
+import com.nuvio.app.features.profiles.MAX_PROFILES
 
 internal actual object PlatformLocalAccountDataCleaner {
     private val plainKeys = listOf(
         "profile_payload",
         "avatar_catalog_payload",
+        "anonymous_user_id",
+        "member_access_payload",
     )
     private val profilePinCachePrefixes = listOf("profile_pin_cache_")
     private val profileIndexedPrefixes = listOf(
@@ -17,6 +24,7 @@ internal actual object PlatformLocalAccountDataCleaner {
     )
     private val profileScopedBaseKeys = listOf(
         "catalog_settings_payload",
+        "discover_catalog_key",
         "continue_watching_preferences_payload",
         "poster_card_style_payload",
         "episode_release_notifications_payload",
@@ -50,9 +58,14 @@ internal actual object PlatformLocalAccountDataCleaner {
         "mdblist_use_trakt",
         "mdblist_use_letterboxd",
         "mdblist_use_audience",
+        "mdblist_use_mal",
         "trakt_auth_payload",
+        "simkl_auth_metadata",
+        "simkl_sync_snapshot",
         "trakt_library_payload",
         "trakt_settings_payload",
+        "library_display_settings_payload",
+        "pending_watch_progress_source",
         "collection_mobile_settings_payload",
         "collections_payload",
     )
@@ -62,7 +75,7 @@ internal actual object PlatformLocalAccountDataCleaner {
 
         plainKeys.forEach(defaults::removeObjectForKey)
 
-        (1..4).forEach { profileId ->
+        (1..MAX_PROFILES).forEach { profileId ->
             profileIndexedPrefixes.forEach { prefix ->
                 defaults.removeObjectForKey("$prefix$profileId")
             }
@@ -76,9 +89,21 @@ internal actual object PlatformLocalAccountDataCleaner {
 
         for (key in defaults.dictionaryRepresentation().keys) {
             val keyString = key as? String ?: continue
-            if (keyString.startsWith("stream_link_")) {
+            if (
+                keyString.startsWith("stream_link_") ||
+                keyString.startsWith("cw_enrichment_cache_")
+            ) {
                 defaults.removeObjectForKey(keyString)
             }
+        }
+
+        val scraperCodePath = "${NSHomeDirectory()}/Library/Application Support/nuvio_plugin_scrapers"
+        if (NSFileManager.defaultManager.fileExistsAtPath(scraperCodePath)) {
+            NSFileManager.defaultManager.removeItemAtPath(scraperCodePath, null)
+        }
+        val membershipPath = "${NSHomeDirectory()}/Library/Application Support/NuvioMembership"
+        if (NSFileManager.defaultManager.fileExistsAtPath(membershipPath)) {
+            NSFileManager.defaultManager.removeItemAtPath(membershipPath, null)
         }
     }
 }

@@ -24,7 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
-import com.nuvio.app.features.player.AddonSubtitleStartupMode
 import com.nuvio.app.features.player.AndroidLibmpvVideoOutput
 import com.nuvio.app.features.player.AndroidPlaybackEngine
 import com.nuvio.app.features.player.AudioLanguageOption
@@ -76,7 +75,12 @@ import com.nuvio.app.features.player.languageLabelForCode
 import com.nuvio.app.features.player.subtitleFontSizeRangeSp
 import com.nuvio.app.features.player.toStorageHexString
 import com.nuvio.app.features.p2p.P2pConsentDialog
+import com.nuvio.app.features.p2p.P2pCacheClearResult
+import com.nuvio.app.features.p2p.P2pCacheSize
 import com.nuvio.app.features.p2p.P2pSettingsRepository
+import com.nuvio.app.features.p2p.P2pStreamingEngine
+import com.nuvio.app.features.p2p.P2pStreamingState
+import com.nuvio.app.features.p2p.P2pTorrentProfile
 import com.nuvio.app.features.plugins.PluginsUiState
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.streams.StreamAutoPlayMode
@@ -148,15 +152,29 @@ private fun formatStep(value: Float): String {
 }
 
 @Composable
-private fun addonSubtitleStartupModeLabel(mode: AddonSubtitleStartupMode): String =
-    when (mode) {
-        AddonSubtitleStartupMode.FAST_STARTUP ->
-            stringResource(Res.string.settings_playback_addon_subtitle_startup_fast)
-        AddonSubtitleStartupMode.PREFERRED_ONLY ->
-            stringResource(Res.string.settings_playback_addon_subtitle_startup_preferred)
-        AddonSubtitleStartupMode.ALL_SUBTITLES ->
-            stringResource(Res.string.settings_playback_addon_subtitle_startup_all)
+private fun p2pProfileLabel(profile: P2pTorrentProfile): String = when (profile) {
+    P2pTorrentProfile.SOFT -> stringResource(Res.string.settings_p2p_profile_soft)
+    P2pTorrentProfile.BALANCED -> stringResource(Res.string.settings_p2p_profile_balanced)
+    P2pTorrentProfile.FAST -> stringResource(Res.string.settings_p2p_profile_fast)
+}
+
+@Composable
+private fun p2pCacheSizeLabel(size: P2pCacheSize): String = when (size) {
+    P2pCacheSize.NONE -> stringResource(Res.string.settings_p2p_cache_none)
+    P2pCacheSize.GB_2 -> stringResource(Res.string.settings_p2p_cache_2_gb)
+    P2pCacheSize.GB_5 -> stringResource(Res.string.settings_p2p_cache_5_gb)
+    P2pCacheSize.GB_10 -> stringResource(Res.string.settings_p2p_cache_10_gb)
+}
+
+private fun formatP2pCacheBytes(bytes: Long): String {
+    val gibibyte = 1024.0 * 1024.0 * 1024.0
+    val mebibyte = 1024.0 * 1024.0
+    return if (bytes >= gibibyte) {
+        "${kotlin.math.round(bytes / gibibyte * 10.0) / 10.0} GB"
+    } else {
+        "${kotlin.math.round(bytes / mebibyte * 10.0) / 10.0} MB"
     }
+}
 
 fun snapToStep(value: Float, step: Float): Float {
     return (value / step).roundToInt() * step
@@ -279,7 +297,6 @@ private fun PlaybackSettingsSection(
     var showSecondaryAudioDialog by remember { mutableStateOf(false) }
     var showPreferredSubtitleDialog by remember { mutableStateOf(false) }
     var showSecondarySubtitleDialog by remember { mutableStateOf(false) }
-    var showAddonSubtitleStartupModeDialog by remember { mutableStateOf(false) }
     var showSubtitleTextColorDialog by remember { mutableStateOf(false) }
     var showSubtitleBackgroundColorDialog by remember { mutableStateOf(false) }
     var showSubtitleOutlineColorDialog by remember { mutableStateOf(false) }
@@ -300,7 +317,12 @@ private fun PlaybackSettingsSection(
     var showAutoPlayAddonSelectionDialog by remember { mutableStateOf(false) }
     var showAutoPlayPluginSelectionDialog by remember { mutableStateOf(false) }
     var showAutoPlayRegexDialog by remember { mutableStateOf(false) }
+    var showAutoSkipSegmentDialog by remember { mutableStateOf(false) }
     var showP2pConsentDialog by remember { mutableStateOf(false) }
+    var showP2pProfileDialog by remember { mutableStateOf(false) }
+    var showP2pCacheSizeDialog by remember { mutableStateOf(false) }
+    var p2pCacheClearResult by remember { mutableStateOf<P2pCacheClearResult?>(null) }
+    var p2pCacheClearFailed by remember { mutableStateOf(false) }
     val pluginsEnabled = AppFeaturePolicy.pluginsEnabled
     val externalPlayerSupported = AppFeaturePolicy.externalPlayerSupported
     val autoPlayPlayerSettings by PlayerSettingsRepository.uiState.collectAsStateWithLifecycle()
@@ -308,6 +330,9 @@ private fun PlaybackSettingsSection(
         P2pSettingsRepository.ensureLoaded()
         P2pSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
+    val p2pCacheState by P2pStreamingEngine.cacheState.collectAsStateWithLifecycle()
+    val p2pStreamingState by P2pStreamingEngine.state.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
     val availableExternalPlayers = if (externalPlayerSupported) {
         ExternalPlayerPlatform.availablePlayers()
     } else {
@@ -334,12 +359,46 @@ private fun PlaybackSettingsSection(
             isTablet = isTablet,
         ) {
             SettingsGroup(isTablet = isTablet) {
+                if (!isDesktop) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_legacy_layout),
+                        description = stringResource(Res.string.settings_playback_legacy_layout_description),
+                        checked = autoPlayPlayerSettings.useLegacyPlayerLayout,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setUseLegacyPlayerLayout,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                }
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_show_loading_overlay),
                     description = stringResource(Res.string.settings_playback_show_loading_overlay_description),
                     checked = showLoadingOverlay,
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setShowLoadingOverlay,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.playback_show_loading_status),
+                    description = stringResource(Res.string.playback_show_loading_status_sub),
+                    checked = autoPlayPlayerSettings.showPlayerLoadingStatus,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setShowPlayerLoadingStatus,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_playback_pause_overlay),
+                    description = stringResource(Res.string.settings_playback_pause_overlay_description),
+                    checked = autoPlayPlayerSettings.pauseOverlayEnabled,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setPauseOverlayEnabled,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_playback_parental_guide),
+                    description = stringResource(Res.string.settings_playback_parental_guide_description),
+                    checked = autoPlayPlayerSettings.showParentalGuide,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setShowParentalGuide,
                 )
                 if (externalPlayerSupported) {
                     SettingsGroupDivider(isTablet = isTablet)
@@ -479,6 +538,19 @@ private fun PlaybackSettingsSection(
                 )
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_playback_subtitle_strip_sdh),
+                    description = stringResource(Res.string.settings_playback_subtitle_strip_sdh_description),
+                    checked = autoPlayPlayerSettings.subtitleStyle.stripSdh,
+                    enabled = otherSubtitleOptionsEnabled,
+                    isTablet = isTablet,
+                    onCheckedChange = { enabled ->
+                        PlayerSettingsRepository.setSubtitleStyle(
+                            autoPlayPlayerSettings.subtitleStyle.copy(stripSdh = enabled),
+                        )
+                    },
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_subtitle_use_forced),
                     description = stringResource(Res.string.settings_playback_subtitle_use_forced_description),
                     checked = autoPlayPlayerSettings.subtitleStyle.useForcedSubtitles,
@@ -502,14 +574,6 @@ private fun PlaybackSettingsSection(
                             autoPlayPlayerSettings.subtitleStyle.copy(showOnlyPreferredLanguages = enabled),
                         )
                     },
-                )
-                SettingsGroupDivider(isTablet = isTablet)
-                SettingsNavigationRow(
-                    title = stringResource(Res.string.settings_playback_addon_subtitle_startup_mode),
-                    description = addonSubtitleStartupModeLabel(autoPlayPlayerSettings.addonSubtitleStartupMode),
-                    enabled = otherSubtitleOptionsEnabled,
-                    isTablet = isTablet,
-                    onClick = { showAddonSubtitleStartupModeDialog = true },
                 )
             }
         }
@@ -594,7 +658,7 @@ private fun PlaybackSettingsSection(
                         onClick = { showSubtitleOutlineColorDialog = true },
                     )
                 }
-                val showLibassSettings = !isIos && androidPlaybackEngine != AndroidPlaybackEngine.Libmpv
+                val showLibassSettings = !isIos && (isDesktop || androidPlaybackEngine != AndroidPlaybackEngine.Libmpv)
                 if (showLibassSettings) {
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsSwitchRow(
@@ -605,7 +669,7 @@ private fun PlaybackSettingsSection(
                         isTablet = isTablet,
                         onCheckedChange = PlayerSettingsRepository::setUseLibass,
                     )
-                    if (useLibass) {
+                    if (useLibass && !isDesktop) {
                         SettingsGroupDivider(isTablet = isTablet)
                         SettingsNavigationRow(
                             title = stringResource(Res.string.settings_playback_render_type),
@@ -621,7 +685,7 @@ private fun PlaybackSettingsSection(
 
         if (P2pSettingsRepository.isVisible) {
             SettingsSection(
-                title = stringResource(Res.string.settings_p2p_title),
+                title = stringResource(Res.string.settings_playback_section_p2p),
                 isTablet = isTablet,
             ) {
                 SettingsGroup(isTablet = isTablet) {
@@ -646,6 +710,58 @@ private fun PlaybackSettingsSection(
                         isTablet = isTablet,
                         onCheckedChange = P2pSettingsRepository::setHideTorrentStats,
                     )
+                    if (!isDesktop) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.settings_p2p_profile_title),
+                            description = p2pProfileLabel(p2pSettings.torrentProfile),
+                            isTablet = isTablet,
+                            onClick = { showP2pProfileDialog = true },
+                        )
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.settings_p2p_cache_size_title),
+                            description = p2pCacheSizeLabel(p2pSettings.cacheSize),
+                            isTablet = isTablet,
+                            onClick = { showP2pCacheSizeDialog = true },
+                        )
+                        SettingsGroupDivider(isTablet = isTablet)
+                        val cacheClearAvailable = p2pStreamingState !is P2pStreamingState.Connecting &&
+                            p2pStreamingState !is P2pStreamingState.Streaming &&
+                            !p2pCacheState.isClearing
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.settings_p2p_clear_cache_title),
+                            description = when {
+                                p2pCacheState.isClearing ->
+                                    stringResource(Res.string.settings_p2p_clear_cache_clearing)
+                                !cacheClearAvailable ->
+                                    stringResource(Res.string.settings_p2p_clear_cache_playback_active)
+                                p2pCacheClearFailed ->
+                                    stringResource(Res.string.settings_p2p_clear_cache_failed)
+                                p2pCacheClearResult != null -> stringResource(
+                                    Res.string.settings_p2p_clear_cache_done,
+                                    formatP2pCacheBytes(p2pCacheClearResult!!.reclaimedBytes),
+                                )
+                                !p2pCacheState.hasMeasurement ->
+                                    stringResource(Res.string.settings_p2p_clear_cache_usage_pending)
+                                else -> stringResource(
+                                    Res.string.settings_p2p_clear_cache_usage,
+                                    formatP2pCacheBytes(p2pCacheState.usedBytes),
+                                )
+                            },
+                            enabled = cacheClearAvailable,
+                            isTablet = isTablet,
+                            onClick = {
+                                p2pCacheClearResult = null
+                                p2pCacheClearFailed = false
+                                coroutineScope.launch {
+                                    runCatching { P2pStreamingEngine.clearCache() }
+                                        .onSuccess { p2pCacheClearResult = it }
+                                        .onFailure { p2pCacheClearFailed = true }
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -800,21 +916,23 @@ private fun PlaybackSettingsSection(
 
         if (!isIos) {
             val decoderEnabled = !autoPlayPlayerSettings.externalPlayerEnabled
-            val exoOptionsEnabled = decoderEnabled && androidPlaybackEngine != AndroidPlaybackEngine.Libmpv
-            val libmpvOptionsVisible = androidPlaybackEngine != AndroidPlaybackEngine.ExoPlayer
+            val exoOptionsEnabled = decoderEnabled && (isDesktop || androidPlaybackEngine != AndroidPlaybackEngine.Libmpv)
+            val libmpvOptionsVisible = !isDesktop && androidPlaybackEngine != AndroidPlaybackEngine.ExoPlayer
             val libmpvOptionsEnabled = decoderEnabled && libmpvOptionsVisible
             SettingsSection(
                 title = stringResource(Res.string.settings_playback_section_decoder),
                 isTablet = isTablet,
             ) {
                 SettingsGroup(isTablet = isTablet) {
-                    SettingsNavigationRow(
-                        title = stringResource(Res.string.settings_playback_engine),
-                        description = androidPlaybackEngine.label,
-                        enabled = decoderEnabled,
-                        isTablet = isTablet,
-                        onClick = { showPlaybackEngineDialog = true },
-                    )
+                    if (!isDesktop) {
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.settings_playback_engine),
+                            description = androidPlaybackEngine.label,
+                            enabled = decoderEnabled,
+                            isTablet = isTablet,
+                            onClick = { showPlaybackEngineDialog = true },
+                        )
+                    }
                     if (libmpvOptionsVisible) {
                         SettingsGroupDivider(isTablet = isTablet)
                         SettingsNavigationRow(
@@ -843,7 +961,9 @@ private fun PlaybackSettingsSection(
                             onCheckedChange = PlayerSettingsRepository::setAndroidLibmpvYuv420pEnabled,
                         )
                     }
-                    SettingsGroupDivider(isTablet = isTablet)
+                    if (!isDesktop) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                    }
                     SettingsNavigationRow(
                         title = stringResource(Res.string.settings_playback_decoder_priority),
                         description = decoderPriorityLabel(decoderPriority),
@@ -851,24 +971,26 @@ private fun PlaybackSettingsSection(
                         isTablet = isTablet,
                         onClick = { showDecoderPriorityDialog = true },
                     )
-                    SettingsGroupDivider(isTablet = isTablet)
-                    SettingsSwitchRow(
-                        title = stringResource(Res.string.settings_playback_map_dv7_to_hevc),
-                        description = stringResource(Res.string.settings_playback_map_dv7_to_hevc_description),
-                        checked = mapDV7ToHevc,
-                        enabled = exoOptionsEnabled,
-                        isTablet = isTablet,
-                        onCheckedChange = PlayerSettingsRepository::setMapDV7ToHevc,
-                    )
-                    SettingsGroupDivider(isTablet = isTablet)
-                    SettingsSwitchRow(
-                        title = stringResource(Res.string.settings_playback_tunneled_playback),
-                        description = stringResource(Res.string.settings_playback_tunneled_playback_description),
-                        checked = tunnelingEnabled,
-                        enabled = exoOptionsEnabled,
-                        isTablet = isTablet,
-                        onCheckedChange = PlayerSettingsRepository::setTunnelingEnabled,
-                    )
+                    if (!isDesktop) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_playback_map_dv7_to_hevc),
+                            description = stringResource(Res.string.settings_playback_map_dv7_to_hevc_description),
+                            checked = mapDV7ToHevc,
+                            enabled = exoOptionsEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = PlayerSettingsRepository::setMapDV7ToHevc,
+                        )
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_playback_tunneled_playback),
+                            description = stringResource(Res.string.settings_playback_tunneled_playback_description),
+                            checked = tunnelingEnabled,
+                            enabled = exoOptionsEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = PlayerSettingsRepository::setTunnelingEnabled,
+                        )
+                    }
                 }
             }
         }
@@ -959,8 +1081,18 @@ private fun PlaybackSettingsSection(
                     title = stringResource(Res.string.settings_playback_skip_intro_outro_recap),
                     description = stringResource(Res.string.settings_playback_skip_intro_outro_recap_description),
                     checked = autoPlayPlayerSettings.skipIntroEnabled,
+                    enabled = !externalPlayerSupported || !autoPlayPlayerSettings.externalPlayerEnabled,
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setSkipIntroEnabled,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsNavigationRow(
+                    title = stringResource(Res.string.settings_playback_auto_skip_segments),
+                    description = autoSkipSelectionSummary(autoPlayPlayerSettings.autoSkipSegmentTypes),
+                    enabled = autoPlayPlayerSettings.skipIntroEnabled &&
+                        (!externalPlayerSupported || !autoPlayPlayerSettings.externalPlayerEnabled),
+                    isTablet = isTablet,
+                    onClick = { showAutoSkipSegmentDialog = true },
                 )
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
@@ -1035,6 +1167,17 @@ private fun PlaybackSettingsSection(
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setStreamAutoPlayNextEpisodeEnabled,
                 )
+                if (autoPlayPlayerSettings.streamAutoPlayNextEpisodeEnabled &&
+                    autoPlayPlayerSettings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL) {
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_auto_play_next_episode_fallback),
+                        description = stringResource(Res.string.settings_playback_auto_play_next_episode_fallback_description),
+                        checked = autoPlayPlayerSettings.streamAutoPlayNextEpisodeFallbackEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setStreamAutoPlayNextEpisodeFallbackEnabled,
+                    )
+                }
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_prefer_binge_group),
@@ -1204,6 +1347,45 @@ private fun PlaybackSettingsSection(
         )
     }
 
+    if (showP2pProfileDialog && !isDesktop) {
+        IosEnumSelectionDialog(
+            title = stringResource(Res.string.settings_p2p_profile_title),
+            options = P2pTorrentProfile.entries,
+            selected = p2pSettings.torrentProfile,
+            label = { p2pProfileLabel(it) },
+            description = { profile ->
+                when (profile) {
+                    P2pTorrentProfile.SOFT ->
+                        stringResource(Res.string.settings_p2p_profile_soft_description)
+                    P2pTorrentProfile.BALANCED ->
+                        stringResource(Res.string.settings_p2p_profile_balanced_description)
+                    P2pTorrentProfile.FAST ->
+                        stringResource(Res.string.settings_p2p_profile_fast_description)
+                }
+            },
+            onSelect = { profile ->
+                P2pSettingsRepository.setTorrentProfile(profile)
+                showP2pProfileDialog = false
+            },
+            onDismiss = { showP2pProfileDialog = false },
+        )
+    }
+
+    if (showP2pCacheSizeDialog && !isDesktop) {
+        IosEnumSelectionDialog(
+            title = stringResource(Res.string.settings_p2p_cache_size_title),
+            options = P2pCacheSize.entries,
+            selected = p2pSettings.cacheSize,
+            label = { p2pCacheSizeLabel(it) },
+            onSelect = { size ->
+                P2pSettingsRepository.setCacheSize(size)
+                p2pCacheClearResult = null
+                showP2pCacheSizeDialog = false
+            },
+            onDismiss = { showP2pCacheSizeDialog = false },
+        )
+    }
+
     if (showSecondaryAudioDialog) {
         val originalHint = stringResource(Res.string.settings_playback_option_original_hint)
         LanguageSelectionDialog(
@@ -1257,17 +1439,6 @@ private fun PlaybackSettingsSection(
                 showSecondarySubtitleDialog = false
             },
             onDismiss = { showSecondarySubtitleDialog = false },
-        )
-    }
-
-    if (showAddonSubtitleStartupModeDialog) {
-        AddonSubtitleStartupModeDialog(
-            selectedMode = autoPlayPlayerSettings.addonSubtitleStartupMode,
-            onModeSelected = {
-                PlayerSettingsRepository.setAddonSubtitleStartupMode(it)
-                showAddonSubtitleStartupModeDialog = false
-            },
-            onDismiss = { showAddonSubtitleStartupModeDialog = false },
         )
     }
 
@@ -1351,6 +1522,14 @@ private fun PlaybackSettingsSection(
                 showP2pConsentDialog = false
             },
             onDismiss = { showP2pConsentDialog = false },
+        )
+    }
+
+    if (showAutoSkipSegmentDialog) {
+        AutoSkipSegmentSelectionDialog(
+            selectedTypes = autoPlayPlayerSettings.autoSkipSegmentTypes,
+            onTypeToggled = PlayerSettingsRepository::setAutoSkipSegmentTypeEnabled,
+            onDismiss = { showAutoSkipSegmentDialog = false },
         )
     }
 
@@ -1895,7 +2074,7 @@ private fun ReuseCacheDurationDialog(
     onDurationSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val options = listOf(1, 6, 12, 24, 48, 72, 168)
+    val options = listOf(1, 2, 3, 6, 12, 24, 48, 72, 168)
 
     BasicAlertDialog(
         onDismissRequest = onDismiss,
@@ -2165,7 +2344,7 @@ private fun <T> IosEnumSelectionDialog(
     title: String,
     options: List<T>,
     selected: T,
-    label: (T) -> String,
+    label: @Composable (T) -> String,
     description: @Composable (T) -> String? = { null },
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
@@ -2440,108 +2619,7 @@ private fun LibassRenderTypeDialog(
     }
 }
 
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun AddonSubtitleStartupModeDialog(
-    selectedMode: AddonSubtitleStartupMode,
-    onModeSelected: (AddonSubtitleStartupMode) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val options = listOf(
-        Triple(
-            AddonSubtitleStartupMode.FAST_STARTUP,
-            Res.string.settings_playback_addon_subtitle_startup_fast,
-            Res.string.settings_playback_addon_subtitle_startup_fast_description,
-        ),
-        Triple(
-            AddonSubtitleStartupMode.PREFERRED_ONLY,
-            Res.string.settings_playback_addon_subtitle_startup_preferred,
-            Res.string.settings_playback_addon_subtitle_startup_preferred_description,
-        ),
-        Triple(
-            AddonSubtitleStartupMode.ALL_SUBTITLES,
-            Res.string.settings_playback_addon_subtitle_startup_all,
-            Res.string.settings_playback_addon_subtitle_startup_all_description,
-        ),
-    )
 
-    BasicAlertDialog(
-        onDismissRequest = onDismiss,
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = stringResource(Res.string.settings_playback_addon_subtitle_startup_mode),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    options.forEach { (mode, titleRes, descriptionRes) ->
-                        val isSelected = mode == selectedMode
-                        val containerColor = if (isSelected) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onModeSelected(mode) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = containerColor,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(titleRes),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = stringResource(descriptionRes),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier.size(24.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3332,9 +3410,8 @@ private fun IntroDbApiKeyDialog(
                         enabled = !isVerifying
                     ) { 
                         if (isVerifying) {
-                            CircularProgressIndicator(
+                            NuvioLoadingIndicator(
                                 modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         } else {

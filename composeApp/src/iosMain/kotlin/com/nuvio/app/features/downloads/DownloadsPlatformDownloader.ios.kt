@@ -37,6 +37,7 @@ import platform.Foundation.NSURLSessionDataTask
 import platform.Foundation.NSURLSessionTask
 import platform.Foundation.setHTTPMethod
 import platform.Foundation.setValue
+import platform.UIKit.UIApplication
 import platform.Foundation.timeIntervalSince1970
 import platform.darwin.NSObject
 import platform.posix.FILE
@@ -70,6 +71,7 @@ internal actual object DownloadsPlatformDownloader {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onSuccess: (localFileUri: String, totalBytes: Long?) -> Unit,
         onFailure: (message: String) -> Unit,
+        onPaused: () -> Unit,
     ): DownloadsTaskHandle {
         val job = SupervisorJob()
         val scope = CoroutineScope(job + Dispatchers.Default)
@@ -81,6 +83,7 @@ internal actual object DownloadsPlatformDownloader {
             val tempPath = "$downloadsDirectory/${request.destinationFileName}.part"
 
             try {
+                DownloadSubtitles.prepare(request.item, NSURL.fileURLWithPath(destinationPath).absoluteString!!)
                 var resumeFromBytes = fileSizeOrNull(tempPath)?.coerceAtLeast(0L) ?: 0L
 
                 var attemptedRangeRequest = resumeFromBytes > 0L
@@ -143,6 +146,13 @@ internal actual object DownloadsPlatformDownloader {
         return handle
     }
 
+    actual fun restoreItem(item: DownloadItem): DownloadItem =
+        if (item.status == DownloadStatus.Downloading) {
+            item.copy(status = DownloadStatus.Paused, errorMessage = null)
+        } else {
+            item
+        }
+
     actual fun removeFile(localFileUri: String?): Boolean {
         if (localFileUri.isNullOrBlank()) return false
         val path = localFileUri.toLocalPath() ?: return false
@@ -155,8 +165,9 @@ internal actual object DownloadsPlatformDownloader {
     }
 
     actual fun removePartialFile(destinationFileName: String): Boolean {
-        val tempPath = "${downloadsDirectoryPath()}/$destinationFileName.part"
-        return removePathIfExists(tempPath)
+        val destinationPath = "${downloadsDirectoryPath()}/$destinationFileName"
+        DownloadSubtitleStorage(NSURL.fileURLWithPath(destinationPath).absoluteString!!).remove()
+        return removePathIfExists("$destinationPath.part")
     }
 
     actual fun resolveLocalFileUri(localFileUri: String?, destinationFileName: String): String? {
@@ -175,6 +186,16 @@ internal actual object DownloadsPlatformDownloader {
         } else {
             null
         }
+    }
+
+    actual fun openDownloadsDirectory(): Boolean {
+        val url = NSURL.fileURLWithPath(downloadsDirectoryPath())
+        UIApplication.sharedApplication.openURL(
+            url = url,
+            options = emptyMap<Any?, Any>(),
+            completionHandler = null,
+        )
+        return true
     }
 }
 

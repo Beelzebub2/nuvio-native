@@ -12,10 +12,12 @@ internal actual object PlayerTrackPreferenceStorage {
     private const val subtitleTrackIdKey = "subtitle_track_id"
     private const val addonSubtitleIdKey = "addon_subtitle_id"
     private const val addonSubtitleUrlKey = "addon_subtitle_url"
+    private const val addonSubtitleItemIdKey = "addon_subtitle_item_id"
     private const val addonSubtitleAddonNameKey = "addon_subtitle_addon_name"
     private const val audioLanguageKey = "audio_language"
     private const val audioNameKey = "audio_name"
     private const val audioTrackIdKey = "audio_track_id"
+    private const val subtitleIsForcedKey = "subtitle_is_forced"
     private const val subtitleDelayMsKey = "subtitle_delay_ms"
 
     private var preferences: SharedPreferences? = null
@@ -33,10 +35,12 @@ internal actual object PlayerTrackPreferenceStorage {
             subtitleTrackId = loadString(subtitleTrackIdKey, id),
             addonSubtitleId = loadString(addonSubtitleIdKey, id),
             addonSubtitleUrl = loadString(addonSubtitleUrlKey, id),
+            addonSubtitleItemId = loadString(addonSubtitleItemIdKey, id),
             addonSubtitleAddonName = loadString(addonSubtitleAddonNameKey, id),
             audioLanguage = loadString(audioLanguageKey, id),
             audioName = loadString(audioNameKey, id),
             audioTrackId = loadString(audioTrackIdKey, id),
+            subtitleIsForced = loadBoolean(subtitleIsForcedKey, id),
         )
         return preference.takeIf {
             listOf(
@@ -46,11 +50,12 @@ internal actual object PlayerTrackPreferenceStorage {
                 it.subtitleTrackId,
                 it.addonSubtitleId,
                 it.addonSubtitleUrl,
+                it.addonSubtitleItemId,
                 it.addonSubtitleAddonName,
                 it.audioLanguage,
                 it.audioName,
                 it.audioTrackId,
-            ).any { value -> !value.isNullOrBlank() }
+            ).any { value -> !value.isNullOrBlank() } || it.subtitleIsForced != null
         }
     }
 
@@ -63,10 +68,12 @@ internal actual object PlayerTrackPreferenceStorage {
             putOptionalString(subtitleTrackIdKey, id, preference.subtitleTrackId)
             putOptionalString(addonSubtitleIdKey, id, preference.addonSubtitleId)
             putOptionalString(addonSubtitleUrlKey, id, preference.addonSubtitleUrl)
+            putOptionalString(addonSubtitleItemIdKey, id, preference.addonSubtitleItemId)
             putOptionalString(addonSubtitleAddonNameKey, id, preference.addonSubtitleAddonName)
             putOptionalString(audioLanguageKey, id, preference.audioLanguage)
             putOptionalString(audioNameKey, id, preference.audioName)
             putOptionalString(audioTrackIdKey, id, preference.audioTrackId)
+            putOptionalBoolean(subtitleIsForcedKey, id, preference.subtitleIsForced)
         }?.apply()
     }
 
@@ -90,6 +97,22 @@ internal actual object PlayerTrackPreferenceStorage {
         preferences
             ?.getString(scopedKey(field, contentId), null)
             ?.takeIf { it.isNotBlank() }
+
+    private fun loadBoolean(field: String, contentId: String): Boolean? {
+        val key = scopedKey(field, contentId)
+        val prefs = preferences ?: return null
+        if (!prefs.contains(key)) return null
+        return prefs.getBoolean(key, false)
+    }
+
+    private fun SharedPreferences.Editor.putOptionalBoolean(field: String, contentId: String, value: Boolean?) {
+        val key = scopedKey(field, contentId)
+        if (value == null) {
+            remove(key)
+        } else {
+            putBoolean(key, value)
+        }
+    }
 
     private fun SharedPreferences.Editor.putOptionalString(field: String, contentId: String, value: String?) {
         val key = scopedKey(field, contentId)

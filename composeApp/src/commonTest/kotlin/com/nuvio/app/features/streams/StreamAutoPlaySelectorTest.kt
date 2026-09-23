@@ -170,6 +170,27 @@ class StreamAutoPlaySelectorTest {
     }
 
     @Test
+    fun `first stream mode does not auto select external url browser link`() {
+        val external = stream(
+            addonName = "External Addon",
+            externalUrl = "https://example.com/watch",
+            name = "Watch on site",
+        )
+
+        val selected = StreamAutoPlaySelector.selectAutoPlayStream(
+            streams = listOf(external),
+            mode = StreamAutoPlayMode.FIRST_STREAM,
+            regexPattern = "",
+            source = StreamAutoPlaySource.ALL_SOURCES,
+            installedAddonNames = setOf("External Addon"),
+            selectedAddons = emptySet(),
+            selectedPlugins = emptySet(),
+        )
+
+        assertNull(selected)
+    }
+
+    @Test
     fun `timeout evaluation keeps pending regex debrid candidate open`() {
         val pending = stream(
             addonName = "Torrentio",
@@ -249,9 +270,31 @@ class StreamAutoPlaySelectorTest {
         assertFalse(evaluation.hasPendingDebridCandidate)
     }
 
+    @Test
+    fun `nested exclusions do not crash regex selection`() {
+        val stream = stream(
+            addonName = "Direct Addon",
+            url = "https://example.com/video.mp4",
+            name = "Movie 1080p WEB",
+        )
+
+        val selected = StreamAutoPlaySelector.selectAutoPlayStream(
+            streams = listOf(stream),
+            mode = StreamAutoPlayMode.REGEX_MATCH,
+            regexPattern = "^(?!.*\\b(CAM(?!RIP)|TS)\\b).*1080p",
+            source = StreamAutoPlaySource.ALL_SOURCES,
+            installedAddonNames = setOf("Direct Addon"),
+            selectedAddons = emptySet(),
+            selectedPlugins = emptySet(),
+        )
+
+        assertEquals(stream, selected)
+    }
+
     private fun stream(
         addonName: String,
         url: String? = null,
+        externalUrl: String? = null,
         name: String? = null,
         bingeGroup: String? = null,
         directDebrid: Boolean = false,
@@ -261,6 +304,7 @@ class StreamAutoPlaySelectorTest {
     ): StreamItem = StreamItem(
         name = name,
         url = url,
+        externalUrl = externalUrl,
         infoHash = infoHash,
         addonName = addonName,
         addonId = "addon:$addonName",

@@ -4,11 +4,13 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.nuvio.app.core.diagnostics.SentryNetworkBreadcrumbInterceptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.net.URI
 
 /**
  * Downloads subtitle files from remote URLs to local cache and provides
@@ -19,7 +21,11 @@ object SubtitleFileCache {
     private const val SUBTITLE_CACHE_DIR = "subtitles"
 
     private var appContext: Context? = null
-    private val okHttpClient: OkHttpClient by lazy { OkHttpClient() }
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(SentryNetworkBreadcrumbInterceptor())
+            .build()
+    }
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
@@ -70,11 +76,12 @@ object SubtitleFileCache {
             val filename = sanitizeFilename("${input.lang}_${input.name}.$extension")
             val file = File(dir, filename)
 
-            val request = Request.Builder()
-                .url(input.url)
-                .build()
-
             try {
+                if (input.url.startsWith("file:")) {
+                    File(URI(input.url)).copyTo(file, overwrite = true)
+                    return@withContext FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                }
+                val request = Request.Builder().url(input.url).build()
                 okHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         Log.w(TAG, "HTTP ${response.code} downloading subtitle: ${input.url}")

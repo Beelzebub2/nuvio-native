@@ -1,5 +1,8 @@
 package com.nuvio.app.features.tmdb
 
+import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.watchprogress.ContinueWatchingEnrichmentCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,9 +42,10 @@ object TmdbSettingsRepository {
         return _uiState.value
     }
 
+    fun effectiveApiKey(): String = snapshot().apiKey.ifBlank { TmdbConfig.API_KEY }
+
     fun setEnabled(value: Boolean) {
         ensureLoaded()
-        if (value && apiKey.isBlank()) return
         if (enabled == value) return
         enabled = value
         publish()
@@ -53,12 +57,9 @@ object TmdbSettingsRepository {
         val normalized = value.trim()
         if (apiKey == normalized) return
         apiKey = normalized
-        if (apiKey.isBlank()) {
-            enabled = false
-            TmdbSettingsStorage.saveEnabled(false)
-        }
         publish()
         TmdbSettingsStorage.saveApiKey(normalized)
+        invalidateMetadata()
     }
 
     fun setLanguage(value: String) {
@@ -161,9 +162,11 @@ object TmdbSettingsRepository {
     }
 
     private fun loadFromDisk() {
+        val wasLoaded = hasLoaded
+        val previousApiKey = apiKey
         hasLoaded = true
+        enabled = TmdbSettingsStorage.loadEnabled() ?: false
         apiKey = TmdbSettingsStorage.loadApiKey()?.trim().orEmpty()
-        enabled = (TmdbSettingsStorage.loadEnabled() ?: false) && apiKey.isNotBlank()
         val storedLanguage = TmdbSettingsStorage.loadLanguage()
         language = if (storedLanguage == null) "en" else normalizeLanguage(storedLanguage)
         useTrailers = TmdbSettingsStorage.loadUseTrailers() ?: true
@@ -178,6 +181,9 @@ object TmdbSettingsRepository {
         useMoreLikeThis = TmdbSettingsStorage.loadUseMoreLikeThis() ?: true
         useCollections = TmdbSettingsStorage.loadUseCollections() ?: true
         publish()
+        if (wasLoaded && previousApiKey != apiKey) {
+            invalidateMetadata()
+        }
     }
 
     private fun publish() {
@@ -197,6 +203,11 @@ object TmdbSettingsRepository {
             useMoreLikeThis = useMoreLikeThis,
             useCollections = useCollections,
         )
+    }
+
+    private fun invalidateMetadata() {
+        MetaDetailsRepository.clear()
+        ContinueWatchingEnrichmentCache.clearAll(ProfileRepository.activeProfileId)
     }
 }
 
