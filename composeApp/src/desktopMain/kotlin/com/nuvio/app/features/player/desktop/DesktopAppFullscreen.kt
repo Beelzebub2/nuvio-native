@@ -123,7 +123,9 @@ internal class DesktopAppFullscreenController {
     fun applyRestoredFullscreenState(window: Window, windowState: WindowState, fullscreen: Boolean) {
         if (!fullscreen) return
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
-            enterWindowsFullscreen(window, windowState)
+            SwingUtilities.invokeLater {
+                enterWindowsFullscreen(window, windowState)
+            }
         } else {
             restoreWindowPlacement = windowState.placement
                 .takeUnless { it == WindowPlacement.Fullscreen }
@@ -223,18 +225,6 @@ internal class DesktopAppFullscreenController {
         val wasMaximized = fullscreenState.wasMaximized
         windowsFullscreenState = null
 
-        // Do NOT re-apply state here via window.extendedState / windowState.placement. The native
-        // restore above already replays the exact WINDOWPLACEMENT Windows itself reported when
-        // fullscreen was entered - it's provably correct. Redundantly toggling extendedState through
-        // AWT's own Java-level setter right after hits known JDK bugs where AWT computes maximize/
-        // restore bounds from its own stale internal state rather than the real window (see the
-        // JDK-8176359 family cited in DesktopMaximizedBounds.kt) - that's what was collapsing the
-        // window to a tiny size instead of the intended maximized/floating bounds. AWT already picks
-        // up the real, native-triggered extendedState change through its own WINDOW_STATE_CHANGED
-        // handling, and Compose mirrors that into windowState.placement on its own; forcing it again
-        // here only reintroduces the bug. wasMaximized/windowState are unused now but kept in the
-        // signature/state in case that automatic sync ever needs a manual fallback.
-        if (window is Frame) {
         if (window is Frame) {
             if (wasMaximized) {
                 window.extendedState = Frame.NORMAL
