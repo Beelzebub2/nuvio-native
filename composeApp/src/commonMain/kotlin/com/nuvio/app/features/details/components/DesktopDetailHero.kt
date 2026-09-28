@@ -75,6 +75,7 @@ import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.detail_logo_content_description
 import nuvio.composeapp.generated.resources.hero_add_to_library
 import nuvio.composeapp.generated.resources.hero_mark_unwatched
+import nuvio.composeapp.generated.resources.playback_unavailable
 import nuvio.composeapp.generated.resources.hero_mark_watched
 import nuvio.composeapp.generated.resources.hero_remove_from_library
 import nuvio.composeapp.generated.resources.rating_imdb
@@ -197,6 +198,7 @@ fun DesktopDetailHero(
     showOverallRatings: Boolean,
     isMdbListActive: Boolean,
     playButtonLabel: String,
+    isPrimaryPlayEnabled: Boolean,
     isSaved: Boolean,
     isWatched: Boolean,
     onHeightChanged: (Int) -> Unit,
@@ -304,7 +306,8 @@ fun DesktopDetailHero(
             Spacer(modifier = Modifier.height(space.s28))
             DetailActionButtons(
                 modifier = Modifier.widthIn(max = 520.dp),
-                playLabel = playButtonLabel,
+                playLabel = if (isPrimaryPlayEnabled) playButtonLabel else stringResource(Res.string.playback_unavailable),
+                playEnabled = isPrimaryPlayEnabled,
                 secondaryActions = listOf(
                     DetailSecondaryAction(
                         label = if (isWatched) {
