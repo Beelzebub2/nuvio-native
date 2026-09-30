@@ -624,7 +624,7 @@ private fun DesktopHomeHeroFrame(
                     )
                     .fillMaxWidth(layout.contentWidthFraction)
                     .widthIn(max = layout.contentMaxWidth),
-                contentAlignment = Alignment.CenterStart,
+                contentAlignment = Alignment.BottomStart,
             ) {
                 HeroDesktopContentLayers(
                     items = items,
