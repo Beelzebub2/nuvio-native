@@ -1280,6 +1280,10 @@ fun MetaDetailsScreen(
                                         },
                                         onPlayClick = onPrimaryPlayClick,
                                         onPlayLongClick = if (showManualPlayOption) onPrimaryPlayLongClick else null,
+                                        onShuffleClick = if (showShuffleButton) ({
+                                            if (shuffleSettings.enabled) saveShuffle(shuffleSettings.copy(enabled = false)) else showShuffle = true
+                                        }) else null,
+                                        shuffleEnabled = shuffleSettings.enabled,
                                         onWatchedClick = toggleWatched,
                                         onSaveClick = toggleSaved,
                                         onSaveLongClick = openLibraryListPicker,
