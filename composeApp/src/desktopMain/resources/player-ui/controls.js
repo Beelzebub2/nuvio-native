@@ -1730,7 +1730,7 @@ const renderSourceModal = () => {
   sourceVirtualSpacer.className = "source-virtual-spacer";
   sourceList.appendChild(sourceVirtualSpacer);
   rebuildSourceVirtualLayout();
-  renderSourceVirtualRows();
+  requestSourceVirtualRender();
 };
 
 const appendEpisodeRow = (container, item) => {
