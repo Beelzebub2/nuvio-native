@@ -2835,9 +2835,14 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_reparentSurfaceNat
     if (handle == 0 || hostViewPtr == 0) return;
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     NSView *hostView = (__bridge NSView *)(void *)(intptr_t)hostViewPtr;
-    runOnMainSync(^{
-        [player reparentSurfaceToHostView:hostView];
-    });
+    // AWT can query Java focus while the PiP window becomes key. Its main thread
+    // then waits in AWTRunLoopMode for the EDT, which is waiting here. GCD's main
+    // queue is not serviced in that mode; schedule the move in AWT's loop too.
+    // Keep the move synchronous so the old window is not disposed before it ends.
+    [player performSelectorOnMainThread:@selector(reparentSurfaceToHostView:)
+                            withObject:hostView
+                         waitUntilDone:YES
+                                 modes:@[NSRunLoopCommonModes, @"AWTRunLoopMode"]];
 }
 
 extern "C" JNIEXPORT void JNICALL
