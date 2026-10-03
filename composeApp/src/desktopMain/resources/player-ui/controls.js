@@ -366,6 +366,7 @@ let sourceVirtualOffsets = [];
 let sourceVirtualTotalHeight = 0;
 let sourceVirtualSpacer = null;
 let sourceVirtualRenderRaf = 0;
+let appliedRememberedVolume = false;
 let selectedEpisodeSeason = null;
 let episodeStreamFilterId = "";
 let activeSubtitleLanguageKey = "";
@@ -792,7 +793,6 @@ const setProgress = (positionMs, durationMs) => {
   if (timeLabel) {
     timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
   }
-  syncVolumeControl();
 };
 
 const setText = (element, text) => {
@@ -3015,6 +3015,10 @@ window.playerUpdate = update => {
     audioTracks,
     subtitleTracks,
   };
+  if (!appliedRememberedVolume) {
+    appliedRememberedVolume = true;
+    syncVolumeControl();
+  }
   if (typeof volumeLevel === "number" && volumeLevel > 0) {
     preMuteVolumeLevel = volumeLevel;
   }
