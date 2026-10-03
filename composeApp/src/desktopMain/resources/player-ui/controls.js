@@ -414,6 +414,7 @@ let playerToastTimer = 0;
 let playerToastToken = 0;
 let pendingSettingToastCommand = "";
 let pendingSettingToastToken = 0;
+let timeLabelShowRemaining = false;
 let isPipLocked = false;
 const pipLockButton = document.getElementById("pipLockButton");
 const pipLockOverlay = document.getElementById("pipLockOverlay");
@@ -791,7 +792,13 @@ const setProgress = (positionMs, durationMs) => {
   positionLabel.textContent = formatTime(positionMs);
   durationLabel.textContent = formatTime(durationMs);
   if (timeLabel) {
-    timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
+    durationMs = durationMs - (durationMs % 1000);
+    if (timeLabelShowRemaining) {
+      let remainingTimeMs = durationMs - positionMs + (positionMs % 1000 == 0 ? 0 : 1000);
+      timeLabel.textContent = `-${formatTime(remainingTimeMs)}`;
+    } else {
+      timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
+    }
   }
 };
 
@@ -2985,6 +2992,12 @@ volumeButton.addEventListener("click", () => {
   }
   syncVolumeControl();
   send("volumeChangeTemporary", state.volumeLevel);
+});
+
+timeLabel.addEventListener("click", () => {
+  noteChromeActivity();
+  timeLabelShowRemaining = !timeLabelShowRemaining;
+  renderChrome();
 });
 
 window.playerUpdate = update => {
