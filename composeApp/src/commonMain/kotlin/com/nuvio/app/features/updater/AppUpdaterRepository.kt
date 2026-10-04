@@ -27,6 +27,8 @@ internal data class GitHubAssetDto(
     @SerialName("browser_download_url") val browserDownloadUrl: String,
     val size: Long? = null,
     @SerialName("content_type") val contentType: String? = null,
+    val url: String? = null,
+    val digest: String? = null,
 )
 
 internal class NoChannelReleaseException : IllegalStateException()
@@ -36,6 +38,7 @@ internal data class AppUpdateAssetCandidate(
     val downloadUrl: String,
     val size: Long? = null,
     val contentType: String? = null,
+    val sha256: String? = null,
 )
 
 internal fun selectBestUpdateAsset(
@@ -71,11 +74,14 @@ internal object AppUpdaterRepository {
             headers = mapOf(
                 "Accept" to "application/vnd.github+json",
                 "User-Agent" to source.userAgent,
-            ),
+            ) + AppUpdaterPlatform.releaseRequestHeaders(),
             body = "",
         )
         currentCoroutineContext().ensureActive()
-        if (response.status == 404) throw NoChannelReleaseException()
+        if (response.status == 404) {
+            if (source.privateRepository) error("No private release is visible. Check your GitHub sign-in and repository access.")
+            throw NoChannelReleaseException()
+        }
         if (response.status !in 200..299) {
             error(getString(Res.string.updates_github_api_error, response.status))
         }
@@ -84,6 +90,7 @@ internal object AppUpdaterRepository {
             channel = channel,
             supportedAbis = AppUpdaterPlatform.getSupportedAbis(),
             selector = AppUpdaterPlatform.assetSelector,
+            useApiAssetUrls = source.privateRepository,
         )
             ?: throw NoChannelReleaseException()
     }
@@ -104,6 +111,7 @@ internal object AppUpdaterRepository {
             preferredNameFragments = supportedAbis,
             fallbackNameFragments = listOf("universal", "all"),
         ),
+        useApiAssetUrls: Boolean = false,
     ): AppUpdate? {
         val releases = when (channel) {
             UpdateChannel.STABLE -> listOf(json.decodeFromString<GitHubReleaseDto>(responseBody))
@@ -121,9 +129,12 @@ internal object AppUpdaterRepository {
                 assets = release.assets.map { candidate ->
                     AppUpdateAssetCandidate(
                         name = candidate.name,
-                        downloadUrl = candidate.browserDownloadUrl,
+                        downloadUrl = if (useApiAssetUrls) candidate.url ?: candidate.browserDownloadUrl else candidate.browserDownloadUrl,
                         size = candidate.size,
                         contentType = candidate.contentType,
+                        sha256 = candidate.digest?.removePrefix("sha256:")?.takeIf {
+                            it.matches(Regex("[a-fA-F0-9]{64}"))
+                        },
                     )
                 },
                 selector = selector,
@@ -144,6 +155,7 @@ internal object AppUpdaterRepository {
                 assetName = asset.name,
                 assetUrl = asset.downloadUrl,
                 assetSizeBytes = asset.size,
+                sha256 = asset.sha256,
             )
         }
     }

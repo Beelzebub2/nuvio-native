@@ -23,6 +23,7 @@ actual object AppUpdaterPlatform {
     )
 
     actual val currentVersionName: String = AppVersionConfig.VERSION_NAME
+    actual suspend fun releaseRequestHeaders(): Map<String, String> = emptyMap()
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 
@@ -33,6 +34,7 @@ actual object AppUpdaterPlatform {
     actual suspend fun downloadUpdateAsset(
         assetUrl: String,
         assetName: String,
+        expectedSha256: String?,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String> = Result.failure(IllegalStateException(getString(Res.string.updates_not_available)))
 

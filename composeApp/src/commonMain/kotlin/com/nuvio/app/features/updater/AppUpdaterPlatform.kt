@@ -6,6 +6,7 @@ data class AppUpdateReleaseSource(
     val channelBranch: String? = null,
     val includePrereleases: Boolean = false,
     val userAgent: String,
+    val privateRepository: Boolean = false,
 )
 
 data class AppUpdateAssetSelector(
@@ -28,6 +29,8 @@ expect object AppUpdaterPlatform {
 
     val currentVersionName: String
 
+    suspend fun releaseRequestHeaders(): Map<String, String>
+
     fun getIgnoredTag(): String?
 
     fun setIgnoredTag(tag: String?)
@@ -41,6 +44,7 @@ expect object AppUpdaterPlatform {
     suspend fun downloadUpdateAsset(
         assetUrl: String,
         assetName: String,
+        expectedSha256: String? = null,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String>
 

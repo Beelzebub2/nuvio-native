@@ -3,6 +3,8 @@ package com.nuvio.app.features.updater
 import com.nuvio.app.core.build.AppVersionConfig
 import com.nuvio.app.core.storage.DesktopStorage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import nuvio.composeapp.generated.resources.Res
@@ -18,6 +20,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -30,7 +33,7 @@ private const val updateChannelKey = "update_channel"
 
 private val desktopUpdaterHttpClient: HttpClient = HttpClient.newBuilder()
     .connectTimeout(Duration.ofSeconds(60))
-    .followRedirects(HttpClient.Redirect.NORMAL)
+    .followRedirects(HttpClient.Redirect.NEVER)
     .build()
 
 actual object AppUpdaterPlatform {
@@ -53,17 +56,22 @@ actual object AppUpdaterPlatform {
         get() = currentOs != DesktopUpdaterOs.UNKNOWN && linuxInstallMethod != LinuxInstallMethod.FLATPAK
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
-        owner = "NuvioMedia",
-        repo = "NuvioDesktop",
+        owner = "Beelzebub2",
+        repo = "nuvio-native",
         channelBranch = null,
         includePrereleases = true,
-        userAgent = "NuvioDesktop",
+        userAgent = "NuvioNative",
+        privateRepository = true,
     )
 
     actual val assetSelector: AppUpdateAssetSelector
         get() = currentOs.assetSelector(linuxInstallMethod)
 
     actual val currentVersionName: String = AppVersionConfig.DESKTOP_VERSION_NAME
+
+    actual suspend fun releaseRequestHeaders(): Map<String, String> = withContext(Dispatchers.IO) {
+        mapOf("Authorization" to "Bearer ${PrivateReleaseAuth.token()}")
+    }
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 
@@ -86,6 +94,7 @@ actual object AppUpdaterPlatform {
     actual suspend fun downloadUpdateAsset(
         assetUrl: String,
         assetName: String,
+        expectedSha256: String?,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
@@ -94,27 +103,52 @@ actual object AppUpdaterPlatform {
             val destination = File(updatesDir(), safeName)
             val tempFile = File(updatesDir(), "$safeName.part")
 
-            val request = HttpRequest.newBuilder()
-                .uri(URI(assetUrl))
-                .GET()
-                .build()
-            val response = desktopUpdaterHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
-            if (response.statusCode() !in 200..299) {
-                error(runBlocking { getString(Res.string.updates_download_failed_http, response.statusCode()) })
+            require(expectedSha256 != null && expectedSha256.matches(Regex("[a-fA-F0-9]{64}"))) {
+                "This private update has no SHA-256 digest. Publish it through the Windows release workflow."
+            }
+            val apiUri = URI(assetUrl)
+            require(isPrivateReleaseAssetUri(apiUri)) { "Unexpected private update download address" }
+            var downloadUri = apiUri
+            var response: HttpResponse<java.io.InputStream>? = null
+            repeat(5) {
+                if (response != null) return@repeat
+                currentCoroutineContext().ensureActive()
+                val builder = HttpRequest.newBuilder(downloadUri).GET().timeout(Duration.ofMinutes(10))
+                    .header("User-Agent", "NuvioNative")
+                if (downloadUri == apiUri) {
+                    builder.header("Accept", "application/octet-stream")
+                        .header("Authorization", "Bearer ${PrivateReleaseAuth.token()}")
+                }
+                val next = desktopUpdaterHttpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream())
+                if (next.statusCode() in listOf(301, 302, 303, 307, 308)) {
+                    next.body().close()
+                    val location = next.headers().firstValue("Location").orElseThrow()
+                    downloadUri = downloadUri.resolve(location)
+                    require(downloadUri.scheme == "https" && downloadUri.userInfo == null) { "Unsafe update redirect" }
+                } else response = next
+            }
+            val completedResponse = response ?: error("Too many update redirects")
+            val digest = MessageDigest.getInstance("SHA-256")
+            val responseBody = completedResponse
+            if (responseBody.statusCode() !in 200..299) {
+                responseBody.body().close()
+                error(runBlocking { getString(Res.string.updates_download_failed_http, responseBody.statusCode()) })
             }
 
-            val totalBytes = response.headers().firstValue("Content-Length").orElse(null)
+            val totalBytes = responseBody.headers().firstValue("Content-Length").orElse(null)
                 ?.toLongOrNull()
                 ?.takeIf { it > 0L }
             var downloadedBytes = 0L
             try {
-                response.body()?.use { input ->
+                responseBody.body()?.use { input ->
                     FileOutputStream(tempFile).use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         while (true) {
+                            currentCoroutineContext().ensureActive()
                             val read = input.read(buffer)
                             if (read <= 0) break
                             output.write(buffer, 0, read)
+                            digest.update(buffer, 0, read)
                             downloadedBytes += read.toLong()
                             onProgress(downloadedBytes, totalBytes)
                         }
@@ -124,6 +158,10 @@ actual object AppUpdaterPlatform {
 
                 if (totalBytes != null && downloadedBytes != totalBytes) {
                     error(runBlocking { getString(Res.string.updates_download_failed) })
+                }
+                val actualDigest = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                check(downloadedBytes > 0 && actualDigest.equals(expectedSha256, ignoreCase = true)) {
+                    "Update checksum verification failed. The installer was discarded."
                 }
 
                 if (!tempFile.renameTo(destination)) {

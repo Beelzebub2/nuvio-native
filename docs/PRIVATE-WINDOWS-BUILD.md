@@ -1,0 +1,45 @@
+# Nuvio Native
+
+Source: https://github.com/Beelzebub2/nuvio-native (private)
+
+Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a3239427b4507f2fafb35. GPLv3 and upstream copyright notices are retained.
+
+## Install and update
+
+Download `Nuvio-Native-Windows-x64-1.0.0.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Nuvio Native for the current Windows user, with a separate installer identity from upstream Nuvio.
+
+Private update access uses your existing GitHub CLI login. On a new computer, install GitHub CLI and run `gh auth login` once with an account that can read this repository. Open Settings → About to check for updates. Updates also check at startup and every six hours. Installation requires choosing Install and restarting the app; catalog refreshes do not require restarting.
+
+An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credential. Use a fine-grained token restricted to this repository with Contents: read. Never put a token in source, build settings, release assets, command arguments, or logs. GitHub CLI manages its credential; the app reads it only into memory. HTTP redirects are followed without forwarding the credential. Every private installer must have GitHub's SHA-256 digest and pass verification before installation.
+
+Personal builds work as a local guest with playback addons. Official account credentials are not available in this clone; configure your own compatible server if you need account sync.
+
+## Built-in Airing Now
+
+Airing Now appears on Home without installing a schedule addon. It has Today, Next 24 hours, Recent, and All views, groups multiple episodes of the same anime, and shows episode numbers and times. Settings select Broadcast (AniList), Sub or Dub (Tsuzuki), an IANA time zone (default Europe/Lisbon), 1–7 history days, and estimated times. Clicking a poster opens native episode details and your existing stream addons. Exact AniList→Kitsu/MAL mappings preserve anime episode numbering; TVDB season numbers cannot overwrite it.
+
+The app reclassifies schedules every minute while visible and focused, and refreshes provider data every five minutes or when you click Refresh. It retains a local snapshot across source failures and restarts. Broadcast schedules use AniList, which primarily guarantees future data; saved observations supplement recent history. Air times are schedules, not proof that a playable release exists.
+
+Provider calls first use `https://nuvio-native-gateway.cloudflaredomainrrm.workers.dev`, the fixed read-only gateway in `gateway/`. It caches successful provider responses, rejects arbitrary URLs/GraphQL, and requires no account credential in the app. If a provider blocks Cloudflare egress, the client falls back to a direct request. Both paths may fail for a provider with an exhausted quota. The initial live check found Cloudflare requests blocked by AniList and ani.zip, while direct AniList and the independent Fribb ID mapping list worked. Those fallbacks are deliberate. Existing Airing Now addon profiles are separate from these native settings. The old addon's Home rows are suppressed in this desktop build to avoid duplicate schedules; its saved configuration remains available in Addons.
+
+`NUVIO_AIRING_GATEWAY` can override the HTTPS gateway URL; an empty value selects direct requests. Redeploy with `cd gateway`, `npm ci`, `npm test`, `npm run deploy:dry`, then `npm run deploy` using your Wrangler login. The gateway is deployed separately from desktop tag releases. It uses the Workers Cache API without KV, R2, or other provisioned storage.
+
+## Local data
+
+On the first Windows launch, local addons, profiles, watch history, and display/player/torrent preferences are copied from `%APPDATA%/Nuvio` into `%APPDATA%/NuvioNative`. The original files remain intact. Cloud and integration credentials are not imported; the build starts as a local guest unless you configure a compatible server. Subsequent runs keep the private build's own data.
+
+## Release a new version
+
+Change `composeApp/Configuration/DesktopVersion.properties` (VERSION_NAME and increasing VERSION_CODE), commit and push, then push the matching `vMAJOR.MINOR.PATCH` tag. `.github/workflows/windows-release.yml` validates the version, fetches the pinned native binaries from the original public LFS store, runs desktop tests, packages an .exe, generates SHA256SUMS.txt, and publishes a private GitHub release. No upstream service secrets are required. GitHub-hosted runner availability and private Actions allowances apply.
+
+Local build: use JDK 21, Visual Studio C++ Build Tools, WiX 3, and the Microsoft.Web.WebView2 NuGet SDK. Run `gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseExe --no-configuration-cache`. Set `-Pnuvio.webview2.dir=...` if needed. Native files must be materialized from upstream Git LFS first.
+
+## P2P decision
+
+Compared [TorrServer](https://github.com/YouROK/TorrServer), its [anacrolix engine](https://github.com/anacrolix/torrent), [libtorrent](https://www.libtorrent.org/streaming.html), and [qBittorrent](https://github.com/qbittorrent/qBittorrent). libtorrent is a mature alternative, but a new Windows bridge and a streaming adapter would need their own maintenance and seek/buffering tests. qBittorrent's download API alone is not a drop-in HTTP streaming backend. This release retains the already bundled, pinned TorrServer engine and fixes integration faults found in this desktop client: ignored preferences, fixed-port collisions, short metadata waits, failed-stream cleanup, and concurrent starts.
+
+The cache setting NONE means no persistent disk cache; the engine still needs a bounded memory buffer. SOFT/BALANCED/FAST use 128/256/512 MiB memory-only buffering and 40/100/200 connections respectively. Disk mode honors 2/5/10 GiB, removes data when dropping the stream, and uses a small preload fraction to avoid waiting for most of a large cache before playback. Poor peer availability or network restrictions can still prevent playback.
+
+Research references: [Compose native packaging](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html), [GitHub authenticated release assets](https://docs.github.com/en/rest/releases/assets), [TorrServer settings source](https://github.com/YouROK/TorrServer/blob/master/server/settings/btsets.go).
+
+Schedule references: [AniList API](https://docs.anilist.co/guide/graphql/), [airing data caveat](https://docs.anilist.co/reference/object/airingschedule), [Fribb ID mappings](https://github.com/Fribb/anime-lists), [Workers cache](https://developers.cloudflare.com/workers/runtime-apis/cache/).

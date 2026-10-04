@@ -2,6 +2,8 @@ package com.nuvio.app.features.details
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.AddonManifest
+import com.nuvio.app.features.airing.NATIVE_AIRING_PREFIX
+import com.nuvio.app.features.airing.fetchBuiltInAiringDetails
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.buildAddonResourceUrl
 import com.nuvio.app.features.addons.enabledAddons
@@ -52,6 +54,21 @@ object MetaDetailsRepository {
     fun load(type: String, id: String) {
         log.d { "load() called — type=$type id=$id" }
         val requestKey = "$type:$id"
+        if (id.startsWith(NATIVE_AIRING_PREFIX)) {
+            if (_uiState.value.isLoading && activeRequestKey == requestKey) return
+            activeRequestKey = requestKey
+            _uiState.value = MetaDetailsUiState(isLoading = true)
+            scope.launch {
+                val meta = try {
+                    fetchBuiltInAiringDetails(id)
+                } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                if (activeRequestKey != requestKey) return@launch
+                if (meta != null) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = meta)
+                _uiState.value = MetaDetailsUiState(meta = meta,
+                    errorMessage = if (meta == null) "Airing Now metadata is unavailable. Refresh schedules and try again." else null)
+            }
+            return
+        }
         val currentState = _uiState.value
         val mdbListSettings = MdbListSettingsRepository.snapshot()
         val metaScreenSettingsFingerprint = buildMetaScreenSettingsFingerprint(mdbListSettings)
@@ -198,6 +215,9 @@ object MetaDetailsRepository {
 
     suspend fun fetch(type: String, id: String, cacheResult: Boolean = true): MetaDetails? {
         val requestKey = "$type:$id"
+        if (id.startsWith(NATIVE_AIRING_PREFIX)) return fetchBuiltInAiringDetails(id)?.also {
+            if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = it)
+        }
         cachedMetaByRequestKey[requestKey]?.let { return it.baseMeta }
 
         val metaLookupId = resolveMetaLookupId(itemId = id, itemType = type)

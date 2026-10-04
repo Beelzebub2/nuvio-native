@@ -136,6 +136,11 @@ object NetworkStatusRepository {
             return NetworkCondition.NoInternet
         }
 
+        val server = ServerConfigurationRepository.active.value
+        if (server.backendUrl.isBlank() || server.publishableKey.isBlank()) {
+            return NetworkCondition.Online
+        }
+
         val supabaseReachable = SupabaseEndpointConfig.restEndpointUrls().any { url ->
             probeReachable(
                 url = url,
