@@ -39,6 +39,8 @@ import com.nuvio.app.core.ui.rememberHeroStretchState
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.addons.AddonRepository
+import com.nuvio.app.features.catalog.LiveCatalogRefreshEffect
+import com.nuvio.app.features.airing.BuiltInAiringSection
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.addons.firstEnabledManifestError
 import com.nuvio.app.features.cloud.CloudLibraryContentType
@@ -172,6 +174,16 @@ fun HomeScreen(
     }.collectAsStateWithLifecycle()
     val navBarScrollState = LocalNuvioNavBarScrollState.current
     var observedOfflineState by remember { mutableStateOf(false) }
+
+    LiveCatalogRefreshEffect(
+        key = ProfileRepository.activeProfileId,
+        enabled = networkStatusUiState.condition == NetworkCondition.Online,
+    ) {
+        if (!HomeRepository.uiState.value.isLoading) {
+            AddonRepository.refreshAll()
+            HomeRepository.refresh(AddonRepository.uiState.value.addons.enabledAddons(), force = true)
+        }
+    }
 
     ScreenActivityEffect(scrollToTopRequests) { active ->
         if (!active) return@ScreenActivityEffect
@@ -1017,6 +1029,12 @@ fun HomeScreen(
                             )
                         }
                     }
+                }
+            }
+
+            if (isDesktop) {
+                item(key = "native_airing", contentType = "native_airing") {
+                    BuiltInAiringSection(Modifier.padding(horizontal = homeSectionPadding), onPosterClick)
                 }
             }
 

@@ -1,0 +1,12 @@
+{
+  "name": "nuvio-native-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test worker.test.mjs",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run"
+  },
+  "devDependencies": { "wrangler": "4.131.0" }
+}

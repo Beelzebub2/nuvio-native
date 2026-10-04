@@ -1,3 +1,11 @@
+# Nuvio Native — private Windows build
+
+Personal native desktop build with built-in Airing Now, a Cloudflare provider gateway, automatic catalog refresh, corrected P2P integration, tag-triggered .exe releases, and authenticated private updates.
+
+[Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) · [Download your Windows installer](https://github.com/Beelzebub2/nuvio-native/releases/latest) · [Changes](docs/RELEASE-NOTES.md)
+
+Based on the upstream project described below; its GPLv3 license and credits are retained.
+
 <div align="center">
 
   <img src="composeApp/src/commonMain/composeResources/drawable/app_logo_wordmark.png" alt="Nuvio" width="300" />

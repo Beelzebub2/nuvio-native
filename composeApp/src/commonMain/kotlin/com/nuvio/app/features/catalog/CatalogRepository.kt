@@ -125,7 +125,7 @@ object CatalogRepository {
         val requestedSkip = if (reset) 0 else current.nextSkip ?: return
 
         _uiState.value = current.copy(
-            items = if (reset) emptyList() else current.items,
+            items = if (reset && !forceRefresh) emptyList() else current.items,
             isLoading = true,
             nextSkip = if (reset) null else current.nextSkip,
             errorMessage = null,
@@ -179,12 +179,13 @@ object CatalogRepository {
                     )
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     if (activeRequest != request) return@fold
 
                     _uiState.value = current.copy(
-                        items = if (reset) emptyList() else current.items,
+                        items = if (reset && !forceRefresh) emptyList() else current.items,
                         isLoading = false,
-                        nextSkip = null,
+                        nextSkip = if (forceRefresh) current.nextSkip else null,
                         errorMessage = error.message ?: getString(Res.string.catalog_load_failed),
                     )
                 },

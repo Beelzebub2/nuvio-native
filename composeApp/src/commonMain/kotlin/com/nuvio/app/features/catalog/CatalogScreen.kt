@@ -119,6 +119,15 @@ fun CatalogScreen(
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
 
+    LiveCatalogRefreshEffect(
+        key = target,
+        enabled = networkStatusUiState.condition == NetworkCondition.Online && target is CatalogTarget.Addon,
+    ) {
+        if (!CatalogRepository.uiState.value.isLoading && gridState.firstVisibleItemIndex == 0) {
+            CatalogRepository.load(target, force = true)
+        }
+    }
+
     LaunchedEffect(target, homeCatalogSettingsUiState.hideUnreleasedContent) {
         CatalogRepository.load(
             target = target,

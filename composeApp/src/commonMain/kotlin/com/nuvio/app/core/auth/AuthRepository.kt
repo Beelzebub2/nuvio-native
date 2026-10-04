@@ -2,6 +2,7 @@ package com.nuvio.app.core.auth
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.network.SupabaseProvider
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
@@ -40,6 +41,16 @@ object AuthRepository {
     fun initialize() {
         if (initialized) return
         initialized = true
+
+        // Personal builds need no upstream service secrets to browse or play local addons.
+        val server = ServerConfigurationRepository.active.value
+        if (server.backendUrl.isBlank() || server.publishableKey.isBlank()) {
+            val existingId = AuthStorage.loadAnonymousUserId()
+            if (existingId == null) signInAnonymously() else {
+                _state.value = AuthState.Authenticated(userId = existingId, email = null, isAnonymous = true)
+            }
+            return
+        }
 
         val savedAnonId = AuthStorage.loadAnonymousUserId()
         if (savedAnonId != null) {

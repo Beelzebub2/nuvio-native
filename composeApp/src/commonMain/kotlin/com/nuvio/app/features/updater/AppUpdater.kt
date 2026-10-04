@@ -28,6 +28,7 @@ data class AppUpdate(
     val assetName: String,
     val assetUrl: String,
     val assetSizeBytes: Long?,
+    val sha256: String? = null,
 )
 
 data class AppUpdaterUiState(
@@ -80,6 +81,12 @@ class AppUpdaterController internal constructor(
         }
         autoCheckStarted = true
         checkForUpdates(force = false, showNoUpdateFeedback = false)
+        scope.launch {
+            while (true) {
+                delay(6 * 60 * 60 * 1000L)
+                checkForUpdates(force = false, showNoUpdateFeedback = false)
+            }
+        }
     }
 
     fun checkForUpdates(force: Boolean, showNoUpdateFeedback: Boolean) {
@@ -216,6 +223,7 @@ class AppUpdaterController internal constructor(
             val result = AppUpdaterPlatform.downloadUpdateAsset(
                 assetUrl = update.assetUrl,
                 assetName = update.assetName,
+                expectedSha256 = update.sha256,
             ) { downloadedBytes, totalBytes ->
                 downloadContext.ensureActive()
                 val progress = if (totalBytes != null && totalBytes > 0L) {

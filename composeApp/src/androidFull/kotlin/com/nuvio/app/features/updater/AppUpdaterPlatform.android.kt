@@ -24,6 +24,7 @@ actual object AppUpdaterPlatform {
         )
 
     actual val currentVersionName: String = AppVersionConfig.VERSION_NAME
+    actual suspend fun releaseRequestHeaders(): Map<String, String> = emptyMap()
 
     actual fun getSupportedAbis(): List<String> = AndroidAppUpdaterPlatform.getSupportedAbis()
 
@@ -46,6 +47,7 @@ actual object AppUpdaterPlatform {
     actual suspend fun downloadUpdateAsset(
         assetUrl: String,
         assetName: String,
+        expectedSha256: String?,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String> = AndroidAppUpdaterPlatform.downloadUpdateAsset(assetUrl, assetName, onProgress)
 

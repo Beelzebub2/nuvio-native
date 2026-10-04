@@ -20,6 +20,7 @@ import com.nuvio.app.features.trakt.TraktPublicListSourceResolver
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import com.nuvio.app.isDesktop
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -50,7 +51,9 @@ object HomeRepository {
     private var lastErrorMessage: String? = null
 
     fun refresh(addons: List<ManagedAddon>, force: Boolean = false) {
-        val activeAddons = addons.enabledAddons()
+        val activeAddons = addons.enabledAddons().filterNot {
+            isDesktop && it.manifest?.id == "tools.rrm.nuvio.anime-aired-today"
+        }
         val requests = buildHomeCatalogDefinitions(activeAddons)
         currentDefinitions = requests
         val requestCacheKeys = requests.mapTo(mutableSetOf(), HomeCatalogDefinition::cacheKey)
@@ -99,7 +102,7 @@ object HomeRepository {
                     async {
                         request to runCatching {
                             request.toSection(forceRefresh = force)
-                        }
+                        }.onFailure { if (it is CancellationException) throw it }
                     }
                 }.awaitAll()
 

@@ -1,0 +1,92 @@
+name: Release Nuvio Native for Windows
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      WEBVIEW2_VERSION: 1.0.4078.44
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Validate version tag
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Release requires a vMAJOR.MINOR.PATCH tag.' }
+          $version = (Get-Content composeApp/Configuration/DesktopVersion.properties | Where-Object { $_ -match '^VERSION_NAME=' }) -replace '^VERSION_NAME=', ''
+          if ($env:RELEASE_TAG -ne "v$version") { throw 'Tag does not match DesktopVersion.properties.' }
+          "RELEASE_VERSION=$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Fetch pinned native Windows runtimes
+        shell: pwsh
+        run: |
+          # Read the original public LFS store; a private clone need not duplicate its storage.
+          git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/**,composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
+          if ($LASTEXITCODE -ne 0) { throw 'Native runtime fetch failed.' }
+          git lfs checkout
+          $mpv = Get-Item composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll
+          if ($mpv.Length -lt 1000000) { throw 'libmpv was not materialized.' }
+          $torrent = 'composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe'
+          if ((Get-FileHash $torrent -Algorithm SHA256).Hash.ToLowerInvariant() -ne '13031185a54abe0f729f9f3bdb7271a349a89ac8c559327d773c66007ed604f4') { throw 'Torrent engine checksum mismatch.' }
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Test provider gateway
+        working-directory: gateway
+        run: node --test worker.test.mjs
+      - name: Install packaging tools and WebView2 SDK
+        shell: pwsh
+        run: |
+          choco install wixtoolset --version=3.14.1.20250415 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed.' }
+          nuget install Microsoft.Web.WebView2 -Version $env:WEBVIEW2_VERSION -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
+          "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Test and package the executable
+        shell: pwsh
+        run: |
+          & .\gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseExe "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT" '-Pcompose.desktop.packaging.checkJdkVendor=false' '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' '-Pkotlin.daemon.jvmargs=-Xmx3072m' --no-configuration-cache --no-daemon --console=plain
+          if ($LASTEXITCODE -ne 0) { throw 'Tests or packaging failed.' }
+      - name: Verify package and write checksums
+        shell: pwsh
+        run: |
+          $packages = @(Get-ChildItem composeApp/build/compose/binaries/main-release/exe/*.exe)
+          if ($packages.Count -ne 1) { throw 'Expected one executable installer.' }
+          if ($packages[0].Length -lt 100000000) { throw 'Installer is too small to contain the native player and runtime.' }
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          $name = "Nuvio-Native-Windows-x64-$env:RELEASE_VERSION.exe"
+          Copy-Item -LiteralPath $packages[0].FullName -Destination "release/$name"
+          $sha = (Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $name" | Set-Content release/SHA256SUMS.txt -Encoding ascii
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Nuvio-Native-Windows-x64-${{ env.RELEASE_VERSION }}
+          path: release/*
+          if-no-files-found: error
+      - name: Publish private release after successful checks
+        shell: pwsh
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'This release already exists; do not overwrite published installers.' }
+          $installer = "release/Nuvio-Native-Windows-x64-$env:RELEASE_VERSION.exe"
+          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --title "Nuvio Native $env:RELEASE_VERSION" --notes-file docs/RELEASE-NOTES.md $installer release/SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
