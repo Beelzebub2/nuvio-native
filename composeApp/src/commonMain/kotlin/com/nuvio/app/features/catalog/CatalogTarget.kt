@@ -7,6 +7,16 @@ sealed interface CatalogTarget {
     val contentType: String
     val supportsPagination: Boolean
 
+    data class Airing(val window: String) : CatalogTarget {
+        override val contentType: String = "series"
+        override val supportsPagination: Boolean = false
+    }
+
+    data object WatchLater : CatalogTarget {
+        override val contentType: String = "all"
+        override val supportsPagination: Boolean = false
+    }
+
     data class Addon(
         val manifestUrl: String,
         override val contentType: String,

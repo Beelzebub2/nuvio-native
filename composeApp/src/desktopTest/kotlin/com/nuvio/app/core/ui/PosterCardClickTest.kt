@@ -29,6 +29,7 @@ class PosterCardClickTest {
 
     private var clicks = 0
     private var actions = 0
+    private var middleClicks = 0
     private var clickAnchor: PosterZoomAnchor? = null
     private var actionAnchor: PosterZoomAnchor? = null
 
@@ -36,6 +37,19 @@ class PosterCardClickTest {
     fun clearAnchor() {
         PosterZoomAnchorHolder.consume()
         PosterZoomOverlayCoordinator.hide()
+    }
+
+    @Test
+    fun middleClickSavesWithoutNavigatingOrOpeningActions() {
+        setContent()
+        compose.onNodeWithTag("poster").performMouseInput { click(button = MouseButton.Tertiary) }
+        compose.runOnIdle {
+            assertEquals(1, middleClicks)
+            assertEquals(0, clicks)
+            assertEquals(0, actions)
+            assertNull(clickAnchor)
+            assertNull(actionAnchor)
+        }
     }
 
     @Test
@@ -107,6 +121,7 @@ class PosterCardClickTest {
                             onLongClick = onLongClick,
                             zoomImageUrl = "poster.jpg",
                             zoomCornerRadius = 12.dp,
+                            onMiddleClick = { middleClicks++ },
                         )
                     } else {
                         modifier.posterCardClickable(
@@ -115,6 +130,7 @@ class PosterCardClickTest {
                             zoomImageUrl = "poster.jpg",
                             zoomCornerRadius = 12.dp,
                             hoverScaleEnabled = hoverScaleEnabled,
+                            onMiddleClick = { middleClicks++ },
                         )
                     },
                 )

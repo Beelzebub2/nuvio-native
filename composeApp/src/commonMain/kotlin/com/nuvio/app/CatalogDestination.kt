@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import com.nuvio.app.features.catalog.CatalogScreen
 import com.nuvio.app.features.catalog.CatalogTarget
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.airing.BuiltInAiringCatalog
 import com.nuvio.app.features.library.toLibraryItem
 import com.nuvio.app.navigation.CatalogRoute
 import com.nuvio.app.navigation.DetailRoute
@@ -50,6 +51,15 @@ internal fun CatalogDestination(
     }
 
     val target = launch.target
+    if (target is CatalogTarget.Airing) {
+        BuiltInAiringCatalog(
+            window = target.window,
+            onBack = onBack,
+            onPosterClick = { meta -> navController.navigate(DetailRoute(type = meta.type, id = meta.id, title = meta.name)) },
+            onPosterLongClick = { meta -> onPosterLongClick(PosterActionTarget(preview = meta)) },
+        )
+        return
+    }
     CatalogScreen(
         title = launch.title,
         subtitle = launch.subtitle,

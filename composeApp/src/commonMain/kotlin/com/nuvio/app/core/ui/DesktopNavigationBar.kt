@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -24,6 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.jelly.JellyNavigationBar
@@ -83,10 +88,18 @@ internal fun DesktopNavigationBar(
             viewportWidth > 1600.dp -> 30.dp
             else -> 28.dp
         }
-        val trackWidth = ((iconSize + 20.dp + 64.dp * labelFraction) * items.size + 8.dp).coerceAtMost(maxWidth)
+        val textMeasurer = rememberTextMeasurer()
+        val labelStyle = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+        val widestLabel = with(LocalDensity.current) {
+            items.maxOf { textMeasurer.measure(AnnotatedString(it.label), labelStyle, softWrap = false).size.width }.toDp()
+        }
+        val compactItemWidth = iconSize + 20.dp
+        val expandedItemWidth = iconSize + widestLabel + 32.dp
+        val effectiveLabelFraction = if (maxWidth < expandedItemWidth * items.size + 8.dp) 0f else labelFraction
+        val trackWidth = ((compactItemWidth + (expandedItemWidth - compactItemWidth) * effectiveLabelFraction) * items.size + 8.dp).coerceAtMost(maxWidth)
         JellyNavigationBar(
             items = items,
-            labelFraction = labelFraction,
+            labelFraction = effectiveLabelFraction,
             glowStrength = glowStrength,
             horizontalLabels = true,
             iconSize = iconSize,

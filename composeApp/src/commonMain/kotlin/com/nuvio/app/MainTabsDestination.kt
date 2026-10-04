@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -101,7 +102,7 @@ internal fun MainTabsDestination(
         val topChromePadding = if (useFloatingTopBar || useDesktopTopBar) {
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             if (useDesktopTopBar) {
-                statusBarPadding + 48.dp + 64.dp
+                statusBarPadding + 72.dp
             } else {
                 max(statusBarPadding + 24.dp, 48.dp) + 64.dp
             }
@@ -141,7 +142,8 @@ internal fun MainTabsDestination(
         }
         val navBarGlowEnabled by ThemeSettingsRepository.navBarGlowEnabled.collectAsStateWithLifecycle()
         var isTopProfileSwitcherOpen by remember { mutableStateOf(false) }
-        val floatingNavigationItems = listOf(
+        val floatingNavigationItems = buildList {
+            addAll(listOf(
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Home,
                 onClick = { onTabSelected(AppScreenTab.Home) },
@@ -177,7 +179,14 @@ internal fun MainTabsDestination(
                     )
                 },
             ),
-        )
+            ))
+            if (isDesktop) add(2, FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.WatchLater,
+                onClick = { onTabSelected(AppScreenTab.WatchLater) },
+                icon = Icons.Filled.Bookmark,
+                label = "Watch Later",
+            ))
+        }
 
         Scaffold(
             modifier = Modifier

@@ -6,7 +6,7 @@ Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a32394
 
 ## Install and update
 
-Download `Nuvio-Native-Windows-x64-1.0.0.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Nuvio Native for the current Windows user, with a separate installer identity from upstream Nuvio.
+Download the latest `Nuvio-Native-Windows-x64-*.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Nuvio Native for the current Windows user, with a separate installer identity from upstream Nuvio.
 
 Private update access uses your existing GitHub CLI login. On a new computer, install GitHub CLI and run `gh auth login` once with an account that can read this repository. Open Settings → About to check for updates. Updates also check at startup and every six hours. Installation requires choosing Install and restarting the app; catalog refreshes do not require restarting.
 
@@ -15,6 +15,16 @@ An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credenti
 Personal builds work as a local guest with playback addons. Official account credentials are not available in this clone; configure your own compatible server if you need account sync.
 
 ## Built-in Airing Now
+
+Use View all or click the Airing Now heading to open a full scrollable poster grid. The Home row supports drag scrolling, previous/next buttons, and a horizontal scrollbar. Both views keep the source, time-window filters, settings, and automatic refresh.
+
+## Watch Later and navigation
+
+Middle-click any catalog poster to toggle Watch Later without opening its details. A bookmark badge marks saved items. The hover preview also has a Watch Later button. Watch Later is a separate local list for each profile, persists across app restarts, and preserves native anime identifiers; it does not change your Library or connected tracking lists. Click Watch Later in the top navigation to open its full grid, then middle-click a saved poster again to remove it.
+
+Version 1.0.1 moves desktop navigation to a horizontal top bar once for each profile. You can subsequently choose a sidebar in Settings → Appearance, and that preference persists.
+
+## Airing schedules
 
 Airing Now appears on Home without installing a schedule addon. It has Today, Next 24 hours, Recent, and All views, groups multiple episodes of the same anime, and shows episode numbers and times. Settings select Broadcast (AniList), Sub or Dub (Tsuzuki), an IANA time zone (default Europe/Lisbon), 1–7 history days, and estimated times. Clicking a poster opens native episode details and your existing stream addons. Exact AniList→Kitsu/MAL mappings preserve anime episode numbering; TVDB season numbers cannot overwrite it.
 

@@ -74,6 +74,7 @@ internal fun Modifier.posterCardClickable(
     zoomImageUrl: String? = null,
     zoomCornerRadius: Dp = NuvioTokens.Radius.poster,
     hoverScaleEnabled: Boolean = true,
+    onMiddleClick: (() -> Unit)? = null,
 ): Modifier {
     val graphicsContext = LocalGraphicsContext.current
     val source = remember(graphicsContext, zoomImageUrl) { PosterLiftSource(graphicsContext) }
@@ -93,7 +94,7 @@ internal fun Modifier.posterCardClickable(
             )
         }
         .then(this)
-    if (onClick == null && onLongClick == null) return posterModifier
+    if (onClick == null && onLongClick == null) return posterModifier.middleClick(onMiddleClick)
     val interactionSource = remember { MutableInteractionSource() }
     val handleLongClick = onLongClick?.let { longClick ->
         {
@@ -129,6 +130,7 @@ internal fun Modifier.posterCardClickable(
             onLongClick = handleLongClick,
         )
         .secondaryClick(handleLongClick)
+        .middleClick(onMiddleClick)
 }
 
 internal fun DrawScope.drawLiftedPoster(source: PosterLiftSource) {

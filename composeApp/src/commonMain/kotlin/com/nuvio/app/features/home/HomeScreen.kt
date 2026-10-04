@@ -1034,7 +1034,7 @@ fun HomeScreen(
 
             if (isDesktop) {
                 item(key = "native_airing", contentType = "native_airing") {
-                    BuiltInAiringSection(Modifier.padding(horizontal = homeSectionPadding), onPosterClick)
+                    BuiltInAiringSection(Modifier.padding(horizontal = homeSectionPadding), onPosterClick, onCatalogClick, onPosterLongClick)
                 }
             }
 

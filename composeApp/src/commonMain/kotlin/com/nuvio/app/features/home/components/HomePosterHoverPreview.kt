@@ -33,11 +33,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -77,6 +80,8 @@ import com.nuvio.app.core.ui.PosterZoomOverlayCoordinator
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.secondaryClick
+import com.nuvio.app.core.ui.middleClick
+import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.details.components.DetailIconAction
 import com.nuvio.app.features.library.LibraryRepository
@@ -363,6 +368,8 @@ private fun HomePosterPreviewCard(
     onWatchedClick: () -> Unit,
     onSaveClick: () -> Unit,
 ) {
+    val watchLaterItems by WatchLaterRepository.items.collectAsState()
+    val savedForLater = watchLaterItems.any { it.id == item.id && it.type == item.type }
     val tokens = MaterialTheme.nuvio
     val shape = RoundedCornerShape(NuvioTokens.Radius.xl)
     val previewBackground = tokens.colors.background
@@ -384,7 +391,8 @@ private fun HomePosterPreviewCard(
             ) {
                 onClick?.invoke()
             }
-            .secondaryClick(onLongClick),
+            .secondaryClick(onLongClick)
+            .middleClick { WatchLaterRepository.toggle(item) },
     ) {
         Box(
             modifier = Modifier
@@ -564,6 +572,14 @@ private fun HomePosterPreviewCard(
                         active = isSaved,
                         progress = 1f,
                         onClick = onSaveClick,
+                        size = NuvioTokens.Space.s40,
+                    )
+                    DetailIconAction(
+                        label = if (savedForLater) "Remove from Watch Later" else "Save to Watch Later",
+                        icon = if (savedForLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        active = savedForLater,
+                        progress = 1f,
+                        onClick = { WatchLaterRepository.toggle(item) },
                         size = NuvioTokens.Space.s40,
                     )
                 }

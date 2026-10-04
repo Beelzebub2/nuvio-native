@@ -75,6 +75,9 @@ import com.nuvio.app.features.home.HomeScreen
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryScreen
+import com.nuvio.app.features.catalog.CatalogScreen
+import com.nuvio.app.features.catalog.CatalogTarget
+import androidx.compose.material.icons.filled.Bookmark
 import com.nuvio.app.features.library.LibrarySection
 import com.nuvio.app.features.library.LibrarySortOption
 import com.nuvio.app.features.player.PlayerBackReleaseGuard
@@ -276,6 +279,18 @@ internal fun AppTabHost(
                     onConnectCloudClick = actions.onConnectCloudClick,
                     onDownloadsClick = actions.onDownloadsClick,
                     disintegrationRequest = state.libraryDisintegrationRequest,
+                )
+            }
+
+            AppScreenTab.WatchLater -> {
+                CatalogScreen(
+                    title = "Watch Later",
+                    subtitle = "Middle-click a poster to save it here or remove it. Saved separately for each profile.",
+                    target = CatalogTarget.WatchLater,
+                    onBack = null,
+                    onPosterClick = actions.onPosterClick,
+                    onPosterLongClick = actions.onPosterLongClick,
+                    modifier = Modifier.fillMaxSize().padding(top = state.topChromePadding ?: 0.dp),
                 )
             }
 
@@ -854,6 +869,15 @@ internal fun DesktopHoverSidebar(
                         modifier = Modifier.size(DesktopSidebarIconSize),
                         tint = color,
                     )
+                }
+                DesktopSidebarItem(
+                    label = "Watch Later",
+                    selected = selectedTab == AppScreenTab.WatchLater,
+                    expanded = sidebarExpanded,
+                    onClick = { selectTab(AppScreenTab.WatchLater) },
+                ) { color ->
+                    Icon(Icons.Filled.Bookmark, contentDescription = "Watch Later",
+                        modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_settings_page_root),
