@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -49,8 +50,18 @@ class DesktopJellyNavigationTest {
         }
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Library").assertIsSelected()
-        compose.runOnIdle { assertEquals(listOf(2), clicks) }
+        compose.runOnIdle { assertEquals(listOf(3), clicks) }
         savePreview("expanded")
+    }
+
+    @Test
+    fun watchLaterNavigatesFromTheTopBar() {
+        setContent()
+        compose.onNodeWithContentDescription("Watch Later").performMouseInput { click() }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Watch Later").assertIsSelected()
+        compose.runOnIdle { assertEquals(listOf(2), clicks) }
+        savePreview("watch-later")
     }
 
     @Test
@@ -82,11 +93,11 @@ class DesktopJellyNavigationTest {
     }
 
     private fun setContent(withProfile: Boolean = false) {
-        val labels = listOf("Home", "Search", "Library", "Settings")
-        val icons = listOf(Icons.Default.Home, Icons.Default.Search, Icons.Default.VideoLibrary, Icons.Default.Settings)
+        val labels = listOf("Home", "Search", "Watch Later", "Library", "Settings")
+        val icons = listOf(Icons.Default.Home, Icons.Default.Search, Icons.Default.Bookmark, Icons.Default.VideoLibrary, Icons.Default.Settings)
         compose.setContent {
             NuvioTheme {
-                Box(Modifier.size(640.dp, 220.dp).background(Color(0xFF151619))) {
+                Box(Modifier.size(1024.dp, 220.dp).background(Color(0xFF151619))) {
                     DesktopNavigationBar(
                         items = labels.mapIndexed { index, label ->
                             FloatingNavigationItem(
@@ -96,8 +107,8 @@ class DesktopJellyNavigationTest {
                                     clicks += index
                                     selected.intValue = index
                                 },
-                                icon = if (withProfile && index == 3) null else icons[index],
-                                content = if (withProfile && index == 3) {
+                                icon = if (withProfile && index == 4) null else icons[index],
+                                content = if (withProfile && index == 4) {
                                     { onClick ->
                                         Box(
                                             Modifier.size(26.dp).background(Color.Gray)

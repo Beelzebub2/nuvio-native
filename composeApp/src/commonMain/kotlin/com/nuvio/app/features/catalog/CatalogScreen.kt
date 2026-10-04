@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.ScreenActivityEffect
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,7 +91,7 @@ fun CatalogScreen(
     title: String,
     subtitle: String,
     target: CatalogTarget,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -118,6 +119,10 @@ fun CatalogScreen(
     )
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
+
+    ScreenActivityEffect(target) { active ->
+        if (active && target is CatalogTarget.WatchLater) CatalogRepository.load(target)
+    }
 
     LiveCatalogRefreshEffect(
         key = target,
@@ -247,17 +252,22 @@ fun CatalogScreen(
                     }
                 } else if (uiState.items.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        CatalogEmptyState(
-                            errorMessage = uiState.errorMessage,
-                            networkCondition = networkStatusUiState.condition,
-                            onRetry = {
-                                NetworkStatusRepository.requestRefresh(force = true)
-                                CatalogRepository.load(
-                                    target = target,
-                                    force = true,
-                                )
-                            },
-                        )
+                        if (target is CatalogTarget.WatchLater) {
+                            Text("Nothing saved yet. Middle-click a poster in Airing Now or another catalog to add it to Watch Later.",
+                                modifier = Modifier.padding(vertical = 24.dp), style = MaterialTheme.typography.bodyLarge)
+                        } else {
+                            CatalogEmptyState(
+                                errorMessage = uiState.errorMessage,
+                                networkCondition = networkStatusUiState.condition,
+                                onRetry = {
+                                    NetworkStatusRepository.requestRefresh(force = true)
+                                    CatalogRepository.load(
+                                        target = target,
+                                        force = true,
+                                    )
+                                },
+                            )
+                        }
                     }
                 } else {
                     items(
@@ -320,7 +330,7 @@ private fun CatalogHeader(
     title: String,
     subtitle: String,
     pageHorizontalPadding: Dp,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     if (LocalUseNativeNavigation.current) {
@@ -341,14 +351,16 @@ private fun CatalogHeader(
             .padding(horizontal = pageHorizontalPadding)
             .padding(top = if (isDesktop) 32.dp else 52.dp, bottom = 12.dp),
     ) {
-        NuvioBackButton(
-            onClick = onBack,
-            modifier = Modifier.size(if (isDesktop) 48.dp else 40.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            iconSize = 24.dp,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        if (onBack != null) {
+            NuvioBackButton(
+                onClick = onBack,
+                modifier = Modifier.size(if (isDesktop) 48.dp else 40.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                iconSize = 24.dp,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.displaySmall,

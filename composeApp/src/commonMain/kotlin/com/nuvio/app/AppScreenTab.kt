@@ -5,6 +5,7 @@ import com.nuvio.app.core.ui.NativeNavigationTab
 enum class AppScreenTab {
     Home,
     Search,
+    WatchLater,
     Library,
     Settings,
     ;
@@ -19,6 +20,7 @@ internal fun AppScreenTab.toNativeNavigationTab(): NativeNavigationTab = when (t
     AppScreenTab.Home -> NativeNavigationTab.Home
     AppScreenTab.Search -> NativeNavigationTab.Search
     AppScreenTab.Library -> NativeNavigationTab.Library
+    AppScreenTab.WatchLater -> NativeNavigationTab.Library
     AppScreenTab.Settings -> NativeNavigationTab.Settings
 }
 

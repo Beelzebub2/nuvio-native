@@ -175,6 +175,7 @@ object ProfileRepository {
         ensureTrackingProvidersRegistered()
         TrackingProviderRegistry.onProfileChanged()
         LibraryRepository.onProfileChanged(profileIndex)
+        com.nuvio.app.features.watchlater.WatchLaterRepository.ensureLoaded()
         LibraryDisplaySettingsRepository.onProfileChanged()
         WatchProgressRepository.onProfileChanged(profileIndex)
         AddonRepository.onProfileChanged(profileIndex)

@@ -69,8 +69,15 @@ internal actual object ThemeSettingsStorage {
         store.putBoolean(ProfileScopedKey.of(liquidGlassNativeTabBarEnabledKey), enabled)
     }
 
-    actual fun loadDesktopNavigationLayout(): String? =
-        store.getString(ProfileScopedKey.of(desktopNavigationLayoutKey))
+    actual fun loadDesktopNavigationLayout(): String? {
+        // Apply the requested top layout once per profile; later appearance choices persist.
+        val migratedKey = ProfileScopedKey.of("native_top_navigation_v1")
+        if (store.getBoolean(migratedKey) != true) {
+            store.putString(ProfileScopedKey.of(desktopNavigationLayoutKey), DesktopNavigationLayout.TopBar.name)
+            store.putBoolean(migratedKey, true)
+        }
+        return store.getString(ProfileScopedKey.of(desktopNavigationLayoutKey))
+    }
 
     actual fun saveDesktopNavigationLayout(layoutName: String) {
         store.putString(ProfileScopedKey.of(desktopNavigationLayoutKey), layoutName)

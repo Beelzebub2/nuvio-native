@@ -6,6 +6,8 @@ import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.collection.TmdbCollectionSourceResolver
 import com.nuvio.app.features.collection.catalogRouteKey
 import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.toMetaPreview
+import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.filterReleasedItems
 import com.nuvio.app.features.trakt.TraktPublicListSourceResolver
@@ -40,6 +42,19 @@ object CatalogRepository {
             return
         }
         activeRequest = request
+        if (target is CatalogTarget.WatchLater) {
+            activeJob?.cancel()
+            _uiState.value = CatalogUiState(isLoading = true)
+            activeJob = scope.launch {
+                WatchLaterRepository.ensureLoaded()
+                WatchLaterRepository.items.collect { items ->
+                    if (activeRequest == request) {
+                        _uiState.value = CatalogUiState(items = items.map { it.toMetaPreview() })
+                    }
+                }
+            }
+            return
+        }
         if (target is CatalogTarget.Library) {
             observeInternalLibrary(request)
             return
@@ -148,7 +163,8 @@ object CatalogRepository {
                         page = requestedSkip.takeIf { it > 0 } ?: 1,
                     )
 
-                    is CatalogTarget.Library -> error(getString(Res.string.catalog_load_failed))
+                    is CatalogTarget.Library, is CatalogTarget.WatchLater, is CatalogTarget.Airing ->
+                        error(getString(Res.string.catalog_load_failed))
                 }.withUnreleasedFilter(request.hideUnreleasedContent)
             }.fold(
                 onSuccess = { page ->

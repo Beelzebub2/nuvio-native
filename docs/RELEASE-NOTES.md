@@ -1,13 +1,10 @@
-Nuvio Native is a personal Windows desktop build based on NuvioMedia/NuvioDesktop, with Compose desktop UI, native libmpv playback, a bundled Java runtime, and the upstream TorrServer/anacrolix engine.
+Nuvio Native 1.0.1 adds full catalog browsing, Watch Later, and top navigation.
 
-- Airing Now is built into Home: Today, Next 24 hours, Recent, and All views, native episode details, time-zone/history/source controls, and refresh without reopening the app. It uses a Cloudflare provider gateway with direct fallbacks and retains schedules when providers fail. Broadcast uses AniList; Sub/Dub use Tsuzuki and depend on that provider's availability.
-- Anime-specific Kitsu/MAL stream IDs retain the correct episode numbers. Independent cached ID mappings work when ani.zip is blocked.
-- Visible addon home catalogs refresh every minute while the app has focus. Returning to the app triggers a throttled refresh; offline and hidden addon screens pause refreshes. Built-in schedules reclassify every minute and fetch every five minutes.
-- The first page of an addon catalog refreshes while visible without blanking existing results or changing scroll position.
-- P2P profile, cache, and upload preferences now configure the desktop engine. Disk cache uses the selected size; memory-only buffering is bounded by profile.
-- P2P starts serialize, use a separate loopback port, wait up to 90 seconds for metadata, and clean up failed or cancelled streams. Other local torrent servers are not stopped.
-- Windows .exe installers are built and published by pushing a matching vMAJOR.MINOR.PATCH tag.
-- Updates use this private repository through the GitHub API, read your GitHub CLI login at runtime, verify the downloaded SHA-256, and never bundle an account token. Check at startup and every six hours; choose Install in the update dialog.
-- Guest use works without upstream backend credentials. Cloud account integrations require a configured compatible server.
+- Airing Now's View all button and heading open a full scrollable poster grid. Time-window filters, source settings, episode times, and automatic refresh work in both views.
+- The Home row supports drag scrolling, previous/next buttons, and a horizontal scrollbar.
+- Middle-click a catalog poster to save or remove it from Watch Later without opening its details. Saved posters show a bookmark badge; hover previews also offer a Watch Later button.
+- Watch Later is a separate local list for each profile, persists across restarts, and preserves native anime IDs. Your Library and connected tracking lists remain separate.
+- Desktop navigation moves to a horizontal top bar, with a new Watch Later tab. You can choose a sidebar again in Appearance settings.
+- The private updater and tag-driven Windows release workflow continue to verify installer checksums.
 
-This package has no Windows Authenticode certificate. Preserve the upstream GPLv3 license and provide the matching source to any recipient to whom you distribute a copy.
+This installer has no Windows Authenticode certificate. Source and upstream GPLv3 notices remain in this private repository.
