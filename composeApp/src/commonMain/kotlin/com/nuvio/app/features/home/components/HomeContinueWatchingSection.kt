@@ -65,6 +65,8 @@ import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryDisplayArtworkUrl
 import com.nuvio.app.features.tracking.WatchProgressSource
+import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingSectionStyle
 import com.nuvio.app.features.watchprogress.WatchProgressCompletionPercentThreshold
@@ -77,6 +79,11 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 private val ContinueWatchingStatusBadgeShape = RoundedCornerShape(4.dp)
+private fun ContinueWatchingItem.watchLaterPreview() = MetaPreview(
+    id = parentMetaId, type = parentMetaType, name = title,
+    poster = poster ?: imageUrl, rawPosterUrl = rawPosterUrl,
+    banner = background, logo = logo,
+)
 private val ContinueWatchingNewEpisodeBadgeColor = Color(0xFF1D4ED8)
 private val ContinueWatchingNewSeasonBadgeColor = Color(0xFFB45309)
 private const val ContinueWatchingLandscapeCardScale = 1.2f
@@ -718,6 +725,7 @@ private fun ContinueWatchingCard(
                 zoomImageUrl = imageUrl,
                 zoomCornerRadius = cardMetrics.cornerRadius,
             )
+            .watchLaterMiddleClick(item.watchLaterPreview())
             .width(cardMetrics.width)
             .aspectRatio(PosterLandscapeAspectRatio)
             .clip(RoundedCornerShape(cardMetrics.cornerRadius))
@@ -898,6 +906,7 @@ private fun ContinueWatchingWideCard(
     Row(
         modifier = Modifier
             .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
+            .watchLaterMiddleClick(item.watchLaterPreview())
             .width(layout.wideCardWidth)
             .height(layout.wideCardHeight)
             .clip(RoundedCornerShape(cornerRadius))
@@ -1028,6 +1037,7 @@ private fun ContinueWatchingPosterCard(
     Column(
         modifier = Modifier
             .desktopPosterHoverScale()
+            .watchLaterMiddleClick(item.watchLaterPreview())
             .width(layout.posterCardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

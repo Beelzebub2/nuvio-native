@@ -80,8 +80,9 @@ import com.nuvio.app.core.ui.PosterZoomOverlayCoordinator
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.secondaryClick
-import com.nuvio.app.core.ui.middleClick
 import com.nuvio.app.features.watchlater.WatchLaterRepository
+import com.nuvio.app.features.watchlater.WatchLaterPoster
+import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.details.components.DetailIconAction
 import com.nuvio.app.features.library.LibraryRepository
@@ -132,12 +133,12 @@ internal fun HomePosterHoverPreview(
     val trailerPlaybackEnabled = AppFeaturePolicy.trailerPlaybackMode == TrailerPlaybackMode.IN_APP &&
         posterCardStyle.hoverPreviewTrailerEnabled
     if (!posterCardStyle.hoverPreviewEnabled) {
-        content(modifier)
+        WatchLaterPoster(item, modifier) { content(it) }
         return
     }
 
     if (PosterZoomOverlayCoordinator.isVisible) {
-        content(modifier)
+        WatchLaterPoster(item, modifier) { content(it) }
         return
     }
 
@@ -282,8 +283,8 @@ internal fun HomePosterHoverPreview(
         }
     }
 
-    Box(modifier = modifier) {
-        content(Modifier.hoverable(anchorInteractionSource))
+    WatchLaterPoster(item, modifier) { watchLaterModifier ->
+        content(watchLaterModifier.hoverable(anchorInteractionSource))
 
         if (popupMounted) {
             Popup(
@@ -392,7 +393,7 @@ private fun HomePosterPreviewCard(
                 onClick?.invoke()
             }
             .secondaryClick(onLongClick)
-            .middleClick { WatchLaterRepository.toggle(item) },
+            .watchLaterMiddleClick(item),
     ) {
         Box(
             modifier = Modifier
