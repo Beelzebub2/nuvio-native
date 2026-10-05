@@ -71,6 +71,7 @@ import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.heroStretchZoom
 import com.nuvio.app.core.ui.ultrawideViewportProgress
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import com.nuvio.app.features.tmdb.originalTmdbImageUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -546,7 +547,8 @@ private fun DesktopHomeHeroFrame(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor),
+            .background(backgroundColor)
+            .watchLaterMiddleClick(currentHeroItem(items, pagerState)),
     ) {
         HeroBackgroundLayers(
             items = items,

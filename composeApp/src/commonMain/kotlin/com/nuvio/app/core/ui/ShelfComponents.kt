@@ -260,7 +260,8 @@ fun NuvioPosterCard(
         modifier = Modifier
             .desktopPosterHoverScale()
             .then(modifier)
-            .width(cardWidth),
+            .width(cardWidth)
+            .middleClick(onMiddleClick),
         verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
     ) {
         Box(
@@ -279,7 +280,6 @@ fun NuvioPosterCard(
                     zoomImageUrl = imageUrl,
                     zoomCornerRadius = posterCardStyle.cornerRadiusDp.dp,
                     hoverScaleEnabled = false,
-                    onMiddleClick = onMiddleClick,
                 ),
             contentAlignment = Alignment.Center,
         ) {

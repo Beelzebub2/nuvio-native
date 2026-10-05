@@ -1,0 +1,53 @@
+package com.nuvio.app.features.watchlater
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.middleClick
+import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.isDesktop
+
+internal fun Modifier.watchLaterMiddleClick(item: MetaPreview): Modifier {
+    if (!isDesktop) return this
+    return middleClick {
+        runCatching { WatchLaterRepository.toggle(item) }.fold(
+            onSuccess = {
+                val saved = WatchLaterRepository.items.value.any { it.id == item.id && it.type == item.type }
+                NuvioToastController.show(if (saved) "${item.name} added to Watch Later" else "${item.name} removed from Watch Later")
+            },
+            onFailure = { NuvioToastController.show("Couldn't update Watch Later: ${it.message}") },
+        )
+    }
+}
+
+@Composable
+internal fun WatchLaterPoster(
+    item: MetaPreview,
+    modifier: Modifier = Modifier,
+    content: @Composable (Modifier) -> Unit,
+) {
+    val items by remember {
+        WatchLaterRepository.ensureLoaded()
+        WatchLaterRepository.items
+    }.collectAsState()
+    Box(modifier) {
+        // Keep the handler on the card's own layer so its hovered, scaled edges stay clickable.
+        content(Modifier.watchLaterMiddleClick(item))
+        if (isDesktop && items.any { it.id == item.id && it.type == item.type }) {
+            Icon(Icons.Filled.Bookmark, contentDescription = "Saved to Watch Later",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
+        }
+    }
+}

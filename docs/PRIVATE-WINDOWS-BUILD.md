@@ -20,7 +20,7 @@ Use View all or click the Airing Now heading to open a full scrollable poster gr
 
 ## Watch Later and navigation
 
-Middle-click any catalog poster to toggle Watch Later without opening its details. A bookmark badge marks saved items. The hover preview also has a Watch Later button. Watch Later is a separate local list for each profile, persists across app restarts, and preserves native anime identifiers; it does not change your Library or connected tracking lists. Click Watch Later in the top navigation to open its full grid, then middle-click a saved poster again to remove it.
+Middle-click anywhere on a title card, including its image, title, or labels, to toggle Watch Later without opening details or playing it. This works in Home shelves, Airing Now, search results, Discover grids, Library, collection grids, recommendations, Watch Later, Continue Watching (all three layouts), and the featured Home title. The shortcut works with hover previews enabled or disabled, and also inside an open preview. A brief message confirms saving or removal; catalog cards show a bookmark badge. The hover preview also has a Watch Later button. Watch Later is a separate local list for each profile, persists across app restarts, and preserves native anime identifiers; it does not change your Library or connected tracking lists. Click Watch Later in the top navigation to open its full grid, then middle-click a saved card again to remove it.
 
 Version 1.0.1 moves desktop navigation to a horizontal top bar once for each profile. You can subsequently choose a sidebar in Settings → Appearance, and that preference persists.
 
