@@ -24,6 +24,8 @@ Middle-click anywhere on a title card, including its image, title, or labels, to
 
 Version 1.0.1 moves desktop navigation to a horizontal top bar once for each profile. You can subsequently choose a sidebar in Settings → Appearance, and that preference persists.
 
+Desktop notifications appear in the bottom-right corner with a bounded width and up to three lines, keeping the top navigation visible when saving titles with long names.
+
 ## Airing schedules
 
 Airing Now appears on Home without installing a schedule addon. It has Today, Next 24 hours, Recent, and All views, groups multiple episodes of the same anime, and shows episode numbers and times. Settings select Broadcast (AniList), Sub or Dub (Tsuzuki), an IANA time zone (default Europe/Lisbon), 1–7 history days, and estimated times. Clicking a poster opens native episode details and your existing stream addons. Exact AniList→Kitsu/MAL mappings preserve anime episode numbering; TVDB season numbers cannot overwrite it.

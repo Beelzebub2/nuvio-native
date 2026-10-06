@@ -2068,11 +2068,7 @@ internal fun MainAppContent(
                     .zIndex(15f),
             )
 
-            NuvioToastHost(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(20f),
-            )
+            NuvioToastHost()
 
             }
         }

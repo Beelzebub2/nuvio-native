@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
@@ -62,6 +64,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import nuvio.composeapp.generated.resources.Res
@@ -476,7 +479,7 @@ fun NuvioStatusModal(
 }
 
 @Composable
-fun NuvioToastHost(
+fun BoxScope.NuvioToastHost(
     modifier: Modifier = Modifier,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -509,17 +512,22 @@ fun NuvioToastHost(
 
     AnimatedVisibility(
         visibleState = visibilityState,
-        modifier = modifier,
-        enter = fadeIn() + slideInVertically { -it },
-        exit = fadeOut() + slideOutVertically { -it },
+        modifier = modifier
+            .align(if (isDesktop) Alignment.BottomEnd else Alignment.TopCenter)
+            .zIndex(20f),
+        enter = fadeIn() + slideInVertically { if (isDesktop) it else -it },
+        exit = fadeOut() + slideOutVertically { if (isDesktop) it else -it },
     ) {
         val currentToast = renderedToast ?: return@AnimatedVisibility
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = statusBarTop + tokens.spacing.listGap)
-                .padding(horizontal = tokens.spacing.screenHorizontal),
-            contentAlignment = Alignment.TopCenter,
+            modifier = if (isDesktop) {
+                Modifier.padding(NuvioTokens.Space.s16).widthIn(max = 420.dp)
+            } else {
+                Modifier.fillMaxWidth()
+                    .padding(top = statusBarTop + tokens.spacing.listGap)
+                    .padding(horizontal = tokens.spacing.screenHorizontal)
+            },
+            contentAlignment = if (isDesktop) Alignment.BottomEnd else Alignment.TopCenter,
         ) {
             Surface(
                 shape = RoundedCornerShape(NuvioTokens.Radius.xl),
@@ -532,6 +540,8 @@ fun NuvioToastHost(
                     modifier = Modifier.padding(horizontal = NuvioTokens.Space.s16, vertical = NuvioTokens.Space.s12),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tokens.colors.textPrimary,
+                    maxLines = if (isDesktop) 3 else Int.MAX_VALUE,
+                    overflow = if (isDesktop) TextOverflow.Ellipsis else TextOverflow.Clip,
                 )
             }
         }
