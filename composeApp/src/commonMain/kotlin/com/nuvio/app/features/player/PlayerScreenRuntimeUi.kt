@@ -533,20 +533,27 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     }
                 },
                 onControllerReady = { controller ->
-                    playerController = controller.takeIf { sourceAvailable }
+                    val currentSurface = !isP2pPlaybackActive || surfaceSource?.sourceUrl == p2pResolvedSourceUrl
+                    playerController = controller.takeIf { sourceAvailable && currentSurface }
                     playerLifecycleController = controller
-                    playerControllerSourceUrl = surfaceSource?.sourceUrl
+                    playerControllerSourceUrl = surfaceSource?.sourceUrl.takeIf { currentSurface }
                 },
                 onSnapshot = { snapshot ->
+                    if (isP2pPlaybackActive && (p2pResolvedSourceUrl == null || surfaceSource?.sourceUrl != p2pResolvedSourceUrl)) {
+                        return@PlatformPlayerSurface
+                    }
                     if (!updatePlaybackSnapshot(snapshot)) return@PlatformPlayerSurface
                     refreshAudioTracksIfChanged()
-                    if (!snapshot.isLoading) initialLoadCompleted = true
-                    if (snapshot.isEnded) {
+                    if (!playbackSnapshot.isLoading) initialLoadCompleted = true
+                    if (playbackSnapshot.isEnded) {
                         shouldPlay = false
                         controlsVisible = !playerControlsLocked
                     }
                 },
                 onError = { message ->
+                    if (isP2pPlaybackActive && (p2pRecoveryInProgress || p2pResolvedSourceUrl == null || surfaceSource?.sourceUrl != p2pResolvedSourceUrl)) {
+                        return@PlatformPlayerSurface
+                    }
                     if (message != null && tryRefreshCredentialedSourceAfterError(message)) {
                         return@PlatformPlayerSurface
                     }
@@ -600,6 +607,12 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
 
 @Composable
 private fun p2pConnectingPhaseLabel(phase: String): String = when (phase) {
+    "waiting_for_network" -> org.jetbrains.compose.resources.stringResource(
+        nuvio.composeapp.generated.resources.Res.string.player_torrent_waiting_network,
+    )
+    "recovering_engine" -> org.jetbrains.compose.resources.stringResource(
+        nuvio.composeapp.generated.resources.Res.string.player_torrent_reconnecting,
+    )
     "add_magnet" -> org.jetbrains.compose.resources.stringResource(
         nuvio.composeapp.generated.resources.Res.string.player_torrent_fetching_metadata,
     )

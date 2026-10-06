@@ -297,6 +297,84 @@ class PlayerScreenRuntimeStateTest {
         )
     }
 
+    @Test fun p2pRecoveryPreservesThePausedPositionAndLogicalIdentity() {
+        val request = com.nuvio.app.features.p2p.P2pStreamRequest("a".repeat(40), 2)
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = request.infoHash, torrentFileIdx = 2))
+        runtime.p2pResolvedSourceUrl = "http://127.0.0.1:8000/stream"
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false, positionMs = 351_000L, durationMs = 900_000L)
+        runtime.shouldPlay = false
+        runtime.initialSeekApplied = true
+        val identity = runtime.activePlaybackKey
+        runtime.applyP2pRecoveryState(com.nuvio.app.features.p2p.P2pStreamingState.Connecting("recovering_engine", request = request))
+        assertNull(runtime.p2pResolvedSourceUrl)
+        assertTrue(runtime.p2pRecoveryInProgress)
+        assertEquals(351_000L, runtime.activeInitialPositionMs)
+        assertFalse(runtime.initialSeekApplied)
+        assertFalse(runtime.updatePlaybackSnapshot(PlayerPlaybackSnapshot(isEnded = true)))
+        runtime.applyP2pRecoveryState(com.nuvio.app.features.p2p.P2pStreamingState.Streaming(
+            "http://127.0.0.1:8001/stream", 0, 0, 0, 0, 0f, 0f, request = request))
+        assertFalse(runtime.p2pRecoveryInProgress)
+        assertEquals("http://127.0.0.1:8001/stream", runtime.p2pResolvedSourceUrl)
+        assertFalse(runtime.shouldPlay)
+        assertEquals(identity, runtime.activePlaybackKey)
+    }
+
+    @Test fun p2pReconnectCapturesPositionEvenWhenConnectingWasConflated() {
+        val request = com.nuvio.app.features.p2p.P2pStreamRequest("a".repeat(40), null)
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = request.infoHash))
+        runtime.p2pResolvedSourceUrl = "http://127.0.0.1:8000/stream"
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false, positionMs = 222_000L)
+        runtime.initialLoadCompleted = true
+        runtime.applyP2pRecoveryState(com.nuvio.app.features.p2p.P2pStreamingState.Streaming(
+            "http://127.0.0.1:8001/stream", 0, 0, 0, 0, 0f, 0f, request = request))
+        assertEquals(222_000L, runtime.activeInitialPositionMs)
+        assertTrue(runtime.shouldPlay)
+        assertFalse(runtime.initialLoadCompleted)
+        assertEquals("http://127.0.0.1:8001/stream", runtime.p2pResolvedSourceUrl)
+    }
+
+    @Test fun staleP2pRecoveryFromAnotherSourceIsIgnored() {
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = "b".repeat(40)))
+        runtime.p2pResolvedSourceUrl = "http://127.0.0.1:8001/stream"
+        val request = com.nuvio.app.features.p2p.P2pStreamRequest("a".repeat(40), null)
+        runtime.applyP2pRecoveryState(com.nuvio.app.features.p2p.P2pStreamingState.Connecting("recovering_engine", request = request))
+        runtime.applyP2pRecoveryState(com.nuvio.app.features.p2p.P2pStreamingState.Streaming(
+            "http://127.0.0.1:8000/stream", 0, 0, 0, 0, 0f, 0f, request = request))
+        assertFalse(runtime.p2pRecoveryInProgress)
+        assertEquals("http://127.0.0.1:8001/stream", runtime.p2pResolvedSourceUrl)
+    }
+
+    @Test fun repeatingRecoveryDoesNotEraseTheCapturedResumePosition() {
+        val request = com.nuvio.app.features.p2p.P2pStreamRequest("a".repeat(40), null)
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = request.infoHash))
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(positionMs = 123_000L)
+        val state = com.nuvio.app.features.p2p.P2pStreamingState.Connecting("recovering_engine", request = request)
+        runtime.applyP2pRecoveryState(state)
+        runtime.applyP2pRecoveryState(state)
+        assertEquals(123_000L, runtime.activeInitialPositionMs)
+        assertTrue(runtime.p2pRecoveryInProgress)
+    }
+
+    @Test fun anInterruptedTorrentReaderKeepsTheLastPositionForRecovery() {
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = "a".repeat(40)))
+        runtime.updatePlaybackSnapshot(PlayerPlaybackSnapshot(isLoading = false, isPlaying = true,
+            positionMs = 351_000L, durationMs = 900_000L))
+        runtime.updatePlaybackSnapshot(PlayerPlaybackSnapshot(isLoading = false, isEnded = true))
+        assertFalse(runtime.playbackSnapshot.isEnded)
+        assertTrue(runtime.playbackSnapshot.isLoading)
+        assertEquals(351_000L, runtime.playbackSnapshot.positionMs)
+        assertEquals(900_000L, runtime.playbackSnapshot.durationMs)
+    }
+
+    @Test fun aTorrentReachingTheActualEndStillFinishesNormally() {
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs().copy(torrentInfoHash = "a".repeat(40)))
+        runtime.updatePlaybackSnapshot(PlayerPlaybackSnapshot(isLoading = false,
+            positionMs = 899_500L, durationMs = 900_000L))
+        runtime.updatePlaybackSnapshot(PlayerPlaybackSnapshot(isLoading = false, isEnded = true))
+        assertTrue(runtime.playbackSnapshot.isEnded)
+        assertFalse(runtime.playbackSnapshot.isLoading)
+    }
+
     private fun testPlayerScreenArgs() = PlayerScreenArgs(
         profileId = 1,
         title = "Title",

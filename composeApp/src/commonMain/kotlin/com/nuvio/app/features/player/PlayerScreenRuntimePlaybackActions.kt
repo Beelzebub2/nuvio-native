@@ -26,11 +26,16 @@ internal fun PlayerScreenRuntime.updatePlaybackSnapshot(
     snapshot: PlayerPlaybackSnapshot,
     playbackKey: PlaybackKey = activePlaybackKey,
 ): Boolean {
-    if (playbackKey != activePlaybackKey) return false
-    playbackSnapshot = if (snapshot.durationMs <= 0L && playbackSnapshotKey == playbackKey) {
+    if (playbackKey != activePlaybackKey || p2pRecoveryInProgress) return false
+    val current = if (snapshot.durationMs <= 0L && playbackSnapshotKey == playbackKey) {
         snapshot.copy(durationMs = playbackSnapshot.durationMs)
     } else {
         snapshot
+    }
+    playbackSnapshot = if (activeTorrentInfoHash != null) {
+        normalizeP2pEnd(current, playbackSnapshot.takeIf { playbackSnapshotKey == playbackKey } ?: PlayerPlaybackSnapshot())
+    } else {
+        current
     }
     playbackSnapshotKey = playbackKey
     val targetPositionMs = scrubbingPositionMs ?: return true
@@ -145,7 +150,7 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
     }
 }
 
-private fun PlayerScreenRuntime.resetTrackSelectionState() {
+internal fun PlayerScreenRuntime.resetTrackSelectionState() {
     trackPreferenceRestoreApplied = false
     preferredAudioSelectionApplied = false
     appliedAudioPreferences = null

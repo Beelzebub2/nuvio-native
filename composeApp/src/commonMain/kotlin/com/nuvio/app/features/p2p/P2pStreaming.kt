@@ -206,6 +206,7 @@ sealed class P2pStreamingState {
         val uploadSpeed: Long = 0L,
         val peers: Int = 0,
         val seeds: Int = 0,
+        val request: P2pStreamRequest? = null,
     ) : P2pStreamingState()
 
     data class Streaming(
@@ -219,6 +220,7 @@ sealed class P2pStreamingState {
         val downloadedBytes: Long = 0L,
         val verifiedBytes: Long = 0L,
         val deliveredBytes: Long = 0L,
+        val request: P2pStreamRequest? = null,
     ) : P2pStreamingState()
 
     data class Error(val message: String) : P2pStreamingState()

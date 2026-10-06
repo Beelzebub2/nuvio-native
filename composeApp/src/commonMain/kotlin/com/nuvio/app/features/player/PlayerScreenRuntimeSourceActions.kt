@@ -116,6 +116,7 @@ internal fun StreamItem.playerSourceIdentityKey(): String? {
 
 internal fun PlayerScreenRuntime.stopActiveP2pStream() {
     if (activeTorrentInfoHash != null || p2pResolvedSourceUrl != null) {
+        p2pRequestGeneration += 1
         P2pStreamingEngine.stopStream()
     }
     activeTorrentInfoHash = null
@@ -123,6 +124,7 @@ internal fun PlayerScreenRuntime.stopActiveP2pStream() {
     activeTorrentFilename = null
     activeTorrentTrackers = emptyList()
     p2pResolvedSourceUrl = null
+    p2pRecoveryInProgress = false
 }
 
 internal fun PlayerScreenRuntime.saveP2pStreamForReuse(
@@ -164,7 +166,8 @@ internal fun PlayerScreenRuntime.switchToP2pSourceStream(stream: StreamItem) {
         pendingP2pSwitch = PendingPlayerP2pSwitch(stream = stream, episode = null, isAutoPlay = false)
         return
     }
-    val currentPositionMs = playbackSnapshot.positionMs.coerceAtLeast(0L)
+    val currentPositionMs = playbackSnapshot.positionMs.takeIf { it > 0L }
+        ?: activeInitialPositionMs.coerceAtLeast(0L)
     flushWatchProgress()
     stopActiveP2pStream()
     saveP2pStreamForReuse(

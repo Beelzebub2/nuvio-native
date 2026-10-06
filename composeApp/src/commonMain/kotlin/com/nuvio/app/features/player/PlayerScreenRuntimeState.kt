@@ -148,6 +148,8 @@ internal class PlayerScreenRuntime(
     var activeTorrentFilename by mutableStateOf(torrentFilename)
     var activeTorrentTrackers by mutableStateOf(torrentTrackers)
     var p2pResolvedSourceUrl by mutableStateOf<String?>(null)
+    var p2pRecoveryInProgress by mutableStateOf(false)
+    var p2pRequestGeneration by mutableStateOf(0L)
     var activeSourceIdentityKey by mutableStateOf(
         torrentInfoHash?.trim()?.lowercase()?.takeIf { it.isNotBlank() }?.let { hash ->
             "torrent:$hash:${torrentFileIdx ?: -1}"
