@@ -1,8 +1,7 @@
-Nuvio Native 1.0.2 fixes middle-click Watch Later across catalog layouts.
+Nuvio Native 1.0.3 fixes notifications covering the top navigation.
 
-- Middle-click anywhere on a title card, including its image, title, and labels. Discover/search grids and collection grids now use the same shortcut as Home, Airing Now, Library, recommendations, and Watch Later.
-- The shortcut works with hover previews enabled or disabled, and inside an open preview. Catalog bookmark badges and brief save/remove messages confirm the change.
-- Continue Watching supports the shortcut in Card, Wide, and Poster layouts. It saves the parent movie or series without starting playback. Middle-clicking the featured Home title also toggles Watch Later.
-- Each click toggles once, preserves ordinary left/right-click behavior, and keeps Watch Later separate from Library and connected tracking lists.
+- Desktop notifications now appear in the bottom-right corner, leaving the navigation bar visible and accessible.
+- Long title messages wrap within a compact width, with up to three lines and an ellipsis for very long text. The layout adapts when resizing the window or changing UI scale.
+- Notifications enter and leave from the bottom and continue to dismiss automatically.
 
 This installer has no Windows Authenticode certificate. Source and upstream GPLv3 notices remain in this private repository.
