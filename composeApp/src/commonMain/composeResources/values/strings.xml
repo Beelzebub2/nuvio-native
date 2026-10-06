@@ -2481,4 +2481,6 @@
     <string name="movie_status_rumored">Rumored</string>
     <string name="movie_status_in_production">In Production</string>
     <string name="movie_status_post_production">Post Production</string>
+    <string name="player_torrent_reconnecting">Reconnecting torrent…</string>
+    <string name="player_torrent_waiting_network">Waiting for network…</string>
 </resources>

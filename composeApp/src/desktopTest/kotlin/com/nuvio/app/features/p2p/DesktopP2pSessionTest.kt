@@ -1,0 +1,204 @@
+package com.nuvio.app.features.p2p
+
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class DesktopP2pSessionTest {
+    private val request = P2pStreamRequest("a".repeat(40), null, filename = "sample.mp4")
+
+    private class Backend : DesktopTorrentBackend {
+        var starts = 0
+        var stops = 0
+        var running = false
+        var failures = 0
+        var failAfterMetadata = false
+        var startupFailures = 0
+        var metadata = true
+        var startGate: CompletableDeferred<Unit>? = null
+        val requests = mutableListOf<String>()
+        private var callsSinceStart = 0
+
+        override suspend fun restart(settings: P2pSettingsUiState) {
+            stops += 1
+            running = false
+            starts += 1
+            callsSinceStart = 0
+            if (startupFailures > 0) {
+                startupFailures -= 1
+                throw DesktopTorrentEngineUnavailable("Transient startup failure")
+            }
+            startGate?.await()
+            running = true
+        }
+        override suspend fun stop() { stops += 1; running = false }
+        override suspend fun addTorrent(magnetLink: String): String {
+            requests += magnetLink
+            return magnetLink.substringAfter("btih:").substringBefore('&')
+        }
+        override suspend fun getTorrentStats(hash: String): TorrServerStats {
+            callsSinceStart += 1
+            if (failures > 0 || (failAfterMetadata && callsSinceStart > 1)) {
+                failures = (failures - 1).coerceAtLeast(0)
+                throw DesktopTorrentEngineUnavailable("Lost local server")
+            }
+            return TorrServerStats(0, 0, 0, 0, 10, 20, 100,
+                if (metadata) listOf(TorrServerFile(1, "sample.mp4", 100)) else emptyList())
+        }
+        override fun getStreamUrl(magnetLink: String, fileIdx: Int): String = "http://127.0.0.1:${8000 + starts}/stream?index=$fileIdx"
+    }
+
+    private class Environment {
+        var network: Set<String>? = setOf("wifi:192.0.2.1")
+        var sleepMs = 0L
+        fun read(time: Long) = DesktopP2pEnvironment(time + sleepMs, time, network)
+    }
+
+    private fun TestScope.engine(backend: Backend, environment: Environment = Environment()) = DesktopP2pSession(
+        backend, backgroundScope, { P2pSettingsUiState() }, { environment.read(testScheduler.currentTime) },
+    )
+
+    @Test fun sleepRebuildsTheEngineAndPublishesANewPlaybackUrl() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        val first = engine.startStream(request)
+        environment.sleepMs += 120_000L
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        val state = assertIs<P2pStreamingState.Streaming>(engine.state.value)
+        assertTrue(state.localUrl != first)
+        assertEquals(request, state.request)
+        assertEquals(backend.requests.first(), backend.requests.last())
+        engine.stopStream().join()
+    }
+
+    @Test fun networkLossWaitsUntilTheNewInterfaceIsStable() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.startStream(request)
+        environment.network = emptySet()
+        advanceTimeBy(10_001L)
+        assertEquals(1, backend.starts)
+        environment.network = setOf("ethernet:192.0.2.2")
+        advanceTimeBy(2_000L)
+        assertEquals(1, backend.starts)
+        advanceTimeBy(4_001L)
+        assertEquals(2, backend.starts)
+        advanceTimeBy(8_000L)
+        assertEquals(2, backend.starts)
+        engine.stopStream().join()
+    }
+
+    @Test fun repeatedLocalApiFailuresRecoverButZeroPeersDoNot() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.startStream(request)
+        advanceTimeBy(30_001L)
+        assertEquals(1, backend.starts)
+        backend.failures = 3
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        assertIs<P2pStreamingState.Streaming>(engine.state.value)
+        engine.stopStream().join()
+    }
+
+    @Test fun aPersistentlyBrokenBackendStopsAfterBoundedRecovery() = runTest {
+        val backend = Backend().apply { failAfterMetadata = true }
+        val engine = engine(backend)
+        engine.startStream(request)
+        advanceTimeBy(30_001L)
+        assertEquals(3, backend.starts)
+        assertIs<P2pStreamingState.Error>(engine.state.value)
+        assertFalse(backend.running)
+    }
+
+    @Test fun stopWhileRecoveryIsStartingDoesNotResurrectTheSession() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.startStream(request)
+        backend.startGate = CompletableDeferred()
+        environment.sleepMs += 60_000L
+        advanceTimeBy(6_001L)
+        assertIs<P2pStreamingState.Connecting>(engine.state.value)
+        val stop = engine.stopStream()
+        runCurrent()
+        stop.join()
+        backend.startGate!!.complete(Unit)
+        advanceTimeBy(10_001L)
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+        assertFalse(backend.running)
+        assertEquals(2, backend.starts)
+    }
+
+    @Test fun aNewSourceCancelsOldMetadataAndQueuedCleanupCannotKillIt() = runTest {
+        val backend = Backend().apply { metadata = false }
+        val engine = engine(backend)
+        val first = async { engine.startStream(request) }
+        runCurrent()
+        engine.stopStream()
+        backend.metadata = true
+        val second = async { engine.startStream(request.copy(infoHash = "b".repeat(40))) }
+        runCurrent()
+        second.await()
+        assertTrue(first.isCancelled)
+        assertTrue(backend.running)
+        assertIs<P2pStreamingState.Streaming>(engine.state.value)
+        assertEquals("b".repeat(40), (engine.state.value as P2pStreamingState.Streaming).request?.infoHash)
+        engine.stopStream().join()
+    }
+
+    @Test fun cancellingAStartCleansUpItsOwnedProcess() = runTest {
+        val backend = Backend().apply { metadata = false }
+        val engine = engine(backend)
+        val start = async { engine.startStream(request) }
+        runCurrent()
+        assertTrue(backend.running)
+        start.cancel()
+        runCurrent()
+        start.join()
+        assertFalse(backend.running)
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+    }
+
+    @Test fun aWakeUpDuringMetadataLoadingRebuildsBeforeContinuing() = runTest {
+        val backend = Backend().apply { metadata = false }
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        val start = async { engine.startStream(request) }
+        advanceTimeBy(1_001L)
+        environment.sleepMs += 120_000L
+        advanceTimeBy(3_001L)
+        assertEquals(2, backend.starts)
+        backend.metadata = true
+        advanceTimeBy(2_001L)
+        assertTrue(start.await().contains("8002"))
+        assertIs<P2pStreamingState.Streaming>(engine.state.value)
+        engine.stopStream().join()
+    }
+
+    @Test fun aTransientStartupFailureDuringRecoveryGetsOneRetry() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.startStream(request)
+        backend.startupFailures = 1
+        environment.sleepMs += 60_000L
+        advanceTimeBy(8_001L)
+        assertEquals(3, backend.starts)
+        assertTrue(backend.running)
+        assertIs<P2pStreamingState.Streaming>(engine.state.value)
+        engine.stopStream().join()
+    }
+}

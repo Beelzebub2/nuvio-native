@@ -124,12 +124,14 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     }
 
     LaunchedEffect(
+        p2pRequestGeneration,
         activeTorrentInfoHash,
         activeTorrentFileIdx,
         activeTorrentFilename,
         activeTorrentTrackers,
         p2pSettingsUiState.p2pEnabled,
     ) {
+        p2pRecoveryInProgress = false
         val infoHash = activeTorrentInfoHash
         if (infoHash == null) {
             p2pResolvedSourceUrl = null
@@ -181,7 +183,9 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
 
     LaunchedEffect(p2pStreamingState, activeTorrentInfoHash) {
         val state = p2pStreamingState
+        applyP2pRecoveryState(state)
         if (activeTorrentInfoHash != null && state is P2pStreamingState.Error) {
+            p2pRecoveryInProgress = false
             p2pResolvedSourceUrl = null
             playerController = null
             playerControllerSourceUrl = null
