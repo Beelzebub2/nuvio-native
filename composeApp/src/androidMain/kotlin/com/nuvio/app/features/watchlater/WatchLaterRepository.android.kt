@@ -10,4 +10,6 @@ internal actual object WatchLaterRepository {
     actual fun ensureLoaded() = Unit
     actual fun clearLocalState() = Unit
     actual fun toggle(item: MetaPreview) = Unit
+    actual fun remove(item: LibraryItem) = Unit
+    actual fun resolveEpisodes() = Unit
 }

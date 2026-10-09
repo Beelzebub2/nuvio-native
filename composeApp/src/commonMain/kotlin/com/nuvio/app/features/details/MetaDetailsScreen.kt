@@ -1302,6 +1302,7 @@ fun MetaDetailsScreen(
                                 ) {
                                     DesktopDetailHero(
                                         meta = meta,
+                                        watchLaterEpisode = seriesActionVideo,
                                         showOverallRatings = metaScreenSettingsUiState.showOverallRatings,
                                         isMdbListActive = mdbListSettings.isActive,
                                         playButtonLabel = playButtonLabel,

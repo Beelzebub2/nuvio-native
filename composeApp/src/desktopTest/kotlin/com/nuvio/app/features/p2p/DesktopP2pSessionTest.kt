@@ -27,6 +27,10 @@ class DesktopP2pSessionTest {
         var startGate: CompletableDeferred<Unit>? = null
         val requests = mutableListOf<String>()
         private var callsSinceStart = 0
+        val dropped = mutableListOf<String>()
+        private var preparedSettings: P2pSettingsUiState? = null
+        override suspend fun prepare(settings: P2pSettingsUiState) { if (!running || preparedSettings != settings) restart(settings) }
+        override suspend fun dropTorrent(hash: String) { dropped += hash }
 
         override suspend fun restart(settings: P2pSettingsUiState) {
             stops += 1
@@ -39,6 +43,7 @@ class DesktopP2pSessionTest {
             }
             startGate?.await()
             running = true
+            preparedSettings = settings
         }
         override suspend fun stop() { stops += 1; running = false }
         override suspend fun addTorrent(magnetLink: String): String {
@@ -64,7 +69,7 @@ class DesktopP2pSessionTest {
     }
 
     private fun TestScope.engine(backend: Backend, environment: Environment = Environment()) = DesktopP2pSession(
-        backend, backgroundScope, { P2pSettingsUiState() }, { environment.read(testScheduler.currentTime) },
+        backend, backgroundScope, { P2pSettingsUiState(p2pEnabled = true) }, { environment.read(testScheduler.currentTime) },
     )
 
     @Test fun sleepRebuildsTheEngineAndPublishesANewPlaybackUrl() = runTest {
@@ -80,6 +85,44 @@ class DesktopP2pSessionTest {
         assertEquals(request, state.request)
         assertEquals(backend.requests.first(), backend.requests.last())
         engine.stopStream().join()
+    }
+
+    @Test fun startupPreparationAndSourceChangesReuseTheReadyEngine() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        assertEquals(1, backend.starts)
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+        engine.startStream(request)
+        engine.stopStream().join()
+        assertTrue(backend.running)
+        assertEquals(listOf(request.infoHash), backend.dropped)
+        engine.startStream(request.copy(infoHash = "b".repeat(40)))
+        assertEquals(1, backend.starts)
+        engine.shutdown().join()
+        assertFalse(backend.running)
+    }
+
+    @Test fun networkChangeWhileIdleRebuildsTheWarmedEngine() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.prepare().join()
+        environment.network = setOf("vpn:192.0.2.8")
+        engine.startStream(request)
+        assertEquals(2, backend.starts)
+        engine.shutdown().join()
+    }
+
+    @Test fun changedProfileSettingsReprepareEvenWhenP2pRemainsEnabled() = runTest {
+        val backend = Backend()
+        var settings = P2pSettingsUiState(p2pEnabled = true, enableUpload = false)
+        val engine = DesktopP2pSession(backend, backgroundScope, { settings })
+        engine.prepare().join()
+        settings = settings.copy(cacheSize = P2pCacheSize.NONE, torrentProfile = P2pTorrentProfile.FAST)
+        engine.prepare().join()
+        assertEquals(2, backend.starts)
+        engine.shutdown().join()
     }
 
     @Test fun networkLossWaitsUntilTheNewInterfaceIsStable() = runTest {

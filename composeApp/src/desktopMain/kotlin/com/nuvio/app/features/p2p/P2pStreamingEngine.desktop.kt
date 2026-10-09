@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -31,9 +32,11 @@ import kotlinx.coroutines.withContext
 private val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
 
 actual object P2pStreamingEngine {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var readinessWatcher: Job? = null
     private val engine = DesktopP2pSession(
         backend = TorrServerBackend(),
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        scope = scope,
         settings = {
             P2pSettingsRepository.ensureLoaded()
             P2pSettingsRepository.uiState.value
@@ -44,14 +47,24 @@ actual object P2pStreamingEngine {
 
     init {
         Runtime.getRuntime().addShutdownHook(Thread {
-            runCatching { runBlocking { engine.stopStream().join() } }
+            readinessWatcher?.cancel()
+            runCatching { runBlocking { engine.shutdown().join() } }
         }.apply { name = "nuvio-torrserver-shutdown" })
     }
 
     actual suspend fun startStream(request: P2pStreamRequest): String =
         withContext(Dispatchers.IO) { engine.startStream(request) }
     actual fun stopStream() { engine.stopStream() }
-    actual fun shutdown() { engine.stopStream() }
+    actual fun shutdown() { readinessWatcher?.cancel(); engine.shutdown() }
+    fun prepare() {
+        P2pSettingsRepository.ensureLoaded()
+        if (readinessWatcher != null) return
+        readinessWatcher = scope.launch {
+            P2pSettingsRepository.uiState.collectLatest { settings ->
+                if (settings.p2pEnabled) engine.prepare().join() else engine.stopStream(closeEngine = true).join()
+            }
+        }
+    }
 
     actual suspend fun clearCache(): P2pCacheClearResult = engine.whileInactive {
         withContext(Dispatchers.IO) {
@@ -85,6 +98,36 @@ internal class DesktopP2pSession(
     private var intent = 0L
     private var startJob: Job? = null
     private var monitorJob: Job? = null
+    @Volatile private var warmupJob: Job? = null
+    private var activeHash: String? = null
+    private var preparedEnvironment: DesktopP2pEnvironment? = null
+    @Volatile private var closing = false
+
+    fun prepare(): Job {
+        warmupJob?.cancel()
+        return scope.launch {
+            backendLock.withLock {
+                if (closing || _state.value !is P2pStreamingState.Idle) return@withLock
+                synchronized(intentLock) { intent += 1 }
+                try {
+                    if (needsNetworkRecovery()) backend.restart(settings()) else backend.prepare(settings())
+                    preparedEnvironment = environment()
+                } catch (e: CancellationException) {
+                    withContext(NonCancellable) { backend.stop() }
+                    throw e
+                } catch (e: Exception) {
+                    backend.stop()
+                    log.w(e) { "Background torrent engine preparation failed; playback will retry" }
+                }
+            }
+        }.also { warmupJob = it }
+    }
+
+    fun shutdown(): Job {
+        closing = true
+        warmupJob?.cancel()
+        return stopStream(closeEngine = true)
+    }
 
     suspend fun startStream(request: P2pStreamRequest): String = coroutineScope {
         val job = currentCoroutineContext().job
@@ -101,6 +144,7 @@ internal class DesktopP2pSession(
             backendLock.withLock {
                 ensureCurrent(currentIntent)
                 try {
+                    releaseTorrent()
                     val session = connectWithRetry(request, currentIntent)
                     startMonitoring(session, currentIntent)
                     session.url
@@ -118,7 +162,8 @@ internal class DesktopP2pSession(
         }
     }
 
-    fun stopStream(): Job {
+    fun stopStream(closeEngine: Boolean = false): Job {
+        if (closeEngine) warmupJob?.cancel()
         val stopIntent = synchronized(intentLock) {
             intent += 1
             startJob?.cancel()
@@ -132,7 +177,9 @@ internal class DesktopP2pSession(
         return scope.launch {
             backendLock.withLock {
                 // A delayed stop must never kill the process belonging to a newer source.
-                if (isCurrent(stopIntent)) backend.stop()
+                if (isCurrent(stopIntent)) {
+                    if (closeEngine || !settings().p2pEnabled) { backend.stop(); activeHash = null } else releaseTorrent()
+                }
             }
         }
     }
@@ -159,17 +206,28 @@ internal class DesktopP2pSession(
         val signals: DesktopP2pRecoverySignals,
     )
 
+    private suspend fun releaseTorrent() {
+        val hash = activeHash ?: return
+        activeHash = null
+        try { backend.dropTorrent(hash) } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { backend.stop(); log.w(e) { "Stopping an unresponsive torrent engine" } }
+    }
+
     private suspend fun connectWithRetry(request: P2pStreamRequest, currentIntent: Long, recovering: Boolean = false): Session {
         repeat(2) { attempt ->
             ensureCurrent(currentIntent)
             try {
                 val signals = DesktopP2pRecoverySignals(environment())
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "starting_engine", request = request))
-                backend.restart(settings())
+                val stale = needsNetworkRecovery()
+                if (recovering || attempt > 0 || stale) backend.restart(settings()) else backend.prepare(settings())
+                activeHash = null
+                preparedEnvironment = environment()
                 ensureCurrent(currentIntent)
                 val magnet = buildP2pMagnetUri(request.infoHash, (DEFAULT_TRACKERS + request.trackers).distinct())
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "add_magnet", request = request))
                 val hash = backend.addTorrent(magnet)
+                activeHash = hash
                 ensureCurrent(currentIntent)
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "prepare_stream", request = request))
                 val index = resolveFileIndex(hash, request.fileIdx, request.filename, currentIntent, signals)
@@ -186,6 +244,10 @@ internal class DesktopP2pSession(
         }
         error("Unreachable")
     }
+
+    private fun needsNetworkRecovery(): Boolean = preparedEnvironment?.let { previous ->
+        DesktopP2pRecoverySignals(previous).apply { observe(environment()) }.recoveryPending
+    } == true
 
     private fun startMonitoring(initial: Session, currentIntent: Long) {
         val job = scope.launch(start = CoroutineStart.LAZY) {
@@ -249,6 +311,7 @@ internal class DesktopP2pSession(
 
     private suspend fun fail(currentIntent: Long, error: Exception) {
         withContext(NonCancellable) { backend.stop() }
+        activeHash = null
         publish(currentIntent, P2pStreamingState.Error(error.message ?: localizedP2pUnknownTorrentError()))
     }
 
@@ -271,7 +334,7 @@ internal class DesktopP2pSession(
 
     private fun isCurrent(expected: Long): Boolean = synchronized(intentLock) { intent == expected }
     private fun ensureCurrent(expected: Long) {
-        if (!isCurrent(expected)) throw CancellationException("A newer P2P request replaced this session")
+        if (closing || !isCurrent(expected)) throw CancellationException("A newer P2P request replaced this session")
     }
     private fun publish(expected: Long, state: P2pStreamingState) = synchronized(intentLock) {
         if (intent == expected) _state.value = state

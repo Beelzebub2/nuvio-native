@@ -25,8 +25,36 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class TorrServerRecoveryIntegrationTest {
+    @Test fun portSelectionSkipsAnOccupiedUdpPortAndBoundsFailures() {
+        DatagramSocket(0).use { occupied ->
+            var tries = 0
+            val free = availableTorrentPeerPort()
+            val selected = availableTorrentPeerPort { if (tries++ == 0) occupied.localPort else free }
+            assertEquals(free, selected)
+            assertEquals(2, tries)
+            assertFailsWith<DesktopTorrentEngineUnavailable> { availableTorrentPeerPort { occupied.localPort } }
+        }
+    }
+
+    @Test fun prelaunchSettingsRetainOtherPreferencesAndUnknownFields() {
+        val directory = Files.createTempDirectory("nuvio-settings-test").toFile()
+        try {
+            val file = File(directory, "settings.json")
+            file.writeText("""{"BitTorr":{"StoreSettingsInJson":true,"EnableIPv6":true,"CacheSize":1},"Other":{"keep":"yes"}}""")
+            prepareTorrServerSettingsFile(directory, File(directory, "cache"), P2pSettingsUiState(cacheSize = P2pCacheSize.NONE))
+            val result = Json.parseToJsonElement(file.readText()).jsonObject
+            assertEquals("yes", result["Other"]!!.jsonObject["keep"]!!.jsonPrimitive.content)
+            assertEquals("true", result["BitTorr"]!!.jsonObject["EnableIPv6"]!!.jsonPrimitive.content)
+            assertEquals("268435456", result["BitTorr"]!!.jsonObject["CacheSize"]!!.jsonPrimitive.content)
+        } finally { directory.deleteRecursively() }
+    }
     @Test fun theSelectedPeerPortAcceptsBothTcpAndUdp() {
         val port = availableTorrentPeerPort()
         ServerSocket(port).use {
@@ -82,6 +110,10 @@ class TorrServerRecoveryIntegrationTest {
             val otherPid = assertNotNull(other.processId)
             engine.restart(settings)
             val oldPid = assertNotNull(engine.processId)
+            engine.prepare(settings)
+            assertEquals(oldPid, engine.processId, "Preparing an unchanged engine must reuse its process")
+            engine.prepare(settings.copy(hideTorrentStats = true))
+            assertEquals(oldPid, engine.processId, "UI-only settings must not restart the engine")
             val sentinel = File(dir, "owned/user-file.txt").apply { writeText("retain") }
             engine.restart(settings)
             assertNotEquals(oldPid, engine.processId)

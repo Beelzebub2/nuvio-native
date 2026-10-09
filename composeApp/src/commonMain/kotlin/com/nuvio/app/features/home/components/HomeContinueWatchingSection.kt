@@ -83,6 +83,9 @@ private fun ContinueWatchingItem.watchLaterPreview() = MetaPreview(
     id = parentMetaId, type = parentMetaType, name = title,
     poster = poster ?: imageUrl, rawPosterUrl = rawPosterUrl,
     banner = background, logo = logo,
+    watchLaterEpisode = if (seasonNumber != null || episodeNumber != null) com.nuvio.app.features.watchlater.WatchLaterEpisode(
+        videoId, episodeTitle ?: subtitle, seasonNumber, episodeNumber, episodeThumbnail,
+    ) else null,
 )
 private val ContinueWatchingNewEpisodeBadgeColor = Color(0xFF1D4ED8)
 private val ContinueWatchingNewSeasonBadgeColor = Color(0xFFB45309)

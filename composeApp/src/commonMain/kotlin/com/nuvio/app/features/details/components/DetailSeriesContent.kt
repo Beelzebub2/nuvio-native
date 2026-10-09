@@ -1,5 +1,10 @@
 package com.nuvio.app.features.details.components
 
+import com.nuvio.app.features.watchlater.watchLaterMiddleClick
+import com.nuvio.app.features.watchlater.toWatchLaterPreview
+import com.nuvio.app.features.watchlater.toWatchLaterEpisode
+import com.nuvio.app.features.home.MetaPreview
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -223,6 +228,7 @@ fun DetailSeriesContent(
                             maxWidthDp = containerWidthDp,
                             horizontalScrollPadding = horizontalScrollPadding,
                             parentMetaId = meta.id,
+                            watchLaterParent = meta.toWatchLaterPreview(),
                             metaType = meta.type,
                             watchedKeys = watchedKeys,
                             fallbackImage = meta.background ?: meta.poster,
@@ -251,6 +257,7 @@ fun DetailSeriesContent(
                                 )
                                 EpisodeListCard(
                                     video = episode,
+                                    modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
                                     fallbackImage = meta.background ?: meta.poster,
                                     progressEntry = progressByVideoId[episodeVideoId],
                                     imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -336,6 +343,7 @@ internal fun DetailSeriesListEpisode(
         )
         EpisodeListCard(
             video = episode,
+            modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
             fallbackImage = meta.background ?: meta.poster,
             progressEntry = progressByVideoId[episodeVideoId],
             imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -711,6 +719,7 @@ private fun EpisodeHorizontalRow(
     maxWidthDp: Float,
     horizontalScrollPadding: Dp,
     parentMetaId: String,
+    watchLaterParent: MetaPreview,
     metaType: String,
     watchedKeys: Set<String>,
     fallbackImage: String?,
@@ -766,6 +775,7 @@ private fun EpisodeHorizontalRow(
             )
             EpisodeHorizontalCard(
                 video = episode,
+                modifier = Modifier.watchLaterMiddleClick(watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode())),
                 fallbackImage = fallbackImage,
                 progressEntry = progressByVideoId[episodeVideoId],
                 imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -797,6 +807,7 @@ private fun EpisodeHorizontalCard(
     episodeRatingsVisibility: EpisodeRatingsVisibility,
     blurUnwatchedEpisodes: Boolean,
     metrics: EpisodeHorizontalCardMetrics,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
@@ -818,7 +829,7 @@ private fun EpisodeHorizontalCard(
         metrics.contentBottomPadding
     }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(metrics.cardWidth)
             .height(metrics.cardHeight)
             .clip(cardShape)

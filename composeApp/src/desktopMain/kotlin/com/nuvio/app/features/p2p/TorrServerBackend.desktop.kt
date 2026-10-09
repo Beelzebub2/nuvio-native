@@ -35,9 +35,12 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import java.io.IOException
+import kotlin.random.Random
 
 internal interface DesktopTorrentBackend {
+    suspend fun prepare(settings: P2pSettingsUiState)
     suspend fun restart(settings: P2pSettingsUiState)
+    suspend fun dropTorrent(hash: String)
     suspend fun stop()
     suspend fun addTorrent(magnetLink: String): String
     suspend fun getTorrentStats(hash: String): TorrServerStats
@@ -47,21 +50,27 @@ internal interface DesktopTorrentBackend {
 internal class DesktopTorrentEngineUnavailable(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** The torrent library binds TCP and UDP to the same port; TCP autoselection alone can collide on Windows. */
-internal fun availableTorrentPeerPort(): Int {
-    repeat(20) {
+internal fun availableTorrentPeerPort(candidate: () -> Int = { Random.nextInt(20_000, 49_152) }): Int {
+    var lastFailure: SocketException? = null
+    repeat(128) {
         try {
-            ServerSocket(0).use { tcp ->
+            // Server ports below the default Windows ephemeral range avoid most VPN/Hyper-V exclusions.
+            val port = candidate()
+            ServerSocket().use { tcp ->
+                tcp.reuseAddress = false
+                tcp.bind(InetSocketAddress(port))
                 DatagramSocket(null).use { udp ->
                     udp.reuseAddress = false
                     udp.bind(InetSocketAddress(tcp.localPort))
                     return tcp.localPort
                 }
             }
-        } catch (_: SocketException) {
+        } catch (e: SocketException) {
+            lastFailure = e
             // Choose another port if UDP is occupied or excluded by Windows.
         }
     }
-    throw DesktopTorrentEngineUnavailable("Cannot find a free TCP/UDP torrent port")
+    throw DesktopTorrentEngineUnavailable("Cannot find an available TCP/UDP torrent port. Check your VPN or firewall and retry.", lastFailure)
 }
 
 internal suspend fun sendTorrServerRequest(client: HttpClient, request: HttpRequest): HttpResponse<String> =
@@ -72,20 +81,40 @@ internal suspend fun sendTorrServerRequest(client: HttpClient, request: HttpRequ
     }
 
 internal class TorrServerBackend(
-    configurationDirectory: File = DesktopStorage.rootDir.resolve("torrserver").toFile(),
-    cacheDirectory: File = DesktopStorage.cacheDir.resolve("torrents").toFile(),
+    private val configurationDirectory: File = DesktopStorage.rootDir.resolve("torrserver").toFile(),
+    private val cacheDirectory: File = DesktopStorage.cacheDir.resolve("torrents").toFile(),
     binaryFile: File? = null,
 ) : DesktopTorrentBackend {
     private val binary = TorrServerBinary(configurationDirectory, binaryFile)
     private val api = TorrServerApi(binary, cacheDirectory)
     val processId: Long? get() = binary.processId
+    private var preparedSettings: P2pSettingsUiState? = null
+
+    override suspend fun prepare(settings: P2pSettingsUiState) {
+        if (preparedSettings == settings.copy(p2pEnabled = false, hideTorrentStats = false) && binary.isRunning()) return
+        restart(settings)
+    }
 
     override suspend fun restart(settings: P2pSettingsUiState) {
         stop()
-        binary.start()
-        api.configure(settings)
+        prepareTorrServerSettingsFile(configurationDirectory, cacheDirectory, settings)
+        repeat(3) { attempt ->
+            try {
+                binary.start()
+                api.configure(settings)
+                preparedSettings = settings.copy(p2pEnabled = false, hideTorrentStats = false)
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: DesktopTorrentEngineUnavailable) {
+                stop()
+                if (attempt == 2) throw e
+                delay(250L * (attempt + 1))
+            }
+        }
     }
-    override suspend fun stop() = withContext(Dispatchers.IO) { binary.stop() }
+    override suspend fun stop() = withContext(Dispatchers.IO) { preparedSettings = null; binary.stop() }
+    override suspend fun dropTorrent(hash: String) = api.dropTorrent(hash)
     override suspend fun addTorrent(magnetLink: String): String = api.addTorrent(magnetLink)
     override suspend fun getTorrentStats(hash: String): TorrServerStats = api.getTorrentStats(hash)
     override fun getStreamUrl(magnetLink: String, fileIdx: Int): String = api.getStreamUrl(magnetLink, fileIdx)
@@ -107,7 +136,7 @@ private class TorrServerBinary(
     val baseUrl: String get() = "http://127.0.0.1:$port"
 
     suspend fun start() = withContext(Dispatchers.IO) {
-        port = ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { it.localPort }
+        port = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1")).use { it.localPort }
 
         val binaryFile = resolveBinaryFile()
         if (!binaryFile.canExecute()) {
@@ -336,6 +365,7 @@ private class TorrServerApi(
         val current = readSettingsWhenReady()
         val cacheDir = cacheDirectory.also { it.mkdirs() }
         val configured = desktopTorrentSettings(current, settings, cacheDir.absolutePath)
+        if (configured == current) return@withContext
         postJson("/settings", buildJsonObject {
             put("action", "set")
             put("sets", configured)
@@ -371,6 +401,10 @@ private class TorrServerApi(
             put("hash", hash)
         }) ?: throw DesktopTorrentEngineUnavailable("Torrent engine returned no status")
         return parseTorrServerStats(stats)
+    }
+
+    suspend fun dropTorrent(hash: String) {
+        postJson("/torrents", buildJsonObject { put("action", "drop"); put("hash", hash) })
     }
 
     fun getStreamUrl(magnetLink: String, fileIdx: Int): String {
