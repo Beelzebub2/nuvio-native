@@ -65,6 +65,7 @@ internal object LocalAccountDataCleaner {
         com.nuvio.app.features.shuffle.EpisodeShuffleRepository.clearLocalState()
         LibraryRepository.clearLocalState()
         com.nuvio.app.features.watchlater.WatchLaterRepository.clearLocalState()
+        com.nuvio.app.features.watchlater.PersonalMediaRepository.clearLocalState()
         LibraryDisplaySettingsRepository.clearLocalState()
         ContinueWatchingPreferencesRepository.clearLocalState()
         EpisodeReleaseNotificationsRepository.clearLocalState()

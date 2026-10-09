@@ -9,4 +9,6 @@ internal expect object WatchLaterRepository {
     fun ensureLoaded()
     fun clearLocalState()
     fun toggle(item: MetaPreview)
+    fun remove(item: LibraryItem)
+    fun resolveEpisodes()
 }

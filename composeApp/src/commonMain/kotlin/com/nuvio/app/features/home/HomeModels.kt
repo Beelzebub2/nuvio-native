@@ -21,6 +21,7 @@ data class MetaPreview(
     val rawPosterUrl: String? = null,
     val landscapePoster: String? = null,
     val rawLandscapePosterUrl: String? = null,
+    val watchLaterEpisode: com.nuvio.app.features.watchlater.WatchLaterEpisode? = null,
 )
 
 fun MetaPreview.stableKey(): String = "$type:$id"

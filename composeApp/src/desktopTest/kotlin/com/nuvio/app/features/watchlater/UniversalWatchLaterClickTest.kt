@@ -52,13 +52,14 @@ class UniversalWatchLaterClickTest(private val case: Case) {
     @get:Rule val compose = createComposeRule()
 
     @Test fun `middle click toggles exactly once without navigating playing or changing Library`() {
-        val preview = MetaPreview("universal-middle-${case.name}", "series", "Test ${case.name}")
+        val preview = MetaPreview("universal-middle-${case.name}", "series", "Test ${case.name}",
+            watchLaterEpisode = WatchLaterEpisode("universal-middle-${case.name}:1:2", "Episode 2", 1, 2))
         PosterCardStyleRepository.ensureLoaded()
         val previousHover = PosterCardStyleRepository.uiState.value.hoverPreviewEnabled
         PosterCardStyleRepository.setHoverPreviewEnabled(case == Case.CatalogHoverEnabled || case == Case.DiscoverHoverEnabled)
         WatchLaterRepository.ensureLoaded()
         fun isSaved() = WatchLaterRepository.items.value.any { it.id == preview.id && it.type == preview.type }
-        if (isSaved()) WatchLaterRepository.toggle(preview)
+        WatchLaterRepository.items.value.filter { it.id == preview.id }.forEach(WatchLaterRepository::remove)
         var navigations = 0
         var actions = 0
         try {
@@ -114,6 +115,7 @@ class UniversalWatchLaterClickTest(private val case: Case) {
                 }
             }
             clickMiddle()
+            compose.waitUntil(5_000L) { isSaved() }
             compose.runOnIdle {
                 assertTrue(isSaved(), "${case.name} must save the parent title")
                 assertEquals(1, WatchLaterRepository.items.value.count { it.id == preview.id && it.type == preview.type })
@@ -123,9 +125,10 @@ class UniversalWatchLaterClickTest(private val case: Case) {
                 assertTrue(NuvioToastController.currentToast.value!!.message.contains("added to Watch Later"))
             }
             clickMiddle()
+            compose.waitUntil(5_000L) { !isSaved() }
             compose.runOnIdle { assertFalse(isSaved(), "The second middle click must remove the title") }
         } finally {
-            if (isSaved()) WatchLaterRepository.toggle(preview)
+            WatchLaterRepository.items.value.filter { it.id == preview.id }.forEach(WatchLaterRepository::remove)
             PosterCardStyleRepository.setHoverPreviewEnabled(previousHover)
             NuvioToastController.dismiss()
         }

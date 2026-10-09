@@ -10,8 +10,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.details.seriesPrimaryAction
+import com.nuvio.app.features.library.toMetaPreview
+import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.watchprogress.CurrentDateProvider
+import com.nuvio.app.features.watched.WatchedRepository
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal actual object WatchLaterRepository {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val mutation = Mutex()
     private val storage = DesktopStorage.store("nuvio_watch_later")
     private val list = WatchLaterList(
         profileId = { ProfileRepository.activeProfileId },
@@ -20,8 +32,64 @@ internal actual object WatchLaterRepository {
     )
     actual val items: StateFlow<List<LibraryItem>> get() = list.items
     actual fun ensureLoaded() = list.ensureLoaded()
-    actual fun clearLocalState() = list.clearLocalState()
-    actual fun toggle(item: MetaPreview) = list.toggle(item)
+    actual fun clearLocalState() { scope.coroutineContext.cancelChildren(); list.clearLocalState() }
+    actual fun toggle(item: MetaPreview) {
+        val profile = ProfileRepository.activeProfileId
+        scope.launch {
+            mutation.withLock {
+                try {
+                    val resolved = resolveEpisode(item)
+                    currentCoroutineContext().ensureActive()
+                    if (ProfileRepository.activeProfileId != profile) return@withLock
+                    list.toggle(resolved)
+                    val saved = items.value.any { it.watchLaterKey() == resolved.toLibraryItem(0L).watchLaterKey() }
+                    val label = resolved.watchLaterEpisode?.let { "${resolved.name} · E${it.episodeNumber ?: "?"}" } ?: resolved.name
+                    NuvioToastController.show(if (saved) "$label added to Watch Later" else "$label removed from Watch Later")
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { NuvioToastController.show("Couldn't update Watch Later: ${e.message}") }
+            }
+        }
+    }
+
+    actual fun remove(item: LibraryItem) = list.remove(item)
+    actual fun resolveEpisodes() {
+        val profile = ProfileRepository.activeProfileId
+        scope.launch {
+            mutation.withLock {
+                list.ensureLoaded()
+                for (item in list.items.value.filter { it.type == "series" && it.watchLaterEpisode == null }) {
+                    val resolved = try { resolveEpisode(item.toMetaPreview()) }
+                        catch (e: CancellationException) { throw e } catch (_: Exception) { continue }
+                    currentCoroutineContext().ensureActive()
+                    if (ProfileRepository.activeProfileId != profile) return@withLock
+                    if (resolved.watchLaterEpisode != null) list.replace(item, resolved.toLibraryItem(item.savedAtEpochMs))
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveEpisode(item: MetaPreview): MetaPreview {
+        if (item.watchLaterEpisode != null || item.type != "series") return item
+        WatchProgressRepository.ensureLoaded()
+        WatchedRepository.ensureLoaded()
+        WatchProgressRepository.uiState.value.entries.filter { it.parentMetaId == item.id &&
+            it.parentMetaType == item.type && it.isEpisode && !it.isEffectivelyCompleted }
+            .maxByOrNull { it.lastUpdatedEpochMs }?.let { progress ->
+                return item.copy(watchLaterEpisode = WatchLaterEpisode(progress.videoId,
+                    progress.episodeTitle ?: "Episode ${progress.episodeNumber}", progress.seasonNumber,
+                    progress.episodeNumber, progress.episodeThumbnail))
+            }
+        val meta = withTimeoutOrNull(15_000L) { MetaDetailsRepository.fetch(item.type, item.id) } ?: return item
+        val action = meta.seriesPrimaryAction(
+            entries = WatchProgressRepository.uiState.value.entries,
+            watchedItems = WatchedRepository.uiState.value.items,
+            todayIsoDate = CurrentDateProvider.todayIsoDate(), allowRewatch = true,
+            watchedKeys = WatchedRepository.uiState.value.watchedKeys,
+        ) ?: return item
+        val video = meta.videos.firstOrNull { it.id == action.videoId ||
+            (it.season == action.seasonNumber && it.episode == action.episodeNumber) } ?: return item
+        return item.copy(watchLaterEpisode = video.toWatchLaterEpisode())
+    }
 }
 
 /** A separate local list: middle-click never modifies a connected tracking library. */
@@ -42,7 +110,7 @@ internal class WatchLaterList(
         if (profile == loadedProfile) return
         val payload = load(profile)
         val loaded = if (payload.isNullOrBlank()) emptyList() else json.decodeFromString<List<LibraryItem>>(payload)
-        state.value = loaded.distinctBy { it.type to it.id }.sortedByDescending { it.savedAtEpochMs }
+        state.value = loaded.distinctBy { it.watchLaterKey() }.sortedByDescending { it.savedAtEpochMs }
         loadedProfile = profile
     }
 
@@ -56,11 +124,28 @@ internal class WatchLaterList(
     fun toggle(item: MetaPreview) {
         ensureLoaded()
         val current = state.value
-        val remaining = current.filterNot { it.id == item.id && it.type == item.type }
+        val key = item.toLibraryItem(0L).watchLaterKey()
+        val remaining = current.filterNot { it.watchLaterKey() == key }
         val updated = if (remaining.size == current.size) {
             listOf(item.toLibraryItem(savedAtEpochMs = now())) + remaining
         } else remaining
         // Publish only after successful persistence so a failed write cannot look saved.
+        save(requireNotNull(loadedProfile), json.encodeToString(updated))
+        state.value = updated
+    }
+
+    @Synchronized fun remove(item: LibraryItem) {
+        ensureLoaded()
+        persist(state.value.filterNot { it.watchLaterKey() == item.watchLaterKey() })
+    }
+
+    @Synchronized fun replace(old: LibraryItem, replacement: LibraryItem) {
+        ensureLoaded()
+        persist(state.value.map { if (it.watchLaterKey() == old.watchLaterKey()) replacement else it }
+            .distinctBy { it.watchLaterKey() })
+    }
+
+    private fun persist(updated: List<LibraryItem>) {
         save(requireNotNull(loadedProfile), json.encodeToString(updated))
         state.value = updated
     }

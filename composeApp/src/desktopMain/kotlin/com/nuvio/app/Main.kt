@@ -68,6 +68,7 @@ fun main(args: Array<String>) {
     // on the very first Compose frame (matching Android's SharedPreferences behavior).
     ProfileRepository.loadCachedProfiles()
     AppIconRepository.ensureLoaded()
+    P2pStreamingEngine.prepare()
     DiscordPresenceManager.start()
 
     application {

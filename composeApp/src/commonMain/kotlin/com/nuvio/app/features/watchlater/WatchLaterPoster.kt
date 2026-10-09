@@ -21,13 +21,7 @@ import com.nuvio.app.isDesktop
 internal fun Modifier.watchLaterMiddleClick(item: MetaPreview): Modifier {
     if (!isDesktop) return this
     return middleClick {
-        runCatching { WatchLaterRepository.toggle(item) }.fold(
-            onSuccess = {
-                val saved = WatchLaterRepository.items.value.any { it.id == item.id && it.type == item.type }
-                NuvioToastController.show(if (saved) "${item.name} added to Watch Later" else "${item.name} removed from Watch Later")
-            },
-            onFailure = { NuvioToastController.show("Couldn't update Watch Later: ${it.message}") },
-        )
+        WatchLaterRepository.toggle(item)
     }
 }
 

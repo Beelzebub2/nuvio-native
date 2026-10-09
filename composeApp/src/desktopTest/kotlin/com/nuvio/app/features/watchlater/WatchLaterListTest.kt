@@ -7,6 +7,18 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WatchLaterListTest {
+    @Test fun `episodes of one anime are saved and removed independently across restarts`() {
+        val disk = mutableMapOf<Int, String>()
+        val list = WatchLaterList({ 1 }, { disk[it] }, { p, value -> disk[p] = value })
+        val first = MetaPreview("anime", "series", "Anime", watchLaterEpisode = WatchLaterEpisode("episode-1", "First", 1, 1))
+        val second = first.copy(watchLaterEpisode = WatchLaterEpisode("episode-2", "Second", 1, 2))
+        list.toggle(first); list.toggle(second)
+        val restored = WatchLaterList({ 1 }, { disk[it] }, { p, value -> disk[p] = value })
+        restored.ensureLoaded()
+        assertEquals(setOf("episode-1", "episode-2"), restored.items.value.map { it.watchLaterEpisode?.videoId }.toSet())
+        restored.toggle(first)
+        assertEquals("episode-2", restored.items.value.single().watchLaterEpisode?.videoId)
+    }
     @Test fun `native anime identities and artwork survive a restart`() {
         val disk = mutableMapOf<Int, String>()
         val preview = MetaPreview("nativeairing:21", "series", "One Piece", poster = "https://example.test/poster.jpg")

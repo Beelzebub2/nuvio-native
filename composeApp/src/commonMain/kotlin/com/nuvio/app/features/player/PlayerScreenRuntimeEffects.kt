@@ -373,7 +373,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         onDispose {
             args.launchId?.let { launchId -> PlayerLaunchStore.update(launchId) { currentLaunch(it) } }
             playerController?.clearNowPlayingInfo()
-            P2pStreamingEngine.shutdown()
+            P2pStreamingEngine.stopStream()
             cancelNextEpisodePreload()
             PlayerStreamsRepository.clearAll()
         }

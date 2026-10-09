@@ -216,6 +216,7 @@ fun DesktopDetailHero(
     onWatchedClick: () -> Unit,
     onSaveClick: () -> Unit,
     onSaveLongClick: (() -> Unit)?,
+    watchLaterEpisode: com.nuvio.app.features.details.MetaVideo? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val space = NuvioTokens.Space
@@ -357,6 +358,11 @@ fun DesktopDetailHero(
                 isTablet = true,
                 onPlayClick = onPlayClick,
                 onPlayLongClick = onPlayLongClick,
+            )
+            com.nuvio.app.features.watchlater.PersonalMediaControls(
+                com.nuvio.app.features.home.MetaPreview(meta.id, meta.type, meta.name,
+                    poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description),
+                episode = watchLaterEpisode,
             )
         }
 

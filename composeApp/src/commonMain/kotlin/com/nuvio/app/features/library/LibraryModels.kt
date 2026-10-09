@@ -35,6 +35,7 @@ data class LibraryItem(
     override val trackingProviderItemId: String? = null,
     override val trackingSourceUrl: String? = null,
     val savedAtEpochMs: Long,
+    val watchLaterEpisode: com.nuvio.app.features.watchlater.WatchLaterEpisode? = null,
 ) : TrackingAttributedItem {
     override val trackingContentId: String
         get() = id
@@ -97,6 +98,7 @@ fun MetaPreview.toLibraryItem(savedAtEpochMs: Long): LibraryItem =
         posterShape = posterShape,
         imdbId = id.takeIf { it.startsWith("tt") },
         savedAtEpochMs = savedAtEpochMs,
+        watchLaterEpisode = watchLaterEpisode,
     )
 
 fun LibraryItem.toMetaPreview(): MetaPreview =
@@ -114,4 +116,5 @@ fun LibraryItem.toMetaPreview(): MetaPreview =
         genres = genres,
         rawPosterUrl = rawPosterUrl,
         landscapePoster = landscapePoster,
+        watchLaterEpisode = watchLaterEpisode,
     )
