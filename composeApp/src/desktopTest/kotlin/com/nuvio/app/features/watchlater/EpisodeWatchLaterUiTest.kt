@@ -43,7 +43,7 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
             compose.onNodeWithText(second.title).performMouseInput { click(button = MouseButton.Tertiary) }
             compose.waitUntil(5_000L) { WatchLaterRepository.items.value.count { it.id == id } == 2 }
             assertEquals(0, plays)
-            val directory = File("build/qa-1.0.5").apply { mkdirs() }
+            val directory = File("build/qa-1.0.6").apply { mkdirs() }
             ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "episodes-$style.png"))
         } finally { WatchLaterRepository.items.value.filter { it.id == id }.forEach(WatchLaterRepository::remove) }
     }
