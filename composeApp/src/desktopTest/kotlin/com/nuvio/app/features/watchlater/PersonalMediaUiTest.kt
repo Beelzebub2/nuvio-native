@@ -45,7 +45,7 @@ class PersonalMediaUiTest {
                 assertEquals(videoId, played?.videoId)
                 assertEquals(600_000L, played?.resumePositionMs)
             }
-            val directory = File("build/qa-1.0.5").apply { mkdirs() }
+            val directory = File("build/qa-1.0.6").apply { mkdirs() }
             ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "watch-later-progress.png"))
         } finally {
             WatchLaterRepository.items.value.filter { it.id == id }.forEach(WatchLaterRepository::remove)
@@ -70,7 +70,7 @@ class PersonalMediaUiTest {
                 assertEquals(PersonalMediaStatus.DROPPED, saved.status)
                 assertEquals(9, saved.rating)
             }
-            val directory = File("build/qa-1.0.5").apply { mkdirs() }
+            val directory = File("build/qa-1.0.6").apply { mkdirs() }
             ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "my-list.png"))
         } finally { PersonalMediaRepository.setStatus(item, null); PersonalMediaRepository.setRating(item, null) }
     }

@@ -25,7 +25,7 @@ internal fun desktopP2pEnvironment(): DesktopP2pEnvironment = DesktopP2pEnvironm
 
 internal enum class DesktopP2pRecoveryReason { Resume, NetworkChange, EngineUnavailable }
 
-/** Sampled only while a torrent is active. Wait for interfaces to settle before rebuilding sockets. */
+/** Sample regularly while the engine is ready. Wait for interfaces to settle before rebuilding sockets. */
 internal class DesktopP2pRecoverySignals(initial: DesktopP2pEnvironment) {
     private var previous = initial
     private var network = initial.networkAddresses

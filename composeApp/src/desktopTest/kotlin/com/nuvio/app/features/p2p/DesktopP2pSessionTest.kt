@@ -114,6 +114,71 @@ class DesktopP2pSessionTest {
         engine.shutdown().join()
     }
 
+    @Test fun ordinaryIdleTimeAndLongPlaybackDoNotRebuildTheWarmedEngine() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        advanceTimeBy(120_001L)
+        assertEquals(1, backend.starts)
+        engine.startStream(request)
+        assertEquals(1, backend.starts)
+        advanceTimeBy(120_001L)
+        engine.stopStream().join()
+        advanceTimeBy(60_001L)
+        engine.startStream(request.copy(infoHash = "b".repeat(40)))
+        assertEquals(1, backend.starts)
+        engine.shutdown().join()
+    }
+
+    @Test fun sleepWhileIdleRebuildsBeforeTheNextPlayback() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.prepare().join()
+        environment.sleepMs += 120_000L
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+        engine.startStream(request)
+        assertEquals(2, backend.starts)
+        engine.shutdown().join()
+    }
+
+    @Test fun idleRecoveryWaitsForAUsableStableNetworkAndStopsOnShutdown() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.prepare().join()
+        environment.network = emptySet()
+        advanceTimeBy(30_001L)
+        assertEquals(1, backend.starts)
+        environment.network = setOf("ethernet:192.0.2.2")
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        engine.shutdown().join()
+        environment.sleepMs += 120_000L
+        environment.network = setOf("wifi:192.0.2.8")
+        advanceTimeBy(30_001L)
+        assertEquals(2, backend.starts)
+        assertFalse(backend.running)
+    }
+
+    @Test fun shutdownCancelsAnIdleRecoveryThatIsStarting() = runTest {
+        val backend = Backend()
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.prepare().join()
+        backend.startGate = CompletableDeferred()
+        environment.sleepMs += 120_000L
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        engine.shutdown().join()
+        backend.startGate!!.complete(Unit)
+        advanceTimeBy(30_001L)
+        assertFalse(backend.running)
+        assertEquals(2, backend.starts)
+    }
+
     @Test fun changedProfileSettingsReprepareEvenWhenP2pRemainsEnabled() = runTest {
         val backend = Backend()
         var settings = P2pSettingsUiState(p2pEnabled = true, enableUpload = false)

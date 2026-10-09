@@ -98,9 +98,10 @@ internal class DesktopP2pSession(
     private var intent = 0L
     private var startJob: Job? = null
     private var monitorJob: Job? = null
+    private var readinessMonitorJob: Job? = null
     @Volatile private var warmupJob: Job? = null
     private var activeHash: String? = null
-    private var preparedEnvironment: DesktopP2pEnvironment? = null
+    private var preparedSignals: DesktopP2pRecoverySignals? = null
     @Volatile private var closing = false
 
     fun prepare(): Job {
@@ -111,7 +112,8 @@ internal class DesktopP2pSession(
                 synchronized(intentLock) { intent += 1 }
                 try {
                     if (needsNetworkRecovery()) backend.restart(settings()) else backend.prepare(settings())
-                    preparedEnvironment = environment()
+                    preparedSignals = DesktopP2pRecoverySignals(environment())
+                    startReadinessMonitoring()
                 } catch (e: CancellationException) {
                     withContext(NonCancellable) { backend.stop() }
                     throw e
@@ -163,7 +165,7 @@ internal class DesktopP2pSession(
     }
 
     fun stopStream(closeEngine: Boolean = false): Job {
-        if (closeEngine) warmupJob?.cancel()
+        if (closeEngine) { warmupJob?.cancel(); readinessMonitorJob?.cancel() }
         val stopIntent = synchronized(intentLock) {
             intent += 1
             startJob?.cancel()
@@ -178,7 +180,12 @@ internal class DesktopP2pSession(
             backendLock.withLock {
                 // A delayed stop must never kill the process belonging to a newer source.
                 if (isCurrent(stopIntent)) {
-                    if (closeEngine || !settings().p2pEnabled) { backend.stop(); activeHash = null } else releaseTorrent()
+                    if (closeEngine || !settings().p2pEnabled) {
+                        readinessMonitorJob?.cancel()
+                        backend.stop()
+                        activeHash = null
+                        preparedSignals = null
+                    } else releaseTorrent()
                 }
             }
         }
@@ -217,12 +224,13 @@ internal class DesktopP2pSession(
         repeat(2) { attempt ->
             ensureCurrent(currentIntent)
             try {
-                val signals = DesktopP2pRecoverySignals(environment())
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "starting_engine", request = request))
                 val stale = needsNetworkRecovery()
                 if (recovering || attempt > 0 || stale) backend.restart(settings()) else backend.prepare(settings())
                 activeHash = null
-                preparedEnvironment = environment()
+                val signals = DesktopP2pRecoverySignals(environment())
+                preparedSignals = signals
+                startReadinessMonitoring()
                 ensureCurrent(currentIntent)
                 val magnet = buildP2pMagnetUri(request.infoHash, (DEFAULT_TRACKERS + request.trackers).distinct())
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "add_magnet", request = request))
@@ -245,9 +253,34 @@ internal class DesktopP2pSession(
         error("Unreachable")
     }
 
-    private fun needsNetworkRecovery(): Boolean = preparedEnvironment?.let { previous ->
-        DesktopP2pRecoverySignals(previous).apply { observe(environment()) }.recoveryPending
+    private fun needsNetworkRecovery(): Boolean = preparedSignals?.let { signals ->
+        signals.observe(environment()) != null || signals.recoveryPending
     } == true
+
+    private fun startReadinessMonitoring() {
+        if (readinessMonitorJob?.isActive == true) return
+        readinessMonitorJob = scope.launch {
+            while (isActive) {
+                delay(2_000L)
+                backendLock.withLock {
+                    if (closing || !settings().p2pEnabled || _state.value !is P2pStreamingState.Idle) return@withLock
+                    val reason = preparedSignals?.observe(environment()) ?: return@withLock
+                    try {
+                        backend.restart(settings())
+                        preparedSignals = DesktopP2pRecoverySignals(environment())
+                        log.i { "Prepared torrent engine after $reason" }
+                    } catch (e: CancellationException) {
+                        withContext(NonCancellable) { backend.stop() }
+                        throw e
+                    } catch (e: Exception) {
+                        backend.stop()
+                        preparedSignals = null
+                        log.w(e) { "Idle torrent engine recovery failed; playback will retry" }
+                    }
+                }
+            }
+        }
+    }
 
     private fun startMonitoring(initial: Session, currentIntent: Long) {
         val job = scope.launch(start = CoroutineStart.LAZY) {
