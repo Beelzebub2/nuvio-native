@@ -108,7 +108,7 @@ class UniversalWatchLaterClickTest(private val case: Case) {
                     val titles = compose.onAllNodesWithText(preview.name, useUnmergedTree = true)
                     titles[titles.fetchSemanticsNodes().lastIndex].performMouseInput { click(button = MouseButton.Tertiary) }
                 } else {
-                    compose.onNodeWithTag("target").performMouseInput {
+                    compose.onNodeWithTag("target", useUnmergedTree = true).performMouseInput {
                         val titleArea = case in listOf(Case.CatalogTitle, Case.DiscoverTitle, Case.CollectionTitle)
                         click(position = Offset(center.x, if (titleArea) height - 3f else height * 0.25f), button = MouseButton.Tertiary)
                     }

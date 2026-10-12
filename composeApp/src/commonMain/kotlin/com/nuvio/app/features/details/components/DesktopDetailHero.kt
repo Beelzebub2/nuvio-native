@@ -359,7 +359,8 @@ fun DesktopDetailHero(
                 onPlayClick = onPlayClick,
                 onPlayLongClick = onPlayLongClick,
             )
-            com.nuvio.app.features.watchlater.PersonalMediaControls(
+            com.nuvio.app.features.myanimelist.MyAnimeListControls(meta)
+            com.nuvio.app.features.watchlater.WatchLaterControls(
                 com.nuvio.app.features.home.MetaPreview(meta.id, meta.type, meta.name,
                     poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description),
                 episode = watchLaterEpisode,

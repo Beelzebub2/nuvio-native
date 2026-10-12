@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.middleClick
+import com.nuvio.app.core.ui.secondaryClick
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.isDesktop
 
@@ -22,7 +23,7 @@ internal fun Modifier.watchLaterMiddleClick(item: MetaPreview): Modifier {
     if (!isDesktop) return this
     return middleClick {
         WatchLaterRepository.toggle(item)
-    }
+    }.secondaryClick(if (item.watchLaterEpisode != null) ({ EpisodeDetailsNavigation.open(item) }) else null)
 }
 
 @Composable
@@ -37,8 +38,8 @@ internal fun WatchLaterPoster(
     }.collectAsState()
     Box(modifier) {
         // Keep the handler on the card's own layer so its hovered, scaled edges stay clickable.
-        content(Modifier.watchLaterMiddleClick(item))
-        if (isDesktop && items.any { it.id == item.id && it.type == item.type }) {
+        EpisodeSynopsis(item) { content(Modifier.watchLaterMiddleClick(item)) }
+        if (isDesktop && items.any { it.matchesWatchLaterPreview(item) }) {
             Icon(Icons.Filled.Bookmark, contentDescription = "Saved to Watch Later",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))

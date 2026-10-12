@@ -40,11 +40,17 @@ internal class AiringClient {
         if (settings.airType != "broadcast") {
             val url = "https://tsuzuki.top/api/v1/schedule?start=$first&days=${settings.historyDays + 2}&airType=${settings.airType}"
             val proxied = gatewayGet("/release-schedule?start=$first&days=${settings.historyDays + 2}&airType=${settings.airType}")
-            return parseTsuzukiSchedule(proxied ?: get(url), settings.airType)
+            val recent = parseTsuzukiSchedule(proxied ?: get(url), settings.airType)
+            val week = gatewayGet("/release-schedule?start=$today&days=8&airType=${settings.airType}")
+                ?: get("https://tsuzuki.top/api/v1/schedule?start=$today&days=8&airType=${settings.airType}")
+            return (recent + parseTsuzukiSchedule(week, settings.airType)).distinctBy { "${it.mediaId}:${it.episode}" }
         }
-        val start = first.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond() - 1
-        val end = today.plusDays(2).atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond()
         val result = mutableListOf<AiringEvent>()
+        // Keep each request inside the gateway's existing start/range limits.
+        for ((from, until) in listOf(first to today.plusDays(2), today.plusDays(1) to today.plusDays(8))) {
+        val start = from.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond() - 1
+        val end = until.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond()
+        var complete = false
         for (number in 1..20) {
             val response = gatewayGet("/schedule?start=$start&end=$end&page=$number")?.obj("data")
                 ?: graphql(SCHEDULE_QUERY, buildJsonObject {
@@ -53,9 +59,11 @@ internal class AiringClient {
             val page = response.obj("Page")
             if (page["airingSchedules"] !is JsonArray) error("AniList returned no schedule")
             result.addAll(parseAniListSchedule(page))
-            if (!page.obj("pageInfo").flag("hasNextPage")) return result
+            if (!page.obj("pageInfo").flag("hasNextPage")) { complete = true; break }
         }
-        error("Schedule is too large to load completely; choose fewer history days")
+        check(complete) { "Schedule is too large to load completely; choose fewer history days" }
+        }
+        return result.distinctBy { "${it.mediaId}:${it.episode}" }
     }
 
     suspend fun details(id: Int, known: List<AiringEvent>, settings: AiringSettings): MetaDetails? = coroutineScope {
@@ -85,7 +93,16 @@ internal class AiringClient {
         buildAiringDetails(record, events, mapped, extra.obj("episodes"), Instant.now())
     }
 
-    private suspend fun mapping(id: Int): JsonObject? = mappingMutex.withLock {
+    internal suspend fun resolveMalId(id: String): Int? {
+        val prefix = id.substringBefore(':')
+        val number = id.substringAfter(':', "").substringBefore(':').toIntOrNull()?.takeIf { it > 0 } ?: return null
+        if (prefix == "mal") return number
+        val field = when (prefix) { "nativeairing", "anilist" -> "anilist_id"; "kitsu" -> "kitsu_id"; else -> return null }
+        if (prefix == "nativeairing") NativeAiring.repository.state.value.snapshot.events.firstOrNull { it.mediaId == number }?.malId?.let { return it }
+        return mapping(number, field)?.number("mal_id")
+    }
+
+    private suspend fun mapping(id: Int, field: String = "anilist_id"): JsonObject? = mappingMutex.withLock {
         val cache = DesktopStorage.cacheDir.resolve("airing-id-mappings.json")
         val now = System.currentTimeMillis()
         if (mappings == null && Files.isRegularFile(cache)) {
@@ -107,7 +124,7 @@ internal class AiringClient {
                 withContext(Dispatchers.IO) { runCatching { Files.writeString(cache, fresh.toString()) } }
             }
         }
-        mappings.orEmpty().firstOrNull { (it as? JsonObject)?.number("anilist_id") == id } as? JsonObject
+        mappings.orEmpty().firstOrNull { (it as? JsonObject)?.number(field) == id } as? JsonObject
     }
 
     private suspend fun get(url: String): JsonObject = json.parseToJsonElement(

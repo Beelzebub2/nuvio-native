@@ -3,6 +3,10 @@ package com.nuvio.app.features.airing
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -31,6 +35,8 @@ import com.nuvio.app.features.catalog.LiveCatalogRefreshEffect
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.components.HomePosterCard
+import com.nuvio.app.features.watchlater.EpisodeSynopsis
+import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -42,7 +48,7 @@ internal actual fun BuiltInAiringSection(
     onPosterClick: ((MetaPreview) -> Unit)?,
     onCatalogClick: ((HomeCatalogSection) -> Unit)?,
     onPosterLongClick: ((MetaPreview) -> Unit)?,
-) = AiringBrowser(modifier, expanded = false, initialWindow = AiringWindow.Today.name,
+) = AiringBrowser(modifier, expanded = false, initialWindow = AiringWindow.Now.name,
     onPosterClick = onPosterClick, onPosterLongClick = onPosterLongClick, onCatalogClick = onCatalogClick)
 
 @Composable
@@ -69,7 +75,7 @@ internal fun AiringBrowser(
     val state by repository.state.collectAsState()
     val scope = rememberCoroutineScope()
     var selectedWindow by rememberSaveable {
-        mutableStateOf(AiringWindow.entries.firstOrNull { it.name == initialWindow } ?: AiringWindow.Today)
+        mutableStateOf(AiringWindow.Now)
     }
     var showSettings by remember { mutableStateOf(false) }
     val rowState = rememberLazyListState()
@@ -103,14 +109,11 @@ internal fun AiringBrowser(
                 Text("$source · ${state.settings.zone}", color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall)
             }
-            if (viewAll != null) TextButton(onClick = viewAll) { Text("View all") }
+            if (viewAll != null) TextButton(onClick = viewAll) { Text("Browse") }
             TextButton(onClick = { showSettings = true }) { Text("Settings") }
             TextButton(enabled = !state.loading, onClick = { scope.launch { repository.refresh(force = true) } }) { Text("Refresh") }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AiringWindow.entries.forEach { window ->
-                FilterChip(selected = window == selectedWindow, onClick = { selectedWindow = window }, label = { Text(window.label) })
-            }
             if (!expanded) {
                 Spacer(Modifier.weight(1f))
                 IconButton(enabled = rowState.canScrollBackward, onClick = {
@@ -150,6 +153,7 @@ internal fun AiringBrowser(
             }
             HorizontalScrollbar(rememberScrollbarAdapter(rowState), modifier = Modifier.fillMaxWidth().height(8.dp))
         }
+        if (!expanded) AnimeSchedule(state, onPosterClick, onPosterLongClick)
         val refreshed = state.snapshot.savedAt.takeIf { it > 0 }?.let {
             DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of(state.settings.zone)).format(Instant.ofEpochMilli(it))
         }
@@ -161,15 +165,38 @@ internal fun AiringBrowser(
 }
 
 @Composable
+private fun AnimeSchedule(state: AiringState, onPosterClick: ((MetaPreview) -> Unit)?, onPosterLongClick: ((MetaPreview) -> Unit)?) {
+    val today = state.now.atZone(ZoneId.of(state.settings.zone)).toLocalDate()
+    var date by rememberSaveable(today.toString()) { mutableStateOf(today.toString()) }
+    val selected = java.time.LocalDate.parse(date)
+    val episodes = remember(state.snapshot, state.settings, selected) { selectScheduledEvents(state.snapshot.events, state.settings, selected) }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp).testTag("anime-schedule"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Anime schedule", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headlineSmall)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (0..6).forEach { offset -> val day = today.plusDays(offset.toLong())
+                FilterChip(selected = day == selected, onClick = { date = day.toString() },
+                    label = { Text(day.format(DateTimeFormatter.ofPattern("EEE d"))) }, modifier = Modifier.testTag("schedule-$day"))
+            }
+        }
+        if (episodes.isEmpty()) Text("No scheduled episodes for this day.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(episodes, key = { "${it.mediaId}:${it.episode}" }) { event -> AiringPoster(event, state.settings.zone, onPosterClick, onPosterLongClick) }
+        }
+    }
+}
+
+@Composable
 private fun AiringPoster(event: AiringEvent, zone: String, onPosterClick: ((MetaPreview) -> Unit)?, onPosterLongClick: ((MetaPreview) -> Unit)?) {
     val preview = event.preview()
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    EpisodeSynopsis(preview) {
+    Column(Modifier.watchLaterMiddleClick(preview), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         HomePosterCard(item = preview, onClick = { onPosterClick?.invoke(preview) },
             onLongClick = onPosterLongClick?.let { { it(preview) } })
         val formatted = DateTimeFormatter.ofPattern("EEE HH:mm").withZone(ZoneId.of(zone)).format(Instant.ofEpochSecond(event.airingAt))
         Text("Episode ${event.episode} · $formatted${if (event.estimated) " (estimated)" else ""}",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.widthIn(max = 240.dp))
+    }
     }
 }
 

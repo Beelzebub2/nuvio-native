@@ -4,6 +4,7 @@ import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
+import com.nuvio.app.features.library.toLibraryItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.WatchProgressUiState
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
@@ -24,7 +25,15 @@ internal fun MetaDetails.toWatchLaterPreview(video: MetaVideo? = null) = MetaPre
     id, type, name, poster = poster, banner = background, logo = logo, description = description,
     watchLaterEpisode = video?.toWatchLaterEpisode(),
 )
-internal fun LibraryItem.watchLaterKey(): String = "$type|$id|${watchLaterEpisode?.videoId.orEmpty()}"
+internal fun LibraryItem.watchLaterKey(): String {
+    val episode = watchLaterEpisode
+    val identity = if (episode?.seasonNumber != null && episode.episodeNumber != null)
+        "episode:${episode.seasonNumber}:${episode.episodeNumber}" else episode?.videoId.orEmpty()
+    return "$type|$id|$identity"
+}
+internal fun LibraryItem.matchesWatchLaterPreview(preview: MetaPreview): Boolean =
+    id == preview.id && type == preview.type &&
+        (preview.watchLaterEpisode == null || watchLaterKey() == preview.toLibraryItem(0L).watchLaterKey())
 internal fun LibraryItem.watchLaterProgress(progress: WatchProgressUiState): WatchProgressEntry? {
     val episode = watchLaterEpisode
     progress.progressForVideo(episode?.videoId ?: id, id, episode?.seasonNumber, episode?.episodeNumber)?.let { return it }

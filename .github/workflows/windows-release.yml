@@ -88,5 +88,5 @@ jobs:
           gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) { throw 'This release already exists; do not overwrite published installers.' }
           $installer = "release/Nuvio-Native-Windows-x64-$env:RELEASE_VERSION.exe"
-          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --title "Nuvio Native $env:RELEASE_VERSION" --notes-file docs/RELEASE-NOTES.md $installer release/SHA256SUMS.txt
+          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --title "Nuvio Native $env:RELEASE_VERSION" --generate-notes --notes-file docs/RELEASE-NOTES.md $installer release/SHA256SUMS.txt
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

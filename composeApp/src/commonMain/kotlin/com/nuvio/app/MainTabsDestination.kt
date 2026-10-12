@@ -186,12 +186,6 @@ internal fun MainTabsDestination(
                 icon = Icons.Filled.Bookmark,
                 label = "Watch Later",
             ))
-            if (isDesktop) add(3, FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.MyList,
-                onClick = { onTabSelected(AppScreenTab.MyList) },
-                icon = Icons.Filled.Bookmark,
-                label = "My List",
-            ))
         }
 
         Scaffold(

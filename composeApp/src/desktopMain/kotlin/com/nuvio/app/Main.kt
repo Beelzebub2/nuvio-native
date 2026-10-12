@@ -124,6 +124,7 @@ fun main(args: Array<String>) {
 
         SwingWindow(
             onCloseRequest = {
+                com.nuvio.app.features.myanimelist.clearMyAnimeListState()
                 P2pStreamingEngine.shutdown()
                 DiscordPresenceManager.shutdown()
                 SentryInitializer.close()

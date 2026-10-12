@@ -3,6 +3,7 @@ package com.nuvio.app.features.watchlater
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -35,7 +36,7 @@ class PersonalMediaUiTest {
         compose.waitUntil(5_000L) { WatchLaterRepository.items.value.any { it.id == id } }
         var played: ContinueWatchingItem? = null
         try {
-            compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp)) {
+            compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp).testTag("watch-later-canvas")) {
                 WatchLaterScreen(onPosterClick = {}, onPlay = { played = it })
             } } }
             compose.onNodeWithText("S1 · E2 · Second episode").assertIsDisplayed()
@@ -45,33 +46,13 @@ class PersonalMediaUiTest {
                 assertEquals(videoId, played?.videoId)
                 assertEquals(600_000L, played?.resumePositionMs)
             }
-            val directory = File("build/qa-1.0.6").apply { mkdirs() }
-            ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "watch-later-progress.png"))
+            val directory = File("build/qa-1.0.7").apply { mkdirs() }
+            ImageIO.write(compose.onNodeWithTag("watch-later-canvas", useUnmergedTree = true).captureToImage().toAwtImage(), "png", File(directory, "watch-later-progress.png"))
         } finally {
             WatchLaterRepository.items.value.filter { it.id == id }.forEach(WatchLaterRepository::remove)
             WatchProgressRepository.clearProgress(session.videoId, id)
         }
     }
 
-    @Test fun myListCanChangeAStatusAndRating() {
-        val item = MetaPreview("personal-ui", "series", "An anime with a long title for the new My List card")
-        PersonalMediaRepository.setStatus(item, PersonalMediaStatus.WATCHING)
-        PersonalMediaRepository.setRating(item, 8)
-        try {
-            compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp)) {
-                WatchLaterScreen(personalList = true, onPosterClick = {}, onPlay = {})
-            } } }
-            compose.onNodeWithText("Watching").performClick()
-            compose.onNodeWithText("Dropped").performClick()
-            compose.onNodeWithText("★ 8/10").performClick()
-            compose.onNodeWithText("9 / 10").performClick()
-            compose.runOnIdle {
-                val saved = PersonalMediaRepository.items.value.single { it.item.id == item.id }
-                assertEquals(PersonalMediaStatus.DROPPED, saved.status)
-                assertEquals(9, saved.rating)
-            }
-            val directory = File("build/qa-1.0.6").apply { mkdirs() }
-            ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "my-list.png"))
-        } finally { PersonalMediaRepository.setStatus(item, null); PersonalMediaRepository.setRating(item, null) }
-    }
+
 }

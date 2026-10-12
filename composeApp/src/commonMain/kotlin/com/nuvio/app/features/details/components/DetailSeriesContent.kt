@@ -1,5 +1,6 @@
 package com.nuvio.app.features.details.components
 
+import com.nuvio.app.features.watchlater.EpisodeSynopsis
 import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import com.nuvio.app.features.watchlater.toWatchLaterPreview
 import com.nuvio.app.features.watchlater.toWatchLaterEpisode
@@ -258,6 +259,7 @@ fun DetailSeriesContent(
                                 EpisodeListCard(
                                     video = episode,
                                     modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
+                                    preview = meta.toWatchLaterPreview(episode),
                                     fallbackImage = meta.background ?: meta.poster,
                                     progressEntry = progressByVideoId[episodeVideoId],
                                     imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -344,6 +346,7 @@ internal fun DetailSeriesListEpisode(
         EpisodeListCard(
             video = episode,
             modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
+            preview = meta.toWatchLaterPreview(episode),
             fallbackImage = meta.background ?: meta.poster,
             progressEntry = progressByVideoId[episodeVideoId],
             imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -776,6 +779,7 @@ private fun EpisodeHorizontalRow(
             EpisodeHorizontalCard(
                 video = episode,
                 modifier = Modifier.watchLaterMiddleClick(watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode())),
+                preview = watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode()),
                 fallbackImage = fallbackImage,
                 progressEntry = progressByVideoId[episodeVideoId],
                 imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
@@ -810,7 +814,9 @@ private fun EpisodeHorizontalCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
+    preview: MetaPreview? = null,
 ) {
+    EpisodeSynopsis(preview ?: MetaPreview(video.id, "series", video.title)) {
     val cardShape = RoundedCornerShape(metrics.cornerRadius)
     val ratingLabel = remember(imdbRating, episodeRatingsVisibility, isWatched) {
         imdbRating?.takeIf { it > 0.0 && episodeRatingsVisibility.showRating(isWatched) }
@@ -979,6 +985,8 @@ private fun EpisodeHorizontalCard(
                 fillColor = MaterialTheme.colorScheme.primary,
             )
         }
+    }
+
     }
 }
 
@@ -1197,7 +1205,9 @@ private fun EpisodeListCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
+    preview: MetaPreview? = null,
 ) {
+    EpisodeSynopsis(preview ?: MetaPreview(video.id, "series", video.title)) {
     val cornerRadius = rememberPosterCardStyleUiState().cornerRadiusDp.dp
     val cardShape = RoundedCornerShape(cornerRadius)
     val ratingLabel = remember(imdbRating, episodeRatingsVisibility, isWatched) {
@@ -1354,6 +1364,8 @@ private fun EpisodeListCard(
                     fillColor = MaterialTheme.colorScheme.primary,
                 )
             }
+    }
+
     }
 }
 
