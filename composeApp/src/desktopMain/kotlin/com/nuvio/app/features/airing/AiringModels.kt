@@ -36,6 +36,7 @@ internal data class AiringEvent(
         id = "$NATIVE_AIRING_PREFIX$mediaId", type = "series", name = name,
         poster = poster, rawPosterUrl = poster, banner = banner,
         description = description, genres = genres,
+        watchLaterEpisode = com.nuvio.app.features.watchlater.WatchLaterEpisode("$NATIVE_AIRING_PREFIX$mediaId:$episode", "Episode $episode", 1, episode, banner),
     )
 }
 
@@ -47,7 +48,7 @@ internal data class AiringSnapshot(
 )
 
 internal enum class AiringWindow(val label: String) {
-    Today("Today"), Upcoming("Next 24 hours"), Recent("Recent"), All("All")
+    Now("Airing Now")
 }
 
 internal fun selectAiringEvents(
@@ -60,23 +61,17 @@ internal fun selectAiringEvents(
         !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
             (settings.includeEstimated || !it.estimated)
     }
-    fun inWindow(event: AiringEvent, target: AiringWindow): Boolean {
+    fun inWindow(event: AiringEvent): Boolean {
         val date = Instant.ofEpochSecond(event.airingAt).atZone(zone).toLocalDate()
-        return when (target) {
-            AiringWindow.Today -> date == today && event.airingAt <= now.epochSecond
-            AiringWindow.Upcoming -> event.airingAt > now.epochSecond && event.airingAt <= now.plusSeconds(86400).epochSecond
-            AiringWindow.Recent -> date >= start && date < today && event.airingAt <= now.epochSecond
-            AiringWindow.All -> false
-        }
+        return date >= start && date <= today && event.airingAt <= now.epochSecond
     }
-    if (window == AiringWindow.All) {
-        return listOf(AiringWindow.Today, AiringWindow.Upcoming, AiringWindow.Recent)
-            .flatMap { selectAiringEvents(eligible, settings, now, it) }.distinctBy { it.mediaId }
-    }
-    val matching = eligible.filter { inWindow(it, window) }
-    return (if (window == AiringWindow.Upcoming) matching.sortedBy { it.airingAt }
-        else matching.sortedByDescending { it.airingAt }).distinctBy { it.mediaId }
+    return eligible.filter(::inWindow).sortedByDescending { it.airingAt }.distinctBy { it.mediaId }
 }
+
+internal fun selectScheduledEvents(events: List<AiringEvent>, settings: AiringSettings, date: java.time.LocalDate): List<AiringEvent> =
+    events.filter { !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
+        (settings.includeEstimated || !it.estimated) && Instant.ofEpochSecond(it.airingAt).atZone(ZoneId.of(settings.zone)).toLocalDate() == date }
+        .sortedBy { it.airingAt }.distinctBy { "${it.mediaId}:${it.episode}" }
 
 internal fun JsonObject.text(key: String): String? =
     (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }

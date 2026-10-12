@@ -41,6 +41,7 @@ import com.nuvio.app.features.watched.WatchedRepository
 
 internal object LocalAccountDataCleaner {
     fun wipe() {
+        com.nuvio.app.features.myanimelist.clearMyAnimeListState()
         ensureTrackingProvidersRegistered()
         TrackingProviderRegistry.removeStoredProfiles(1..MAX_PROFILES)
         SyncManager.cancelAccountSync()

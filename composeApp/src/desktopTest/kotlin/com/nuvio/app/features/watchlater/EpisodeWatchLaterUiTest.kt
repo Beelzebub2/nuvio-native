@@ -3,10 +3,12 @@ package com.nuvio.app.features.watchlater
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaEpisodeCardStyle
@@ -26,6 +28,30 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
         @JvmStatic @Parameterized.Parameters(name = "{0}") fun styles() = MetaEpisodeCardStyle.entries.map { arrayOf(it) }
     }
     @get:Rule val compose = createComposeRule()
+    @Test fun episodeHoverShowsTheParentSynopsisAndRightClickOpensItsDetails() {
+        val episode = MetaVideo("episode-actions-$style:1:2", "Second episode", released = "2020-01-01", season = 1, episode = 2)
+        val meta = MetaDetails("episode-actions-$style", "series", "Test Anime", description = "An anime synopsis shown on hover.", videos = listOf(episode))
+        var opened: com.nuvio.app.features.home.MetaPreview? = null
+        var plays = 0
+        var contextMenus = 0
+        compose.setContent { NuvioTheme {
+            LaunchedEffect(meta.id) { EpisodeDetailsNavigation.requests.collect { opened = it } }
+            Box(Modifier.size(1100.dp, 760.dp)) {
+                DetailSeriesContent(meta, episodeCardStyle = style, onEpisodeClick = { plays++ }, onEpisodeLongPress = { contextMenus++ })
+            }
+        } }
+        compose.onNodeWithText(episode.title).performMouseInput { moveTo(center) }
+        compose.mainClock.advanceTimeBy(1_500L)
+        compose.onNodeWithText(meta.description!!).assertIsDisplayed()
+        compose.onNodeWithText(episode.title).performMouseInput { click(button = MouseButton.Secondary) }
+        compose.runOnIdle {
+            assertEquals(meta.id, opened?.id)
+            assertEquals(meta.type, opened?.type)
+            assertEquals(null, opened?.watchLaterEpisode)
+            assertEquals(0, plays)
+            assertEquals(0, contextMenus)
+        }
+    }
     @Test fun middleClickSavesTheSpecificEpisodeWithoutPlayingIt() {
         val id = "episode-ui-$style"
         val first = MetaVideo("$id:1:1", "First episode", released = "2020-01-01", season = 1, episode = 1)
@@ -35,7 +61,7 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
         WatchLaterRepository.ensureLoaded()
         WatchLaterRepository.items.value.filter { it.id == id }.forEach(WatchLaterRepository::remove)
         try {
-            compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp)) {
+            compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp).testTag("episode-canvas")) {
                 DetailSeriesContent(meta, episodeCardStyle = style, onEpisodeClick = { plays++ })
             } } }
             compose.onNodeWithText(first.title).performMouseInput { click(button = MouseButton.Tertiary) }
@@ -43,8 +69,8 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
             compose.onNodeWithText(second.title).performMouseInput { click(button = MouseButton.Tertiary) }
             compose.waitUntil(5_000L) { WatchLaterRepository.items.value.count { it.id == id } == 2 }
             assertEquals(0, plays)
-            val directory = File("build/qa-1.0.6").apply { mkdirs() }
-            ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "episodes-$style.png"))
+            val directory = File("build/qa-1.0.7").apply { mkdirs() }
+            ImageIO.write(compose.onNodeWithTag("episode-canvas", useUnmergedTree = true).captureToImage().toAwtImage(), "png", File(directory, "episodes-$style.png"))
         } finally { WatchLaterRepository.items.value.filter { it.id == id }.forEach(WatchLaterRepository::remove) }
     }
 }

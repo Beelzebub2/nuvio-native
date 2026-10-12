@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.NuvioToastController
@@ -42,6 +43,11 @@ import com.nuvio.app.features.streams.shouldUseLandscapeAutoPlayLoading
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.navigation.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import com.nuvio.app.features.streams.resolveEpisodeVideoId
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
@@ -63,6 +69,9 @@ internal fun StreamDestination(
     openExternalPlayback: suspend (PlayerLaunch) -> Boolean,
     openExternalStreamUrl: (String) -> Boolean,
     onLandscapeLoadingChanged: (Boolean) -> Unit,
+    fetchEpisodeMeta: suspend (String, String) -> com.nuvio.app.features.details.MetaDetails? = { type, id ->
+        MetaDetailsRepository.fetch(type, id)
+    },
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
     val launch = remember(route.launchId) {
@@ -77,7 +86,8 @@ internal fun StreamDestination(
     val pauseDescription = launch.pauseDescription
     val streamRouteScope = rememberCoroutineScope()
     var autoPlayNavigationStarted by remember(route.launchId) { mutableStateOf(false) }
-    var resolvingDebridStream by rememberSaveable(route.launchId) { mutableStateOf(false) }
+    var startupTimedOut by remember(route.launchId) { mutableStateOf(false) }
+    var resolvingDebridStream by remember(route.launchId) { mutableStateOf(false) }
     var pendingP2pStreamOpen by remember { mutableStateOf<PendingP2pStreamOpen?>(null) }
     val shouldResolveEpisodeVideoId =
         launch.parentMetaId != null &&
@@ -115,20 +125,11 @@ internal fun StreamDestination(
         }
 
         hasResolvedVideoId = false
-        val metaType = launch.parentMetaType ?: launch.type
-        val metaId = launch.parentMetaId ?: return@LaunchedEffect
-        val resolvedVideoId = runCatching {
-            MetaDetailsRepository.fetch(metaType, metaId)
-        }.getOrNull()
-            ?.videos
-            ?.firstOrNull { video ->
-                video.season == launch.seasonNumber &&
-                    video.episode == launch.episodeNumber
-            }
-            ?.id
-            ?.takeIf { it.isNotBlank() }
-
-        effectiveVideoId = resolvedVideoId ?: launch.videoId
+        effectiveVideoId = resolveEpisodeVideoId(launch) { type, id ->
+            MetaDetailsRepository.peek(type, id)?.takeIf { cached -> cached.videos.any {
+                it.season == launch.seasonNumber && it.episode == launch.episodeNumber
+            } } ?: fetchEpisodeMeta(type, id)
+        }
         hasResolvedVideoId = true
     }
 
@@ -261,7 +262,8 @@ internal fun StreamDestination(
 
     var reuseHandled by rememberSaveable(launch.videoId, effectiveVideoId) { mutableStateOf(false) }
     var reuseNavigated by remember { mutableStateOf(false) }
-    LaunchedEffect(effectiveVideoId, hasResolvedVideoId, playerSettings.streamReuseLastLinkEnabled, launch.manualSelection) {
+    LaunchedEffect(effectiveVideoId, hasResolvedVideoId, playerSettings.streamReuseLastLinkEnabled, launch.manualSelection, startupTimedOut) {
+        if (startupTimedOut) return@LaunchedEffect
         if (!hasResolvedVideoId) return@LaunchedEffect
         if (reuseHandled) return@LaunchedEffect
         reuseHandled = true
@@ -357,16 +359,28 @@ internal fun StreamDestination(
         episode = launch.episodeNumber,
         manualSelection = launch.manualSelection,
     )
-    val showLoadingScreen = autoPlayNavigationStarted || resolvingDebridStream || streamsUiState.shouldShowAutoPlayLoading(
+    val showLoadingScreen = !startupTimedOut && (autoPlayNavigationStarted || resolvingDebridStream || streamsUiState.shouldShowAutoPlayLoading(
         expectedRequestToken = expectedStreamsRequestToken,
         settings = playerSettings,
         manualSelection = launch.manualSelection,
-    )
-    val useLandscapeLoading = autoPlayNavigationStarted || streamsUiState.shouldUseLandscapeAutoPlayLoading(
+    ))
+    val useLandscapeLoading = !startupTimedOut && (autoPlayNavigationStarted || streamsUiState.shouldUseLandscapeAutoPlayLoading(
         expectedRequestToken = expectedStreamsRequestToken,
         settings = playerSettings,
         manualSelection = launch.manualSelection,
-    )
+    ))
+    LaunchedEffect(route.launchId, expectedStreamsRequestToken, showLoadingScreen, autoPlayNavigationStarted) {
+        if (!showLoadingScreen) return@LaunchedEffect
+        delay(if (autoPlayNavigationStarted) 10_000L else 45_000L)
+        if (navController.currentRoute == route) {
+            startupTimedOut = true
+            autoPlayNavigationStarted = false
+            StreamsRepository.consumeAutoPlay()
+            StreamsRepository.cancelLoading()
+            StreamsRepository.setOverlayVisible(false)
+            NuvioToastController.show("Source lookup timed out. Choose a source or refresh to retry.")
+        }
+    }
     SideEffect { onLandscapeLoadingChanged(useLandscapeLoading) }
     var autoPlayHandled by rememberSaveable(launch.videoId, effectiveVideoId) { mutableStateOf(false) }
     LaunchedEffect(
@@ -375,7 +389,9 @@ internal fun StreamDestination(
         expectedStreamsRequestToken,
         reuseHandled,
         launch.manualSelection,
+        startupTimedOut,
     ) {
+        if (startupTimedOut) return@LaunchedEffect
         if (!reuseHandled) return@LaunchedEffect
         if (launch.manualSelection) return@LaunchedEffect
         if (reuseNavigated) return@LaunchedEffect
@@ -500,7 +516,6 @@ internal fun StreamDestination(
     }
 
     if (!hasResolvedVideoId) {
-        if (showLoadingScreen) {
             StreamLoadingScreen(
                 launch = launch,
                 state = StreamsUiState(),
@@ -508,14 +523,6 @@ internal fun StreamDestination(
                 resolvingDebridStream = false,
                 onBack = onBack,
             )
-            return
-        }
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            NuvioLoadingIndicator()
-        }
         return
     }
 
@@ -530,12 +537,18 @@ internal fun StreamDestination(
             if (resolvingDebridStream) return
             streamRouteScope.launch {
                 resolvingDebridStream = true
-                val resolved = DirectDebridPlaybackResolver.resolveToPlayableStream(
-                    stream = stream,
-                    season = launch.seasonNumber,
-                    episode = launch.episodeNumber,
-                )
-                resolvingDebridStream = false
+                val resolved = try {
+                    withTimeout(30_000L) { DirectDebridPlaybackResolver.resolveToPlayableStream(
+                        stream = stream, season = launch.seasonNumber, episode = launch.episodeNumber,
+                    ) }
+                } catch (e: TimeoutCancellationException) {
+                    NuvioToastController.show("Source resolver timed out. Choose another source or retry.")
+                    return@launch
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) {
+                    NuvioToastController.show("Couldn't resolve this source. Choose another source or retry.")
+                    return@launch
+                } finally { resolvingDebridStream = false }
                 when (resolved) {
                     is DirectDebridPlayableResult.Success -> openSelectedStream(
                         stream = resolved.stream,
@@ -692,7 +705,7 @@ internal fun StreamDestination(
                 )
             },
             onBack = onBack,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag("stream-source-picker"),
         )
         pendingP2pStreamOpen?.let { pending ->
             P2pConsentDialog(

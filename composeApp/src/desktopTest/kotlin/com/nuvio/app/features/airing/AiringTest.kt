@@ -21,11 +21,9 @@ class AiringTest {
             event(2, 3, "2026-10-04T13:00:00Z"),
             event(3, 1, "2026-10-04T14:00:00Z"),
         )
-        assertEquals(listOf(2), selectAiringEvents(events, settings, now, AiringWindow.Today).map { it.mediaId })
-        assertEquals(2, selectAiringEvents(events, settings, now, AiringWindow.Today).single().episode)
-        assertEquals(listOf(1), selectAiringEvents(events, settings, now, AiringWindow.Recent).map { it.mediaId })
-        assertEquals(listOf(2, 3), selectAiringEvents(events, settings, now, AiringWindow.Upcoming).map { it.mediaId })
-        assertEquals(listOf(2, 3, 1), selectAiringEvents(events, settings, now, AiringWindow.All).map { it.mediaId })
+        assertEquals(listOf(2, 1), selectAiringEvents(events, settings, now, AiringWindow.Now).map { it.mediaId })
+        assertEquals(2, selectAiringEvents(events, settings, now, AiringWindow.Now).first().episode)
+        assertEquals(listOf(2, 2, 2, 3), selectScheduledEvents(events, settings, now.atZone(java.time.ZoneId.of(settings.zone)).toLocalDate()).map { it.mediaId })
     }
 
     @Test fun `DST transition uses local dates and estimated breaks stay hidden`() {
@@ -37,7 +35,7 @@ class AiringTest {
             event(4, 1, "2026-10-25T01:30:00Z").copy(estimated = true),
             event(5, 1, "2026-10-25T01:30:00Z").copy(airType = "dub"),
         )
-        assertEquals(setOf(1, 2), selectAiringEvents(events, AiringSettings(includeEstimated = false), transition, AiringWindow.Today).map { it.mediaId }.toSet())
+        assertEquals(setOf(1, 2), selectAiringEvents(events, AiringSettings(includeEstimated = false), transition, AiringWindow.Now).map { it.mediaId }.toSet())
     }
 
     @Test fun `Tsuzuki breaks override prior scheduled episodes`() {

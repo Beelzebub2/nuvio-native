@@ -30,11 +30,11 @@ class WatchLaterPosterTest {
             compose.setContent {
                 NuvioTheme { HomePosterCard(preview, modifier = Modifier.testTag("saved-poster"), onClick = { navigations++ }) }
             }
-            compose.onNodeWithTag("saved-poster").performMouseInput { click(button = MouseButton.Tertiary) }
+            compose.onNodeWithTag("saved-poster", useUnmergedTree = true).performMouseInput { click(button = MouseButton.Tertiary) }
             compose.waitUntil(5_000L) { WatchLaterRepository.items.value.any { it.id == preview.id } }
             compose.onNodeWithContentDescription("Saved to Watch Later").assertExists()
             compose.runOnIdle { assertEquals(0, navigations) }
-            compose.onNodeWithTag("saved-poster").performMouseInput { click(button = MouseButton.Tertiary) }
+            compose.onNodeWithTag("saved-poster", useUnmergedTree = true).performMouseInput { click(button = MouseButton.Tertiary) }
             compose.waitUntil(5_000L) { WatchLaterRepository.items.value.none { it.id == preview.id } }
             compose.onNodeWithContentDescription("Saved to Watch Later").assertDoesNotExist()
         } finally {

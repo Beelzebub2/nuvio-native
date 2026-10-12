@@ -7,6 +7,20 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WatchLaterListTest {
+    @Test fun `provider id changes still toggle the same saved episode`() {
+        val disk = mutableMapOf<Int, String>()
+        val list = WatchLaterList({ 1 }, { disk[it] }, { p, value -> disk[p] = value })
+        val offline = MetaPreview("nativeairing:21", "series", "Anime",
+            watchLaterEpisode = WatchLaterEpisode("nativeairing:21:7", "Episode 7", 1, 7))
+        list.toggle(offline)
+        val canonical = offline.copy(watchLaterEpisode = offline.watchLaterEpisode!!.copy(videoId = "kitsu:12:1:7"))
+        val restarted = WatchLaterList({ 1 }, { disk[it] }, { p, value -> disk[p] = value })
+        restarted.toggle(canonical)
+        assertTrue(restarted.items.value.isEmpty(), "The same episode must be removed rather than duplicated")
+        restarted.toggle(canonical)
+        restarted.toggle(canonical.copy(watchLaterEpisode = canonical.watchLaterEpisode!!.copy(videoId = "kitsu:12:1:8", episodeNumber = 8)))
+        assertEquals(2, restarted.items.value.size)
+    }
     @Test fun `episodes of one anime are saved and removed independently across restarts`() {
         val disk = mutableMapOf<Int, String>()
         val list = WatchLaterList({ 1 }, { disk[it] }, { p, value -> disk[p] = value })

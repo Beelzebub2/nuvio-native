@@ -66,6 +66,7 @@ import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryDisplayArtworkUrl
 import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchlater.EpisodeSynopsis
 import com.nuvio.app.features.watchlater.watchLaterMiddleClick
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingSectionStyle
@@ -686,6 +687,7 @@ private fun ContinueWatchingCard(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
+    EpisodeSynopsis(item.watchLaterPreview()) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val cardMetrics = remember(posterCardStyle.widthDp, posterCardStyle.cornerRadiusDp) {
         val basePosterWidthDp = desktopCatalogShelfPosterBaseWidthDp(posterCardStyle.widthDp)
@@ -721,14 +723,14 @@ private fun ContinueWatchingCard(
     val badgeBackground = continueWatchingBadgeBackground(item)
 
     Box(
-        modifier = Modifier
+        modifier = Modifier.watchLaterMiddleClick(item.watchLaterPreview())
             .posterCardClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 zoomImageUrl = imageUrl,
                 zoomCornerRadius = cardMetrics.cornerRadius,
             )
-            .watchLaterMiddleClick(item.watchLaterPreview())
+
             .width(cardMetrics.width)
             .aspectRatio(PosterLandscapeAspectRatio)
             .clip(RoundedCornerShape(cardMetrics.cornerRadius))
@@ -859,6 +861,8 @@ private fun ContinueWatchingCard(
             }
         }
     }
+
+    }
 }
 
 @Composable
@@ -905,11 +909,12 @@ private fun ContinueWatchingWideCard(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
+    EpisodeSynopsis(item.watchLaterPreview()) {
     val cornerRadius = rememberPosterCardStyleUiState().cornerRadiusDp.dp
     Row(
-        modifier = Modifier
+        modifier = Modifier.watchLaterMiddleClick(item.watchLaterPreview())
             .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
-            .watchLaterMiddleClick(item.watchLaterPreview())
+
             .width(layout.wideCardWidth)
             .height(layout.wideCardHeight)
             .clip(RoundedCornerShape(cornerRadius))
@@ -1024,6 +1029,8 @@ private fun ContinueWatchingWideCard(
             }
         }
     }
+
+    }
 }
 
 @Composable
@@ -1035,12 +1042,13 @@ private fun ContinueWatchingPosterCard(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
+    EpisodeSynopsis(item.watchLaterPreview()) {
     val cornerRadius = rememberPosterCardStyleUiState().cornerRadiusDp.dp
     val imageUrl = item.continueWatchingPosterArtworkUrl(useEpisodeThumbnails)
     Column(
-        modifier = Modifier
+        modifier = Modifier.watchLaterMiddleClick(item.watchLaterPreview())
             .desktopPosterHoverScale()
-            .watchLaterMiddleClick(item.watchLaterPreview())
+
             .width(layout.posterCardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1163,6 +1171,8 @@ private fun ContinueWatchingPosterCard(
                 )
             }
         }
+    }
+
     }
 }
 

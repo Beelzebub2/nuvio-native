@@ -282,9 +282,8 @@ internal fun AppTabHost(
                 )
             }
 
-            AppScreenTab.WatchLater, AppScreenTab.MyList -> {
+            AppScreenTab.WatchLater -> {
                 com.nuvio.app.features.watchlater.WatchLaterScreen(
-                    personalList = tab == AppScreenTab.MyList,
                     onPosterClick = { actions.onPosterClick?.invoke(it) },
                     onPlay = { actions.onContinueWatchingClick?.invoke(it) },
                     modifier = Modifier.fillMaxSize().padding(top = state.topChromePadding ?: 0.dp),
@@ -874,15 +873,6 @@ internal fun DesktopHoverSidebar(
                     onClick = { selectTab(AppScreenTab.WatchLater) },
                 ) { color ->
                     Icon(Icons.Filled.Bookmark, contentDescription = "Watch Later",
-                        modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
-                }
-                DesktopSidebarItem(
-                    label = "My List",
-                    selected = selectedTab == AppScreenTab.MyList,
-                    expanded = sidebarExpanded,
-                    onClick = { selectTab(AppScreenTab.MyList) },
-                ) { color ->
-                    Icon(Icons.Filled.Bookmark, contentDescription = "My List",
                         modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
                 }
                 DesktopSidebarItem(
