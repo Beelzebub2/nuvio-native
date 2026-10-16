@@ -17,8 +17,13 @@ internal enum class MalStatus(val value: String, val label: String) {
 internal data class MalListStatus(val status: MalStatus?, val score: Int, val watchedEpisodes: Int)
 internal data class MalAnime(val id: Int, val title: String)
 @Serializable internal data class MalTokens(val clientId: String, val accessToken: String, val refreshToken: String,
-    val expiresAt: Long, val username: String = "")
-internal class MalHttpException(val status: Int) : IOException("MyAnimeList returned HTTP $status. Please retry or reconnect.")
+    val expiresAt: Long, val username: String = "", val clientSecret: String = "")
+internal class MalHttpException(val status: Int, errorCode: String? = null) : IOException(when (errorCode) {
+    "invalid_client" -> "MyAnimeList rejected the API client. For a Web app, enter its client secret; for an Other app, leave it empty."
+    "invalid_grant" -> "MyAnimeList rejected the authorization code. Check the registered redirect URL, then connect again."
+    "invalid_request" -> "MyAnimeList rejected the sign-in request. Check the App Type and exact redirect URL in your MAL API settings."
+    else -> "MyAnimeList returned HTTP $status. Please retry or reconnect."
+})
 
 internal class MalClient(
     private val api: String = "https://api.myanimelist.net/v2/",
@@ -26,17 +31,20 @@ internal class MalClient(
     private val http: OkHttpClient = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).callTimeout(25, TimeUnit.SECONDS).build(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-    suspend fun exchange(clientId: String, code: String, verifier: String, redirect: String): MalTokens =
-        tokens(clientId, mapOf("grant_type" to "authorization_code", "code" to code, "code_verifier" to verifier, "redirect_uri" to redirect))
+    suspend fun exchange(clientId: String, code: String, verifier: String, redirect: String, clientSecret: String = ""): MalTokens =
+        tokens(clientId, mapOf("grant_type" to "authorization_code", "code" to code, "code_verifier" to verifier, "redirect_uri" to redirect), clientSecret)
     suspend fun refresh(previous: MalTokens): MalTokens = tokens(previous.clientId,
-        mapOf("grant_type" to "refresh_token", "refresh_token" to previous.refreshToken)).copy(username = previous.username)
-    private suspend fun tokens(clientId: String, fields: Map<String, String>): MalTokens {
-        val body = FormBody.Builder().add("client_id", clientId).apply { fields.forEach { (key, value) -> add(key, value) } }.build()
+        mapOf("grant_type" to "refresh_token", "refresh_token" to previous.refreshToken), previous.clientSecret).copy(username = previous.username)
+    private suspend fun tokens(clientId: String, fields: Map<String, String>, clientSecret: String = ""): MalTokens {
+        val body = FormBody.Builder().add("client_id", clientId).apply {
+            if (clientSecret.isNotEmpty()) add("client_secret", clientSecret)
+            fields.forEach { (key, value) -> add(key, value) }
+        }.build()
         val response = request(Request.Builder().url(oauth + "token").post(body).build())
         val access = response["access_token"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() && it.length <= 8192 } ?: error("Invalid MAL token response")
         val refresh = response["refresh_token"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() && it.length <= 8192 } ?: error("Invalid MAL refresh response")
         val lifetime = response["expires_in"]?.jsonPrimitive?.longOrNull?.takeIf { it in 1..31_536_000 } ?: error("Invalid MAL token lifetime")
-        return MalTokens(clientId, access, refresh, System.currentTimeMillis() + lifetime * 1000)
+        return MalTokens(clientId, access, refresh, System.currentTimeMillis() + lifetime * 1000, clientSecret = clientSecret)
     }
     suspend fun username(token: String): String = get("users/@me", token)["name"]?.jsonPrimitive?.content ?: "Connected"
     suspend fun listStatus(id: Int, token: String): MalListStatus? {
@@ -65,7 +73,12 @@ internal class MalClient(
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val result = response.use {
-                        if (!it.isSuccessful) throw MalHttpException(it.code)
+                        if (!it.isSuccessful) {
+                            val errorCode = runCatching {
+                                json.parseToJsonElement(it.peekBody(4096).string()).jsonObject["error"]?.jsonPrimitive?.contentOrNull
+                            }.getOrNull()
+                            throw MalHttpException(it.code, errorCode)
+                        }
                         val bytes = it.body?.byteStream()?.use { stream -> stream.readNBytes(2 * 1024 * 1024 + 1) } ?: error("Empty MAL response")
                         check(bytes.size <= 2 * 1024 * 1024) { "MAL response is too large" }
                         json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject

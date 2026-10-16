@@ -16,7 +16,8 @@ const ctx = { waitUntil: promise => promise };
 test('fixed routes cannot become an open proxy or arbitrary GraphQL service', async () => {
   let called = false;
   const env = environment(async () => { called = true; });
-  for (const path of ['/proxy?url=https://internal', '/schedule?page=999', '/episodes?id=../bad', '/release-schedule?start=invalid&days=2&airType=sub']) {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const path of ['/proxy?url=https://internal', '/schedule?page=999', '/episodes?id=../bad', '/release-schedule?start=invalid&days=2&airType=sub', `/release-schedule?start=${today}&days=2&airType=sub&includeAdult=yes`, `/release-schedule-adult?start=${today}&days=2&airType=sub&includeAdult=0`]) {
     const r = await handleRequest(new Request(`https://gateway.test${path}`), ctx, env);
     assert.ok([400, 404].includes(r.status));
   }
@@ -24,6 +25,30 @@ test('fixed routes cannot become an open proxy or arbitrary GraphQL service', as
   const target = providerRequest(new URL(`${schedule}&query=mutation&url=https://internal`));
   assert.equal(target.url, 'https://graphql.anilist.co');
   assert.ok(target.body.query.startsWith('query('));
+});
+
+test('AniList schedule and media responses include the authoritative adult flag', () => {
+  const airings = providerRequest(new URL(schedule));
+  const details = providerRequest(new URL('https://gateway.test/media?id=42'));
+  assert.match(airings.body.query, /media\{[^}]*isAdult/);
+  assert.match(details.body.query, /isAdult/);
+});
+
+test('release-schedule explicitly opts into adult releases and isolates the cache key', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const base = `https://gateway.test/release-schedule?start=${today}&days=2&airType=sub`;
+  const safe = providerRequest(new URL(base));
+  const adult = providerRequest(new URL(base + '&includeAdult=1'));
+  const adultPath = base.replace('/release-schedule?', '/release-schedule-adult?');
+  assert.equal(safe.url.includes('includeAdult'), false);
+  assert.equal(adult.url.endsWith('&includeAdult=1'), true);
+  assert.equal(providerRequest(new URL(adultPath)).url, adult.url);
+  let requests = 0;
+  const env = environment(async () => { requests++; return Response.json({ ok: true, episodes: [] }); });
+  assert.equal((await handleRequest(new Request(base), ctx, env)).status, 200);
+  assert.equal((await handleRequest(new Request(adultPath), ctx, env)).status, 200);
+  assert.equal((await handleRequest(new Request(base + '&includeAdult=1'), ctx, env)).status, 200);
+  assert.equal(requests, 2, 'adult and safe schedule results must not share the same cache');
 });
 
 test('only public read operations and health are accepted', async () => {

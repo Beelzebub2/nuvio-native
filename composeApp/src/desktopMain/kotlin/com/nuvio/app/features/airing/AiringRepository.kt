@@ -32,8 +32,8 @@ internal class AiringRepository(
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(AiringState(initialSettings, initialSnapshot.takeIf {
-        it.airType == initialSettings.airType
-    } ?: AiringSnapshot(airType = initialSettings.airType), now()))
+        it.airType == initialSettings.airType && it.hideNsfw == initialSettings.hideNsfw
+    } ?: AiringSnapshot(airType = initialSettings.airType, hideNsfw = initialSettings.hideNsfw), now()))
     val state = _state.asStateFlow()
     private var attemptedAt = 0L
 
@@ -44,7 +44,12 @@ internal class AiringRepository(
             val previous = _state.value
             saveSettings(settings)
             _state.value = previous.copy(settings = settings, error = null,
-                snapshot = previous.snapshot.takeIf { it.airType == settings.airType } ?: AiringSnapshot(airType = settings.airType))
+                snapshot = previous.snapshot.takeIf {
+                    it.airType == settings.airType && it.hideNsfw == settings.hideNsfw
+                } ?: AiringSnapshot(airType = settings.airType, hideNsfw = settings.hideNsfw))
+            if (previous.settings.hideNsfw != settings.hideNsfw) {
+                com.nuvio.app.features.details.MetaDetailsRepository.invalidateNativeAiring()
+            }
             attemptedAt = 0
         }
         refresh(force = true)
@@ -63,9 +68,11 @@ internal class AiringRepository(
             val fresh = fetch(old.settings, instant)
             val cutoff = instant.minusSeconds(8 * 86400).epochSecond
             val retainedPast = old.snapshot.events.filter { it.airingAt <= instant.epochSecond }
-            val merged = (retainedPast + fresh).filter { it.airingAt >= cutoff }
+            val eligible = (retainedPast + fresh).filter { it.airingAt >= cutoff }
+            val merged = filterAiringContent(eligible, old.settings)
                 .associateBy { "${it.mediaId}:${it.episode}:${it.airType}" }.values.toList()
-            val snapshot = AiringSnapshot(merged, instant.toEpochMilli(), old.settings.airType)
+            val snapshot = AiringSnapshot(merged, instant.toEpochMilli(),
+                old.settings.airType, old.settings.hideNsfw)
             // Persistence failure must not throw away a successful live response.
             try { saveSnapshot(snapshot) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
             _state.value = old.copy(snapshot = snapshot, now = now(), error = null)

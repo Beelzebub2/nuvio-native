@@ -20,5 +20,6 @@ class MalSetupUiTest {
         compose.onNodeWithText("Public client ID").assertIsDisplayed()
         compose.onNodeWithText(MAL_REDIRECT).assertIsDisplayed()
         compose.onNodeWithText("Open MyAnimeList API setup").assertIsDisplayed()
+        compose.onNodeWithText("Client secret (Web apps only)").performScrollTo().assertIsDisplayed()
     }
 }

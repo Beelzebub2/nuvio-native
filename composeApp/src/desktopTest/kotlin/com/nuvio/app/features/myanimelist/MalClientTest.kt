@@ -2,8 +2,13 @@ package com.nuvio.app.features.myanimelist
 
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
+import java.net.URI
+import java.net.URL
 import java.net.URLDecoder
 import org.junit.Test
 import org.junit.Assume.assumeTrue
@@ -11,6 +16,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.test.*
 
 class MalClientTest {
+    private fun callbackResponse(query: String): Int {
+        val connection = URL("$MAL_REDIRECT?$query").openConnection() as HttpURLConnection
+        connection.connectTimeout = 1500
+        connection.readTimeout = 1500
+        return try { connection.responseCode } finally { connection.disconnect() }
+    }
+
     @Test fun statusAndScoreUpdateTheRealApiFieldsWithoutOverwritingEpisodeProgress(): Unit = runBlocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         var status = "watching"
@@ -54,11 +66,101 @@ class MalClientTest {
         assertFailsWith<IllegalArgumentException> { malCallbackCode("$MAL_REDIRECT?state=$state&state=$state&code=test-code", state) }
         assertFailsWith<IllegalArgumentException> { malCallbackCode("https://example.com/myanimelist/callback?state=$state&code=test-code", state) }
     }
+    @Test fun validStateAuthorizationErrorsCompleteImmediatelyInsteadOfTimingOut(): Unit = runBlocking {
+        for ((errorCode, expected) in listOf("access_denied" to "declined", "access%5Fdenied" to "declined", "server_error" to "server_error")) {
+            val failure = assertFailsWith<Exception> {
+                withTimeout(2_000L) {
+                    awaitMalAuthorization("test-client-id") { authorization: URI ->
+                        val state = authorization.toString().toHttpUrl().queryParameter("state")!!
+                        assertEquals(400, callbackResponse("state=$state&error=$errorCode"))
+                    }
+                }
+            }
+            assertContains(failure.message.orEmpty(), expected)
+        }
+    }
+    @Test fun wrongStateCallbackCannotEndLoginButAValidCodeStillWorks(): Unit = runBlocking {
+        val (code, verifier) = withTimeout(2_000L) {
+            awaitMalAuthorization("test-client-id") { authorization: URI ->
+                val state = authorization.toString().toHttpUrl().queryParameter("state")!!
+                assertEquals(400, callbackResponse("state=wrong&error=access_denied"))
+                assertEquals(200, callbackResponse("state=$state&code=valid-code"))
+            }
+        }
+        assertEquals("valid-code", code)
+        assertTrue(verifier.length in 43..128)
+    }
+    @Test fun missingAuthorizationCodeWithValidStateReportsErrorImmediately(): Unit = runBlocking {
+        val failure = assertFailsWith<Exception> {
+            withTimeout(2_000L) {
+                awaitMalAuthorization("test-client-id") { authorization: URI ->
+                    val state = authorization.toString().toHttpUrl().queryParameter("state")!!
+                    assertEquals(400, callbackResponse("state=$state"))
+                }
+            }
+        }
+        assertContains(failure.message.orEmpty(), "authorization code")
+    }
+    @Test fun occupiedCallbackPortProducesActionableError(): Unit = runBlocking {
+        val occupying = HttpServer.create(InetSocketAddress("127.0.0.1", 54328), 0)
+        occupying.start()
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                awaitMalAuthorization("test-client-id") { error("Browser must not open without a listener") }
+            }
+            assertContains(failure.message.orEmpty(), "54328")
+            assertContains(failure.message.orEmpty(), "already in use")
+        } finally { occupying.stop(0) }
+    }
+    @Test fun oauthTokensSupportPublicAndWebClientsWithoutLosingTheSecretOnRefresh(): Unit = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val requests = mutableListOf<Map<String, String>>()
+        server.createContext("/oauth/token") { request ->
+            val fields = request.requestBody.readBytes().toString(Charsets.UTF_8).split('&').associate {
+                val pair = it.split('=', limit = 2)
+                URLDecoder.decode(pair[0], "UTF-8") to URLDecoder.decode(pair[1], "UTF-8")
+            }
+            requests += fields
+            val status = if (fields["client_id"] == "web-id" && fields["client_secret"] != "web-secret") 401 else 200
+            val payload = if (status == 200)
+                """{"access_token":"access","refresh_token":"refresh","expires_in":3600}"""
+            else """{"error":"invalid_client","message":"A client secret is required"}"""
+            val bytes = payload.toByteArray()
+            request.sendResponseHeaders(status, bytes.size.toLong())
+            request.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val client = MalClient(oauth = "http://127.0.0.1:${server.address.port}/oauth/")
+            val public = client.exchange("other-id", "code", "verifier", MAL_REDIRECT)
+            assertEquals("", public.clientSecret)
+            assertFalse(requests.last().containsKey("client_secret"))
+            val invalid = assertFailsWith<MalHttpException> {
+                client.exchange("web-id", "code", "verifier", MAL_REDIRECT)
+            }
+            assertEquals(401, invalid.status)
+            assertContains(invalid.message.orEmpty(), "client secret")
+            val web = client.exchange("web-id", "code", "verifier", MAL_REDIRECT, "web-secret")
+            assertEquals("web-secret", web.clientSecret)
+            assertEquals("web-secret", requests.last()["client_secret"])
+            val renewed = client.refresh(web)
+            assertEquals("web-secret", renewed.clientSecret)
+            assertEquals("web-secret", requests.last()["client_secret"])
+            assertEquals("refresh_token", requests.last()["grant_type"])
+        } finally { server.stop(0) }
+    }
     @Test fun windowsCredentialsAreEncryptedAndRoundTripUnderTheCurrentUser() {
         assumeTrue(System.getProperty("os.name").startsWith("Windows"))
         val original = "fake-access-token-for-test-only"
         val encrypted = protectMalCredential(original)
         assertFalse(encrypted.contains(original))
         assertEquals(original, protectMalCredential(encrypted, decrypt = true))
+        val token = MalTokens("client-id", "access-token", "refresh-token", 100L, clientSecret = "example-web-secret")
+        val payload = Json.encodeToString(token)
+        val protected = protectMalCredential(payload)
+        assertFalse(protected.contains(token.clientSecret))
+        assertEquals(token, Json.decodeFromString<MalTokens>(protectMalCredential(protected, decrypt = true)))
+        val legacy = """{"clientId":"client-id","accessToken":"access-token","refreshToken":"refresh-token","expiresAt":100}"""
+        assertEquals("", Json.decodeFromString<MalTokens>(legacy).clientSecret)
     }
 }

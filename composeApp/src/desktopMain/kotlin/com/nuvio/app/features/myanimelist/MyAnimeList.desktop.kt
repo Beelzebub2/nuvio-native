@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.details.MetaDetails
@@ -28,7 +29,9 @@ import kotlinx.coroutines.withTimeoutOrNull
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("MyAnimeList", style = MaterialTheme.typography.titleMedium)
-            Text(if (connection.connected) "Connected as ${connection.username}" else "Connect your anime list to set statuses and ratings.")
+            Text(if (!connection.connected) "Connect your anime list to set statuses and ratings."
+                else if (connection.username.isBlank() || connection.username == "Connected") "Connected to MyAnimeList."
+                else "Connected as ${connection.username}")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = !connection.busy, onClick = { setup = true }) { Text(if (connection.connected) "Reconnect" else "Set up / Connect") }
                 if (connection.connected) TextButton(onClick = MyAnimeListRepository::disconnect) { Text("Disconnect") }
@@ -113,20 +116,25 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable private fun MalSetupDialog(connection: MalConnectionState, onDismiss: () -> Unit) {
     var clientId by remember { mutableStateOf(connection.clientId) }
+    var clientSecret by remember { mutableStateOf("") }
     val uri = LocalUriHandler.current
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Connect MyAnimeList") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Register a public/native API application in MyAnimeList, then enter its public client ID. Your password stays on MyAnimeList.")
+        Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("In MyAnimeList API setup, choose App Type Other (recommended, no secret). Existing Web apps require their client secret. Your MAL password stays on MyAnimeList.")
             TextButton(onClick = { uri.openUri("https://myanimelist.net/apiconfig") }) { Text("Open MyAnimeList API setup") }
-            Text("Set this redirect URL in the MAL application's settings:")
+            Text("Set the App Redirect URL to exactly:")
             SelectionContainer { Text(MAL_REDIRECT, style = MaterialTheme.typography.bodySmall) }
             OutlinedTextField(value = clientId, onValueChange = { clientId = it.trim() }, label = { Text("Public client ID") }, singleLine = true)
+            OutlinedTextField(value = clientSecret, onValueChange = { clientSecret = it.trim() },
+                label = { Text("Client secret (Web apps only)") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation())
+            Text("The site shown on MAL's approval screen (such as example.com) is your registered app's homepage. You can correct it in MAL API setup; it does not determine the sign-in callback.")
             Text("Connect opens your browser. Approve access there, then return here. Tokens are protected by your Windows account.")
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = clientId.isNotBlank() && !connection.busy, onClick = {
-        runCatching { MyAnimeListRepository.connect(clientId); onDismiss() }.onFailure { error = it.message }
+        runCatching { MyAnimeListRepository.connect(clientId, clientSecret); onDismiss() }.onFailure { error = it.message }
     }) { Text("Connect") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
