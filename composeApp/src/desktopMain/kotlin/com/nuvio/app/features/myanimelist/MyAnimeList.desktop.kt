@@ -2,9 +2,15 @@ package com.nuvio.app.features.myanimelist
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,6 +18,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.coroutines.CancellationException
@@ -82,30 +90,49 @@ import kotlinx.coroutines.withTimeoutOrNull
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!connection.connected) OutlinedButton(enabled = !connection.busy, onClick = { setup = true }) { Text("Connect MyAnimeList") }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!connection.connected) NuvioCompactActionButton(
+                label = "Connect MyAnimeList", icon = Icons.Default.Link,
+                enabled = !connection.busy, onClick = { setup = true },
+            )
             else {
                 Box {
-                    OutlinedButton(enabled = !busy && !connection.busy && malId != null, onClick = { statusMenu = true }) { Text("MAL · ${status?.status?.label ?: "Set status"}") }
+                    NuvioCompactActionButton(
+                        label = "MAL · ${status?.status?.label ?: "Set status"}", icon = Icons.Default.PlaylistAddCheck,
+                        accessibilityLabel = "MyAnimeList status: ${status?.status?.label ?: "Set status"}",
+                        trailingIcon = Icons.Default.ExpandMore, enabled = !busy && !connection.busy && malId != null,
+                        onClick = { statusMenu = true },
+                    )
                     DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
                         MalStatus.entries.forEach { option -> DropdownMenuItem(text = { Text(option.label) },
                             onClick = { statusMenu = false; update(newStatus = option) }) }
                     }
                 }
                 Box {
-                    OutlinedButton(enabled = !busy && !connection.busy && malId != null, onClick = { ratingMenu = true }) { Text(status?.score?.takeIf { it > 0 }?.let { "★ $it/10" } ?: "Rate on MAL") }
+                    NuvioCompactActionButton(
+                        label = status?.score?.takeIf { it > 0 }?.let { "Rating · $it/10" } ?: "Rate on MAL",
+                        accessibilityLabel = status?.score?.takeIf { it > 0 }?.let { "MyAnimeList rating: $it out of 10" } ?: "Rate on MyAnimeList",
+                        icon = Icons.Default.Star, trailingIcon = Icons.Default.ExpandMore,
+                        enabled = !busy && !connection.busy && malId != null, onClick = { ratingMenu = true },
+                    )
                     DropdownMenu(expanded = ratingMenu, onDismissRequest = { ratingMenu = false }) {
                         (10 downTo 0).forEach { score -> DropdownMenuItem(text = { Text(if (score == 0) "Clear rating" else "$score / 10") },
                             onClick = { ratingMenu = false; update(score = score) }) }
                     }
                 }
-                TextButton(enabled = !busy && !connection.busy, onClick = { search = true }) { Text(if (malId == null) "Link MAL entry" else "Change MAL entry") }
+                NuvioCompactActionButton(
+                    label = if (malId == null) "Link MAL entry" else "Change MAL entry",
+                    icon = Icons.Default.Edit, tone = NuvioCompactActionTone.Quiet,
+                    enabled = !busy && !connection.busy, onClick = { search = true },
+                )
             }
         }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (busy) LinearProgressIndicator(Modifier.width(220.dp))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { scope.launch { busy = true; try { malId?.let { status = MyAnimeListRepository.listStatus(it); error = null } }
-                catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message } finally { busy = false } } }) { Text("Retry") } }
+            NuvioCompactActionButton(label = "Retry", icon = Icons.Default.Refresh,
+                enabled = !busy && !connection.busy,
+                onClick = { scope.launch { busy = true; try { malId?.let { status = MyAnimeListRepository.listStatus(it); error = null } }
+                    catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message } finally { busy = false } } }) }
     }
     if (setup) MalSetupDialog(connection, onDismiss = { setup = false })
     if (search) MalSearchDialog(meta, onDismiss = { search = false }, onSelect = { selected ->

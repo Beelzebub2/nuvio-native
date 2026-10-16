@@ -46,7 +46,9 @@ internal fun readableSynopsis(value: String?): String = value.orEmpty()
 internal fun EpisodeSynopsis(item: MetaPreview, content: @Composable () -> Unit) {
     if (!isDesktop || item.watchLaterEpisode == null) { content(); return }
 
-    val state = rememberTooltipState(isPersistent = true)
+    // Mouse hover already keeps the synopsis visible while reading. Persistent tooltips
+    // ignore pointer exit, leaving the old card's synopsis over navigation or other content.
+    val state = rememberTooltipState(isPersistent = false)
     var description by remember(item.id, item.type, item.description) { mutableStateOf(item.description) }
     var lookupFinished by remember(item.id, item.type, item.description) { mutableStateOf(false) }
     LaunchedEffect(state.isVisible, item.id, item.type) {
