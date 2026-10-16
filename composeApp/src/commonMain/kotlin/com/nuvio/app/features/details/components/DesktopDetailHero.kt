@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -359,12 +360,18 @@ fun DesktopDetailHero(
                 onPlayClick = onPlayClick,
                 onPlayLongClick = onPlayLongClick,
             )
-            com.nuvio.app.features.myanimelist.MyAnimeListControls(meta)
-            com.nuvio.app.features.watchlater.WatchLaterControls(
-                com.nuvio.app.features.home.MetaPreview(meta.id, meta.type, meta.name,
-                    poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description),
-                episode = watchLaterEpisode,
-            )
+            Spacer(modifier = Modifier.height(space.s12))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(space.s8),
+                verticalArrangement = Arrangement.spacedBy(space.s8),
+            ) {
+                com.nuvio.app.features.myanimelist.MyAnimeListControls(meta)
+                com.nuvio.app.features.watchlater.WatchLaterControls(
+                    com.nuvio.app.features.home.MetaPreview(meta.id, meta.type, meta.name,
+                        poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description),
+                    episode = watchLaterEpisode,
+                )
+            }
         }
 
         if (heroTrailerSourceUrl != null) {

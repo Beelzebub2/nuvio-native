@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioAsyncImage
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.toMetaPreview
@@ -65,12 +71,22 @@ internal fun WatchLaterScreen(onPosterClick: (MetaPreview) -> Unit, onPlay: (Con
                                         Text(if (playback.resumePositionMs > 0L) "${(playback.progressFraction * 100).toInt()}% · ${playback.resumePositionMs / 60_000} min watched"
                                             else "${(playback.progressFraction * 100).toInt()}% watched", style = MaterialTheme.typography.labelMedium)
                                     }
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        TextButton(onClick = { if (unresolved) onPosterClick(preview) else onPlay(playback) }) {
-                                            Text(if (unresolved) "Choose episode" else if (playback.resumePositionMs > 0L || playback.progressFraction > 0f) "Resume" else "Play")
-                                        }
-                                        TextButton(onClick = { runCatching { WatchLaterRepository.remove(item) }
-                                            .onFailure { NuvioToastController.show("Couldn't remove: ${it.message}") } }) { Text("Remove") }
+                                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        NuvioCompactActionButton(
+                                            label = if (unresolved) "Choose episode" else if (playback.resumePositionMs > 0L || playback.progressFraction > 0f) "Resume" else "Play",
+                                            icon = if (unresolved) Icons.Default.PlaylistPlay else Icons.Default.PlayArrow,
+                                            tone = NuvioCompactActionTone.Emphasized,
+                                            onClick = { if (unresolved) onPosterClick(preview) else onPlay(playback) },
+                                        )
+                                        NuvioCompactActionButton(
+                                            label = "Remove",
+                                            accessibilityLabel = "Remove ${item.name} from Watch Later",
+                                            icon = Icons.Default.DeleteOutline,
+                                            tone = NuvioCompactActionTone.Danger,
+                                            onClick = { runCatching { WatchLaterRepository.remove(item) }
+                                                .onFailure { NuvioToastController.show("Couldn't remove: ${it.message}") } },
+                                        )
                                     }
                                 }
                             }
