@@ -1,5 +1,5 @@
 // A fixed, read-only provider gateway. Never accepts arbitrary URLs or GraphQL.
-const MEDIA_FIELDS = 'id idMal title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes';
+const MEDIA_FIELDS = 'id idMal isAdult title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes';
 const SCHEDULE_QUERY = `query($start:Int,$end:Int,$page:Int){Page(page:$page,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:$start,airingAt_lesser:$end,sort:TIME){episode airingAt media{${MEDIA_FIELDS}}}}}`;
 const MEDIA_QUERY = `query($id:Int){Media(id:$id,type:ANIME){${MEDIA_FIELDS}}Page(perPage:50){airingSchedules(mediaId:$id,notYetAired:false,sort:EPISODE_DESC){episode airingAt}}}`;
 
@@ -27,7 +27,7 @@ export function providerRequest(url) {
     const path = url.pathname === '/episodes' ? 'episodes' : 'mappings';
     return { url: `https://hayase.ani.zip/v1/${path}?anilist_id=${id}`, ttl: 3600 };
   }
-  if (url.pathname === '/release-schedule') {
+  if (url.pathname === '/release-schedule' || url.pathname === '/release-schedule-adult') {
     const start = p.get('start');
     const date = Date.parse(`${start}T00:00:00Z`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !Number.isFinite(date) ||
@@ -35,7 +35,11 @@ export function providerRequest(url) {
     const days = integer(p, 'days', 1, 9);
     const airType = p.get('airType');
     if (!['sub', 'dub'].includes(airType)) throw new Error('Invalid airType');
-    return { url: `https://tsuzuki.top/api/v1/schedule?start=${start}&days=${days}&airType=${airType}`, ttl: 300 };
+    const includeAdult = p.get('includeAdult');
+    if (includeAdult !== null && !['0', '1'].includes(includeAdult)) throw new Error('Invalid includeAdult');
+    if (url.pathname === '/release-schedule-adult' && includeAdult === '0') throw new Error('Invalid includeAdult');
+    const adult = url.pathname === '/release-schedule-adult' || includeAdult === '1';
+    return { url: `https://tsuzuki.top/api/v1/schedule?start=${start}&days=${days}&airType=${airType}${adult ? '&includeAdult=1' : ''}`, ttl: 300 };
   }
   return null;
 }

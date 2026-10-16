@@ -71,9 +71,12 @@ internal object MyAnimeListRepository {
         ensureLoaded()
     }
 
-    @Synchronized fun connect(clientId: String) {
+    @Synchronized fun connect(clientId: String, clientSecret: String = "") {
         ensureLoaded()
         require(clientId.matches(Regex("[A-Za-z0-9_-]{16,128}"))) { "Enter your MAL application's public client ID." }
+        require(clientSecret.length <= 256 && clientSecret.none { it.isWhitespace() || it.isISOControl() }) {
+            "Enter a valid MyAnimeList client secret, or leave it empty for App Type Other."
+        }
         check(!mutableState.value.busy || mutableState.value.connecting) { "Wait for account loading to finish." }
         val previous = connectJob
         previous?.cancel()
@@ -89,11 +92,16 @@ internal object MyAnimeListRepository {
                 previous?.join()
                 currentCoroutineContext().ensureActive()
                 val (code, verifier) = awaitMalAuthorization(clientId) { Desktop.getDesktop().browse(it) }
-                val exchanged = client.exchange(clientId, code, verifier, MAL_REDIRECT)
-                val tokens = exchanged.copy(username = client.username(exchanged.accessToken))
+                val exchanged = client.exchange(clientId, code, verifier, MAL_REDIRECT, clientSecret)
+                // A temporary profile API outage must not discard successfully authorized tokens.
+                val username = try { client.username(exchanged.accessToken) }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: MalHttpException) { if (e.status == 401) throw e else "Connected" }
+                    catch (_: Exception) { "Connected" }
+                val tokens = exchanged.copy(username = username)
                 persist(tokens, profile, expected, finishConnect = true)
             } catch (e: TimeoutCancellationException) {
-                fail(profile, expected, "Sign-in timed out. Press Connect to retry.")
+                fail(profile, expected, "Sign-in timed out. Check that the MAL App Redirect URL is $MAL_REDIRECT, then try again.")
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { fail(profile, expected, e.message ?: "MyAnimeList sign-in failed.") }
         }

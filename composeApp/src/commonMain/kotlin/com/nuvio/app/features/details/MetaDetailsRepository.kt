@@ -50,20 +50,35 @@ object MetaDetailsRepository {
     val uiState: StateFlow<MetaDetailsUiState> = _uiState.asStateFlow()
     private var activeRequestKey: String? = null
     private val cachedMetaByRequestKey = mutableMapOf<String, CachedMetaEntry>()
+    private var nativeAiringGeneration = 0L
+
+    /** Discard metadata obtained under a previous Airing Now content policy. */
+    fun invalidateNativeAiring() {
+        nativeAiringGeneration += 1
+        cachedMetaByRequestKey.keys.filter { it.substringAfter(':').startsWith(NATIVE_AIRING_PREFIX) }
+            .forEach { cachedMetaByRequestKey.remove(it) }
+        if (activeRequestKey?.substringAfter(':')?.startsWith(NATIVE_AIRING_PREFIX) == true ||
+            _uiState.value.meta?.id?.startsWith(NATIVE_AIRING_PREFIX) == true) {
+            activeRequestKey = null
+            _uiState.value = MetaDetailsUiState()
+        }
+    }
 
     fun load(type: String, id: String) {
         log.d { "load() called — type=$type id=$id" }
         val requestKey = "$type:$id"
         if (id.startsWith(NATIVE_AIRING_PREFIX)) {
             if (_uiState.value.isLoading && activeRequestKey == requestKey) return
+            val generation = nativeAiringGeneration
             activeRequestKey = requestKey
             _uiState.value = MetaDetailsUiState(isLoading = true)
             scope.launch {
                 val meta = try {
                     fetchBuiltInAiringDetails(id)
                 } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-                if (activeRequestKey != requestKey) return@launch
+                if (activeRequestKey != requestKey || nativeAiringGeneration != generation) return@launch
                 if (meta != null) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = meta)
+                else cachedMetaByRequestKey.remove(requestKey)
                 _uiState.value = MetaDetailsUiState(meta = meta,
                     errorMessage = if (meta == null) "Airing Now metadata is unavailable. Refresh schedules and try again." else null)
             }
@@ -209,14 +224,20 @@ object MetaDetailsRepository {
 
     fun clear() {
         activeRequestKey = null
+        nativeAiringGeneration += 1
         cachedMetaByRequestKey.clear()
         _uiState.value = MetaDetailsUiState()
     }
 
     suspend fun fetch(type: String, id: String, cacheResult: Boolean = true): MetaDetails? {
         val requestKey = "$type:$id"
-        if (id.startsWith(NATIVE_AIRING_PREFIX)) return fetchBuiltInAiringDetails(id)?.also {
-            if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = it)
+        if (id.startsWith(NATIVE_AIRING_PREFIX)) {
+            val generation = nativeAiringGeneration
+            val meta = fetchBuiltInAiringDetails(id)
+            if (generation != nativeAiringGeneration) return null
+            if (meta == null) cachedMetaByRequestKey.remove(requestKey)
+            else if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = meta)
+            return meta
         }
         cachedMetaByRequestKey[requestKey]?.let { return it.baseMeta }
 

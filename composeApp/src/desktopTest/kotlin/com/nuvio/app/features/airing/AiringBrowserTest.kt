@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.click
@@ -38,17 +40,17 @@ import kotlin.test.assertTrue
 class AiringBrowserTest {
     @get:Rule val compose = createComposeRule()
     private val now = Instant.parse("2026-10-04T12:00:00Z")
-    private val events = (1..40).map { AiringEvent(it, 7, now.minusSeconds(3600).epochSecond, "Anime $it") }
+    private val events = (1..40).map { AiringEvent(it, 7, now.minusSeconds(3600).epochSecond, "Anime $it", isAdult = false) }
     private fun repository() = AiringRepository(AiringSettings(zone = "UTC"),
-        AiringSnapshot(events, now.toEpochMilli()), fetch = { _, _ -> events }, now = { now })
+        AiringSnapshot(events, now.toEpochMilli(), hideNsfw = true), fetch = { _, _ -> events }, now = { now })
     private fun posterTitle(name: String) = compose.onAllNodesWithText(name, useUnmergedTree = true).let {
         // The fixture's missing artwork also displays its title; target the label below it.
         it[it.fetchSemanticsNodes().lastIndex]
     }
 
     @Test fun `airing episode labels show synopsis and open title details with right click`() {
-        val event = AiringEvent(61, 7, now.minusSeconds(86400).epochSecond, "Label Anime", description = "The parent anime synopsis.")
-        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(event), now.toEpochMilli()),
+        val event = AiringEvent(61, 7, now.minusSeconds(86400).epochSecond, "Label Anime", description = "The parent anime synopsis.", isAdult = false)
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(event), now.toEpochMilli(), hideNsfw = true),
             fetch = { _, _ -> listOf(event) }, now = { now })
         var opened: MetaPreview? = null
         var menus = 0
@@ -70,9 +72,9 @@ class AiringBrowserTest {
     }
 
     @Test fun `recent and today share one feed and future days are in the schedule below`() {
-        val recent = AiringEvent(51, 3, now.minusSeconds(86400).epochSecond, "Recent Anime")
-        val future = AiringEvent(52, 4, now.plusSeconds(86400).epochSecond, "Future Anime")
-        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(recent, future), now.toEpochMilli()),
+        val recent = AiringEvent(51, 3, now.minusSeconds(86400).epochSecond, "Recent Anime", isAdult = false)
+        val future = AiringEvent(52, 4, now.plusSeconds(86400).epochSecond, "Future Anime", isAdult = false)
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(recent, future), now.toEpochMilli(), hideNsfw = true),
             fetch = { _, _ -> listOf(recent, future) }, now = { now })
         compose.setContent { NuvioTheme {
             Column(Modifier.size(1024.dp, 760.dp).verticalScroll(rememberScrollState())) {
@@ -120,5 +122,28 @@ class AiringBrowserTest {
         compose.onNodeWithTag("airing-grid").performScrollToIndex(39)
         compose.waitForIdle()
         assertTrue(compose.onAllNodesWithText("Anime 40").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test fun `settings checkbox hides adults by default and enables them after save`() {
+        val normal = AiringEvent(81, 1, now.minusSeconds(1800).epochSecond, "Normal Example", isAdult = false)
+        val adult = AiringEvent(82, 1, now.minusSeconds(3600).epochSecond, "Adult Example", isAdult = true)
+        val feed = listOf(normal, adult)
+        val repository = AiringRepository(AiringSettings(zone = "UTC"),
+            AiringSnapshot(feed, now.toEpochMilli(), hideNsfw = true), fetch = { _, _ -> feed }, now = { now })
+        compose.setContent { NuvioTheme {
+            Box(Modifier.size(1024.dp, 760.dp)) {
+                AiringBrowser(Modifier, expanded = false, initialWindow = "Now", onPosterClick = {},
+                    onPosterLongClick = {}, repository = repository)
+            }
+        } }
+        assertTrue(compose.onAllNodesWithText("Normal Example").fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithText("Adult Example").assertDoesNotExist()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithTag("airing-hide-nsfw").assertIsOn().performClick()
+        compose.onNodeWithTag("airing-hide-nsfw").assertIsOff()
+        compose.onNodeWithText("Save").performClick()
+        compose.waitForIdle()
+        assertEquals(false, repository.state.value.settings.hideNsfw)
+        assertTrue(compose.onAllNodesWithText("Adult Example").fetchSemanticsNodes().isNotEmpty())
     }
 }

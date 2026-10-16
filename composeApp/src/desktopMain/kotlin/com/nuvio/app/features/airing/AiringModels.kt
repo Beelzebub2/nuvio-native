@@ -14,6 +14,7 @@ internal data class AiringSettings(
     val airType: String = "broadcast",
     val historyDays: Int = 2,
     val includeEstimated: Boolean = true,
+    val hideNsfw: Boolean = true,
 )
 
 @Serializable
@@ -31,6 +32,8 @@ internal data class AiringEvent(
     val airType: String = "broadcast",
     val estimated: Boolean = false,
     val isBreak: Boolean = false,
+    // Null means the source has not verified the title's adult classification.
+    val isAdult: Boolean? = null,
 ) {
     fun preview() = MetaPreview(
         id = "$NATIVE_AIRING_PREFIX$mediaId", type = "series", name = name,
@@ -45,10 +48,38 @@ internal data class AiringSnapshot(
     val events: List<AiringEvent> = emptyList(),
     val savedAt: Long = 0,
     val airType: String = "broadcast",
+    // Legacy snapshots are unclassified, so they cannot be reused under either policy.
+    val hideNsfw: Boolean? = null,
 )
 
 internal enum class AiringWindow(val label: String) {
     Now("Airing Now")
+}
+
+/** Apply the same policy to live responses, saved snapshots, full catalogs and dated schedules. */
+internal fun AiringEvent.allowedBy(settings: AiringSettings): Boolean =
+    !settings.hideNsfw || (isAdult == false && genres.none { it.equals("Hentai", ignoreCase = true) })
+
+internal fun filterAiringContent(events: List<AiringEvent>, settings: AiringSettings): List<AiringEvent> {
+    if (!settings.hideNsfw) return events
+    // A title cannot be shown as safe when different episodes disagree about its
+    // classification. Evaluate the whole batch before dropping individual records.
+    val blockedTitles = events.asSequence().filter { event ->
+        event.isAdult == true || event.genres.any { it.equals("Hentai", ignoreCase = true) }
+    }.map { it.mediaId }.toSet()
+    return events.filter { it.mediaId !in blockedTitles && it.allowedBy(settings) }
+}
+
+internal data class TsuzukiScheduleRequest(val gatewayPath: String, val directUrl: String)
+
+internal fun tsuzukiScheduleRequest(
+    start: java.time.LocalDate, days: Int, settings: AiringSettings,
+): TsuzukiScheduleRequest {
+    val query = "start=$start&days=$days&airType=${settings.airType}"
+    return TsuzukiScheduleRequest(
+        gatewayPath = if (settings.hideNsfw) "/release-schedule?$query" else "/release-schedule-adult?$query",
+        directUrl = "https://tsuzuki.top/api/v1/schedule?$query" + if (settings.hideNsfw) "" else "&includeAdult=1",
+    )
 }
 
 internal fun selectAiringEvents(
@@ -57,7 +88,7 @@ internal fun selectAiringEvents(
     val zone = ZoneId.of(settings.zone)
     val today = now.atZone(zone).toLocalDate()
     val start = today.minusDays((settings.historyDays - 1).toLong())
-    val eligible = events.filter {
+    val eligible = filterAiringContent(events, settings).filter {
         !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
             (settings.includeEstimated || !it.estimated)
     }
@@ -69,7 +100,7 @@ internal fun selectAiringEvents(
 }
 
 internal fun selectScheduledEvents(events: List<AiringEvent>, settings: AiringSettings, date: java.time.LocalDate): List<AiringEvent> =
-    events.filter { !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
+    filterAiringContent(events, settings).filter { !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
         (settings.includeEstimated || !it.estimated) && Instant.ofEpochSecond(it.airingAt).atZone(ZoneId.of(settings.zone)).toLocalDate() == date }
         .sortedBy { it.airingAt }.distinctBy { "${it.mediaId}:${it.episode}" }
 
@@ -95,6 +126,10 @@ internal fun parseAniListSchedule(page: JsonObject): List<AiringEvent> =
         eventFromAniList(record.obj("media"), record.number("episode"), record.number("airingAt")?.toLong())
     }
 
+/** Skip invalid provider records; demand adult classification for every displayable item. */
+internal fun hasClassifiedAniListMedia(page: JsonObject): Boolean =
+    page["airingSchedules"] is JsonArray && parseAniListSchedule(page).all { it.isAdult != null }
+
 internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?): AiringEvent? {
     val id = media.number("id")?.takeIf { it > 0 } ?: return null
     if (episode == null || episode !in 1..10000 || airingAt == null || airingAt <= 0) return null
@@ -105,10 +140,11 @@ internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?)
         description = media.text("description")?.replace(Regex("<[^>]+>"), " ")?.trim(),
         genres = (media["genres"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
         totalEpisodes = media.number("episodes"),
+        isAdult = (media["isAdult"] as? JsonPrimitive)?.booleanOrNull,
     )
 }
 
-internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String): List<AiringEvent> {
+internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String, sourceExcludesAdult: Boolean = false): List<AiringEvent> {
     val records = payload["episodes"] as? JsonArray ?: error("Schedule provider returned no episode list")
     return records.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
@@ -121,6 +157,9 @@ internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String): List<Ai
             name = titleText(item["title"]) ?: "Anime $id", poster = coverText(item["coverImage"]),
             airType = airType, estimated = item.flag("estimated") || !item.flag("exact"),
             isBreak = item.flag("isBreak") || item.obj("note").text("kind") == "break",
+            isAdult = (item["isAdult"] as? JsonPrimitive)?.booleanOrNull
+                ?: (item.obj("media")["isAdult"] as? JsonPrimitive)?.booleanOrNull
+                ?: if (sourceExcludesAdult) false else null,
         )
     }
 }

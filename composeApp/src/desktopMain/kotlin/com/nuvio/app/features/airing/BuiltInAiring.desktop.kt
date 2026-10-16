@@ -206,6 +206,7 @@ private fun AiringSettingsDialog(settings: AiringSettings, onDismiss: () -> Unit
     var airType by remember { mutableStateOf(settings.airType) }
     var days by remember { mutableStateOf(settings.historyDays) }
     var estimated by remember { mutableStateOf(settings.includeEstimated) }
+    var hideNsfw by remember { mutableStateOf(settings.hideNsfw) }
     val validZone = remember(zone) { runCatching { ZoneId.of(zone.trim()) }.isSuccess }
     AlertDialog(
         onDismissRequest = onDismiss, title = { Text("Airing Now settings") },
@@ -229,9 +230,16 @@ private fun AiringSettingsDialog(settings: AiringSettings, onDismiss: () -> Unit
                     Checkbox(checked = estimated, onCheckedChange = { estimated = it })
                     Text("Include estimated times", modifier = Modifier.padding(top = 12.dp))
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = hideNsfw, onCheckedChange = { hideNsfw = it },
+                        modifier = Modifier.testTag("airing-hide-nsfw"))
+                    Text("Hide NSFW / hentai anime")
+                }
             }
         },
-        confirmButton = { TextButton(enabled = validZone, onClick = { onSave(AiringSettings(zone.trim(), airType, days, estimated)) }) { Text("Save") } },
+        confirmButton = { TextButton(enabled = validZone, onClick = {
+            onSave(AiringSettings(zone.trim(), airType, days, estimated, hideNsfw))
+        }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

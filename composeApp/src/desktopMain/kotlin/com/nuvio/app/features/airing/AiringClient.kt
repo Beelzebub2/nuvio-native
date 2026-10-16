@@ -38,12 +38,19 @@ internal class AiringClient {
         val today = now.atZone(ZoneId.of(settings.zone)).toLocalDate()
         val first = today.minusDays((settings.historyDays - 1).toLong())
         if (settings.airType != "broadcast") {
-            val url = "https://tsuzuki.top/api/v1/schedule?start=$first&days=${settings.historyDays + 2}&airType=${settings.airType}"
-            val proxied = gatewayGet("/release-schedule?start=$first&days=${settings.historyDays + 2}&airType=${settings.airType}")
-            val recent = parseTsuzukiSchedule(proxied ?: get(url), settings.airType)
-            val week = gatewayGet("/release-schedule?start=$today&days=8&airType=${settings.airType}")
-                ?: get("https://tsuzuki.top/api/v1/schedule?start=$today&days=8&airType=${settings.airType}")
-            return (recent + parseTsuzukiSchedule(week, settings.airType)).distinctBy { "${it.mediaId}:${it.episode}" }
+            // Tsuzuki excludes adult titles by default. The existing gateway does not
+            // support includeAdult. The dedicated adult route falls back to direct
+            // Tsuzuki until the updated gateway has been deployed.
+            suspend fun releaseSchedule(start: java.time.LocalDate, days: Int): List<AiringEvent> {
+                val request = tsuzukiScheduleRequest(start, days, settings)
+                val response = gatewayGet(request.gatewayPath) ?: get(request.directUrl)
+                return parseTsuzukiSchedule(response, settings.airType, sourceExcludesAdult = settings.hideNsfw)
+            }
+            val recent = releaseSchedule(first, settings.historyDays + 2)
+            val week = releaseSchedule(today, 8)
+            // Keep all classification evidence until the repository combines new
+            // and retained episodes and applies the title-level policy.
+            return recent + week
         }
         val result = mutableListOf<AiringEvent>()
         // Keep each request inside the gateway's existing start/range limits.
@@ -52,10 +59,15 @@ internal class AiringClient {
         val end = until.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond()
         var complete = false
         for (number in 1..20) {
-            val response = gatewayGet("/schedule?start=$start&end=$end&page=$number")?.obj("data")
+            val cached = gatewayGet("/schedule?start=$start&end=$end&page=$number")?.obj("data")
+            // Older gateway deployments omit isAdult. Never treat unknown as safe:
+            // request the original metadata from AniList before accepting a page.
+            val response = cached?.takeIf { data ->
+                !settings.hideNsfw || hasClassifiedAniListMedia(data.obj("Page"))
+            }
                 ?: graphql(SCHEDULE_QUERY, buildJsonObject {
-                put("start", start); put("end", end); put("page", number)
-            })
+                    put("start", start); put("end", end); put("page", number)
+                })
             val page = response.obj("Page")
             if (page["airingSchedules"] !is JsonArray) error("AniList returned no schedule")
             result.addAll(parseAniListSchedule(page))
@@ -63,13 +75,16 @@ internal class AiringClient {
         }
         check(complete) { "Schedule is too large to load completely; choose fewer history days" }
         }
-        return result.distinctBy { "${it.mediaId}:${it.episode}" }
+        return result
     }
 
     suspend fun details(id: Int, known: List<AiringEvent>, settings: AiringSettings): MetaDetails? = coroutineScope {
         val existing = known.lastOrNull { it.mediaId == id && it.airType == settings.airType }
         val mediaRequest = async { optional {
-            gatewayGet("/media?id=$id")?.obj("data")
+            val cached = gatewayGet("/media?id=$id")?.obj("data")
+            cached?.takeIf {
+                !settings.hideNsfw || (it.obj("Media")["isAdult"] as? JsonPrimitive)?.booleanOrNull != null
+            }
                 ?: graphql(MEDIA_QUERY, buildJsonObject { put("id", id) })
         } }
         val mappingRequest = async { optional { mapping(id) } }
@@ -83,6 +98,9 @@ internal class AiringClient {
         val mapped = JsonObject(databaseMapping + extra.obj("mappings"))
         val record = info?.let { eventFromAniList(it, existing?.episode ?: 1, existing?.airingAt ?: 1) }
             ?.copy(airType = settings.airType) ?: existing ?: return@coroutineScope null
+        if (!record.allowedBy(settings)) return@coroutineScope null
+        if (filterAiringContent(known.filter { it.mediaId == id } + record, settings).isEmpty())
+            return@coroutineScope null
         val historical = (metadata?.obj("Page")?.get("airingSchedules") as? JsonArray).orEmpty().mapNotNull { element ->
             val node = element as? JsonObject ?: return@mapNotNull null
             record.copy(episode = node.number("episode") ?: return@mapNotNull null,
@@ -179,7 +197,7 @@ internal class AiringClient {
     catch (_: Exception) { null }
 
     companion object {
-        private val MEDIA_FIELDS = "id idMal title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes"
+        private val MEDIA_FIELDS = "id idMal isAdult title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes"
         private val SCHEDULE_QUERY = "query(\$start:Int,\$end:Int,\$page:Int){Page(page:\$page,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:\$start,airingAt_lesser:\$end,sort:TIME){episode airingAt media{$MEDIA_FIELDS}}}}"
         private val MEDIA_QUERY = "query(\$id:Int){Media(id:\$id,type:ANIME){$MEDIA_FIELDS}Page(perPage:50){airingSchedules(mediaId:\$id,notYetAired:false,sort:EPISODE_DESC){episode airingAt}}}"
     }
