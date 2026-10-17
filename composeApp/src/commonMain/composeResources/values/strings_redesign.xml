@@ -9,6 +9,8 @@
     <string name="detail_synopsis_more">More</string>
     <string name="detail_facts_studio">Studio</string>
     <string name="detail_minutes_left">%1$d min left</string>
+    <string name="detail_action_library">Library</string>
+    <string name="detail_action_watched">Watched</string>
     <string name="detail_trailer_muted">Trailer muted</string>
     <string name="detail_trailer_sound_on">Trailer sound on</string>
 
