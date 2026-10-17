@@ -36,16 +36,16 @@ class EpisodeSynopsisHoverTest {
     fun synopsisStaysWhileReadingButDisappearsWhenMovingToHome() {
         setContent()
         compose.onNodeWithContentDescription("Home").performMouseInput { moveTo(center) }
-        compose.onNodeWithText("Synopsis").assertDoesNotExist()
+        compose.onNodeWithText(first.overview()).assertDoesNotExist()
 
         hover(first)
         // Reading a synopsis must not be limited to the default short tooltip timeout.
         compose.mainClock.advanceTimeBy(6_000L)
-        compose.onNodeWithText(first.description!!).assertIsDisplayed()
+        compose.onNodeWithText(first.overview()).assertIsDisplayed()
 
         compose.onNodeWithContentDescription("Home").performMouseInput { moveTo(center) }
         compose.mainClock.advanceTimeBy(1_500L)
-        compose.onNodeWithText("Synopsis").assertDoesNotExist()
+        compose.onNodeWithText(first.overview()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Home").assertIsDisplayed()
     }
 
@@ -53,29 +53,38 @@ class EpisodeSynopsisHoverTest {
     fun leavingTheWindowDismissesTheSynopsisAndReenteringShowsItAgain() {
         setContent()
         hover(first)
-        compose.onNodeWithText(first.description!!).assertIsDisplayed()
+        compose.onNodeWithText(first.overview()).assertIsDisplayed()
 
         compose.onNodeWithTag(first.id).performMouseInput { exit() }
         compose.mainClock.advanceTimeBy(1_500L)
-        compose.onNodeWithText("Synopsis").assertDoesNotExist()
+        compose.onNodeWithText(first.overview()).assertDoesNotExist()
 
         hover(first)
-        compose.onNodeWithText(first.description).assertIsDisplayed()
+        compose.onNodeWithText(first.overview()).assertIsDisplayed()
     }
 
     @Test
     fun movingBetweenEpisodesOnlyShowsTheCurrentSynopsis() {
         setContent()
         hover(first)
-        compose.onNodeWithText(first.description!!).assertIsDisplayed()
+        compose.onNodeWithText(first.overview()).assertIsDisplayed()
 
         hover(second)
-        compose.onNodeWithText(first.description).assertDoesNotExist()
-        compose.onNodeWithText(second.description!!).assertIsDisplayed()
+        compose.onNodeWithText(first.overview()).assertDoesNotExist()
+        compose.onNodeWithText(second.overview()).assertIsDisplayed()
 
         compose.onNodeWithContentDescription("Home").performMouseInput { moveTo(center) }
         compose.mainClock.advanceTimeBy(1_500L)
-        compose.onNodeWithText("Synopsis").assertDoesNotExist()
+        compose.onNodeWithText(second.overview()).assertDoesNotExist()
+    }
+
+    @Test
+    fun showsTheEpisodeOverviewNotTheSeriesDescription() {
+        setContent()
+        hover(first)
+        compose.onNodeWithText(first.overview()).assertIsDisplayed()
+        compose.onNodeWithText(first.description!!).assertDoesNotExist()
+        compose.onNodeWithText("Episode 2").assertIsDisplayed()
     }
 
     private fun hover(item: MetaPreview) {
@@ -112,8 +121,10 @@ class EpisodeSynopsisHoverTest {
         }
     }
 
+    private fun MetaPreview.overview(): String = watchLaterEpisode!!.overview!!
+
     private fun episode(id: String, synopsis: String) = MetaPreview(
-        id, "series", "Anime $id", description = synopsis,
-        watchLaterEpisode = WatchLaterEpisode("$id:1:2", "Episode 2", 1, 2),
+        id, "series", "Anime $id", description = "Series description for $id.",
+        watchLaterEpisode = WatchLaterEpisode("$id:1:2", "Episode 2", 1, 2, overview = synopsis),
     )
 }
