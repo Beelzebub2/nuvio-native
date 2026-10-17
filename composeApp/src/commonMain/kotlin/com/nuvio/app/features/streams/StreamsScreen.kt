@@ -76,6 +76,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.ui.positionContextMenuAxis
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.NuvioBottomSheetActionRow
@@ -1324,22 +1325,6 @@ internal class StreamActionsPopupPositionProvider(
             edgeMargin = edgeMarginPx,
         ),
     )
-}
-
-internal fun positionContextMenuAxis(
-    pointer: Int,
-    popupExtent: Int,
-    windowExtent: Int,
-    edgeMargin: Int,
-): Int {
-    val minimum = edgeMargin
-    val maximum = (windowExtent - popupExtent - edgeMargin).coerceAtLeast(minimum)
-    val preferred = if (pointer + popupExtent <= windowExtent - edgeMargin) {
-        pointer
-    } else {
-        pointer - popupExtent
-    }
-    return preferred.coerceIn(minimum, maximum)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

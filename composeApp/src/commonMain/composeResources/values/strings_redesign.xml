@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Episode hover card -->
+    <string name="episode_hover_loading">Loading synopsis…</string>
+    <string name="episode_hover_empty">No synopsis for this episode yet.</string>
+
+    <!-- Details hero -->
+    <string name="detail_synopsis_about">About</string>
+    <string name="detail_synopsis_more">More</string>
+    <string name="detail_facts_studio">Studio</string>
+    <string name="detail_minutes_left">%1$d min left</string>
+    <string name="detail_trailer_muted">Trailer muted</string>
+    <string name="detail_trailer_sound_on">Trailer sound on</string>
+
+    <!-- Watch Later -->
+    <string name="watch_later">Watch Later</string>
+    <string name="watch_later_save_named">Save %1$s to Watch Later</string>
+    <string name="watch_later_remove_named">Remove %1$s from Watch Later</string>
+</resources>

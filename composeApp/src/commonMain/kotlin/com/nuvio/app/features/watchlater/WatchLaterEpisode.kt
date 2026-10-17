@@ -18,9 +18,17 @@ data class WatchLaterEpisode(
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val thumbnail: String? = null,
+    val overview: String? = null,
 )
 
-internal fun MetaVideo.toWatchLaterEpisode() = WatchLaterEpisode(id, title, season, episode, thumbnail)
+internal fun MetaVideo.toWatchLaterEpisode() = WatchLaterEpisode(id, title, season, episode, thumbnail, overview)
+
+internal fun MetaVideo.matchesWatchLaterEpisode(episode: WatchLaterEpisode): Boolean =
+    if (episode.seasonNumber != null && episode.episodeNumber != null) {
+        season == episode.seasonNumber && this.episode == episode.episodeNumber
+    } else {
+        id == episode.videoId
+    }
 internal fun MetaDetails.toWatchLaterPreview(video: MetaVideo? = null) = MetaPreview(
     id, type, name, poster = poster, banner = background, logo = logo, description = description,
     watchLaterEpisode = video?.toWatchLaterEpisode(),
