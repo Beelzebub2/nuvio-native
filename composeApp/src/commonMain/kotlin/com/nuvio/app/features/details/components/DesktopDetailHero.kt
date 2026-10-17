@@ -17,11 +17,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -31,9 +29,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -84,6 +80,27 @@ import nuvio.composeapp.generated.resources.hero_mark_watched
 import nuvio.composeapp.generated.resources.hero_remove_from_library
 import nuvio.composeapp.generated.resources.rating_imdb
 import nuvio.composeapp.generated.resources.source_imdb
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDecoration
+import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
+import com.nuvio.app.core.ui.NuvioActionSize
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
+import com.nuvio.app.core.ui.NuvioIconActionButton
+import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.secondaryClick
+import nuvio.composeapp.generated.resources.detail_action_library
+import nuvio.composeapp.generated.resources.detail_action_watched
+import nuvio.composeapp.generated.resources.detail_minutes_left
+import nuvio.composeapp.generated.resources.detail_synopsis_more
+import nuvio.composeapp.generated.resources.detail_trailer_muted
+import nuvio.composeapp.generated.resources.detail_trailer_sound_on
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -196,6 +213,16 @@ fun DesktopDetailBackdrop(
     }
 }
 
+/** What the primary action resumes or starts, shown above the desktop action bar. */
+data class DesktopResumeLine(
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val episodeTitle: String?,
+    val remainingMinutes: Int?,
+    val progress: Float?,
+)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DesktopDetailHero(
     meta: MetaDetails,
@@ -218,8 +245,10 @@ fun DesktopDetailHero(
     onSaveClick: () -> Unit,
     onSaveLongClick: (() -> Unit)?,
     watchLaterEpisode: com.nuvio.app.features.details.MetaVideo? = null,
+    resumeLine: DesktopResumeLine? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val colors = MaterialTheme.nuvio.colors
     val space = NuvioTokens.Space
     val trailerAlpha by animateFloatAsState(
         targetValue = if (heroTrailerReady) 1f else 0f,
@@ -228,11 +257,14 @@ fun DesktopDetailHero(
     )
     var logoLoadError by remember(meta.id, meta.logo) { mutableStateOf(false) }
     val logoUrl = meta.logo?.takeIf { it.isNotBlank() }
+    var showSynopsisPanel by remember(meta.id) { mutableStateOf(false) }
+    var synopsisOverflows by remember(meta.id, meta.description) { mutableStateOf(false) }
+    val playLabel = if (isPrimaryPlayEnabled) playButtonLabel else stringResource(Res.string.playback_unavailable)
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(660.dp)
+            .heightIn(min = 660.dp)
             .onSizeChanged { onHeightChanged(it.height) },
     ) {
         val actionHorizontalInset = fullscreenActionHorizontalInsetForWidth(maxWidth.value)
@@ -241,12 +273,14 @@ fun DesktopDetailHero(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .widthIn(max = 760.dp)
+                .widthIn(max = 780.dp)
                 .padding(
                     start = pageHorizontalPadding,
                     end = space.s32,
+                    top = 120.dp,
                     bottom = space.s40,
                 ),
+            verticalArrangement = Arrangement.spacedBy(space.s16),
         ) {
             if (logoUrl != null && !logoLoadError) {
                 AsyncImage(
@@ -265,147 +299,141 @@ fun DesktopDetailHero(
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontSize = NuvioTokens.Type.displayMd,
                         lineHeight = NuvioTokens.LineHeight.displayMd,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = NuvioTokens.LetterSpacing.none,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = NuvioTokens.LetterSpacing.pageDisplay,
                     ),
                     color = colorScheme.onBackground,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(modifier = Modifier.height(space.s20))
-            DesktopHeroMetaRow(meta = meta, showOverallRatings = showOverallRatings && !isMdbListActive)
-            if (isMdbListActive && meta.externalRatings.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(space.s12))
-                DetailRatingsRow(
-                    ratings = meta.externalRatings,
-                    modifier = Modifier.widthIn(max = 520.dp),
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(space.s12)) {
+                DesktopHeroMetaRow(meta = meta, showOverallRatings = showOverallRatings && !isMdbListActive)
+                if (isMdbListActive && meta.externalRatings.isNotEmpty()) {
+                    DetailRatingsRow(
+                        ratings = meta.externalRatings,
+                        modifier = Modifier.widthIn(max = 520.dp),
+                    )
+                }
             }
             if (meta.genres.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(space.s12))
-                Text(
-                    text = meta.genres.take(4).joinToString(" \u2022 "),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = NuvioTokens.Type.bodyMd,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = NuvioTokens.LetterSpacing.none,
-                    ),
-                    color = colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(space.s8),
+                    verticalArrangement = Arrangement.spacedBy(space.s8),
+                ) {
+                    meta.genres.take(4).forEach { genre -> DetailGenreChip(genre) }
+                }
             }
             meta.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
-                Spacer(modifier = Modifier.height(space.s16))
-                Text(
-                    text = synopsis,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = NuvioTokens.Type.bodyLg,
-                        lineHeight = NuvioTokens.LineHeight.bodyLg,
-                        letterSpacing = NuvioTokens.LetterSpacing.none,
+                Column(
+                    modifier = Modifier.widthIn(max = 620.dp),
+                    verticalArrangement = Arrangement.spacedBy(space.s4),
+                ) {
+                    Text(
+                        text = synopsis,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = NuvioTokens.Type.bodyLg,
+                            lineHeight = 25.sp,
+                            letterSpacing = NuvioTokens.LetterSpacing.none,
+                        ),
+                        color = colors.textPrimary.copy(alpha = 0.85f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { layout -> synopsisOverflows = layout.hasVisualOverflow },
+                    )
+                    if (synopsisOverflows) {
+                        Text(
+                            text = stringResource(Res.string.detail_synopsis_more),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(NuvioTokens.Radius.sm))
+                                .clickable(role = Role.Button) { showSynopsisPanel = true }
+                                .padding(vertical = space.s2),
+                            style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.Underline),
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                        )
+                    }
+                }
+            }
+            resumeLine?.let { DesktopHeroResumeLine(it) }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(space.s10),
+                verticalArrangement = Arrangement.spacedBy(space.s10),
+            ) {
+                NuvioCompactActionButton(
+                    label = playLabel,
+                    icon = Icons.Rounded.PlayArrow,
+                    onClick = onPlayClick,
+                    modifier = Modifier.secondaryClick(onPlayLongClick),
+                    enabled = isPrimaryPlayEnabled,
+                    tone = NuvioCompactActionTone.Primary,
+                    size = NuvioActionSize.Large,
+                )
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.detail_action_library),
+                    icon = if (isSaved) Icons.Default.Check else Icons.Default.Add,
+                    onClick = onSaveClick,
+                    modifier = Modifier.secondaryClick(onSaveLongClick),
+                    tone = NuvioCompactActionTone.Secondary,
+                    accessibilityLabel = stringResource(
+                        if (isSaved) Res.string.hero_remove_from_library else Res.string.hero_add_to_library,
                     ),
-                    color = colorScheme.onSurface,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
+                    size = NuvioActionSize.Large,
+                    selected = isSaved,
                 )
-            }
-            Spacer(modifier = Modifier.height(space.s28))
-            val shuffleAction = onShuffleClick?.let { onClick ->
-                DetailSecondaryAction(
-                    label = stringResource(if (shuffleEnabled) Res.string.shuffle_stop else Res.string.random_episode_title),
-                    icon = Icons.Default.Shuffle,
-                    isActive = shuffleEnabled,
-                    onClick = onClick,
+                com.nuvio.app.features.watchlater.WatchLaterHeroButton(
+                    item = com.nuvio.app.features.home.MetaPreview(
+                        meta.id, meta.type, meta.name,
+                        poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description,
+                    ),
+                    episode = watchLaterEpisode,
                 )
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.detail_action_watched),
+                    icon = if (isWatched) Icons.Default.CheckCircle else Icons.Default.CheckCircleOutline,
+                    onClick = onWatchedClick,
+                    tone = NuvioCompactActionTone.Secondary,
+                    accessibilityLabel = stringResource(
+                        if (isWatched) Res.string.hero_mark_unwatched else Res.string.hero_mark_watched,
+                    ),
+                    size = NuvioActionSize.Large,
+                    selected = isWatched,
+                )
+                onShuffleClick?.let { onClick ->
+                    NuvioIconActionButton(
+                        icon = Icons.Default.Shuffle,
+                        contentDescription = stringResource(
+                            if (shuffleEnabled) Res.string.shuffle_stop else Res.string.random_episode_title,
+                        ),
+                        onClick = onClick,
+                        size = NuvioActionSize.Large,
+                        selected = shuffleEnabled,
+                    )
+                }
             }
-            DetailActionButtons(
-                modifier = Modifier.widthIn(max = 520.dp),
-                playLabel = if (isPrimaryPlayEnabled) playButtonLabel else stringResource(Res.string.playback_unavailable),
-                playEnabled = isPrimaryPlayEnabled,
-                pinnedAction = shuffleAction?.takeIf { shuffleEnabled },
-                secondaryActions = buildList {
-                    if (!shuffleEnabled) shuffleAction?.let(::add)
-                    add(DetailSecondaryAction(
-                        label = if (isWatched) {
-                            stringResource(Res.string.hero_mark_unwatched)
-                        } else {
-                            stringResource(Res.string.hero_mark_watched)
-                        },
-                        icon = if (isWatched) {
-                            Icons.Default.CheckCircle
-                        } else {
-                            Icons.Default.CheckCircleOutline
-                        },
-                        isActive = isWatched,
-                        onClick = onWatchedClick,
-                    ))
-                    add(DetailSecondaryAction(
-                        label = if (isSaved) {
-                            stringResource(Res.string.hero_remove_from_library)
-                        } else {
-                            stringResource(Res.string.hero_add_to_library)
-                        },
-                        icon = if (isSaved) {
-                            Icons.Default.Check
-                        } else {
-                            Icons.Default.Add
-                        },
-                        isActive = isSaved,
-                        onClick = onSaveClick,
-                        onLongClick = onSaveLongClick,
-                    ))
-                },
-                isTablet = true,
-                onPlayClick = onPlayClick,
-                onPlayLongClick = onPlayLongClick,
-            )
-            Spacer(modifier = Modifier.height(space.s12))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(space.s8),
                 verticalArrangement = Arrangement.spacedBy(space.s8),
             ) {
                 com.nuvio.app.features.myanimelist.MyAnimeListControls(meta)
-                com.nuvio.app.features.watchlater.WatchLaterControls(
-                    com.nuvio.app.features.home.MetaPreview(meta.id, meta.type, meta.name,
-                        poster = meta.poster, banner = meta.background, logo = meta.logo, description = meta.description),
-                    episode = watchLaterEpisode,
-                )
             }
         }
 
         if (heroTrailerSourceUrl != null) {
-            Surface(
+            NuvioCompactActionButton(
+                label = stringResource(
+                    if (heroTrailerMuted) Res.string.detail_trailer_muted else Res.string.detail_trailer_sound_on,
+                ),
+                icon = if (heroTrailerMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
                 onClick = onHeroTrailerMuteToggle,
-                enabled = heroTrailerReady,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(
-                        top = space.s32,
-                        end = actionHorizontalInset + if (isFullscreenActionSupported) 60.dp else 0.dp,
-                    )
-                    .size(48.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(end = pageHorizontalPadding, bottom = space.s40)
                     .graphicsLayer { alpha = trailerAlpha },
-                shape = CircleShape,
-                color = colorScheme.surfaceVariant.copy(alpha = 0.82f),
-                contentColor = colorScheme.onSurface,
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = if (heroTrailerMuted) {
-                            Icons.AutoMirrored.Rounded.VolumeOff
-                        } else {
-                            Icons.AutoMirrored.Rounded.VolumeUp
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
+                enabled = heroTrailerReady,
+                tone = NuvioCompactActionTone.Ghost,
+                size = NuvioActionSize.Small,
+            )
         }
 
         if (isFullscreenActionSupported) {
@@ -418,6 +446,77 @@ fun DesktopDetailHero(
                 iconSize = 24.dp,
                 containerColor = colorScheme.surfaceVariant.copy(alpha = 0.82f),
                 contentColor = colorScheme.onSurface,
+            )
+        }
+    }
+
+    if (showSynopsisPanel) {
+        DetailSynopsisPanel(
+            meta = meta,
+            onDismiss = { showSynopsisPanel = false },
+        ) {
+            NuvioCompactActionButton(
+                label = playLabel,
+                icon = Icons.Rounded.PlayArrow,
+                onClick = {
+                    showSynopsisPanel = false
+                    onPlayClick()
+                },
+                enabled = isPrimaryPlayEnabled,
+                tone = NuvioCompactActionTone.Primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopHeroResumeLine(line: DesktopResumeLine) {
+    val colors = MaterialTheme.nuvio.colors
+    val code = localizedSeasonEpisodeCode(line.seasonNumber, line.episodeNumber)
+    if (code == null && line.episodeTitle.isNullOrBlank() && line.progress == null) return
+    Column(
+        modifier = Modifier
+            .widthIn(max = 440.dp)
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+        ) {
+            code?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                )
+            }
+            Text(
+                text = line.episodeTitle.orEmpty(),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            line.remainingMinutes?.let { minutes ->
+                Text(
+                    text = stringResource(Res.string.detail_minutes_left, minutes),
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                    color = colors.textSecondary,
+                    maxLines = 1,
+                )
+            }
+        }
+        line.progress?.let { progress ->
+            NuvioProgressBar(
+                progress = progress,
+                modifier = Modifier.fillMaxWidth(),
+                height = NuvioTokens.Space.s4,
+                trackColor = colors.textPrimary.copy(alpha = 0.14f),
+                fillColor = colors.accent,
             )
         }
     }
@@ -443,11 +542,11 @@ private fun DesktopHeroMetaRow(meta: MetaDetails, showOverallRatings: Boolean) {
             Text(
                 text = item,
                 style = MaterialTheme.typography.titleSmall.copy(
-                    fontSize = NuvioTokens.Type.bodyLg,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = NuvioTokens.Type.bodyMd,
+                    fontWeight = FontWeight.Medium,
                     letterSpacing = NuvioTokens.LetterSpacing.none,
                 ),
-                color = colorScheme.onBackground,
+                color = MaterialTheme.nuvio.colors.textSecondary,
                 maxLines = 1,
             )
         }

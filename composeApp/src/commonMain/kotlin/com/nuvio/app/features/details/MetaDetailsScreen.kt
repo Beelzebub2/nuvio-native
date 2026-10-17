@@ -102,6 +102,7 @@ import com.nuvio.app.core.ui.rememberHeroStretchState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import com.nuvio.app.features.details.components.DetailActions
+import com.nuvio.app.features.details.components.DesktopResumeLine
 import com.nuvio.app.features.details.components.CommentDetailSheet
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
 import com.nuvio.app.features.details.components.DetailCastSection
@@ -821,6 +822,36 @@ fun MetaDetailsScreen(
                     seasonNumber = seriesAction?.seasonNumber,
                     episodeNumber = seriesAction?.episodeNumber,
                 )
+                val desktopResumeLine = remember(seriesAction, seriesActionVideo, movieProgress, progressByVideoId, meta.id) {
+                    val action = seriesAction
+                    if (action != null) {
+                        val entry = progressByVideoId[
+                            buildPlaybackVideoId(
+                                parentMetaId = meta.id,
+                                seasonNumber = action.seasonNumber,
+                                episodeNumber = action.episodeNumber,
+                                fallbackVideoId = seriesActionVideo?.id ?: action.videoId,
+                            ),
+                        ]?.takeIf { !it.isCompleted && it.durationMs > 0L }
+                        DesktopResumeLine(
+                            seasonNumber = action.seasonNumber,
+                            episodeNumber = action.episodeNumber,
+                            episodeTitle = action.episodeTitle ?: seriesActionVideo?.title,
+                            remainingMinutes = entry?.let { ((it.durationMs - it.lastPositionMs) / 60_000L).toInt().coerceAtLeast(1) },
+                            progress = entry?.progressFraction,
+                        )
+                    } else {
+                        movieProgress?.takeIf { it.durationMs > 0L }?.let { entry ->
+                            DesktopResumeLine(
+                                seasonNumber = null,
+                                episodeNumber = null,
+                                episodeTitle = null,
+                                remainingMinutes = ((entry.durationMs - entry.lastPositionMs) / 60_000L).toInt().coerceAtLeast(1),
+                                progress = entry.progressFraction,
+                            )
+                        }
+                    }
+                }
                 val playText = stringResource(Res.string.action_play)
                 val resumeText = stringResource(Res.string.action_resume)
                 val chooseEpisodesText = stringResource(Res.string.shuffle_change_selection)
@@ -1303,6 +1334,7 @@ fun MetaDetailsScreen(
                                     DesktopDetailHero(
                                         meta = meta,
                                         watchLaterEpisode = seriesActionVideo,
+                                        resumeLine = desktopResumeLine,
                                         showOverallRatings = metaScreenSettingsUiState.showOverallRatings,
                                         isMdbListActive = mdbListSettings.isActive,
                                         playButtonLabel = playButtonLabel,
