@@ -39,8 +39,8 @@ class PersonalMediaUiTest {
             compose.setContent { NuvioTheme { Box(Modifier.size(1100.dp, 760.dp).testTag("watch-later-canvas")) {
                 WatchLaterScreen(onPosterClick = {}, onPlay = { played = it })
             } } }
-            compose.onNodeWithText("S1 · E2 · Second episode").assertIsDisplayed()
-            compose.onNodeWithText("50% · 10 min watched").assertIsDisplayed()
+            compose.onNodeWithText("Second episode").assertIsDisplayed()
+            compose.onNodeWithText("10 min left").assertIsDisplayed()
             compose.onNodeWithText("Resume").performClick()
             compose.runOnIdle {
                 assertEquals(videoId, played?.videoId)

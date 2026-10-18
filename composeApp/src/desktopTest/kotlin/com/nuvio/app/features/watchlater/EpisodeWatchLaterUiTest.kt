@@ -28,7 +28,7 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
         @JvmStatic @Parameterized.Parameters(name = "{0}") fun styles() = MetaEpisodeCardStyle.entries.map { arrayOf(it) }
     }
     @get:Rule val compose = createComposeRule()
-    @Test fun episodeHoverShowsTheParentSynopsisAndRightClickOpensItsDetails() {
+    @Test fun episodeCardsShowNoSeriesSynopsisAndRightClickOpensTheEpisodeMenu() {
         val episode = MetaVideo("episode-actions-$style:1:2", "Second episode", released = "2020-01-01", season = 1, episode = 2)
         val meta = MetaDetails("episode-actions-$style", "series", "Test Anime", description = "An anime synopsis shown on hover.", videos = listOf(episode))
         var opened: com.nuvio.app.features.home.MetaPreview? = null
@@ -42,14 +42,13 @@ class EpisodeWatchLaterUiTest(private val style: MetaEpisodeCardStyle) {
         } }
         compose.onNodeWithText(episode.title).performMouseInput { moveTo(center) }
         compose.mainClock.advanceTimeBy(1_500L)
-        compose.onNodeWithText(meta.description!!).assertIsDisplayed()
+        // The card is already on this title's page: no hover card repeating the series synopsis.
+        compose.onNodeWithText(meta.description!!).assertDoesNotExist()
         compose.onNodeWithText(episode.title).performMouseInput { click(button = MouseButton.Secondary) }
         compose.runOnIdle {
-            assertEquals(meta.id, opened?.id)
-            assertEquals(meta.type, opened?.type)
-            assertEquals(null, opened?.watchLaterEpisode)
+            assertEquals(null, opened)
             assertEquals(0, plays)
-            assertEquals(0, contextMenus)
+            assertEquals(1, contextMenus)
         }
     }
     @Test fun middleClickSavesTheSpecificEpisodeWithoutPlayingIt() {
