@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Top bar -->
+    <string name="compose_nav_discover">Discover</string>
+    <string name="top_bar_search_placeholder">Search titles and people</string>
+
     <!-- Episode hover card -->
     <string name="episode_hover_loading">Loading synopsis…</string>
     <string name="episode_hover_empty">No synopsis for this episode yet.</string>
