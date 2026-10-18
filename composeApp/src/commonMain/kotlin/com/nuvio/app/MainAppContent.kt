@@ -1334,6 +1334,7 @@ internal fun MainAppContent(
                         ),
                         actions = { isTabletLayout ->
                             AppTabActions(
+                                onTabSelected = ::activateTab,
                                 onCatalogClick = onCatalogClick,
                                 onPosterClick = { meta ->
                                     navController.navigate(
