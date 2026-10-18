@@ -43,7 +43,7 @@ class AiringTest {
         val freshAdult = event(31, 2, "2026-10-04T10:00:00Z").copy(isAdult = true)
         val otherSafe = event(32, 1, "2026-10-04T10:00:00Z")
         val repository = AiringRepository(AiringSettings(),
-            AiringSnapshot(listOf(previousSafe), savedAt = 1, hideNsfw = true),
+            AiringSnapshot(listOf(previousSafe), savedAt = 1, hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { _, _ -> listOf(freshAdult, otherSafe) }, now = { now })
         repository.refresh(force = true)
         assertEquals(listOf(32), repository.state.value.snapshot.events.map { it.mediaId })
@@ -51,8 +51,8 @@ class AiringTest {
 
     @Test fun `AniList isAdult metadata is parsed and safe classification is explicit`() {
         val page = Json.parseToJsonElement("""{"airingSchedules":[
-          {"episode":1,"airingAt":1791110000,"media":{"id":12,"title":{"english":"Test"},"isAdult":true}},
-          {"episode":1,"airingAt":1791110000,"media":{"id":13,"title":{"english":"Safe"},"isAdult":false}},
+          {"episode":1,"airingAt":1791110000,"media":{"id":12,"title":{"english":"Test"},"isAdult":true,"genres":[],"tags":[]}},
+          {"episode":1,"airingAt":1791110000,"media":{"id":13,"title":{"english":"Safe"},"isAdult":false,"genres":[],"tags":[]}},
           {"episode":1,"airingAt":1791110000,"media":{"id":14,"title":{"english":"Unrated"}}}
         ]}""").jsonObject
         val parsed = parseAniListSchedule(page)
@@ -61,7 +61,7 @@ class AiringTest {
         assertFalse(hasClassifiedAniListMedia(page))
         val safePage = Json.parseToJsonElement("""{"airingSchedules":[
           {"episode":1,"airingAt":1791110000,"media":null},
-          {"episode":1,"airingAt":1791110000,"media":{"id":13,"isAdult":false}},
+          {"episode":1,"airingAt":1791110000,"media":{"id":13,"isAdult":false,"genres":[],"tags":[]}},
           {"episode":null,"airingAt":1791110000,"media":{"id":12}}
         ]}""").jsonObject
         assertTrue(hasClassifiedAniListMedia(safePage))
@@ -77,15 +77,15 @@ class AiringTest {
         assertTrue(included.directUrl.endsWith("&includeAdult=1"))
     }
 
-    @Test fun `Tsuzuki default adult exclusion marks safe items and does not override explicit adult flags`() {
+    @Test fun `Tsuzuki adult exclusion alone does not classify Ecchi metadata`() {
         val payload = Json.parseToJsonElement("""{"episodes":[
           {"mediaId":21,"episode":1,"airingAt":1791110000,"airType":"sub","title":"Safe","exact":true},
-          {"mediaId":22,"episode":1,"airingAt":1791110000,"airType":"sub","title":"Flagged","exact":true,"isAdult":true}
+          {"mediaId":22,"episode":1,"airingAt":1791110000,"airType":"sub","title":"Flagged","exact":true,"isAdult":true,"genres":[],"tags":[]}
         ]}""").jsonObject
         assertNull(parseTsuzukiSchedule(payload, "sub").first().isAdult)
-        val defaultFeed = parseTsuzukiSchedule(payload, "sub", sourceExcludesAdult = true)
-        assertEquals(listOf(false, true), defaultFeed.map { it.isAdult })
-        assertEquals(listOf(21), filterAiringContent(defaultFeed, AiringSettings()).map { it.mediaId })
+        val defaultFeed = parseTsuzukiSchedule(payload, "sub")
+        assertEquals(listOf(null, true), defaultFeed.map { it.isAdult })
+        assertTrue(filterAiringContent(defaultFeed, AiringSettings()).isEmpty())
     }
 
     @Test fun `local midnight partitions today and history without duplicate anime`() {
@@ -147,7 +147,7 @@ class AiringTest {
         val started = CompletableDeferred<Unit>()
         val proceed = CompletableDeferred<Unit>()
         var saved: AiringSnapshot? = null
-        val repository = AiringRepository(AiringSettings(), AiringSnapshot(listOf(old), hideNsfw = true),
+        val repository = AiringRepository(AiringSettings(), AiringSnapshot(listOf(old), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { _, _ -> started.complete(Unit); proceed.await(); listOf(corrected) },
             saveSnapshot = { saved = it }, now = { now })
         val job = launch { repository.refresh(force = true) }
@@ -161,7 +161,7 @@ class AiringTest {
     }
 
     @Test fun `source failure retains disk snapshot and cancellation ends loading`() = runBlocking {
-        val cached = AiringSnapshot(listOf(event(1, 1, "2026-10-04T09:00:00Z")), savedAt = 1000, hideNsfw = true)
+        val cached = AiringSnapshot(listOf(event(1, 1, "2026-10-04T09:00:00Z")), savedAt = 1000, hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION)
         val repository = AiringRepository(AiringSettings(), cached, fetch = { _, _ -> error("Provider unavailable") }, now = { now })
         repository.refresh(force = true)
         assertEquals(cached, repository.state.value.snapshot)
@@ -175,7 +175,7 @@ class AiringTest {
     @Test fun `source changes clear unrelated snapshot and query new provider`() = runBlocking {
         var requested: AiringSettings? = null
         var persisted: AiringSettings? = null
-        val repository = AiringRepository(AiringSettings(), AiringSnapshot(listOf(event(1, 1, "2026-10-04T09:00:00Z")), hideNsfw = true),
+        val repository = AiringRepository(AiringSettings(), AiringSnapshot(listOf(event(1, 1, "2026-10-04T09:00:00Z")), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { settings, _ -> requested = settings; emptyList() }, saveSettings = { persisted = it }, now = { now })
         val settings = AiringSettings(airType = "dub", historyDays = MAX_AIRING_HISTORY_DAYS)
         repository.updateSettings(settings)
@@ -194,7 +194,7 @@ class AiringTest {
         val hiddenEvent = event(21, 3, "2026-10-04T09:00:00Z")
         val keptEvent = event(22, 5, "2026-10-04T10:00:00Z")
         var persisted: AiringSettings? = null
-        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(hiddenEvent, keptEvent), now.toEpochMilli(), hideNsfw = true),
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(hiddenEvent, keptEvent), now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { _, _ -> error("Hiding must not refetch") }, saveSettings = { persisted = it }, now = { now })
         repository.hide(hiddenEvent)
         val settings = repository.state.value.settings
@@ -224,7 +224,7 @@ class AiringTest {
 
     @Test fun `NSFW setting switch clears the previous feed before fetching replacement`() = runBlocking {
         val adult = event(5, 1, "2026-10-04T09:00:00Z").copy(isAdult = true)
-        val old = AiringSnapshot(listOf(adult), now.toEpochMilli(), hideNsfw = false)
+        val old = AiringSnapshot(listOf(adult), now.toEpochMilli(), hideNsfw = false, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION)
         val fetching = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         var saved: AiringSettings? = null
@@ -239,6 +239,52 @@ class AiringTest {
         release.complete(Unit)
         change.join()
         assertTrue(repository.state.value.snapshot.events.isEmpty())
+    }
+
+    @Test fun `Ecchi and adult tags are hidden in every selector and restored cache`() {
+        val safe = event(1, 1, "2026-10-04T10:00:00Z")
+        val ecchi = event(218217, 1, "2026-10-04T10:00:00Z").copy(genres = listOf("Comedy", "Ecchi", "Fantasy", "Romance"))
+        val tagged = event(208025, 1, "2026-10-04T10:00:00Z").copy(hasAdultTags = true)
+        val feed = listOf(safe, ecchi, tagged, ecchi.copy(episode = 2, genres = emptyList()))
+        val settings = AiringSettings(zone = "UTC")
+        val snapshot = AiringSnapshot(feed, now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION)
+        val repository = AiringRepository(settings, snapshot, fetch = { _, _ -> feed }, now = { now })
+        assertEquals(listOf(1), repository.state.value.snapshot.events.map { it.mediaId })
+        assertEquals(listOf(1), selectAiringEvents(feed, settings, now, AiringWindow.Now).map { it.mediaId })
+        assertEquals(listOf(1), selectScheduledEvents(feed, settings, now.atZone(java.time.ZoneOffset.UTC).toLocalDate()).map { it.mediaId })
+        assertEquals(4, filterAiringContent(feed, settings.copy(hideNsfw = false)).size)
+        val legacy = snapshot.copy(contentPolicyVersion = 0)
+        assertTrue(AiringRepository(settings, legacy, fetch = { _, _ -> feed }, now = { now }).state.value.snapshot.events.isEmpty())
+    }
+
+    @Test fun `presentation settings reuse the complete feed without refetching`() = runBlocking {
+        var requests = 0
+        val repository = AiringRepository(AiringSettings(), fetch = { _, _ -> requests++; listOf(event(1, 1, "2026-10-04T10:00:00Z")) }, now = { now })
+        repository.refresh()
+        repository.updateSettings(repository.state.value.settings.copy(historyDays = 5))
+        repository.updateSettings(repository.state.value.settings.copy(zone = "America/New_York", includeEstimated = false))
+        repository.refresh(force = true)
+        assertEquals(1, requests)
+        assertEquals(5, repository.state.value.settings.historyDays)
+    }
+
+    @Test fun `concurrent forced refreshes coalesce and provider cooldown survives force`() = runBlocking {
+        var instant = now
+        var requests = 0
+        val started = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val repository = AiringRepository(AiringSettings(), fetch = { _, _ ->
+            requests++; started.complete(Unit); finish.await(); throw AiringRateLimitException(now.plusSeconds(180).toEpochMilli())
+        }, now = { instant })
+        val first = launch { repository.refresh(force = true) }
+        started.await()
+        repeat(5) { repository.refresh(force = true) }
+        finish.complete(Unit); first.join()
+        instant = now.plusSeconds(90)
+        repository.refresh(force = true)
+        assertEquals(1, requests)
+        assertNotNull(repository.state.value.error)
+        assertFalse(repository.state.value.loading)
     }
 
     @Test fun `live gateway schedule and anime metadata smoke`() = runBlocking {

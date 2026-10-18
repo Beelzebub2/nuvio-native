@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,64 +19,92 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.nio.file.Files
 import java.time.Instant
-import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-internal class AiringClient {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val http = OkHttpClient.Builder().dns(DesktopIPv4FirstDns())
+internal class AiringRateLimitException(val retryAt: Long) : IOException("Schedule provider is rate limited; will retry after the cooldown")
+
+internal class AiringClient(
+    private val http: OkHttpClient = OkHttpClient.Builder().dns(DesktopIPv4FirstDns())
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS)
-        .callTimeout(20, TimeUnit.SECONDS).build()
+        .callTimeout(20, TimeUnit.SECONDS).build(),
+    private val gateway: String = (System.getenv("NUVIO_AIRING_GATEWAY")
+        ?: "https://nuvio-native-gateway.cloudflaredomainrrm.workers.dev").trimEnd('/'),
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    private val json = Json { ignoreUnknownKeys = true }
     private val mappingMutex = Mutex()
     private var mappings: JsonArray? = null
     private var mappingSavedAt = 0L
-    private val gateway = (System.getenv("NUVIO_AIRING_GATEWAY")
-        ?: "https://nuvio-native-gateway.cloudflaredomainrrm.workers.dev").trimEnd('/')
+    private val requestMutexes = ConcurrentHashMap<String, Mutex>()
+    private val staleGatewayUntil = ConcurrentHashMap<String, Long>()
+    private val cooldowns = ConcurrentHashMap<String, Long>()
+    private var nextAniListAt = 0L
+    private val classifications = mutableMapOf<Int, Pair<Long, AiringEvent>>()
 
     suspend fun schedule(settings: AiringSettings, now: Instant): List<AiringEvent> {
-        val today = now.atZone(ZoneId.of(settings.zone)).toLocalDate()
-        val first = today.minusDays((settings.historyDays - 1).toLong())
+        // UTC windows share cache entries across time zones and all history controls.
+        // Include the boundary days needed for local dates as far as UTC +/-14.
+        val today = now.atZone(ZoneOffset.UTC).toLocalDate()
+        val first = today.minusDays(MAX_AIRING_HISTORY_DAYS.toLong())
         if (settings.airType != "broadcast") {
-            // Tsuzuki excludes adult titles by default. The existing gateway does not
-            // support includeAdult. The dedicated adult route falls back to direct
-            // Tsuzuki until the updated gateway has been deployed.
             suspend fun releaseSchedule(start: java.time.LocalDate, days: Int): List<AiringEvent> {
                 val request = tsuzukiScheduleRequest(start, days, settings)
                 val response = gatewayGet(request.gatewayPath) ?: get(request.directUrl)
-                return parseTsuzukiSchedule(response, settings.airType, sourceExcludesAdult = settings.hideNsfw)
+                return parseTsuzukiSchedule(response, settings.airType)
             }
-            val recent = releaseSchedule(first, settings.historyDays + 2)
-            val week = releaseSchedule(today, 8)
-            // Keep all classification evidence until the repository combines new
-            // and retained episodes and applies the title-level policy.
-            return recent + week
+            val events = releaseSchedule(first, 6) + releaseSchedule(today.plusDays(1), 7)
+            return if (settings.hideNsfw) classifyReleases(events) else events
         }
         val result = mutableListOf<AiringEvent>()
         // Keep each request inside the gateway's existing start/range limits.
-        for ((from, until) in listOf(first to today.plusDays(2), today.plusDays(1) to today.plusDays(8))) {
-        val start = from.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond() - 1
-        val end = until.atStartOfDay(ZoneId.of(settings.zone)).toEpochSecond()
-        var complete = false
-        for (number in 1..20) {
-            val cached = gatewayGet("/schedule?start=$start&end=$end&page=$number")?.obj("data")
-            // Older gateway deployments omit isAdult. Never treat unknown as safe:
-            // request the original metadata from AniList before accepting a page.
-            val response = cached?.takeIf { data ->
-                !settings.hideNsfw || hasClassifiedAniListMedia(data.obj("Page"))
+        for ((from, until) in listOf(first to today.plusDays(1), today.plusDays(1) to today.plusDays(8))) {
+            val start = from.atStartOfDay(ZoneOffset.UTC).toEpochSecond() - 1
+            val end = until.atStartOfDay(ZoneOffset.UTC).toEpochSecond()
+            var complete = false
+            for (number in 1..20) {
+                val cached = gatewayGet("/schedule?start=$start&end=$end&page=$number")?.obj("data")
+                // Older gateway deployments omit isAdult. Never treat unknown as safe:
+                // request the original metadata from AniList before accepting a page.
+                val response = cached?.takeIf { data ->
+                    !settings.hideNsfw || hasClassifiedAniListMedia(data.obj("Page"))
+                }
+                    ?: graphql(SCHEDULE_QUERY, buildJsonObject {
+                        put("start", start); put("end", end); put("page", number)
+                    })
+                val page = response.obj("Page")
+                if (page["airingSchedules"] !is JsonArray) error("AniList returned no schedule")
+                result.addAll(parseAniListSchedule(page))
+                if (!page.obj("pageInfo").flag("hasNextPage")) { complete = true; break }
             }
-                ?: graphql(SCHEDULE_QUERY, buildJsonObject {
-                    put("start", start); put("end", end); put("page", number)
-                })
-            val page = response.obj("Page")
-            if (page["airingSchedules"] !is JsonArray) error("AniList returned no schedule")
-            result.addAll(parseAniListSchedule(page))
-            if (!page.obj("pageInfo").flag("hasNextPage")) { complete = true; break }
-        }
-        check(complete) { "Schedule is too large to load completely; choose fewer history days" }
+            check(complete) { "Schedule is too large to load completely; choose fewer history days" }
         }
         return result
+    }
+
+    private suspend fun classifyReleases(events: List<AiringEvent>): List<AiringEvent> {
+        val missing = events.map { it.mediaId }.distinct().sorted().filter {
+            classifications[it]?.first?.let { saved -> clock() - saved < 86400_000L } != true
+        }
+        for (ids in missing.chunked(50)) {
+            val data = gatewayGet("/classifications?ids=${ids.joinToString(",")}")?.obj("data")
+                ?: graphql(CLASSIFICATION_QUERY, buildJsonObject { put("ids", JsonArray(ids.map(::JsonPrimitive))) })
+            for (element in (data.obj("Page")["media"] as? JsonArray).orEmpty()) {
+                val media = element as? JsonObject ?: continue
+                val classified = eventFromAniList(media, 1, 1) ?: continue
+                if (classified.isAdult != null) classifications[classified.mediaId] = clock() to classified
+            }
+        }
+        return events.map { event ->
+            val metadata = classifications[event.mediaId]?.second
+            event.copy(isAdult = if (event.isAdult == true) true else metadata?.isAdult,
+                genres = metadata?.genres.orEmpty(), hasAdultTags = metadata?.hasAdultTags == true)
+        }
     }
 
     suspend fun details(id: Int, known: List<AiringEvent>, settings: AiringSettings): MetaDetails? = coroutineScope {
@@ -83,7 +112,7 @@ internal class AiringClient {
         val mediaRequest = async { optional {
             val cached = gatewayGet("/media?id=$id")?.obj("data")
             cached?.takeIf {
-                !settings.hideNsfw || (it.obj("Media")["isAdult"] as? JsonPrimitive)?.booleanOrNull != null
+                !settings.hideNsfw || eventFromAniList(it.obj("Media"), 1, 1)?.isAdult != null
             }
                 ?: graphql(MEDIA_QUERY, buildJsonObject { put("id", id) })
         } }
@@ -146,22 +175,44 @@ internal class AiringClient {
     }
 
     private suspend fun get(url: String): JsonObject = json.parseToJsonElement(
-        request(Request.Builder().url(url).header("Cache-Control", "no-cache").build())
+        request(Request.Builder().url(url).build())
     ).jsonObject
 
     private suspend fun gatewayGet(path: String): JsonObject? =
-        if (!gateway.startsWith("https://")) null else optional { get(gateway + path) }
+        if (!gateway.startsWith("https://")) null else try { get(gateway + path) }
+        catch (e: AiringRateLimitException) { throw e }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
 
     private suspend fun graphql(query: String, variables: JsonObject): JsonObject {
         val body = buildJsonObject { put("query", query); put("variables", variables) }.toString()
         val response = json.parseToJsonElement(request(Request.Builder()
-            .url("https://graphql.anilist.co").header("Cache-Control", "no-cache")
+            .url("https://graphql.anilist.co")
             .post(body.toRequestBody("application/json".toMediaType())).build())).jsonObject
         if ((response["errors"] as? JsonArray)?.isNotEmpty() == true) error("AniList could not return schedule data")
         return response["data"] as? JsonObject ?: error("AniList returned no data")
     }
 
-    private suspend fun request(request: Request): String = suspendCancellableCoroutine { continuation ->
+    private suspend fun request(request: Request): String {
+        val provider = if (request.url.host == "graphql.anilist.co" ||
+            (request.url.toString().startsWith(gateway + "/") && request.url.encodedPath in listOf("/schedule", "/media", "/classifications")))
+            "graphql.anilist.co" else if (request.url.toString().startsWith(gateway + "/release-schedule")) "tsuzuki.top" else request.url.host
+        return requestMutexes.computeIfAbsent(provider) { Mutex() }.withLock {
+            val gatewayRequest = request.url.toString().startsWith(gateway + "/")
+            // A stale first page may still need further pages from the gateway cache.
+            // The Worker enforces its upstream cooldown; direct access remains blocked.
+            cooldowns[provider]?.takeIf { it > clock() &&
+                !(gatewayRequest && (staleGatewayUntil[provider] ?: 0L) > clock())
+            }?.let { throw AiringRateLimitException(it) }
+            if (provider == "graphql.anilist.co") {
+                delay((nextAniListAt - clock()).coerceAtLeast(0))
+                nextAniListAt = clock() + 2100L
+            }
+            execute(request, provider)
+        }
+    }
+
+    private suspend fun execute(request: Request, provider: String): String = suspendCancellableCoroutine { continuation ->
         val call = http.newCall(request.newBuilder().header("Accept", "application/json")
             .header("User-Agent", "NuvioNative/1.0 (personal desktop schedule client)").build())
         continuation.invokeOnCancellation { call.cancel() }
@@ -172,16 +223,30 @@ internal class AiringClient {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val payload = response.use {
-                        if (!it.isSuccessful) {
-                            val retry = if (it.code == 429) " (rate limited; will retry later)" else ""
-                            error("${request.url.host}: HTTP ${it.code}$retry")
-                        }
                         val body = it.body ?: error("Schedule provider returned an empty response")
                         // Mapping lists are larger than paginated schedules; bound both.
                         body.byteStream().use { stream ->
                             val bytes = stream.readNBytes(12 * 1024 * 1024 + 1)
                             check(bytes.size <= 12 * 1024 * 1024) { "Schedule response is too large" }
-                            bytes.toString(Charsets.UTF_8)
+                            val payload = bytes.toString(Charsets.UTF_8)
+                            val gatewayLimited = it.code == 503 && runCatching {
+                                json.parseToJsonElement(payload).jsonObject.number("providerStatus") == 429
+                            }.getOrDefault(false)
+                            val graphqlLimited = provider == "graphql.anilist.co" && runCatching {
+                                (json.parseToJsonElement(payload).jsonObject["errors"] as? JsonArray).orEmpty()
+                                    .any { error -> (error as? JsonObject)?.number("status") == 429 }
+                            }.getOrDefault(false)
+                            if (it.code == 429 || gatewayLimited || graphqlLimited || it.header("X-RateLimit-Remaining") == "0" || it.header("X-Nuvio-Stale") == "1") {
+                                val reset = retryTime(it.headers, clock())
+                                cooldowns.merge(provider, reset, ::maxOf)
+                                if (it.header("X-Nuvio-Stale") == "1") staleGatewayUntil[provider] = reset
+                                if (!it.isSuccessful || graphqlLimited) {
+                                    staleGatewayUntil.remove(provider)
+                                    throw AiringRateLimitException(reset)
+                                }
+                            }
+                            check(it.isSuccessful) { "${request.url.host}: HTTP ${it.code}" }
+                            payload
                         }
                     }
                     if (continuation.isActive) continuation.resume(payload)
@@ -197,8 +262,18 @@ internal class AiringClient {
     catch (_: Exception) { null }
 
     companion object {
-        private val MEDIA_FIELDS = "id idMal isAdult title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes"
+        private val MEDIA_FIELDS = "id idMal isAdult tags{name isAdult} title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes"
         private val SCHEDULE_QUERY = "query(\$start:Int,\$end:Int,\$page:Int){Page(page:\$page,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:\$start,airingAt_lesser:\$end,sort:TIME){episode airingAt media{$MEDIA_FIELDS}}}}"
+        private val CLASSIFICATION_QUERY = "query(\$ids:[Int]){Page(perPage:50){media(id_in:\$ids,type:ANIME){$MEDIA_FIELDS}}}"
         private val MEDIA_QUERY = "query(\$id:Int){Media(id:\$id,type:ANIME){$MEDIA_FIELDS}Page(perPage:50){airingSchedules(mediaId:\$id,notYetAired:false,sort:EPISODE_DESC){episode airingAt}}}"
     }
+}
+
+internal fun retryTime(headers: Headers, now: Long): Long {
+    val retry = headers["Retry-After"]?.let { value ->
+        value.toLongOrNull()?.takeIf { it >= 0 }?.let { now + it.coerceAtMost(86400L) * 1000L }
+            ?: runCatching { ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() }.getOrNull()
+    }
+    val reset = headers["X-RateLimit-Reset"]?.toLongOrNull()?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)
+    return maxOf(now + 60_000L, retry ?: 0, reset ?: 0)
 }

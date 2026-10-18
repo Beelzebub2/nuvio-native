@@ -73,11 +73,54 @@ test('successful provider JSON is shared across equivalent requests', async () =
 });
 
 test('HTTP and GraphQL errors are never cached as a successful schedule', async () => {
-  for (const response of [() => new Response('no', { status: 429 }), () => Response.json({ errors: [{ message: 'quota' }] }), () => new Response('<html>blocked</html>')]) {
+  for (const response of [() => Response.json({ errors: [{ message: 'quota' }] }), () => new Response('<html>blocked</html>')]) {
     let calls = 0;
     const env = environment(async () => { calls++; return response(); });
     assert.equal((await handleRequest(new Request(schedule), ctx, env)).status, 503);
     assert.equal((await handleRequest(new Request(schedule), ctx, env)).status, 503);
     assert.equal(calls, 2);
   }
+});
+
+test('classification batches are fixed queries with canonical bounded IDs and adult tags', () => {
+  const first = providerRequest(new URL('https://gateway.test/classifications?ids=218217,31,31'));
+  assert.deepEqual(first.body.variables.ids, [31, 218217]);
+  assert.match(first.body.query, /tags\{name isAdult\}/);
+  assert.equal(first.ttl, 86400);
+  for (const ids of ['1,bad', '0', '2147483648', Array(51).fill('1').join(',')]) {
+    assert.throws(() => providerRequest(new URL(`https://gateway.test/classifications?ids=${ids}`)));
+  }
+});
+
+test('429 preserves provider cooldown across routes without repeatedly contacting upstream', async () => {
+  let calls = 0;
+  const env = environment(async () => { calls++; return new Response('rate limited', { status: 429, headers: { 'Retry-After': '180' } }); });
+  const first = await handleRequest(new Request(schedule), ctx, env);
+  assert.equal(first.status, 429);
+  assert.equal(first.headers.get('Retry-After'), '180');
+  assert.equal((await first.json()).providerStatus, 429);
+  const second = await handleRequest(new Request('https://gateway.test/media?id=21'), ctx, env);
+  assert.equal(second.status, 429);
+  assert.equal(calls, 1);
+});
+
+test('retained stale JSON is served during provider limits and fresh cache remains separate', async () => {
+  let calls = 0;
+  const env = environment(async () => {
+    calls++;
+    return calls === 1 ? Response.json({ data: { safe: true } }) : new Response('limited', { status: 429 });
+  });
+  const entries = new Map();
+  env.cache = {
+    match: async key => entries.get(key.url)?.clone(),
+    put: async (key, value) => { entries.set(key.url, value); },
+  };
+  assert.equal((await handleRequest(new Request(schedule), ctx, env)).status, 200);
+  for (const key of entries.keys()) if (!key.endsWith('&stale=1')) entries.delete(key);
+  const stale = await handleRequest(new Request(schedule), ctx, env);
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers.get('X-Nuvio-Stale'), '1');
+  assert.deepEqual(await stale.json(), { data: { safe: true } });
+  assert.equal((await handleRequest(new Request(schedule), ctx, env)).headers.get('X-Nuvio-Stale'), '1');
+  assert.equal(calls, 2);
 });

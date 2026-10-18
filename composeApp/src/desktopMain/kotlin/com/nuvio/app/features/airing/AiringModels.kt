@@ -10,6 +10,7 @@ import java.time.ZoneId
 
 /** Longest "Recently released" window offered on Home. */
 internal const val MAX_AIRING_HISTORY_DAYS = 5
+internal const val AIRING_CONTENT_POLICY_VERSION = 2
 
 /** A title the user hid from Recently released, Coming up and the Airing Now page. */
 @Serializable
@@ -49,6 +50,7 @@ internal data class AiringEvent(
     val isBreak: Boolean = false,
     // Null means the source has not verified the title's adult classification.
     val isAdult: Boolean? = null,
+    val hasAdultTags: Boolean = false,
 ) {
     fun preview() = MetaPreview(
         id = "$NATIVE_AIRING_PREFIX$mediaId", type = "series", name = name,
@@ -65,6 +67,7 @@ internal data class AiringSnapshot(
     val airType: String = "broadcast",
     // Legacy snapshots are unclassified, so they cannot be reused under either policy.
     val hideNsfw: Boolean? = null,
+    val contentPolicyVersion: Int = 0,
 )
 
 internal enum class AiringWindow(val label: String) {
@@ -73,14 +76,17 @@ internal enum class AiringWindow(val label: String) {
 
 /** Apply the same policy to live responses, saved snapshots, full catalogs and dated schedules. */
 internal fun AiringEvent.allowedBy(settings: AiringSettings): Boolean =
-    !settings.hideNsfw || (isAdult == false && genres.none { it.equals("Hentai", ignoreCase = true) })
+    !settings.hideNsfw || (isAdult == false && !hasAdultTags && genres.none(::nsfwGenre))
+
+private fun nsfwGenre(genre: String): Boolean =
+    genre.equals("Hentai", ignoreCase = true) || genre.equals("Ecchi", ignoreCase = true)
 
 internal fun filterAiringContent(events: List<AiringEvent>, settings: AiringSettings): List<AiringEvent> {
     if (!settings.hideNsfw) return events
     // A title cannot be shown as safe when different episodes disagree about its
     // classification. Evaluate the whole batch before dropping individual records.
     val blockedTitles = events.asSequence().filter { event ->
-        event.isAdult == true || event.genres.any { it.equals("Hentai", ignoreCase = true) }
+        event.isAdult == true || event.hasAdultTags || event.genres.any(::nsfwGenre)
     }.map { it.mediaId }.toSet()
     return events.filter { it.mediaId !in blockedTitles && it.allowedBy(settings) }
 }
@@ -150,6 +156,7 @@ internal fun hasClassifiedAniListMedia(page: JsonObject): Boolean =
 internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?): AiringEvent? {
     val id = media.number("id")?.takeIf { it > 0 } ?: return null
     if (episode == null || episode !in 1..10000 || airingAt == null || airingAt <= 0) return null
+    val adult = (media["isAdult"] as? JsonPrimitive)?.booleanOrNull
     return AiringEvent(
         mediaId = id, episode = episode, airingAt = airingAt,
         name = titleText(media["title"]) ?: "Anime $id", poster = coverText(media["coverImage"]),
@@ -157,11 +164,13 @@ internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?)
         description = media.text("description")?.replace(Regex("<[^>]+>"), " ")?.trim(),
         genres = (media["genres"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
         totalEpisodes = media.number("episodes"),
-        isAdult = (media["isAdult"] as? JsonPrimitive)?.booleanOrNull,
+        // Old gateway payloads without genres/tags cannot establish the stricter policy.
+        isAdult = adult?.takeIf { it || (media["genres"] is JsonArray && media["tags"] is JsonArray) },
+        hasAdultTags = (media["tags"] as? JsonArray).orEmpty().any { (it as? JsonObject)?.flag("isAdult") == true },
     )
 }
 
-internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String, sourceExcludesAdult: Boolean = false): List<AiringEvent> {
+internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String): List<AiringEvent> {
     val records = payload["episodes"] as? JsonArray ?: error("Schedule provider returned no episode list")
     return records.mapNotNull { element ->
         val item = element as? JsonObject ?: return@mapNotNull null
@@ -175,8 +184,7 @@ internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String, sourceEx
             airType = airType, estimated = item.flag("estimated") || !item.flag("exact"),
             isBreak = item.flag("isBreak") || item.obj("note").text("kind") == "break",
             isAdult = (item["isAdult"] as? JsonPrimitive)?.booleanOrNull
-                ?: (item.obj("media")["isAdult"] as? JsonPrimitive)?.booleanOrNull
-                ?: if (sourceExcludesAdult) false else null,
+                ?: (item.obj("media")["isAdult"] as? JsonPrimitive)?.booleanOrNull,
         )
     }
 }
