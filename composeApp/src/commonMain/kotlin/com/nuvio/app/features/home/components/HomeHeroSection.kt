@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.FullscreenActionButton
+import com.nuvio.app.core.ui.LocalFullscreenActionInTopBar
 import com.nuvio.app.core.ui.DesktopBackdropVerticalBias
 import com.nuvio.app.core.ui.NuvioDesktopImageScaling
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
@@ -638,7 +639,7 @@ private fun DesktopHomeHeroFrame(
                 )
             }
 
-            if (isFullscreenActionSupported) {
+            if (isFullscreenActionSupported && !LocalFullscreenActionInTopBar.current) {
                 FullscreenActionButton(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

@@ -1,6 +1,10 @@
 package com.nuvio.app
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.shape.CircleShape
+import com.nuvio.app.core.ui.isFullscreenActionSupported
+import com.nuvio.app.core.ui.LocalFullscreenActionInTopBar
+import com.nuvio.app.core.ui.FullscreenActionButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -285,6 +289,7 @@ internal fun MainTabsDestination(
                     navBarStyleSetting == NavBarStyle.ADAPTIVE
                 }
                 CompositionLocalProvider(
+                    LocalFullscreenActionInTopBar provides (useDesktopTopBar && isFullscreenActionSupported),
                     LocalNuvioBottomNavigationOverlayPadding provides if (useNativeBottomTabs) 49.dp else if (!isDesktop && !isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp else 0.dp,
                     LocalNuvioNavBarScrollState provides navBarScrollState,
                 ) {
@@ -376,6 +381,19 @@ internal fun MainTabsDestination(
                                 onClick = onSearchRequested ?: { onTabSelected(AppScreenTab.Search) },
                             )
                             Spacer(Modifier.width(12.dp))
+                            if (isFullscreenActionSupported) {
+                                FullscreenActionButton(
+                                    modifier = Modifier.border(
+                                        NuvioTokens.Border.thin,
+                                        MaterialTheme.nuvio.colors.textPrimary.copy(alpha = 0.14f),
+                                        CircleShape,
+                                    ),
+                                    buttonSize = 44.dp,
+                                    iconSize = 20.dp,
+                                    contentColor = MaterialTheme.nuvio.colors.textSecondary,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
                             NuvioIconActionButton(
                                 icon = Icons.Rounded.Settings,
                                 contentDescription = stringResource(Res.string.compose_nav_settings),
