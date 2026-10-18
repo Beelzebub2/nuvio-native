@@ -1,3 +1,11 @@
+Nuvio Native 1.0.13 refines the desktop experience with clearer navigation, settings, and layout behavior while preserving the airing, updater, and checksum improvements from 1.0.12.
+
+- Builds without a local IntroDB property now use the public IntroDB API by default, with coverage for the generated configuration.
+- Desktop detail pages keep their own fullscreen action while the shared top bar exposes a single fullscreen action everywhere else.
+- Airing Now settings use the application dialog surface with clearer schedule source and day-segment controls, plus bordered timezone validation and switches.
+- Library and Watch Later content now aligns with the desktop top bar through consistent insets.
+- The Settings sidebar is transparent, aligns its logo and divider below the top bar, and includes default Account and Collections/About entries with update controls.
+
 Nuvio Native 1.0.12 fixes airing classification, schedule controls, and provider resilience while preserving the cumulative desktop browsing experience, private updater, and checksum workflow.
 
 - Hide NSFW now excludes Ecchi, Hentai, adult titles, and adult-tagged anime across all feeds, details, restored snapshots, and caches. Sub/dub classifications use authoritative AniList metadata, including bulk classification for up to 50 IDs, with migration for older cached data.
