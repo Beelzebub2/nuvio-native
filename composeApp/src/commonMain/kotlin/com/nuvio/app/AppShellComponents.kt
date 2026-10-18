@@ -192,6 +192,7 @@ internal data class AppTabActions(
     val onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
     val onRequestedSettingsPageConsumed: () -> Unit = {},
     val onInitialHomeContentRendered: () -> Unit = {},
+    val onTabSelected: (AppScreenTab) -> Unit = {},
 )
 
 @Composable
@@ -278,6 +279,20 @@ internal fun AppTabHost(
                     onConnectCloudClick = actions.onConnectCloudClick,
                     onDownloadsClick = actions.onDownloadsClick,
                     disintegrationRequest = state.libraryDisintegrationRequest,
+                    headerAccessory = if (isDesktop) {
+                        {
+                            com.nuvio.app.features.watchlater.LibraryViewSwitcher(
+                                selected = com.nuvio.app.features.watchlater.LibraryView.Library,
+                                onSelect = { view ->
+                                    if (view == com.nuvio.app.features.watchlater.LibraryView.WatchLater) {
+                                        actions.onTabSelected(AppScreenTab.WatchLater)
+                                    }
+                                },
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
 
@@ -285,7 +300,9 @@ internal fun AppTabHost(
                 com.nuvio.app.features.watchlater.WatchLaterScreen(
                     onPosterClick = { actions.onPosterClick?.invoke(it) },
                     onPlay = { actions.onContinueWatchingClick?.invoke(it) },
-                    modifier = Modifier.fillMaxSize().padding(top = state.topChromePadding ?: 0.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    topChromePadding = state.topChromePadding,
+                    onShowLibrary = { actions.onTabSelected(AppScreenTab.Library) },
                 )
             }
 

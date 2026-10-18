@@ -107,6 +107,7 @@ fun LibraryScreen(
     onConnectCloudClick: (() -> Unit)? = null,
     onDownloadsClick: (() -> Unit)? = null,
     disintegrationRequest: DisintegrationRequest<String>? = null,
+    headerAccessory: (@Composable () -> Unit)? = null,
 ) {
     val uiState by remember {
         LibraryRepository.ensureLoaded()
@@ -344,6 +345,9 @@ fun LibraryScreen(
                                 }
                             },
                         )
+                        headerAccessory?.let { accessory ->
+                            Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) { accessory() }
+                        }
                         LibrarySourceSwitch(
                             selectedMode = sourceMode,
                             onModeSelected = { mode ->

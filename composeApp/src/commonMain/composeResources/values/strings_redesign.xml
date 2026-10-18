@@ -33,4 +33,15 @@
     <string name="watch_later_remove_named">Remove %1$s from Watch Later</string>
     <string name="watch_later_save">Save to Watch Later</string>
     <string name="watch_later_remove">Remove from Watch Later</string>
+    <string name="watch_later_saved">Saved to Watch Later</string>
+    <string name="watch_later_tip">Tip: middle-click any episode or poster to save it here. Right-click a card for its details.</string>
+    <string name="watch_later_empty_title">Nothing saved yet</string>
+    <string name="watch_later_empty_body">Save episodes and titles with the Watch Later button on a details page, or middle-click any poster.</string>
+    <string name="watch_later_choose_episode">Choose an episode</string>
+    <string name="watch_later_action_choose">Choose episode</string>
+    <string name="watch_later_in_progress">In progress</string>
+    <string name="watch_later_movie">Movie</string>
+    <string name="watch_later_series">Series</string>
+    <string name="watch_later_remove_failed">Couldn't remove: %1$s</string>
+    <string name="action_got_it">Got it</string>
 </resources>
