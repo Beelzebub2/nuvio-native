@@ -27,6 +27,19 @@
     <string name="episodes_summary_aired">%1$d aired</string>
     <string name="episodes_summary_next">Next episode %1$s</string>
 
+    <!-- Episode sources -->
+    <string name="streams_choose_source">Choose a source</string>
+    <string name="streams_sources_summary">%1$d sources from %2$d add-ons</string>
+    <string name="streams_sources_summary_searching">%1$d sources from %2$d add-ons · %3$d still searching</string>
+    <string name="streams_best_match">Best match</string>
+    <string name="streams_best_match_auto_play">Picked by your auto-play rules</string>
+    <string name="streams_best_match_ready">Highest quality that is ready to play</string>
+    <string name="streams_best_match_highest_quality">Highest quality found</string>
+    <string name="streams_quality_all">All</string>
+    <string name="streams_quality_other">Other</string>
+    <string name="streams_searching">searching…</string>
+    <string name="streams_episode_label">Season %1$d · Episode %2$d</string>
+
     <!-- Watch Later -->
     <string name="watch_later">Watch Later</string>
     <string name="watch_later_save_named">Save %1$s to Watch Later</string>

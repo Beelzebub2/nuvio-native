@@ -807,13 +807,24 @@ internal fun StreamList(
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     modifier: Modifier = Modifier,
+    groupByQuality: Boolean = false,
+    qualityFilter: StreamQuality? = null,
+    excludedStream: StreamItem? = null,
 ) {
     val filteredGroups = uiState.filteredGroups
     val hasGroups = filteredGroups.isNotEmpty()
     val hasAnyStreams = filteredGroups.any { it.streams.isNotEmpty() }
     val anyLoading = filteredGroups.any { it.isLoading }
-    val streamSections = remember(filteredGroups) {
-        buildStreamSectionRenderModels(filteredGroups)
+    val otherQualityLabel = stringResource(Res.string.streams_quality_other)
+    val streamSections = remember(filteredGroups, groupByQuality, qualityFilter, excludedStream, otherQualityLabel) {
+        if (groupByQuality) {
+            val visibleGroups = filteredGroups.map { group ->
+                group.copy(streams = group.streams.filterNot { it == excludedStream })
+            }
+            buildStreamSectionRenderModels(qualityGroups(visibleGroups, qualityFilter) { it.label(otherQualityLabel) })
+        } else {
+            buildStreamSectionRenderModels(filteredGroups)
+        }
     }
     val torrentNotSupportedText = stringResource(Res.string.streams_torrent_not_supported)
     val listState = rememberLazyListState()
@@ -860,7 +871,7 @@ internal fun StreamList(
                     streamSections.forEach { section ->
                         streamSection(
                             section = section,
-                            showHeader = uiState.selectedFilter == null,
+                            showHeader = groupByQuality || uiState.selectedFilter == null,
                             debridEnabled = debridEnabled,
                             appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                             showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
