@@ -37,6 +37,8 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.posterCardClickable
+import com.nuvio.app.isDesktop
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.features.library.toMetaPreview
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.profiles.ProfileRepository
@@ -96,14 +98,16 @@ internal fun WatchLaterScreen(
     val colors = MaterialTheme.nuvio.colors
     LaunchedEffect(profile.activeProfile) { WatchLaterRepository.resolveEpisodes() }
     val removeFailed = stringResource(Res.string.watch_later_remove_failed, "%s")
-    Column(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    val pageInset = if (isDesktop) desktopPageHorizontalPaddingForWidth(maxWidth.value) else 16.dp
+    Column(Modifier.fillMaxSize()) {
         NuvioScreenHeader(
             title = stringResource(Res.string.library_title),
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = pageInset),
             topPadding = topChromePadding,
         )
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = pageInset),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             LibraryViewSwitcher(
@@ -140,7 +144,7 @@ internal fun WatchLaterScreen(
         Spacer(Modifier.height(20.dp))
         if (saved.isEmpty()) {
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 32.dp).widthIn(max = 520.dp),
+                modifier = Modifier.padding(horizontal = pageInset, vertical = 32.dp).widthIn(max = 520.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -156,7 +160,7 @@ internal fun WatchLaterScreen(
                 )
             }
         }
-        Box(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+        Box(Modifier.weight(1f).padding(horizontal = pageInset)) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(290.dp),
                 state = grid,
@@ -279,5 +283,6 @@ internal fun WatchLaterScreen(
             }
             NuvioDesktopVerticalScrollbar(grid, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
+    }
     }
 }
