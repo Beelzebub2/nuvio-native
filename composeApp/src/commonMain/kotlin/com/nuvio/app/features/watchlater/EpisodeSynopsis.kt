@@ -45,6 +45,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.episode_hover_empty
 import nuvio.composeapp.generated.resources.episode_hover_loading
+import nuvio.composeapp.generated.resources.episode_hover_series_label
 import org.jetbrains.compose.resources.stringResource
 
 internal fun readableSynopsis(value: String?): String = value.orEmpty()
@@ -59,8 +60,9 @@ internal fun readableSynopsis(value: String?): String = value.orEmpty()
     .take(1600)
 
 /**
- * Desktop hover card for an episode. It shows the episode's own overview: the item's
- * description belongs to the series, so it is never used here.
+ * Desktop hover card for an episode. It shows the episode's own overview; the item's
+ * description belongs to the series, so it is only shown (labelled as such) when no
+ * episode overview is known, e.g. for airing schedules.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +87,7 @@ internal fun EpisodeSynopsis(item: MetaPreview, content: @Composable () -> Unit)
         }
     }
     val overview = readableSynopsis(episode.overview?.takeIf { it.isNotBlank() } ?: video?.overview)
+    val seriesSynopsis = readableSynopsis(item.description)
     val gapPx = with(LocalDensity.current) { NuvioTokens.Space.s12.roundToPx() }
     val edgePx = with(LocalDensity.current) { NuvioTokens.Space.s8.roundToPx() }
     TooltipBox(
@@ -96,8 +99,15 @@ internal fun EpisodeSynopsis(item: MetaPreview, content: @Composable () -> Unit)
                 showName = item.name,
                 episode = episode,
                 video = video,
-                overview = overview.ifBlank {
-                    stringResource(if (lookupFinished) Res.string.episode_hover_empty else Res.string.episode_hover_loading)
+                overview = when {
+                    overview.isNotBlank() -> overview
+                    seriesSynopsis.isNotBlank() -> seriesSynopsis
+                    else -> stringResource(if (lookupFinished) Res.string.episode_hover_empty else Res.string.episode_hover_loading)
+                },
+                overviewLabel = if (overview.isBlank() && seriesSynopsis.isNotBlank()) {
+                    stringResource(Res.string.episode_hover_series_label)
+                } else {
+                    null
                 },
             )
         },
@@ -110,6 +120,7 @@ private fun EpisodeHoverCard(
     episode: WatchLaterEpisode,
     video: MetaVideo?,
     overview: String,
+    overviewLabel: String? = null,
 ) {
     val colors = MaterialTheme.nuvio.colors
     val meta = listOfNotNull(
@@ -165,6 +176,13 @@ private fun EpisodeHoverCard(
                         maxLines = 1,
                     )
                 }
+            }
+            overviewLabel?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.textMuted,
+                )
             }
             Text(
                 text = overview,

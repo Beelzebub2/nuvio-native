@@ -177,12 +177,40 @@ class AiringTest {
         var persisted: AiringSettings? = null
         val repository = AiringRepository(AiringSettings(), AiringSnapshot(listOf(event(1, 1, "2026-10-04T09:00:00Z")), hideNsfw = true),
             fetch = { settings, _ -> requested = settings; emptyList() }, saveSettings = { persisted = it }, now = { now })
-        val settings = AiringSettings(airType = "dub", historyDays = 7)
+        val settings = AiringSettings(airType = "dub", historyDays = MAX_AIRING_HISTORY_DAYS)
         repository.updateSettings(settings)
         assertEquals(settings, requested)
         assertEquals(settings, persisted)
         assertTrue(repository.state.value.snapshot.events.isEmpty())
         assertEquals("dub", repository.state.value.snapshot.airType)
+    }
+
+    @Test fun `history beyond five days is rejected`() = runBlocking {
+        val repository = AiringRepository(AiringSettings(), fetch = { _, _ -> emptyList() }, now = { now })
+        try { repository.updateSettings(AiringSettings(historyDays = 6)); fail("Six days must be rejected") } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun `hidden titles leave recent and scheduled feeds and can be shown again`() = runBlocking {
+        val hiddenEvent = event(21, 3, "2026-10-04T09:00:00Z")
+        val keptEvent = event(22, 5, "2026-10-04T10:00:00Z")
+        var persisted: AiringSettings? = null
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(hiddenEvent, keptEvent), now.toEpochMilli(), hideNsfw = true),
+            fetch = { _, _ -> error("Hiding must not refetch") }, saveSettings = { persisted = it }, now = { now })
+        repository.hide(hiddenEvent)
+        val settings = repository.state.value.settings
+        assertEquals(listOf(21), settings.hidden.map { it.mediaId })
+        assertEquals(settings, persisted)
+        val recent = selectAiringEvents(listOf(hiddenEvent, keptEvent), settings, now, AiringWindow.Now)
+        assertEquals(listOf(22), recent.map { it.mediaId })
+        val today = now.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+        assertEquals(listOf(22), selectScheduledEvents(listOf(hiddenEvent, keptEvent), settings, today).map { it.mediaId })
+
+        repository.showAgain(21)
+        assertTrue(repository.state.value.settings.hidden.isEmpty())
+        repository.hide(hiddenEvent)
+        repository.hide(keptEvent)
+        repository.showAllAgain()
+        assertTrue(repository.state.value.settings.hidden.isEmpty())
     }
 
     @Test fun `legacy cache and a different NSFW policy never reuse unclassified snapshots`() {

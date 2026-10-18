@@ -60,10 +60,10 @@ class AiringBrowserTest {
                 AiringBrowser(Modifier, false, "Now", onPosterClick = {}, onPosterLongClick = { menus++ }, repository = repository)
             }
         } }
-        compose.onNodeWithText("Episode 7", substring = true).performMouseInput { moveTo(center) }
+        compose.onNodeWithText("Episode 7 ·", substring = true).performMouseInput { moveTo(center) }
         compose.mainClock.advanceTimeBy(1_500)
         compose.onNodeWithText(event.description!!).assertIsDisplayed()
-        compose.onNodeWithText("Episode 7", substring = true).performMouseInput { click(button = MouseButton.Secondary) }
+        compose.onNodeWithText("Episode 7 ·", substring = true).performMouseInput { click(button = MouseButton.Secondary) }
         compose.runOnIdle {
             assertEquals(event.preview().id, opened?.id)
             assertEquals(null, opened?.watchLaterEpisode)
