@@ -1,6 +1,12 @@
 package com.nuvio.app.features.details.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.ui.geometry.Offset
+import com.nuvio.app.core.ui.NuvioContextMenu
+import com.nuvio.app.core.ui.NuvioContextMenuEntry
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -229,4 +235,78 @@ private fun EpisodeActionSheetHeader(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** Desktop counterpart of [EpisodeWatchedActionSheet], opened at the pointer or under ⋯. */
+@Composable
+fun EpisodeContextMenu(
+    episode: MetaVideo,
+    anchorInRoot: Offset,
+    seasonLabel: String,
+    isEpisodeWatched: Boolean,
+    canMarkPreviousEpisodes: Boolean,
+    arePreviousEpisodesWatched: Boolean,
+    isSeasonWatched: Boolean,
+    isSavedForLater: Boolean?,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onToggleWatched: () -> Unit,
+    onTogglePreviousWatched: () -> Unit,
+    onToggleSeasonWatched: () -> Unit,
+    onToggleWatchLater: () -> Unit,
+    onPlayManually: (() -> Unit)? = null,
+) {
+    val entries = buildList {
+        add(NuvioContextMenuEntry.Action(stringResource(Res.string.action_play), onPlay, Icons.Filled.PlayArrow))
+        onPlayManually?.let {
+            add(NuvioContextMenuEntry.Action(stringResource(Res.string.play_manually), it, Icons.Filled.Layers))
+        }
+        add(NuvioContextMenuEntry.Divider)
+        add(
+            NuvioContextMenuEntry.Action(
+                label = stringResource(if (isEpisodeWatched) Res.string.episode_mark_unwatched else Res.string.episode_mark_watched),
+                onClick = onToggleWatched,
+                icon = Icons.Filled.CheckCircle,
+            ),
+        )
+        if (canMarkPreviousEpisodes) {
+            add(
+                NuvioContextMenuEntry.Action(
+                    label = stringResource(
+                        if (arePreviousEpisodesWatched) Res.string.episode_mark_previous_unwatched else Res.string.episode_mark_previous_watched,
+                    ),
+                    onClick = onTogglePreviousWatched,
+                    icon = Icons.Filled.DoneAll,
+                ),
+            )
+        }
+        add(
+            NuvioContextMenuEntry.Action(
+                label = if (isSeasonWatched) {
+                    stringResource(Res.string.episode_mark_season_unwatched, seasonLabel)
+                } else {
+                    stringResource(Res.string.episode_mark_season_watched, seasonLabel)
+                },
+                onClick = onToggleSeasonWatched,
+                icon = Icons.Filled.PlaylistAddCheckCircle,
+            ),
+        )
+        isSavedForLater?.let { saved ->
+            add(NuvioContextMenuEntry.Divider)
+            add(
+                NuvioContextMenuEntry.Action(
+                    label = stringResource(if (saved) Res.string.watch_later_remove else Res.string.watch_later_save),
+                    onClick = onToggleWatchLater,
+                    icon = if (saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                ),
+            )
+        }
+    }
+    NuvioContextMenu(
+        anchorInRoot = anchorInRoot,
+        entries = entries,
+        onDismiss = onDismiss,
+        headerCode = localizedSeasonEpisodeCode(seasonNumber = episode.season, episodeNumber = episode.episode),
+        headerTitle = episode.title,
+    )
 }

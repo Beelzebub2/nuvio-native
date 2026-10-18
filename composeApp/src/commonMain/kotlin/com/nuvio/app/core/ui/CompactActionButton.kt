@@ -63,22 +63,25 @@ private fun rememberActionColors(
 ): ActionColors {
     val colors = MaterialTheme.nuvio.colors
     val scheme = MaterialTheme.colorScheme
-    val effectiveTone = if (selected && tone in setOf(NuvioCompactActionTone.Secondary, NuvioCompactActionTone.Ghost)) {
-        NuvioCompactActionTone.Primary
-    } else {
-        tone
-    }
-    val baseContainer = when (effectiveTone) {
-        NuvioCompactActionTone.Emphasized -> colors.accent
-        NuvioCompactActionTone.Tonal -> colors.surfaceCard
-        NuvioCompactActionTone.Quiet -> colors.surface
-        NuvioCompactActionTone.Danger -> colors.danger.copy(alpha = 0.12f)
-        NuvioCompactActionTone.Primary -> scheme.onBackground
-        NuvioCompactActionTone.Secondary -> colors.textPrimary.copy(alpha = 0.08f)
-        NuvioCompactActionTone.Ghost -> Color.Transparent
+    // A toggled-on Secondary/Ghost action gets a stronger tint, never the Primary fill, so the
+    // play action stays the only solid button in a row.
+    val isSelectedToggle = selected && tone in setOf(NuvioCompactActionTone.Secondary, NuvioCompactActionTone.Ghost)
+    val effectiveTone = tone
+    val baseContainer = when {
+        isSelectedToggle -> colors.textPrimary.copy(alpha = 0.20f)
+        else -> when (effectiveTone) {
+            NuvioCompactActionTone.Emphasized -> colors.accent
+            NuvioCompactActionTone.Tonal -> colors.surfaceCard
+            NuvioCompactActionTone.Quiet -> colors.surface
+            NuvioCompactActionTone.Danger -> colors.danger.copy(alpha = 0.12f)
+            NuvioCompactActionTone.Primary -> scheme.onBackground
+            NuvioCompactActionTone.Secondary -> colors.textPrimary.copy(alpha = 0.08f)
+            NuvioCompactActionTone.Ghost -> Color.Transparent
+        }
     }
     val foreground = when {
         !enabled -> colors.textDisabled
+        isSelectedToggle -> colors.textPrimary
         effectiveTone == NuvioCompactActionTone.Emphasized -> colors.onAccent
         effectiveTone == NuvioCompactActionTone.Primary -> scheme.background
         effectiveTone == NuvioCompactActionTone.Danger -> colors.danger
@@ -104,6 +107,7 @@ private fun rememberActionColors(
             !enabled -> colors.borderSubtle
             focused -> colors.focusRing
             effectiveTone == NuvioCompactActionTone.Emphasized -> colors.accent
+            isSelectedToggle -> colors.textPrimary.copy(alpha = if (hovered) 0.40f else 0.30f)
             effectiveTone == NuvioCompactActionTone.Primary -> Color.Transparent
             effectiveTone == NuvioCompactActionTone.Danger -> colors.danger.copy(alpha = if (hovered) 0.55f else 0.30f)
             effectiveTone == NuvioCompactActionTone.Secondary -> colors.textPrimary.copy(alpha = if (hovered) 0.18f else 0.10f)
