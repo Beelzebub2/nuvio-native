@@ -53,6 +53,7 @@ fun <T> NuvioSegmentedControl(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     size: NuvioSegmentedSize = NuvioSegmentedSize.Regular,
+    onSecondaryClick: ((T) -> Unit)? = null,
 ) {
     val colors = MaterialTheme.nuvio.colors
     val containerShape = RoundedCornerShape(NuvioTokens.Radius.lg)
@@ -84,6 +85,7 @@ fun <T> NuvioSegmentedControl(
                     .height(size.height)
                     .clip(RoundedCornerShape(NuvioTokens.Radius.md))
                     .background(background)
+                    .secondaryClick(onSecondaryClick?.let { onSecondary -> { onSecondary(segment.key) } })
                     .selectable(
                         selected = isSelected,
                         interactionSource = interactionSource,

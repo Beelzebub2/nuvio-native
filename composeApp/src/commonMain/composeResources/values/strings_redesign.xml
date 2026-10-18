@@ -14,8 +14,19 @@
     <string name="detail_trailer_muted">Trailer muted</string>
     <string name="detail_trailer_sound_on">Trailer sound on</string>
 
+    <!-- Episodes -->
+    <string name="episode_status_up_next">Up next</string>
+    <string name="episodes_hide_spoilers">Hide spoilers</string>
+    <string name="episodes_view_list">List</string>
+    <string name="episodes_view_cards">Cards</string>
+    <string name="episodes_summary_watched">%1$d of %2$d watched</string>
+    <string name="episodes_summary_aired">%1$d aired</string>
+    <string name="episodes_summary_next">Next episode %1$s</string>
+
     <!-- Watch Later -->
     <string name="watch_later">Watch Later</string>
     <string name="watch_later_save_named">Save %1$s to Watch Later</string>
     <string name="watch_later_remove_named">Remove %1$s from Watch Later</string>
+    <string name="watch_later_save">Save to Watch Later</string>
+    <string name="watch_later_remove">Remove from Watch Later</string>
 </resources>
