@@ -39,7 +39,7 @@ internal class AiringRepository(
 
     suspend fun updateSettings(settings: AiringSettings) {
         ZoneId.of(settings.zone)
-        require(settings.historyDays in 1..7 && settings.airType in listOf("broadcast", "sub", "dub"))
+        require(settings.historyDays in 1..MAX_AIRING_HISTORY_DAYS && settings.airType in listOf("broadcast", "sub", "dub"))
         mutex.withLock {
             val previous = _state.value
             saveSettings(settings)
@@ -53,6 +53,22 @@ internal class AiringRepository(
             attemptedAt = 0
         }
         refresh(force = true)
+    }
+
+    /** Hides a title everywhere airing is shown; no refetch is needed. */
+    suspend fun hide(event: AiringEvent) = updateHidden { hidden ->
+        hidden.filterNot { it.mediaId == event.mediaId } +
+            HiddenAiringTitle(event.mediaId, event.name, event.poster, now().toEpochMilli())
+    }
+
+    suspend fun showAgain(mediaId: Int) = updateHidden { hidden -> hidden.filterNot { it.mediaId == mediaId } }
+
+    suspend fun showAllAgain() = updateHidden { emptyList() }
+
+    private suspend fun updateHidden(transform: (List<HiddenAiringTitle>) -> List<HiddenAiringTitle>) = mutex.withLock {
+        val settings = _state.value.settings.let { it.copy(hidden = transform(it.hidden)) }
+        saveSettings(settings)
+        _state.update { it.copy(settings = settings) }
     }
 
     suspend fun refresh(force: Boolean = false) = mutex.withLock {
@@ -92,6 +108,8 @@ internal object NativeAiring {
     val repository by lazy {
         val settings = runCatching { json.decodeFromString<AiringSettings>(store.getString("settings").orEmpty()) }
             .getOrNull()?.takeIf { runCatching { ZoneId.of(it.zone) }.isSuccess && it.historyDays in 1..7 && it.airType in listOf("broadcast", "sub", "dub") }
+            // Earlier builds allowed up to 7 days of history.
+            ?.let { it.copy(historyDays = it.historyDays.coerceAtMost(MAX_AIRING_HISTORY_DAYS)) }
             ?: AiringSettings()
         val snapshot = runCatching { json.decodeFromString<AiringSnapshot>(store.getString("snapshot").orEmpty()) }
             .getOrDefault(AiringSnapshot())

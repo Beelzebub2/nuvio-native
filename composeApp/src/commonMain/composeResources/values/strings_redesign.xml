@@ -7,6 +7,7 @@
     <!-- Episode hover card -->
     <string name="episode_hover_loading">Loading synopsis…</string>
     <string name="episode_hover_empty">No synopsis for this episode yet.</string>
+    <string name="episode_hover_series_label">About the series</string>
 
     <!-- Details hero -->
     <string name="detail_synopsis_about">About</string>
@@ -47,6 +48,44 @@
     <string name="settings_group_sources">Sources</string>
     <string name="settings_group_integrations">Integrations</string>
     <string name="settings_group_system">System</string>
+
+    <!-- Home: airing -->
+    <string name="airing_now_title">Airing Now</string>
+    <string name="airing_recent_title">Recently released</string>
+    <string name="airing_recent_empty">No new episodes in the last %1$d days.</string>
+    <string name="airing_days_last">Last</string>
+    <string name="airing_days_unit">days</string>
+    <string name="airing_days_label">Last %1$d days</string>
+    <string name="airing_action_browse">Browse</string>
+    <string name="airing_action_settings">Settings</string>
+    <string name="airing_action_refresh">Refresh</string>
+    <string name="airing_action_hide">Hide</string>
+    <string name="airing_hide_named">Hide %1$s from Recently released</string>
+    <string name="airing_hidden">Hidden %1$d</string>
+    <string name="airing_hidden_title">Hidden from Recently released</string>
+    <string name="airing_hidden_note">They stay out of Recently released, Coming up and the Airing Now page. Your library, Watch Later and notifications are not affected.</string>
+    <string name="airing_hidden_toast">Hid %1$s. Find it under Hidden to show it again.</string>
+    <string name="airing_show_again">Show again</string>
+    <string name="airing_show_again_named">Show %1$s again</string>
+    <string name="airing_show_all_again">Show all again</string>
+    <string name="airing_previous_items">Previous airing items</string>
+    <string name="airing_next_items">Next airing items</string>
+    <string name="airing_saved_schedules">Showing saved schedules.</string>
+    <string name="airing_try_broadcast">Try Broadcast in Settings for an independent source.</string>
+    <string name="airing_coming_up">Coming up</string>
+    <string name="airing_coming_up_empty">No scheduled episodes for this day.</string>
+    <string name="airing_today">Today</string>
+    <string name="airing_episode_label">Episode %1$d · %2$s</string>
+    <string name="airing_estimated">(estimated)</string>
+    <string name="airing_updated_at">Updated %1$s</string>
+    <string name="airing_footer">Schedules refresh automatically. Middle-click a poster to save it to Watch Later.</string>
+    <string name="airing_settings_title">Airing Now settings</string>
+    <string name="airing_settings_intro">Broadcast uses AniList's original airing times. Sub and dub use Tsuzuki's release schedules.</string>
+    <string name="airing_settings_zone">Time zone</string>
+    <string name="airing_settings_zone_example">Example: Europe/Lisbon</string>
+    <string name="airing_settings_history">Recently released window: %1$d days</string>
+    <string name="airing_settings_estimated">Include estimated times</string>
+    <string name="airing_settings_hide_nsfw">Hide NSFW / hentai anime</string>
 
     <!-- Watch Later -->
     <string name="watch_later">Watch Later</string>

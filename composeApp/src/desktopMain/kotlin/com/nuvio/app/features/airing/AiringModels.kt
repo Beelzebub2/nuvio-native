@@ -8,6 +8,18 @@ import kotlinx.serialization.json.*
 import java.time.Instant
 import java.time.ZoneId
 
+/** Longest "Recently released" window offered on Home. */
+internal const val MAX_AIRING_HISTORY_DAYS = 5
+
+/** A title the user hid from Recently released, Coming up and the Airing Now page. */
+@Serializable
+internal data class HiddenAiringTitle(
+    val mediaId: Int,
+    val name: String,
+    val poster: String? = null,
+    val hiddenAt: Long = 0,
+)
+
 @Serializable
 internal data class AiringSettings(
     val zone: String = "Europe/Lisbon",
@@ -15,7 +27,10 @@ internal data class AiringSettings(
     val historyDays: Int = 2,
     val includeEstimated: Boolean = true,
     val hideNsfw: Boolean = true,
-)
+    val hidden: List<HiddenAiringTitle> = emptyList(),
+) {
+    val hiddenMediaIds: Set<Int> get() = hidden.mapTo(mutableSetOf()) { it.mediaId }
+}
 
 @Serializable
 internal data class AiringEvent(
@@ -88,9 +103,10 @@ internal fun selectAiringEvents(
     val zone = ZoneId.of(settings.zone)
     val today = now.atZone(zone).toLocalDate()
     val start = today.minusDays((settings.historyDays - 1).toLong())
+    val hiddenIds = settings.hiddenMediaIds
     val eligible = filterAiringContent(events, settings).filter {
         !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
-            (settings.includeEstimated || !it.estimated)
+            (settings.includeEstimated || !it.estimated) && it.mediaId !in hiddenIds
     }
     fun inWindow(event: AiringEvent): Boolean {
         val date = Instant.ofEpochSecond(event.airingAt).atZone(zone).toLocalDate()
@@ -101,7 +117,8 @@ internal fun selectAiringEvents(
 
 internal fun selectScheduledEvents(events: List<AiringEvent>, settings: AiringSettings, date: java.time.LocalDate): List<AiringEvent> =
     filterAiringContent(events, settings).filter { !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
-        (settings.includeEstimated || !it.estimated) && Instant.ofEpochSecond(it.airingAt).atZone(ZoneId.of(settings.zone)).toLocalDate() == date }
+        (settings.includeEstimated || !it.estimated) && it.mediaId !in settings.hiddenMediaIds &&
+        Instant.ofEpochSecond(it.airingAt).atZone(ZoneId.of(settings.zone)).toLocalDate() == date }
         .sortedBy { it.airingAt }.distinctBy { "${it.mediaId}:${it.episode}" }
 
 internal fun JsonObject.text(key: String): String? =

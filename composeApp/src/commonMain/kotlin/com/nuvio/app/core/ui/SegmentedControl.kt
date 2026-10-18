@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -37,6 +38,7 @@ data class NuvioSegment<T>(
     val label: String,
     val count: String? = null,
     val contentDescription: String? = null,
+    val testTag: String? = null,
 )
 
 enum class NuvioSegmentedSize(val height: Dp, val horizontalPadding: Dp) {
@@ -93,6 +95,7 @@ fun <T> NuvioSegmentedControl(
                         role = Role.Tab,
                         onClick = { onSelect(segment.key) },
                     )
+                    .then(segment.testTag?.let { Modifier.testTag(it) } ?: Modifier)
                     .then(
                         segment.contentDescription?.let { description ->
                             Modifier.semantics { contentDescription = description }
