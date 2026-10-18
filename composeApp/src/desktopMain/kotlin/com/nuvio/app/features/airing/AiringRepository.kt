@@ -32,15 +32,18 @@ internal class AiringRepository(
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(AiringState(initialSettings, initialSnapshot.takeIf {
-        it.airType == initialSettings.airType && it.hideNsfw == initialSettings.hideNsfw
-    } ?: AiringSnapshot(airType = initialSettings.airType, hideNsfw = initialSettings.hideNsfw), now()))
+        it.airType == initialSettings.airType && it.hideNsfw == initialSettings.hideNsfw &&
+            it.contentPolicyVersion == AIRING_CONTENT_POLICY_VERSION
+    }?.let { it.copy(events = filterAiringContent(it.events, initialSettings)) }
+        ?: AiringSnapshot(airType = initialSettings.airType, hideNsfw = initialSettings.hideNsfw), now()))
     val state = _state.asStateFlow()
-    private var attemptedAt = 0L
+    private var attemptedAt: Long? = null
+    private var retryAt = 0L
 
     suspend fun updateSettings(settings: AiringSettings) {
         ZoneId.of(settings.zone)
         require(settings.historyDays in 1..MAX_AIRING_HISTORY_DAYS && settings.airType in listOf("broadcast", "sub", "dub"))
-        mutex.withLock {
+        val sourceChanged = mutex.withLock {
             val previous = _state.value
             saveSettings(settings)
             _state.value = previous.copy(settings = settings, error = null,
@@ -50,9 +53,12 @@ internal class AiringRepository(
             if (previous.settings.hideNsfw != settings.hideNsfw) {
                 com.nuvio.app.features.details.MetaDetailsRepository.invalidateNativeAiring()
             }
-            attemptedAt = 0
+            val changed = previous.settings.airType != settings.airType || previous.settings.hideNsfw != settings.hideNsfw
+            if (changed) attemptedAt = null
+            changed
         }
-        refresh(force = true)
+        // Dates, history length and estimated episodes are local views of the same feed.
+        if (sourceChanged || state.value.snapshot.savedAt == 0L) refresh(force = sourceChanged)
     }
 
     /** Hides a title everywhere airing is shown; no refetch is needed. */
@@ -71,33 +77,39 @@ internal class AiringRepository(
         _state.update { it.copy(settings = settings) }
     }
 
-    suspend fun refresh(force: Boolean = false) = mutex.withLock {
-        val instant = now()
-        _state.update { it.copy(now = instant) }
-        val old = _state.value
-        val age = instant.toEpochMilli() - old.snapshot.savedAt
-        if (!force && old.snapshot.savedAt > 0 && age in 0 until 5 * 60_000L) return@withLock
-        if (!force && instant.toEpochMilli() - attemptedAt in 0 until 60_000L) return@withLock
-        attemptedAt = instant.toEpochMilli()
-        _state.update { it.copy(loading = true) }
+    suspend fun refresh(force: Boolean = false) {
+        // A second refresh observes the in-flight result instead of queueing another fetch.
+        if (!mutex.tryLock()) return
         try {
-            val fresh = fetch(old.settings, instant)
-            val cutoff = instant.minusSeconds(8 * 86400).epochSecond
-            val retainedPast = old.snapshot.events.filter { it.airingAt <= instant.epochSecond }
-            val eligible = (retainedPast + fresh).filter { it.airingAt >= cutoff }
-            val merged = filterAiringContent(eligible, old.settings)
-                .associateBy { "${it.mediaId}:${it.episode}:${it.airType}" }.values.toList()
-            val snapshot = AiringSnapshot(merged, instant.toEpochMilli(),
-                old.settings.airType, old.settings.hideNsfw)
-            // Persistence failure must not throw away a successful live response.
-            try { saveSnapshot(snapshot) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-            _state.value = old.copy(snapshot = snapshot, now = now(), error = null)
-        } catch (e: CancellationException) {
-            _state.update { it.copy(loading = false) }
-            throw e
-        } catch (e: Exception) {
-            _state.value = old.copy(now = now(), error = e.message ?: "Schedule source is unavailable")
-        }
+            val instant = now()
+            _state.update { it.copy(now = instant) }
+            val old = _state.value
+            val age = instant.toEpochMilli() - old.snapshot.savedAt
+            if (!force && old.snapshot.savedAt > 0 && age in 0 until 5 * 60_000L) return
+            if (instant.toEpochMilli() < retryAt) return
+            if (attemptedAt?.let { instant.toEpochMilli() - it in 0 until 60_000L } == true) return
+            attemptedAt = instant.toEpochMilli()
+            _state.update { it.copy(loading = true) }
+            try {
+                val fresh = fetch(old.settings, instant)
+                val cutoff = instant.minusSeconds(8 * 86400).epochSecond
+                val retainedPast = old.snapshot.events.filter { it.airingAt <= instant.epochSecond }
+                val eligible = (retainedPast + fresh).filter { it.airingAt >= cutoff }
+                val merged = filterAiringContent(eligible, old.settings)
+                    .associateBy { "${it.mediaId}:${it.episode}:${it.airType}" }.values.toList()
+                val snapshot = AiringSnapshot(merged, instant.toEpochMilli(),
+                    old.settings.airType, old.settings.hideNsfw, AIRING_CONTENT_POLICY_VERSION)
+                // Persistence failure must not throw away a successful live response.
+                try { saveSnapshot(snapshot) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                _state.value = old.copy(snapshot = snapshot, now = now(), error = null)
+            } catch (e: CancellationException) {
+                _state.update { it.copy(loading = false) }
+                throw e
+            } catch (e: Exception) {
+                if (e is AiringRateLimitException) retryAt = maxOf(retryAt, e.retryAt)
+                _state.value = old.copy(now = now(), error = e.message ?: "Schedule source is unavailable")
+            }
+        } finally { mutex.unlock() }
     }
 }
 

@@ -42,7 +42,7 @@ class AiringBrowserTest {
     private val now = Instant.parse("2026-10-04T12:00:00Z")
     private val events = (1..40).map { AiringEvent(it, 7, now.minusSeconds(3600).epochSecond, "Anime $it", isAdult = false) }
     private fun repository() = AiringRepository(AiringSettings(zone = "UTC"),
-        AiringSnapshot(events, now.toEpochMilli(), hideNsfw = true), fetch = { _, _ -> events }, now = { now })
+        AiringSnapshot(events, now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION), fetch = { _, _ -> events }, now = { now })
     private fun posterTitle(name: String) = compose.onAllNodesWithText(name, useUnmergedTree = true).let {
         // The fixture's missing artwork also displays its title; target the label below it.
         it[it.fetchSemanticsNodes().lastIndex]
@@ -50,7 +50,7 @@ class AiringBrowserTest {
 
     @Test fun `airing episode labels show synopsis and open title details with right click`() {
         val event = AiringEvent(61, 7, now.minusSeconds(86400).epochSecond, "Label Anime", description = "The parent anime synopsis.", isAdult = false)
-        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(event), now.toEpochMilli(), hideNsfw = true),
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(event), now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { _, _ -> listOf(event) }, now = { now })
         var opened: MetaPreview? = null
         var menus = 0
@@ -74,7 +74,7 @@ class AiringBrowserTest {
     @Test fun `recent and today share one feed and future days are in the schedule below`() {
         val recent = AiringEvent(51, 3, now.minusSeconds(86400).epochSecond, "Recent Anime", isAdult = false)
         val future = AiringEvent(52, 4, now.plusSeconds(86400).epochSecond, "Future Anime", isAdult = false)
-        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(recent, future), now.toEpochMilli(), hideNsfw = true),
+        val repository = AiringRepository(AiringSettings(zone = "UTC"), AiringSnapshot(listOf(recent, future), now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION),
             fetch = { _, _ -> listOf(recent, future) }, now = { now })
         compose.setContent { NuvioTheme {
             Column(Modifier.size(1024.dp, 760.dp).verticalScroll(rememberScrollState())) {
@@ -129,7 +129,7 @@ class AiringBrowserTest {
         val adult = AiringEvent(82, 1, now.minusSeconds(3600).epochSecond, "Adult Example", isAdult = true)
         val feed = listOf(normal, adult)
         val repository = AiringRepository(AiringSettings(zone = "UTC"),
-            AiringSnapshot(feed, now.toEpochMilli(), hideNsfw = true), fetch = { _, _ -> feed }, now = { now })
+            AiringSnapshot(feed, now.toEpochMilli(), hideNsfw = true, contentPolicyVersion = AIRING_CONTENT_POLICY_VERSION), fetch = { _, _ -> feed }, now = { now })
         compose.setContent { NuvioTheme {
             Box(Modifier.size(1024.dp, 760.dp)) {
                 AiringBrowser(Modifier, expanded = false, initialWindow = "Now", onPosterClick = {},
