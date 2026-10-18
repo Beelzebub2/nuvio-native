@@ -215,20 +215,17 @@ internal fun TabletStreamsLayout(
                 .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (isEpisode && seasonNumber != null && episodeNumber != null) {
-                TabletEpisodeInfoPanel(
-                    logo = logo,
-                    seasonNumber = seasonNumber,
-                    episodeNumber = episodeNumber,
-                    episodeTitle = episodeTitle,
-                    showTitle = title,
-                )
-            } else {
-                TabletMovieInfoPanel(
-                    title = title,
-                    logo = logo,
-                )
-            }
+            DesktopStreamsInfoPanel(
+                isEpisode = isEpisode,
+                title = title,
+                logo = logo,
+                artwork = episodeThumbnail ?: background ?: poster,
+                seasonNumber = seasonNumber,
+                episodeNumber = episodeNumber,
+                episodeTitle = episodeTitle,
+                resumePositionMs = resumePositionMs,
+                resumeProgressFraction = resumeProgressFraction,
+            )
         }
 
         Box(
@@ -257,24 +254,24 @@ internal fun TabletStreamsLayout(
                         .fillMaxSize()
                         .padding(16.dp),
                 ) {
-                    if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
-                        ResumeBanner(
-                            positionMs = resumePositionMs,
-                            progressFraction = resumeProgressFraction,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
+                    var qualityFilter by remember(uiState.requestToken) { mutableStateOf<StreamQuality?>(null) }
+                    val best = remember(uiState, debridEnabled) { bestMatch(uiState, debridEnabled) }
+                    DesktopSourcesHeader(
+                        uiState = uiState,
+                        debridEnabled = debridEnabled,
+                        appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                        qualityFilter = qualityFilter,
+                        onQualityFilterChange = { qualityFilter = it },
+                        best = best,
+                        onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
+                        onStreamSecondaryClick = onStreamSecondaryClick,
+                    )
 
                     ProviderFilterRow(
                         groups = uiState.groups,
                         selectedFilter = uiState.selectedFilter,
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
-                    )
-
-                    ActiveScrapersStatusBlock(
-                        groups = uiState.groups,
-                        modifier = Modifier.padding(bottom = 4.dp),
                     )
 
                     StreamList(
@@ -287,6 +284,9 @@ internal fun TabletStreamsLayout(
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
                         modifier = Modifier.weight(1f),
+                        groupByQuality = true,
+                        qualityFilter = qualityFilter,
+                        excludedStream = best?.stream,
                     )
                 }
             }
