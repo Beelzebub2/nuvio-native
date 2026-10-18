@@ -77,7 +77,6 @@ import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryScreen
 import com.nuvio.app.features.catalog.CatalogScreen
 import com.nuvio.app.features.catalog.CatalogTarget
-import androidx.compose.material.icons.filled.Bookmark
 import com.nuvio.app.features.library.LibrarySection
 import com.nuvio.app.features.library.LibrarySortOption
 import com.nuvio.app.features.player.PlayerBackReleaseGuard
@@ -855,7 +854,7 @@ internal fun DesktopHoverSidebar(
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_nav_library),
-                    selected = selectedTab == AppScreenTab.Library,
+                    selected = selectedTab == AppScreenTab.Library || selectedTab == AppScreenTab.WatchLater,
                     expanded = sidebarExpanded,
                     onClick = { selectTab(AppScreenTab.Library) },
                 ) { color ->
@@ -865,15 +864,6 @@ internal fun DesktopHoverSidebar(
                         modifier = Modifier.size(DesktopSidebarIconSize),
                         tint = color,
                     )
-                }
-                DesktopSidebarItem(
-                    label = "Watch Later",
-                    selected = selectedTab == AppScreenTab.WatchLater,
-                    expanded = sidebarExpanded,
-                    onClick = { selectTab(AppScreenTab.WatchLater) },
-                ) { color ->
-                    Icon(Icons.Filled.Bookmark, contentDescription = "Watch Later",
-                        modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_settings_page_root),

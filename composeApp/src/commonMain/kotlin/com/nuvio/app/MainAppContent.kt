@@ -1469,6 +1469,10 @@ internal fun MainAppContent(
                             }
                         },
                         onTabSelected = ::handleRootTabClick,
+                        onSearchRequested = {
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         onProfileSelected = { profile ->
                             profileSwitchLoading = true
                             NativeTabBridge.publishTabBarVisible(false)
