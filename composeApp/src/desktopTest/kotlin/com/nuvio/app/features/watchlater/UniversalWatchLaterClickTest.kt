@@ -103,10 +103,16 @@ class UniversalWatchLaterClickTest(private val case: Case) {
                     }
                 }
             }
+            // Pick the card title before hovering: the episode hover card also shows the title.
+            val continueTitleIndex = if (case in listOf(Case.ContinueCard, Case.ContinueWide, Case.ContinuePoster)) {
+                compose.onAllNodesWithText(preview.name, useUnmergedTree = true).fetchSemanticsNodes().lastIndex
+            } else {
+                -1
+            }
             fun clickMiddle() {
-                if (case in listOf(Case.ContinueCard, Case.ContinueWide, Case.ContinuePoster)) {
-                    val titles = compose.onAllNodesWithText(preview.name, useUnmergedTree = true)
-                    titles[titles.fetchSemanticsNodes().lastIndex].performMouseInput { click(button = MouseButton.Tertiary) }
+                if (continueTitleIndex >= 0) {
+                    compose.onAllNodesWithText(preview.name, useUnmergedTree = true)[continueTitleIndex]
+                        .performMouseInput { click(button = MouseButton.Tertiary) }
                 } else {
                     compose.onNodeWithTag("target", useUnmergedTree = true).performMouseInput {
                         val titleArea = case in listOf(Case.CatalogTitle, Case.DiscoverTitle, Case.CollectionTitle)

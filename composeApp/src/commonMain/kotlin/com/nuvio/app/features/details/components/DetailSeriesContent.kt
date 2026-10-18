@@ -264,7 +264,7 @@ fun DetailSeriesContent(
                                 )
                                 EpisodeListCard(
                                     video = episode,
-                                    modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
+                                    modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode), openDetailsOnSecondaryClick = false),
                                     preview = meta.toWatchLaterPreview(episode),
                                     fallbackImage = meta.background ?: meta.poster,
                                     progressEntry = progressByVideoId[episodeVideoId],
@@ -360,7 +360,7 @@ internal fun DetailSeriesListEpisode(
         )
         EpisodeListCard(
             video = episode,
-            modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode)),
+            modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode), openDetailsOnSecondaryClick = false),
             preview = meta.toWatchLaterPreview(episode),
             fallbackImage = meta.background ?: meta.poster,
             progressEntry = progressByVideoId[episodeVideoId],
@@ -806,7 +806,10 @@ private fun EpisodeHorizontalRow(
             )
             EpisodeHorizontalCard(
                 video = episode,
-                modifier = Modifier.watchLaterMiddleClick(watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode())),
+                modifier = Modifier.watchLaterMiddleClick(
+                    watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode()),
+                    openDetailsOnSecondaryClick = false,
+                ),
                 preview = watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode()),
                 fallbackImage = fallbackImage,
                 progressEntry = progressByVideoId[episodeVideoId],

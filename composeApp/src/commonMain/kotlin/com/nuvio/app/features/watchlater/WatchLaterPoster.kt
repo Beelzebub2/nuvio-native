@@ -23,11 +23,18 @@ import com.nuvio.app.core.ui.secondaryClick
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.isDesktop
 
-internal fun Modifier.watchLaterMiddleClick(item: MetaPreview): Modifier {
+/**
+ * Middle-click toggles Watch Later. Right-click opens the title's details for episode cards,
+ * except where the card already belongs to that title (the details page), whose right-click
+ * opens the episode menu instead.
+ */
+internal fun Modifier.watchLaterMiddleClick(item: MetaPreview, openDetailsOnSecondaryClick: Boolean = true): Modifier {
     if (!isDesktop) return this
     return middleClick {
         WatchLaterRepository.toggle(item)
-    }.secondaryClick(if (item.watchLaterEpisode != null) ({ EpisodeDetailsNavigation.open(item) }) else null)
+    }.secondaryClick(
+        if (openDetailsOnSecondaryClick && item.watchLaterEpisode != null) ({ EpisodeDetailsNavigation.open(item) }) else null,
+    )
 }
 
 @Composable
