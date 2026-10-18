@@ -83,7 +83,8 @@
     <string name="airing_settings_intro">Broadcast uses AniList's original airing times. Sub and dub use Tsuzuki's release schedules.</string>
     <string name="airing_settings_zone">Time zone</string>
     <string name="airing_settings_zone_example">Example: Europe/Lisbon</string>
-    <string name="airing_settings_history">Recently released window: %1$d days</string>
+    <string name="airing_settings_source">Schedule source</string>
+    <string name="airing_settings_window">Recently released window</string>
     <string name="airing_settings_estimated">Include estimated times</string>
     <string name="airing_settings_hide_nsfw">Hide NSFW / hentai anime</string>
 

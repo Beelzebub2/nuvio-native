@@ -2,6 +2,15 @@ package com.nuvio.app.features.airing
 
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.background
+import nuvio.composeapp.generated.resources.airing_settings_window
+import nuvio.composeapp.generated.resources.airing_settings_source
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButton
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
@@ -86,7 +95,6 @@ import nuvio.composeapp.generated.resources.airing_recent_empty
 import nuvio.composeapp.generated.resources.airing_recent_title
 import nuvio.composeapp.generated.resources.airing_saved_schedules
 import nuvio.composeapp.generated.resources.airing_settings_estimated
-import nuvio.composeapp.generated.resources.airing_settings_history
 import nuvio.composeapp.generated.resources.airing_settings_hide_nsfw
 import nuvio.composeapp.generated.resources.airing_settings_intro
 import nuvio.composeapp.generated.resources.airing_settings_title
@@ -414,45 +422,118 @@ private fun AiringPoster(
 
 @Composable
 private fun AiringSettingsDialog(settings: AiringSettings, onDismiss: () -> Unit, onSave: (AiringSettings) -> Unit) {
+    val colors = MaterialTheme.nuvio.colors
     var zone by remember { mutableStateOf(settings.zone) }
     var airType by remember { mutableStateOf(settings.airType) }
     var days by remember { mutableStateOf(settings.historyDays.coerceIn(1, MAX_AIRING_HISTORY_DAYS)) }
     var estimated by remember { mutableStateOf(settings.includeEstimated) }
     var hideNsfw by remember { mutableStateOf(settings.hideNsfw) }
     val validZone = remember(zone) { runCatching { ZoneId.of(zone.trim()) }.isSuccess }
-    AlertDialog(
-        onDismissRequest = onDismiss, title = { Text(stringResource(Res.string.airing_settings_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(Res.string.airing_settings_intro))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("broadcast" to "Broadcast", "sub" to "Sub", "dub" to "Dub").forEach { (value, label) ->
-                        FilterChip(selected = value == airType, onClick = { airType = value }, label = { Text(label) })
-                    }
-                }
-                OutlinedTextField(value = zone, onValueChange = { zone = it }, singleLine = true,
-                    label = { Text(stringResource(Res.string.airing_settings_zone)) }, isError = !validZone,
-                    supportingText = { Text(stringResource(Res.string.airing_settings_zone_example)) })
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(Res.string.airing_settings_history, days), modifier = Modifier.weight(1f).padding(top = 12.dp))
-                    TextButton(enabled = days > 1, onClick = { days-- }) { Text("−") }
-                    TextButton(enabled = days < MAX_AIRING_HISTORY_DAYS, onClick = { days++ }) { Text("+") }
-                }
-                Row {
-                    Checkbox(checked = estimated, onCheckedChange = { estimated = it })
-                    Text(stringResource(Res.string.airing_settings_estimated), modifier = Modifier.padding(top = 12.dp))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = hideNsfw, onCheckedChange = { hideNsfw = it },
-                        modifier = Modifier.testTag("airing-hide-nsfw"))
-                    Text(stringResource(Res.string.airing_settings_hide_nsfw))
+    DialogSurface(
+        onDismissRequest = onDismiss,
+        title = stringResource(Res.string.airing_settings_title),
+        message = stringResource(Res.string.airing_settings_intro),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(top = 4.dp)) {
+            AiringSettingsField(stringResource(Res.string.airing_settings_source)) {
+                NuvioSegmentedControl(
+                    segments = listOf("broadcast" to "Broadcast", "sub" to "Sub", "dub" to "Dub")
+                        .map { (value, label) -> NuvioSegment(value, label) },
+                    selected = airType,
+                    onSelect = { airType = it },
+                )
+            }
+            AiringSettingsField(
+                label = stringResource(Res.string.airing_settings_zone),
+                helper = stringResource(Res.string.airing_settings_zone_example),
+                isError = !validZone,
+            ) {
+                val shape = RoundedCornerShape(NuvioTokens.Radius.md + 2.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .background(colors.surface, shape)
+                        .border(NuvioTokens.Border.thin, if (validZone) colors.borderDefault else colors.danger, shape)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    BasicTextField(
+                        value = zone,
+                        onValueChange = { zone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.textPrimary),
+                        cursorBrush = SolidColor(colors.textPrimary),
+                    )
                 }
             }
-        },
-        confirmButton = { TextButton(enabled = validZone, onClick = {
-            onSave(settings.copy(zone = zone.trim(), airType = airType, historyDays = days,
-                includeEstimated = estimated, hideNsfw = hideNsfw))
-        }) { Text(stringResource(Res.string.action_save)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_cancel)) } },
-    )
+            AiringSettingsField(stringResource(Res.string.airing_settings_window)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NuvioSegmentedControl(
+                        segments = (1..MAX_AIRING_HISTORY_DAYS).map { NuvioSegment(it, it.toString()) },
+                        selected = days,
+                        onSelect = { days = it },
+                    )
+                    Text(stringResource(Res.string.airing_days_unit), style = MaterialTheme.typography.bodyMedium, color = colors.textMuted)
+                }
+            }
+            Column {
+                AiringSettingsSwitch(stringResource(Res.string.airing_settings_estimated), estimated, { estimated = it })
+                AiringSettingsSwitch(
+                    stringResource(Res.string.airing_settings_hide_nsfw), hideNsfw, { hideNsfw = it },
+                    switchModifier = Modifier.testTag("airing-hide-nsfw"),
+                )
+            }
+            DialogButtons {
+                DialogButton(text = stringResource(Res.string.action_cancel), onClick = onDismiss)
+                DialogButton(
+                    text = stringResource(Res.string.action_save),
+                    onClick = {
+                        onSave(settings.copy(zone = zone.trim(), airType = airType, historyDays = days,
+                            includeEstimated = estimated, hideNsfw = hideNsfw))
+                    },
+                    style = DialogButtonStyle.Primary,
+                    enabled = validZone,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiringSettingsField(
+    label: String,
+    helper: String? = null,
+    isError: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val colors = MaterialTheme.nuvio.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = colors.textSecondary)
+        content()
+        helper?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = if (isError) colors.danger else colors.textMuted)
+        }
+    }
+}
+
+@Composable
+private fun AiringSettingsSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    switchModifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Switch) { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.nuvio.colors.textPrimary)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = switchModifier)
+    }
 }
