@@ -1,5 +1,7 @@
 package com.nuvio.app.features.settings
 
+import com.nuvio.app.isDesktop
+
 import com.nuvio.app.AppScreenTab
 import com.nuvio.app.core.build.AppFeaturePolicy
 
@@ -960,15 +962,32 @@ private fun TabletSettingsScreen(
     }
 
     val saveableStateHolder = rememberSaveableStateHolder()
+    var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
 
     Row(modifier = Modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier
-                .width(240.dp)
+                .width(if (isDesktop) 268.dp else 240.dp)
                 .fillMaxSize(),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            Column(
+            if (isDesktop) {
+                DesktopSettingsSidebar(
+                    currentPage = page,
+                    query = settingsSearchQuery,
+                    onQueryChange = { query ->
+                        settingsSearchQuery = query
+                        if (query.isNotBlank() && page != SettingsPage.Root) onPageChange(SettingsPage.Root)
+                    },
+                    onOpenPage = { target ->
+                        settingsSearchQuery = ""
+                        if (target.isEnabledByPolicy()) openInlinePage(target)
+                    },
+                    topPadding = effectiveTopOffset,
+                    onSwitchProfile = onSwitchProfile,
+                    onCheckForUpdates = onCheckForUpdatesClick,
+                )
+            } else Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = effectiveTopOffset),
@@ -1006,7 +1025,6 @@ private fun TabletSettingsScreen(
 
         Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             saveableStateHolder.SaveableStateProvider(page.name) {
-                var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
                 var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
                 var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
                 val hapticFeedback = LocalHapticFeedback.current
@@ -1096,7 +1114,7 @@ private fun TabletSettingsScreen(
                                 val previousPage = page.previousPage()
                                 TabletPageHeader(
                                     title = if (page == SettingsPage.Root) {
-                                        if (settingsSearchQuery.isBlank()) {
+                                        if (settingsSearchQuery.isBlank() && !isDesktop) {
                                             stringResource(activeCategory.labelRes)
                                         } else {
                                             stringResource(Res.string.compose_settings_page_root)
@@ -1104,8 +1122,9 @@ private fun TabletSettingsScreen(
                                     } else {
                                         stringResource(page.titleRes)
                                     },
-                                    showBack = previousPage != null,
+                                    showBack = previousPage != null && !isDesktop,
                                     onBack = { if (previousPage != null) onNavigateBack() },
+                                    eyebrow = if (isDesktop) page.desktopGroupLabel()?.let { stringResource(it) } else null,
                                 )
                             }
                         }
@@ -1115,7 +1134,8 @@ private fun TabletSettingsScreen(
                                     query = settingsSearchQuery,
                                     entries = searchEntries,
                                     isTablet = true,
-                                    showSearchField = rootSearchVisible,
+                                    showSearchField = rootSearchVisible && !isDesktop,
+                                    searchFieldElsewhere = isDesktop,
                                     animateSearchField = rootSearchRevealAnimating,
                                     onQueryChange = { settingsSearchQuery = it },
                                     onTargetClick = { openSearchTarget(it) },
@@ -1137,11 +1157,11 @@ private fun TabletSettingsScreen(
                                         onAccountClick = { openInlinePage(SettingsPage.Account) },
                                         onSwitchProfileClick = onSwitchProfile,
                                         showNotificationsEntry = AppFeaturePolicy.notificationsEnabled,
-                                        showAccountSection = activeCategory == SettingsCategory.Account,
-                                        showGeneralSection = activeCategory == SettingsCategory.General,
-                                        showAboutSection = activeCategory == SettingsCategory.About,
+                                        showAccountSection = isDesktop || activeCategory == SettingsCategory.Account,
+                                        showGeneralSection = isDesktop || activeCategory == SettingsCategory.General,
+                                        showAboutSection = isDesktop || activeCategory == SettingsCategory.About,
                                         showAttribution = false,
-                                        showAdvancedSection = activeCategory == SettingsCategory.Advanced,
+                                        showAdvancedSection = isDesktop || activeCategory == SettingsCategory.Advanced,
                                         showSupportersContributorsPage = AppFeaturePolicy.supportersContributorsPageEnabled,
                                     )
                                 }

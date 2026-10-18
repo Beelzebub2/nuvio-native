@@ -118,6 +118,7 @@ internal fun TabletPageHeader(
     title: String,
     showBack: Boolean,
     onBack: () -> Unit,
+    eyebrow: String? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     Box(
@@ -145,12 +146,21 @@ internal fun TabletPageHeader(
                     iconSize = tokens.icons.md,
                 )
             }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineLarge,
-                color = tokens.colors.textPrimary,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s2)) {
+                eyebrow?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.colors.textMuted,
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = tokens.colors.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }
