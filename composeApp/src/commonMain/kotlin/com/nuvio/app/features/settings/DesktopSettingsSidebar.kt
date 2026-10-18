@@ -42,7 +42,8 @@ import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_title
+import nuvio.composeapp.generated.resources.collections_header
+import nuvio.composeapp.generated.resources.compose_settings_category_about
 import nuvio.composeapp.generated.resources.compose_settings_root_switch_profile_title
 import nuvio.composeapp.generated.resources.settings_group_integrations
 import nuvio.composeapp.generated.resources.settings_group_look_and_feel
@@ -92,11 +93,7 @@ internal fun desktopSettingsGroups(): List<DesktopSettingsGroup> = listOf(
     DesktopSettingsGroup(Res.string.settings_group_integrations, listOf(SettingsPage.TmdbEnrichment, SettingsPage.MdbListRatings)),
     DesktopSettingsGroup(
         Res.string.settings_group_system,
-        buildList {
-            add(SettingsPage.Advanced)
-            if (AppFeaturePolicy.supportersContributorsPageEnabled) add(SettingsPage.SupportersContributors)
-            add(SettingsPage.LicensesAttributions)
-        },
+        listOf(SettingsPage.Advanced),
     ),
 )
 
@@ -104,10 +101,11 @@ internal fun desktopSettingsGroups(): List<DesktopSettingsGroup> = listOf(
 internal fun SettingsPage.desktopGroupLabel(): StringResource? {
     val groups = desktopSettingsGroups()
     groups.firstOrNull { this in it.pages }?.let { return it.labelRes }
-    // Hub pages that are not listed themselves (Integrations, Content discovery).
+    // Pages reached from a hub or from About rather than listed themselves.
     return when (this) {
         SettingsPage.Integrations -> Res.string.settings_group_integrations
         SettingsPage.ContentDiscovery -> Res.string.settings_group_sources
+        SettingsPage.SupportersContributors, SettingsPage.LicensesAttributions -> Res.string.settings_group_system
         else -> null
     }
 }
@@ -119,8 +117,11 @@ internal fun DesktopSettingsSidebar(
     onQueryChange: (String) -> Unit,
     onOpenPage: (SettingsPage) -> Unit,
     topPadding: Dp,
+    startPadding: Dp,
+    aboutSelected: Boolean,
+    onOpenAbout: () -> Unit,
+    onCollections: () -> Unit,
     onSwitchProfile: (() -> Unit)?,
-    onCheckForUpdates: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.nuvio.colors
@@ -128,7 +129,7 @@ internal fun DesktopSettingsSidebar(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 12.dp, top = topPadding, bottom = 24.dp),
+            .padding(start = startPadding - 10.dp, end = 12.dp, top = topPadding, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         SettingsSearchField(query = query, onQueryChange = onQueryChange)
@@ -144,9 +145,16 @@ internal fun DesktopSettingsSidebar(
                 group.pages.forEach { page ->
                     SidebarLink(
                         label = stringResource(page.titleRes),
-                        selected = currentPage == page && query.isBlank(),
+                        selected = currentPage == page && query.isBlank() && !aboutSelected,
                         onClick = { onOpenPage(page) },
                     )
+                    if (page == SettingsPage.Homescreen) {
+                        SidebarLink(
+                            label = stringResource(Res.string.collections_header),
+                            selected = false,
+                            onClick = onCollections,
+                        )
+                    }
                 }
                 if (group.labelRes == Res.string.settings_group_you && onSwitchProfile != null) {
                     SidebarLink(
@@ -155,11 +163,11 @@ internal fun DesktopSettingsSidebar(
                         onClick = onSwitchProfile,
                     )
                 }
-                if (group.labelRes == Res.string.settings_group_system && onCheckForUpdates != null) {
+                if (group.labelRes == Res.string.settings_group_system) {
                     SidebarLink(
-                        label = stringResource(Res.string.compose_settings_root_check_updates_title),
-                        selected = false,
-                        onClick = onCheckForUpdates,
+                        label = stringResource(Res.string.compose_settings_category_about),
+                        selected = aboutSelected && query.isBlank(),
+                        onClick = onOpenAbout,
                     )
                 }
             }
