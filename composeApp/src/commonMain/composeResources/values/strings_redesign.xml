@@ -40,6 +40,14 @@
     <string name="streams_searching">searching…</string>
     <string name="streams_episode_label">Season %1$d · Episode %2$d</string>
 
+    <!-- Settings -->
+    <string name="settings_group_you">You</string>
+    <string name="settings_group_watching">Watching</string>
+    <string name="settings_group_look_and_feel">Look &amp; feel</string>
+    <string name="settings_group_sources">Sources</string>
+    <string name="settings_group_integrations">Integrations</string>
+    <string name="settings_group_system">System</string>
+
     <!-- Watch Later -->
     <string name="watch_later">Watch Later</string>
     <string name="watch_later_save_named">Save %1$s to Watch Later</string>
