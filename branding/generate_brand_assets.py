@@ -1,6 +1,6 @@
 """Generates every Starlit logo, app icon and wordmark asset from one vector mark.
 
-    python branding/generate_brand_assets.py [--preview-only]
+    python branding/generate_brand_assets.py [--preview-only | --readme-only]
 
 The mark is a rounded play triangle holding a four-point star, with a small
 twinkle above it. Each app-icon colourway (Settings > Appearance > App icon)
@@ -31,6 +31,7 @@ ANDROID_RES = ROOT / "composeApp/src/androidMain/res"
 IOS_ASSETS = ROOT / "iosApp/iosApp/Assets.xcassets"
 WORDMARK_FONT = ROOT / "composeApp/src/commonMain/composeResources/font/jetbrains_sans_bold.ttf"
 PREVIEW = ROOT / "build/brand/starlit-brand-board.png"
+README_ASSETS = ROOT / "branding/readme"
 EDGE_CANDIDATES = [
     Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft/Edge/Application/msedge.exe",
     Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Microsoft/Edge/Application/msedge.exe",
@@ -130,7 +131,7 @@ def mark_document(stops: tuple[str, str, str]) -> str:
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">{mark_svg(stops)}\n</svg>\n'
 
 
-def wordmark_document(stops: tuple[str, str, str]) -> str:
+def wordmark_document(stops: tuple[str, str, str], text_color: str = "#FFFFFF") -> str:
     """HTML page with the mark and the name; rendered wide, then trimmed to its pixels."""
     font = WORDMARK_FONT.as_uri()
     return f"""<!doctype html><html><head><style>
@@ -138,7 +139,7 @@ def wordmark_document(stops: tuple[str, str, str]) -> str:
 html, body {{ margin: 0; background: transparent; }}
 .row {{ display: flex; align-items: center; gap: 16px; height: 400px; padding: 0 40px; }}
 svg {{ width: 360px; height: 360px; margin: 0 -40px 0 -48px; }}
-span {{ font: 700 236px/1 "Brand"; letter-spacing: -0.035em; color: #FFFFFF; transform: translateY(-6px); }}
+span {{ font: 700 236px/1 "Brand"; letter-spacing: -0.035em; color: {text_color}; transform: translateY(-6px); }}
 </style></head><body><div class="row">
 <svg viewBox="0 0 1024 1024">{mark_svg(stops, "w")}</svg><span>{BRAND_NAME}</span></div></body></html>
 """
@@ -303,12 +304,23 @@ def write_preview(icons: dict[str, Image.Image], wordmark: Image.Image, mark: Im
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--preview-only", action="store_true", help="render the board without touching app assets")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--preview-only", action="store_true", help="render the board without touching app assets")
+    modes.add_argument("--readme-only", action="store_true", help="render only the README wordmarks")
     args = parser.parse_args()
 
     edge = find_edge()
     with tempfile.TemporaryDirectory(prefix="starlit-brand-") as temp:
         work = Path(temp)
+        # GitHub shows the README on light and dark backgrounds, so it gets one wordmark for each.
+        for theme, text_color in (("dark", "#FFFFFF"), ("light", "#16181D")):
+            page = work / f"readme-{theme}.html"
+            page.write_text(wordmark_document(COLORWAYS["original"][0], text_color), encoding="utf-8")
+            wordmark = trim(render(edge, page, work / f"readme-{theme}.png", 1800, 400, work / f"profile-readme-{theme}"))
+            save_png(wordmark, README_ASSETS / f"starlit-wordmark-{theme}.png")
+        if args.readme_only:
+            print(f"README wordmarks: {README_ASSETS}")
+            return
         (work / "starlit-mark.svg").write_text(mark_document(COLORWAYS["original"][0]), encoding="utf-8")
         shutil.copy(work / "starlit-mark.svg", Path(__file__).with_name("starlit-mark.svg"))
 

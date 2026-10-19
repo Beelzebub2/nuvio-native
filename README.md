@@ -1,146 +1,136 @@
-# Starlit
-
-Starlit is a personal desktop media app by [Beelzebub2](https://github.com/Beelzebub2), based on Nuvio by Tapframe and friends (it was called Nuvio Native up to 1.0.14). It adds built-in Airing Now, a Cloudflare provider gateway, automatic catalog refresh, corrected P2P integration, tag-triggered .exe releases, and authenticated private updates.
-
-[Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) · [Download your Windows installer](https://github.com/Beelzebub2/nuvio-native/releases/latest) · [Changes](docs/RELEASE-NOTES.md)
-
-Based on the upstream project described below; its GPLv3 license and credits are retained.
-
 <div align="center">
 
-  <img src="composeApp/src/commonMain/composeResources/drawable/app_logo_wordmark.png" alt="Nuvio" width="300" />
-  <br />
-  <br />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="branding/readme/starlit-wordmark-dark.png">
+  <img src="branding/readme/starlit-wordmark-light.png" alt="Starlit" width="340">
+</picture>
 
-  [![Contributors][contributors-shield]][contributors-url]
-  [![Forks][forks-shield]][forks-url]
-  [![Stargazers][stars-shield]][stars-url]
-  [![Issues][issues-shield]][issues-url]
-  [![License][license-shield]][license-url]
+<h3>Anime and TV on your desktop: streams, schedules and offline downloads in one app.</h3>
 
-  <p>
-    A desktop media app for Windows, macOS, and Linux.
-    <br />
-    Browse, organize, and play media from sources you add.
-  </p>
+Made by [Beelzebub2](https://github.com/Beelzebub2) · Based on [Nuvio](https://github.com/NuvioMedia/NuvioDesktop) by Tapframe and friends
+
+[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3965D4?style=flat-square)](https://github.com/Beelzebub2/nuvio-native/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-B250EF?style=flat-square)](LICENSE)
+[![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-45D6EB?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-3965D4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/compose-multiplatform/)
+
+**[Download for Windows](https://github.com/Beelzebub2/nuvio-native/releases/latest)** · [What's new](docs/RELEASE-NOTES.md) · [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md)
 
 </div>
 
-## ⚠️ Alpha Software - Slow Development - Testers Only
+> [!NOTE]
+> Starlit is a personal build of Nuvio, maintained by Beelzebub2. It isn't an official Nuvio release, so please report Starlit problems here rather than to the Nuvio team. Up to version 1.0.14 it was called Nuvio Native.
 
-Nuvio Desktop is currently in alpha and is intended only for testers. It is under development and is not suitable for daily use.
+## Highlights
 
-Expect breaking changes with every update. Features, settings, stored data, and compatibility may change or stop working without notice. Do not rely on this build as your primary media app, and report any issues you encounter during testing.
+### Watch
 
-## About
+- **A player built on mpv**, with a side panel for subtitle tracks, style and timing, and intro, recap and credits skipping from IntroDB.
+- **Streams from your add-ons and plugins**, cloud playback through Premiumize and TorBox, and torrent streaming through a bundled TorrServer engine.
+- **Continue Watching, Watch Later and collections.** Middle-click any title card to save it for later, and keep separate libraries per profile.
 
-Nuvio Desktop is a media client for browsing metadata, managing collections and watch progress, downloading media, and playing streams from user-installed extensions or user-provided sources.
+### Anime
 
-## Installation
+- **Airing Now, built in.** Today's and upcoming episodes from AniList, Sub and Dub schedules from Tsuzuki, your own time zone, and a filter for adult titles.
+- **Tracking** with MyAnimeList, Trakt, Simkl and MDBList, right from the details page.
+- **Correct anime episode numbering**, using Fribb's anime ID mappings so seasons from other databases don't scramble it.
 
-Download the latest desktop build from [GitHub Releases](https://github.com/NuvioMedia/NuvioDesktop/releases/latest).
+### Offline
 
-Release packages are provided for supported desktop platforms:
+- **Download whole seasons ahead of time** and play them from disk instead of waiting for a stream.
+- Each episode finds its own source. Starlit picks the highest quality available by default, saves to a folder you choose, and resumes unfinished downloads after a restart.
+- Library → Downloads shows progress, speed and status, with Pause all and Resume all.
 
-- Windows: MSI installer
-- macOS: DMG installer
-- Linux: DEB, RPM, FLATPAK and AppImage available.
+### On Windows
 
-## Development
+- **Starlit's own installer.** Installs for the current user without administrator rights and keeps your data when you update.
+- **In-app updates** verified against each release's SHA-256 checksum, with the installer removed afterwards.
+- Six app icon colourways, Discord Rich Presence, and a searchable Settings sidebar.
+
+## Install
+
+Starlit runs on Windows 10 and 11 (64-bit).
+
+1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/nuvio-native/releases/latest). Releases are private, so you need read access to this repository.
+2. Run it. Setup installs to `%LOCALAPPDATA%\Starlit` and lets you choose the folder and shortcuts.
+3. For updates, sign in to the [GitHub CLI](https://cli.github.com/) once with `gh auth login`. Starlit checks for updates at startup, every six hours, and from Settings → About.
+
+Settings, profiles and your library live in `%APPDATA%\NuvioNative` and are kept across updates. The [install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) covers silent installs, the update token, and moving over from Nuvio Native.
+
+## Build from source
+
+You need JDK 21. Starlit reuses Nuvio's pinned native runtimes (libmpv and TorrServer), so fetch them from the upstream Git LFS store first:
 
 ```bash
-git clone https://github.com/NuvioMedia/NuvioDesktop.git
-cd NuvioDesktop
+git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/**,composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
+git lfs checkout
 ```
 
-Run from source:
-
-```bash
-./gradlew :composeApp:run
-```
-
-On Windows PowerShell:
+Run the app, or run the desktop tests:
 
 ```powershell
 .\gradlew.bat :composeApp:run
+.\gradlew.bat :composeApp:desktopTest
 ```
 
-Build a release package for the current host:
+Building the installer also needs the Visual Studio C++ Build Tools and the [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) NuGet SDK:
 
-```bash
-./gradlew :composeApp:packageReleaseDistributionForCurrentOS
+```powershell
+.\gradlew.bat :composeApp:packageReleaseInstaller "-Pnuvio.webview2.dir=<path to Microsoft.Web.WebView2>" --no-configuration-cache
 ```
 
-Platform-specific packaging:
+The installer is written to `composeApp/build/compose/binaries/main-release/installer/`. Run it with `--sandbox` to try it without touching an existing install: it uses a separate name, folder and Installed apps entry.
 
-```bash
-# Windows
-./gradlew :composeApp:packageReleaseMsi --rerun-tasks
+### Releasing
 
-# macOS
-./scripts/build-macos-release-dmgs.sh --package-only
+Bump `VERSION_NAME` and `VERSION_CODE` in `composeApp/Configuration/DesktopVersion.properties`, add the changes to `docs/RELEASE-NOTES.md`, commit, and push a matching `vMAJOR.MINOR.PATCH` tag. The [release workflow](.github/workflows/windows-release.yml) runs the tests, builds the installer, checks a silent install and uninstall, and publishes the release with its checksum. The schedule gateway in `gateway/` is deployed separately with Wrangler.
 
-# Linux
-./gradlew :composeApp:packageReleaseDeb
-```
+## Project layout
 
-## Project Structure
+| Path | What's there |
+| --- | --- |
+| `composeApp/src/commonMain` | Shared UI, features and data, written once for every platform |
+| `composeApp/src/desktopMain` | Desktop player, downloads, P2P, airing schedules, updater and installer |
+| `composeApp/src/desktopMain/installer/windows` | Starlit's Windows setup (C++ with a WebView2 interface) |
+| `gateway/` | Read-only Cloudflare Worker that caches schedule provider responses |
+| `branding/` | The Starlit logo source and the script that renders every icon and wordmark |
+| `docs/` | Install guide, release notes and the MyAnimeList setup guide |
 
-- `composeApp/` contains the app code.
-- `composeApp/src/commonMain/` contains shared UI, features, repositories, and platform-agnostic logic.
-- `composeApp/src/desktopMain/` contains desktop-specific integrations.
-- `composeApp/Configuration/DesktopVersion.properties` contains the desktop release version and build code.
+## Credits
 
-## Versioning
+Starlit stands on other people's work, and they deserve the credit.
 
-Desktop versions are set in `composeApp/Configuration/DesktopVersion.properties`.
+**Nuvio, by Tapframe and friends.** Starlit is based on [Nuvio Desktop](https://github.com/NuvioMedia/NuvioDesktop) and shares its code with [Nuvio Mobile](https://github.com/NuvioMedia/NuvioMobile). It started from Nuvio Desktop at commit [`25390de`](https://github.com/NuvioMedia/NuvioDesktop/commit/25390defed025a871f6a3239427b4507f2fafb35) and keeps Nuvio's GPLv3 license and copyright notices. Almost everything you see in Starlit began there. Thank you.
 
-```properties
-VERSION_NAME=0.1.1-alpha
-VERSION_CODE=1
-```
+**Playback and streaming**
 
-Use the version helper when changing desktop release versions:
+- [mpv / libmpv](https://github.com/mpv-player/mpv): desktop playback.
+- [TorrServer](https://github.com/YouROK/TorrServer) by YouROK: the torrent streaming and download engine.
+- [MPVKit](https://github.com/mpvkit/MPVKit) and [AndroidX Media3 ExoPlayer](https://github.com/androidx/media): playback in the iOS and Android builds of the shared codebase.
 
-```bash
-./scripts/set-version.sh --desktop 0.1.2-alpha --desktop-code 2
-./scripts/set-version.sh --show
-```
+**Libraries**
 
-## Legal & DMCA
+- [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html) and [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform) by JetBrains
+- [Coil](https://github.com/coil-kt/coil), [Ktor](https://github.com/ktorio/ktor), [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) and [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines)
+- [Haze](https://github.com/chrisbanes/haze) by Chris Banes, for background blur
+- [QuickJS-KT](https://github.com/dokar3/quickjs-kt), [Ksoup](https://github.com/fleeksoft/ksoup), [kmpalette](https://github.com/jordond/kmpalette), [Kermit](https://github.com/touchlab/Kermit), [supabase-kt](https://github.com/supabase-community/supabase-kt) and [Sentry](https://github.com/getsentry/sentry-java)
+- [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), for the installer's interface
 
-Nuvio functions solely as a client-side interface for browsing metadata and playing media provided by user-installed extensions and/or user-provided sources. It is intended for content the user owns or is otherwise authorized to access.
+Each project's license terms are in its repository, and Settings → Licenses & Attribution lists them in the app too.
 
-Nuvio is not affiliated with any third-party extensions, catalogs, sources, or content providers. It does not host, store, or distribute any media content.
+**Data and services.** Starlit isn't affiliated with or endorsed by any of these.
 
-For comprehensive legal information, including our full disclaimer, third-party extension policy, and DMCA/Copyright information, please visit our [Legal & Disclaimer Page](https://nuvioapp.space/legal).
+- [The Movie Database (TMDB)](https://www.themoviedb.org/): movie and TV metadata, artwork and trailers. This product uses the TMDB API but is not endorsed or certified by TMDB.
+- [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/): ratings and vote counts. Information courtesy of IMDb (https://www.imdb.com), used with permission for personal and non-commercial use.
+- [AniList](https://anilist.co/), [Tsuzuki](https://tsuzuki.top/), ani.zip and [Fribb's anime-lists](https://github.com/Fribb/anime-lists): airing schedules, episode details and anime ID mappings.
+- [MyAnimeList](https://myanimelist.net/), [Trakt](https://trakt.tv/), [Simkl](https://simkl.com/) and [MDBList](https://mdblist.com/): tracking, lists and ratings.
+- [IntroDB](https://introdb.app/): community intro, recap and credits timestamps.
+- [Premiumize](https://www.premiumize.me/) and [TorBox](https://torbox.app/): cloud playback.
 
-## Built With
+## Legal
 
-- Kotlin Multiplatform
-- Compose Multiplatform
-- Kotlin
-- Compose Desktop packaging
-- Native desktop player integrations
+Starlit is a client. It browses metadata and plays media from add-ons, plugins and sources that you install or provide, and it is meant for content you own or are otherwise allowed to access. Starlit doesn't host, store or distribute media, and it isn't affiliated with any add-on, catalog, source or content provider.
 
-## Star History
+## License
 
-<a href="https://www.star-history.com/#NuvioMedia/NuvioDesktop&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioDesktop&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioDesktop&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=NuvioMedia/NuvioDesktop&type=date&legend=top-left" />
- </picture>
-</a>
-
-<!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/NuvioMedia/NuvioDesktop.svg?style=for-the-badge
-[contributors-url]: https://github.com/NuvioMedia/NuvioDesktop/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/NuvioMedia/NuvioDesktop.svg?style=for-the-badge
-[forks-url]: https://github.com/NuvioMedia/NuvioDesktop/network/members
-[stars-shield]: https://img.shields.io/github/stars/NuvioMedia/NuvioDesktop.svg?style=for-the-badge
-[stars-url]: https://github.com/NuvioMedia/NuvioDesktop/stargazers
-[issues-shield]: https://img.shields.io/github/issues/NuvioMedia/NuvioDesktop.svg?style=for-the-badge
-[issues-url]: https://github.com/NuvioMedia/NuvioDesktop/issues
-[license-shield]: https://img.shields.io/github/license/NuvioMedia/NuvioDesktop.svg?style=for-the-badge
-[license-url]: https://github.com/NuvioMedia/NuvioDesktop/blob/main/LICENSE
+Starlit is licensed under the [GNU General Public License v3.0](LICENSE), like Nuvio. Nuvio's copyright notices are kept, and Starlit's source is available under the same terms.
