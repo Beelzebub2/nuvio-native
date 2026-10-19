@@ -41,11 +41,15 @@ internal fun malCallbackCode(url: String, state: String): String {
     return codes.singleOrNull()?.takeIf { it.isNotBlank() && it.length <= 4096 }
         ?: throw MalAuthorizationFailure("Missing MyAnimeList authorization code. Try connecting again.")
 }
-internal suspend fun awaitMalAuthorization(clientId: String, open: (URI) -> Unit): Pair<String, String> {
+internal suspend fun awaitMalAuthorization(
+    clientId: String,
+    createListener: () -> HttpServer = { HttpServer.create(InetSocketAddress("127.0.0.1", 54328), 0) },
+    open: (URI) -> Unit,
+): Pair<String, String> {
     val state = malNonce()
     val verifier = malNonce()
     val result = CompletableDeferred<String>()
-    val server = try { HttpServer.create(InetSocketAddress("127.0.0.1", 54328), 0) }
+    val server = try { createListener() }
         catch (e: BindException) {
             throw IllegalStateException("MyAnimeList callback port 54328 is already in use. Close the application using that port and retry.", e)
         }
