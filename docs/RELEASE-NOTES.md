@@ -1,3 +1,12 @@
+Starlit 1.0.18 lets you download whole seasons ahead of time and play them from disk instead of waiting for a stream.
+
+- Series pages have a Download episodes / seasons button above the episode list, and movies have Download for offline. Pick one or more seasons or single episodes. Episodes that haven't aired yet can't be selected.
+- Each download looks for its own source using the provider, quality and Direct files or Torrents choice you set, then downloads one file at a time. Torrent downloads need P2P turned on in Settings. Streaming-only sources and HLS/DASH playlists can't be saved.
+- Choose where downloads go, from the download dialog or from Library → Downloads. Changing the folder only affects new downloads; earlier files stay where they were saved.
+- Library → Downloads shows the save folder with an Open folder button, Pause all and Resume all, and each download's progress, speed and current step. Unfinished downloads pick up where they left off after a restart.
+- Episodes you've downloaded play from the file on disk. Subtitles in your preferred languages are saved first so they still work offline.
+- If an automatic download fails, picking a source for that episode by hand replaces it, and queuing the season again retries the episodes that failed.
+
 Starlit 1.0.17 makes Airing Now useful sooner and keeps schedule loading responsive while preserving strict filtering, cooldowns, and updater safeguards.
 
 - The newest released schedule page appears first, then history and upcoming pages fill progressively in the background. Valid partial snapshots persist across failures and missing pages are retried.
