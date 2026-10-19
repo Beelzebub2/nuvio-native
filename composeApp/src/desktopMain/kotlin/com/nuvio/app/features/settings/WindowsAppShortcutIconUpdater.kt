@@ -49,7 +49,7 @@ internal object WindowsAppShortcutIconUpdater {
         val commonDesktop = knownFolder("CommonDesktopDirectory")
         val commonPrograms = knownFolder("CommonPrograms")
 
-        for (name in listOf("Nuvio Native", "Nuvio")) {
+        for (name in listOf("Starlit", "Nuvio Native", "Nuvio")) {
             val shortcut = "$name.lnk"
             desktop?.let { yield(it.resolve(shortcut)) }
             programs?.let {

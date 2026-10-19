@@ -54,8 +54,8 @@ internal suspend fun awaitMalAuthorization(clientId: String, open: (URI) -> Unit
             require(exchange.requestMethod == "GET")
             malCallbackCode("http://127.0.0.1:54328${exchange.requestURI}", state)
         }
-        val message = if (code.isSuccess) "Authorization received. Return to Nuvio Native to finish connecting."
-            else "MyAnimeList authorization was not completed. Return to Nuvio Native for details."
+        val message = if (code.isSuccess) "Authorization received. Return to Starlit to finish connecting."
+            else "MyAnimeList authorization was not completed. Return to Starlit for details."
         val bytes = message.toByteArray(Charsets.UTF_8)
         try {
             exchange.responseHeaders.set("Content-Type", "text/plain; charset=utf-8")

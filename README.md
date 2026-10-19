@@ -1,6 +1,6 @@
-# Nuvio Native — private Windows build
+# Starlit
 
-Personal native desktop build with built-in Airing Now, a Cloudflare provider gateway, automatic catalog refresh, corrected P2P integration, tag-triggered .exe releases, and authenticated private updates.
+Starlit is a personal desktop media app by [Beelzebub2](https://github.com/Beelzebub2), based on Nuvio by Tapframe and friends (it was called Nuvio Native up to 1.0.14). It adds built-in Airing Now, a Cloudflare provider gateway, automatic catalog refresh, corrected P2P integration, tag-triggered .exe releases, and authenticated private updates.
 
 [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) · [Download your Windows installer](https://github.com/Beelzebub2/nuvio-native/releases/latest) · [Changes](docs/RELEASE-NOTES.md)
 

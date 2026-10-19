@@ -1,4 +1,6 @@
-# Nuvio Native
+# Starlit
+
+Starlit is made by [Beelzebub2](https://github.com/Beelzebub2) and based on Nuvio by Tapframe and friends. It was called Nuvio Native up to version 1.0.14.
 
 Source: https://github.com/Beelzebub2/nuvio-native (private)
 
@@ -6,9 +8,9 @@ Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a32394
 
 ## Install and update
 
-Download the latest `Nuvio-Native-Windows-x64-*.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Nuvio Native for the current Windows user, with a separate installer identity from upstream Nuvio.
+Download the latest `Starlit-Windows-x64-*.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Starlit for the current Windows user, with a separate installer identity from upstream Nuvio.
 
-The installer is Nuvio's own setup (`composeApp/src/desktopMain/installer/windows`), not the stock jpackage one. It installs to `%LOCALAPPDATA%\Nuvio Native` without administrator rights, lets you change the folder and choose Start menu and desktop shortcuts, and adds Nuvio Native to Installed apps with an uninstaller. Running a newer installer updates the existing copy in place, including copies installed by the earlier MSI-based installers; Nuvio is closed first if it is open, and your data in `%APPDATA%\NuvioNative` is kept. Uninstalling keeps that data unless you choose to delete it. The installer needs the Microsoft Edge WebView2 Runtime, which the player already uses. For scripted installs, run it with `--silent` (optionally `--dir <folder>`, `--no-desktop-shortcut`, `--launch`); the uninstaller accepts `--uninstall --silent`. Setup writes a log to `%TEMP%\Nuvio Native Setup.log`.
+The installer is Starlit's own setup (`composeApp/src/desktopMain/installer/windows`), not the stock jpackage one. It installs to `%LOCALAPPDATA%\Starlit` without administrator rights, lets you change the folder and choose Start menu and desktop shortcuts, and adds Starlit to Installed apps with an uninstaller. Running a newer installer updates the existing copy in place, including Nuvio Native copies from before the rename and from the earlier MSI-based installers, which move to the Starlit folder and lose their old shortcuts; the app is closed first if it is open, and your data in `%APPDATA%\NuvioNative` is kept. Uninstalling keeps that data unless you choose to delete it. The installer needs the Microsoft Edge WebView2 Runtime, which the player already uses. For scripted installs, run it with `--silent` (optionally `--dir <folder>`, `--no-desktop-shortcut`, `--launch`); the uninstaller accepts `--uninstall --silent`. Setup writes a log to `%TEMP%\Starlit Setup.log`.
 
 Private update access uses your existing GitHub CLI login. On a new computer, install GitHub CLI and run `gh auth login` once with an account that can read this repository. Open Settings → About to check for updates. Updates also check at startup and every six hours. Installation requires choosing Install and restarting the app; catalog refreshes do not require restarting.
 
@@ -48,7 +50,7 @@ Change `composeApp/Configuration/DesktopVersion.properties` (VERSION_NAME and in
 
 Local build: use JDK 21, Visual Studio C++ Build Tools, and the Microsoft.Web.WebView2 NuGet SDK. Run `gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseInstaller --no-configuration-cache`; the installer is written to `composeApp/build/compose/binaries/main-release/installer/`. Set `-Pnuvio.webview2.dir=...` if needed. Native files must be materialized from upstream Git LFS first.
 
-To try the installer without touching an existing install, run it with `--sandbox`: it uses a separate "Nuvio Native (setup test)" name, folder, shortcuts and Installed apps entry, and never removes the earlier MSI install or your data. To work on the setup screens in a browser, open `ui/index.html?preview` (add `&mode=update`, `&mode=uninstall` or `&step=progress|done|error`) from a folder that also holds `logo.png` and `fonts/`.
+To try the installer without touching an existing install, run it with `--sandbox`: it uses a separate "Starlit (setup test)" name, folder, shortcuts and Installed apps entry, and never removes the earlier MSI install or your data. To work on the setup screens in a browser, open `ui/index.html?preview` (add `&mode=update`, `&mode=uninstall` or `&step=progress|done|error`) from a folder that also holds `logo.png` and `fonts/`.
 
 ## P2P decision
 
