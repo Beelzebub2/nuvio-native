@@ -1,3 +1,7 @@
+Starlit 1.0.21 fixes episode downloads from multi-season torrent packs by using the provider's exact filename and failing clearly when that filename is missing or ambiguous.
+
+- Existing incorrect copies from an earlier download must be removed and queued again after updating.
+
 Starlit 1.0.20 redesigns the episode download dialog and downloads the best quality available by default.
 
 - Pick seasons from chips that show how much of each one is selected, tick a whole season at once, and see each episode's still, air date and runtime.
