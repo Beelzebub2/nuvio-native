@@ -1,4 +1,4 @@
-Starlit 1.0.16 makes Airing Now useful sooner and keeps schedule loading responsive while preserving strict filtering, cooldowns, and updater safeguards.
+Starlit 1.0.17 makes Airing Now useful sooner and keeps schedule loading responsive while preserving strict filtering, cooldowns, and updater safeguards.
 
 - The newest released schedule page appears first, then history and upcoming pages fill progressively in the background. Valid partial snapshots persist across failures and missing pages are retried.
 - Cached gateway pages skip unnecessary upstream pacing while cold gateway and direct AniList requests remain paced. Provider failure cooldowns, Retry-After handling, and the 429 fallback guard remain enforced.
