@@ -273,8 +273,10 @@ private class TorrServerBinary(
         val input = P2pStreamingEngine::class.java.getResourceAsStream(resource) ?: return null
         val dir = DesktopStorage.rootDir.resolve("torrserver/bin/${platform.resourceDir}").toFile().apply { mkdirs() }
         val file = File(dir, platform.binaryName)
-        val tempFile = File(dir, "${platform.binaryName}.tmp")
-        input.use { source ->
+        val bundled = input.use { it.readBytes() }
+        if (file.isFile && file.length() == bundled.size.toLong() && file.inputStream().use { it.readBytes() }.contentEquals(bundled)) return file
+        val tempFile = Files.createTempFile(dir.toPath(), "torrserver-", ".tmp").toFile()
+        bundled.inputStream().use { source ->
             tempFile.outputStream().use { target -> source.copyTo(target) }
         }
         runCatching {

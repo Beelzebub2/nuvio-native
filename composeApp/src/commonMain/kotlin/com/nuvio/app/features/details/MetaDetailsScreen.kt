@@ -1364,6 +1364,11 @@ fun MetaDetailsScreen(
                                         onSaveLongClick = openLibraryListPicker,
                                     )
                                 }
+                                if (!hasEpisodes) item(key = "offline-download") {
+                                    Box(Modifier.padding(horizontal = desktopPageHorizontalPadding)) {
+                                        com.nuvio.app.features.downloads.BatchDownloadAction(meta, 0)
+                                    }
+                                }
                                 configuredMetaSectionItems(
                                     settings = metaScreenSettingsUiState.copy(
                                         items = metaScreenSettingsUiState.items.filterNot {
@@ -2419,6 +2424,11 @@ private fun LazyListScope.configuredMetaSectionItems(
         val episodes = episodeListGroupedEpisodes[currentSeason].orEmpty()
         if (episodes.isEmpty()) return
 
+        if (isDesktop) item(key = "$key-download") {
+            Box(Modifier.padding(horizontal = contentHorizontalPadding)) {
+                com.nuvio.app.features.downloads.BatchDownloadAction(meta, currentSeason)
+            }
+        }
         item(
             key = "$key-header",
             contentType = "detail-episode-header",
