@@ -10,14 +10,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.build.AppVersionPolicy
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.compose_about_based_on_version_format
-import nuvio.composeapp.generated.resources.compose_about_made_with
+import nuvio.composeapp.generated.resources.about_based_on_nuvio
+import nuvio.composeapp.generated.resources.about_based_on_nuvio_version_format
+import nuvio.composeapp.generated.resources.about_made_by_format
 import nuvio.composeapp.generated.resources.compose_about_version_format
 import org.jetbrains.compose.resources.stringResource
+
+// Starlit is Beelzebub2's rebrand of Nuvio.
+internal const val CreatorHandle = "Beelzebub2"
+internal const val CreatorProfileUrl = "https://github.com/Beelzebub2"
 
 @Composable
 internal fun SettingsAttribution(
@@ -37,8 +48,22 @@ internal fun SettingsAttribution(
             modifier = Modifier.height(if (isTablet) 10.dp else 8.dp),
         )
 
+        val madeBy = stringResource(Res.string.about_made_by_format, CreatorHandle)
+        val linkStyle = TextLinkStyles(
+            style = SpanStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = TextDecoration.Underline,
+            ),
+        )
         Text(
-            text = stringResource(Res.string.compose_about_made_with),
+            text = buildAnnotatedString {
+                append(madeBy)
+                val start = madeBy.indexOf(CreatorHandle)
+                if (start >= 0) {
+                    addLink(LinkAnnotation.Url(CreatorProfileUrl, linkStyle), start, start + CreatorHandle.length)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -55,17 +80,14 @@ internal fun SettingsAttribution(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        AppVersionPolicy.basedOnVersionName?.let { basedOnVersionName ->
-            Text(
-                text = stringResource(
-                    Res.string.compose_about_based_on_version_format,
-                    basedOnVersionName,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text(
+            text = AppVersionPolicy.basedOnVersionName
+                ?.let { stringResource(Res.string.about_based_on_nuvio_version_format, it) }
+                ?: stringResource(Res.string.about_based_on_nuvio),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }

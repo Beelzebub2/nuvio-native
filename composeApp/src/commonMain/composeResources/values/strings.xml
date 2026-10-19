@@ -341,6 +341,11 @@
     <string name="compose_about_based_on_version_format">Based on Nuvio %1$s</string>
     <string name="compose_about_made_with">Made with ❤️ by Tapframe and friends</string>
     <string name="compose_about_version_format">Version %1$s (%2$s)</string>
+    <string name="about_made_by_format">Made by %1$s</string>
+    <string name="about_based_on_nuvio_version_format">Based on Nuvio %1$s by Tapframe and friends</string>
+    <string name="about_based_on_nuvio">Based on Nuvio by Tapframe and friends</string>
+    <string name="settings_licenses_attributions_app_body">Made by Beelzebub2 and based on Nuvio. Open the author\'s GitHub profile.</string>
+    <string name="settings_licenses_attributions_upstream_desktop_title">Nuvio Desktop</string>
     <string name="compose_action_off">Off</string>
     <string name="compose_action_on">On</string>
     <string name="compose_action_pause">Pause</string>
