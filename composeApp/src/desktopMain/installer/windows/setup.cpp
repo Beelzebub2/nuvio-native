@@ -4,7 +4,7 @@
 //   setup.exe                         interactive install or update
 //   setup.exe --silent [--dir <path>] [--no-desktop-shortcut] [--no-start-menu-shortcut] [--launch]
 //   setup.exe --uninstall [--silent] [--remove-data]
-//   --sandbox                         separate test identity, see setup_engine.h
+//   --sandbox [--legacy-upgrade-code <guid>]   separate test identity, see setup_engine.h
 //   --devtools                        enable WebView2 DevTools and reload keys
 #include "resource.h"
 #include "setup_engine.h"
@@ -53,6 +53,7 @@ struct Args {
     bool noDesktop = false;
     bool noStartMenu = false;
     std::wstring dir;
+    std::wstring legacyUpgradeCode;
 };
 
 struct UiResource {
@@ -154,7 +155,7 @@ void sendInit() {
     const auto& existing = gEngine->existing();
     std::wstring previous;
     if (existing.ours) previous = existing.version;
-    else if (existing.legacy && !identity.sandbox) previous = existing.legacyVersion;
+    else if (existing.legacy && identity.ownsLegacy()) previous = existing.legacyVersion;
     std::wstring problem = gEngine->source().problem;
     if (problem.empty() && gMode != L"uninstall") problem = gEngine->validateDir(gDir);
     post(Json(L"init")
@@ -250,7 +251,11 @@ void showWindow() {
     KillTimer(gWindow, kShowTimer);
     ShowWindow(gWindow, SW_SHOW);
     SetForegroundWindow(gWindow);
-    if (gController) gController->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+    if (gController) {
+        // WebView2 doesn't follow its parent becoming visible on its own.
+        gController->put_IsVisible(TRUE);
+        gController->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+    }
     post(Json(L"shown"));
 }
 
@@ -335,6 +340,7 @@ void serveResource(ICoreWebView2WebResourceRequestedEventArgs* args) {
 
 void configureWebView(ICoreWebView2Controller* controller) {
     gController = controller;
+    gController->put_IsVisible(gShown ? TRUE : FALSE);
     gController->get_CoreWebView2(&gWebView);
     ComPtr<ICoreWebView2Controller2> controller2;
     if (SUCCEEDED(gController.As(&controller2))) {
@@ -572,6 +578,7 @@ void parseArgs() {
         else if (arg == L"--remove-data") gArgs.removeData = true;
         else if (arg == L"--no-desktop-shortcut") gArgs.noDesktop = true;
         else if (arg == L"--no-start-menu-shortcut") gArgs.noStartMenu = true;
+        else if (arg == L"--legacy-upgrade-code" && i + 1 < count) gArgs.legacyUpgradeCode = argv[++i];
         else if (arg == L"--dir" && i + 1 < count) gArgs.dir = argv[++i];
         else if (arg.rfind(L"--dir=", 0) == 0) gArgs.dir = arg.substr(6);
         else if (arg.rfind(L"/D=", 0) == 0) gArgs.dir = arg.substr(3);
@@ -659,6 +666,9 @@ int runSilent(bool uninstall) {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+    // Before anything can load a DLL: never from the folder setup was started in
+    // (see the delay-load flags in build-installer.ps1).
+    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
     parseArgs();
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     log(L"Started: %s", GetCommandLineW());
@@ -678,6 +688,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         meta("exe", identity.product.exe);
         meta("legacyUpgradeCode", identity.product.legacyUpgradeCode);
     }
+    if (gArgs.sandbox && !gArgs.legacyUpgradeCode.empty()) {
+        identity.product.legacyUpgradeCode = gArgs.legacyUpgradeCode;
+        identity.testLegacy = true;
+    }
     // Without a payload this copy is the uninstaller kept in the install folder.
     const bool uninstall = gArgs.uninstall || (!source.present && source.problem.empty());
     if (uninstall) {
@@ -695,7 +709,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         gMode = L"uninstall";
         gDir = normalizeDir(gArgs.dir.empty() ? existing.location : gArgs.dir);
     } else {
-        gMode = existing.ours || (existing.legacy && !identity.sandbox) ? L"update" : L"install";
+        gMode = existing.ours || (existing.legacy && identity.ownsLegacy()) ? L"update" : L"install";
         gDir = normalizeDir(gArgs.dir.empty() ? gEngine->defaultDir() : gArgs.dir);
     }
 

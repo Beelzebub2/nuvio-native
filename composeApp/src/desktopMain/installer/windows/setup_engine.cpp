@@ -115,9 +115,31 @@ bool readExact(HANDLE file, uint64_t offset, void* buffer, size_t size) {
     return true;
 }
 
+// Where a folder really is. Process image paths are reported that way, so a
+// folder reached through a junction, a SUBST drive or app-data virtualization
+// would otherwise never match the app running from it.
+std::wstring finalPath(const std::wstring& dir) {
+    HANDLE handle = CreateFileW(dir.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return {};
+    wchar_t buffer[MAX_PATH * 2];
+    DWORD length = GetFinalPathNameByHandleW(handle, buffer, ARRAYSIZE(buffer), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    CloseHandle(handle);
+    if (length == 0 || length >= ARRAYSIZE(buffer)) return {};
+    std::wstring path(buffer, length);
+    if (path.rfind(L"\\\\?\\UNC\\", 0) == 0) return L"\\\\" + path.substr(8);
+    if (path.rfind(L"\\\\?\\", 0) == 0) return path.substr(4);
+    return path;
+}
+
 // `ignore` is the uninstaller's file name: a silent uninstall leaves it running
 // in the install folder while it waits for its %TEMP% copy to finish.
-std::vector<DWORD> processesUnder(const std::vector<std::wstring>& dirs, const std::wstring& ignore) {
+std::vector<DWORD> processesUnder(std::vector<std::wstring> dirs, const std::wstring& ignore) {
+    const size_t given = dirs.size();
+    for (size_t i = 0; i < given; ++i) {
+        std::wstring real = dirs[i].empty() ? std::wstring() : finalPath(dirs[i]);
+        if (!real.empty() && lower(real) != lower(dirs[i])) dirs.push_back(real);
+    }
     std::vector<DWORD> found;
     ScopedHandle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
     if (!snapshot.valid()) return found;
@@ -527,7 +549,7 @@ void Engine::setFile(const std::wstring& file) {
 std::wstring Engine::defaultDir() const {
     if (existing_.ours) return existing_.location;
     // A sandbox run must never pick the real install's folder.
-    if (existing_.legacy && !identity_.sandbox && !existing_.legacyLocation.empty()) return existing_.legacyLocation;
+    if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) return existing_.legacyLocation;
     return identity_.defaultInstallDir();
 }
 
@@ -541,7 +563,7 @@ std::wstring Engine::validateDir(const std::wstring& raw) const {
     if (dirExists(dir) && !isDirEmpty(dir) && !fileExists(dir + L"\\" + identity_.product.exe)) {
         return L"This folder already has other files in it. Choose an empty or new folder.";
     }
-    if (identity_.sandbox && existing_.legacy && samePath(dir, existing_.legacyLocation)) {
+    if (!identity_.ownsLegacy() && existing_.legacy && samePath(dir, existing_.legacyLocation)) {
         return L"Sandbox runs can't use the folder of the real install.";
     }
     const uint64_t needed = source_.index.totalRaw + 64ull * 1024 * 1024;
@@ -554,7 +576,7 @@ std::wstring Engine::validateDir(const std::wstring& raw) const {
 bool Engine::isAppRunning(const std::wstring& dir) const {
     std::vector<std::wstring> dirs{normalizeDir(dir)};
     if (existing_.ours) dirs.push_back(existing_.location);
-    if (existing_.legacy && !identity_.sandbox && !existing_.legacyLocation.empty()) dirs.push_back(existing_.legacyLocation);
+    if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) dirs.push_back(existing_.legacyLocation);
     return !processesUnder(dirs, identity_.uninstallerFileName()).empty();
 }
 
@@ -595,7 +617,7 @@ bool Engine::install(const InstallRequest& request) {
     progress = 0.0;
     std::vector<std::wstring> runningDirs{dir};
     if (existing_.ours && !samePath(existing_.location, dir)) runningDirs.push_back(existing_.location);
-    if (existing_.legacy && !identity_.sandbox && !existing_.legacyLocation.empty()) runningDirs.push_back(existing_.legacyLocation);
+    if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) runningDirs.push_back(existing_.legacyLocation);
     if (!closeRunning(runningDirs)) {
         fail(L"Nuvio is still running and couldn't be closed. Close it, then select Try again.");
         return false;
@@ -617,7 +639,7 @@ bool Engine::install(const InstallRequest& request) {
     }
 
     progress = kExtractEnd;
-    if (existing_.legacy && !identity_.sandbox) {
+    if (existing_.legacy && identity_.ownsLegacy()) {
         phase = Phase::Legacy;
         removeLegacyMsi();
     } else if (existing_.legacy) {
