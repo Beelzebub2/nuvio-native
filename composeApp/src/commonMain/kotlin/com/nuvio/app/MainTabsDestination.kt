@@ -373,7 +373,7 @@ internal fun MainTabsDestination(
                         leadingContent = {
                             AppBrandWordmark(
                                 modifier = Modifier.height(22.dp).widthIn(max = 112.dp),
-                                contentDescription = "Nuvio",
+                                contentDescription = "Starlit",
                             )
                         },
                         trailingContent = {
