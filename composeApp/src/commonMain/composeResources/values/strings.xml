@@ -2489,4 +2489,9 @@
     <string name="movie_status_post_production">Post Production</string>
     <string name="player_torrent_reconnecting">Reconnecting torrent…</string>
     <string name="player_torrent_waiting_network">Waiting for network…</string>
+    <string name="downloads_select_all">Select all</string>
+    <string name="downloads_clear_selection">Clear selection</string>
+    <string name="downloads_select_item">Select %1$s</string>
+    <string name="downloads_remove_selected">Remove selected (%1$d)</string>
+    <string name="downloads_remove_selected_message">Remove %1$d selected downloads? Their downloaded files and partial files will be deleted, and any queued or active transfers will be cancelled.</string>
 </resources>

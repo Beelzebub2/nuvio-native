@@ -3,6 +3,8 @@ package com.nuvio.app.features.downloads
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +20,9 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,10 +38,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
@@ -62,7 +71,27 @@ fun DownloadsScreen(
     }
 
     var selectedShowId by rememberSaveable(initialShowId) { mutableStateOf(initialShowId) }
-    var downloadPendingDeletionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
+    val activeProfileId = profileState.activeProfile?.profileIndex ?: ProfileRepository.activeProfileId
+    val profileId = uiState.profileId
+    val canManage = profileId != null && profileId == activeProfileId
+    var selectedIds by remember(profileId, selectedShowId) { mutableStateOf(emptySet<String>()) }
+    var pendingDeletionIds by remember(profileId, selectedShowId) { mutableStateOf<Set<String>?>(null) }
+    var bulkDeletion by remember(profileId, selectedShowId) { mutableStateOf(false) }
+    val visibleIds = remember(uiState.items, selectedShowId) {
+        uiState.items.filter { selectedShowId == null ||
+            (it.status == DownloadStatus.Completed && it.isEpisode && it.parentMetaId == selectedShowId) }
+            .map { it.id }.toSet()
+    }
+    val selection = selectedIds.intersect(visibleIds)
+    LaunchedEffect(visibleIds) { selectedIds = selectedIds.intersect(visibleIds) }
+    val toggleSelection: (Set<String>) -> Unit = { ids ->
+        if (canManage) selectedIds = if (selection.containsAll(ids)) selection - ids else selection + ids
+    }
+    val requestSingleDeletion: (String) -> Unit = { id ->
+        bulkDeletion = false
+        if (canManage) pendingDeletionIds = setOf(id)
+    }
     val openDownloadsDirectoryFailedText = stringResource(Res.string.downloads_open_directory_failed)
 
     val completedEpisodes = remember(uiState.items) {
@@ -110,6 +139,20 @@ fun DownloadsScreen(
         }
 
         item { DownloadManagementControls() }
+        if (canManage && visibleIds.isNotEmpty()) {
+            item {
+                DownloadSelectionControls(
+                    allSelected = selection.containsAll(visibleIds),
+                    selectedCount = selection.size,
+                    onSelectAll = { selectedIds = visibleIds },
+                    onClear = { selectedIds = emptySet() },
+                    onRemove = {
+                        bulkDeletion = true
+                        pendingDeletionIds = selection.toSet()
+                    },
+                )
+            }
+        }
 
         if (selectedShowId == null) {
             downloadsRootContent(
@@ -118,33 +161,66 @@ fun DownloadsScreen(
                 onOpenShow = { showId, title ->
                     onNavigateToShow?.invoke(showId, title) ?: run { selectedShowId = showId }
                 },
-                onDeleteDownload = { downloadPendingDeletionId = it },
+                onDeleteDownload = requestSingleDeletion,
+                selectedIds = selection,
+                onToggleSelection = toggleSelection,
             )
         } else {
             downloadsShowContent(
                 showId = selectedShowId.orEmpty(),
                 episodes = completedEpisodes,
                 onOpenDownload = onOpenDownload,
-                onDeleteDownload = { downloadPendingDeletionId = it },
+                onDeleteDownload = requestSingleDeletion,
+                selectedIds = selection,
+                onToggleSelection = toggleSelection,
             )
         }
     }
 
-    val pendingDeletionId = downloadPendingDeletionId
-    if (pendingDeletionId != null) {
+    val deletionIds = pendingDeletionIds
+    if (deletionIds != null && canManage && profileId != null) {
         NuvioStatusModal(
-            title = stringResource(Res.string.action_delete_confirm_title),
-            message = stringResource(Res.string.action_delete_confirm_message),
+            title = if (bulkDeletion) stringResource(Res.string.downloads_remove_selected, deletionIds.size)
+                else stringResource(Res.string.action_delete_confirm_title),
+            message = if (bulkDeletion) stringResource(Res.string.downloads_remove_selected_message, deletionIds.size)
+                else stringResource(Res.string.action_delete_confirm_message),
             isVisible = true,
             destructive = true,
             confirmText = stringResource(Res.string.action_yes),
             dismissText = stringResource(Res.string.action_no),
             onConfirm = {
-                DownloadsRepository.cancelDownload(pendingDeletionId)
-                downloadPendingDeletionId = null
+                DownloadsRepository.cancelDownloads(deletionIds, expectedProfileId = profileId)
+                selectedIds = selectedIds - deletionIds
+                pendingDeletionIds = null
             },
-            onDismiss = { downloadPendingDeletionId = null },
+            onDismiss = { pendingDeletionIds = null },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DownloadSelectionControls(
+    allSelected: Boolean,
+    selectedCount: Int,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        TextButton(onClick = onSelectAll, enabled = !allSelected) {
+            Text(stringResource(Res.string.downloads_select_all))
+        }
+        TextButton(onClick = onClear, enabled = selectedCount > 0) {
+            Text(stringResource(Res.string.downloads_clear_selection))
+        }
+        TextButton(onClick = onRemove, enabled = selectedCount > 0) {
+            Text(stringResource(Res.string.downloads_remove_selected, selectedCount), color =
+                if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -153,6 +229,8 @@ private fun LazyListScope.downloadsRootContent(
     onOpenDownload: (DownloadItem) -> Unit,
     onOpenShow: (showId: String, title: String) -> Unit,
     onDeleteDownload: (String) -> Unit,
+    selectedIds: Set<String>,
+    onToggleSelection: (Set<String>) -> Unit,
 ) {
     val activeItems = uiState.activeItems
     val completedMovies = uiState.completedItems.filterNot(DownloadItem::isEpisode)
@@ -176,6 +254,8 @@ private fun LazyListScope.downloadsRootContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selected = item.id in selectedIds,
+                onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
@@ -195,6 +275,8 @@ private fun LazyListScope.downloadsRootContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selected = item.id in selectedIds,
+                onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
@@ -227,6 +309,17 @@ private fun LazyListScope.downloadsRootContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    val episodeIds = episodes.map { it.id }.toSet()
+                    val selectionLabel = stringResource(Res.string.downloads_select_item, item.title)
+                    TriStateCheckbox(
+                        state = when {
+                            selectedIds.containsAll(episodeIds) -> ToggleableState.On
+                            episodeIds.any { it in selectedIds } -> ToggleableState.Indeterminate
+                            else -> ToggleableState.Off
+                        },
+                        onClick = { onToggleSelection(episodeIds) },
+                        modifier = Modifier.semantics { contentDescription = selectionLabel },
+                    )
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -277,6 +370,8 @@ private fun LazyListScope.downloadsShowContent(
     episodes: List<DownloadItem>,
     onOpenDownload: (DownloadItem) -> Unit,
     onDeleteDownload: (String) -> Unit,
+    selectedIds: Set<String>,
+    onToggleSelection: (Set<String>) -> Unit,
 ) {
     val showEpisodes = episodes
         .filter { it.parentMetaId == showId }
@@ -328,6 +423,8 @@ private fun LazyListScope.downloadsShowContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selected = item.id in selectedIds,
+                onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
@@ -341,6 +438,8 @@ private fun LazyListScope.downloadsShowContent(
 @Composable
 private fun DownloadRow(
     item: DownloadItem,
+    selected: Boolean,
+    onToggleSelection: () -> Unit,
     onOpen: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -372,6 +471,12 @@ private fun DownloadRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
+                val selectionLabel = stringResource(Res.string.downloads_select_item, displayTitle)
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onToggleSelection() },
+                    modifier = Modifier.semantics { contentDescription = selectionLabel },
+                )
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),

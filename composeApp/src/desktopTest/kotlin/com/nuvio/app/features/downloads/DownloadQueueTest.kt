@@ -1,6 +1,9 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.streams.StreamItem
+import com.nuvio.app.features.profiles.ProfileRepository
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.*
 import org.junit.Test
@@ -18,6 +21,95 @@ class DownloadQueueTest {
         StreamItem(name = "1080p", url = url, addonName = "Local fixture", addonId = "fixture"))
     private fun waitFor(predicate: () -> Boolean) = runBlocking {
         withTimeout(8_000) { while (!predicate()) delay(20) }
+    }
+
+    @Test fun removingActiveAndQueuedDownloadsNeverStartsTheRemovedQueueOrRestoresLateResults() {
+        assertNotNull(System.getProperty("nuvio.dataDir"))
+        val root = Files.createTempDirectory("download-bulk-queue").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val gate = CountDownLatch(1)
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            executor = Executors.newCachedThreadPool { r -> Thread(r).apply { isDaemon = true } }
+            createContext("/") { exchange ->
+                requests.incrementAndGet()
+                gate.await(5, TimeUnit.SECONDS)
+                runCatching {
+                    exchange.sendResponseHeaders(200, media.size.toLong())
+                    exchange.responseBody.use { it.write(media) }
+                }
+            }
+            start()
+        }
+        try {
+            DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(root)
+            val url = "http://127.0.0.1:${server.address.port}/fixture.mp4"
+            enqueue(1, url); enqueue(2, url); enqueue(3, url)
+            waitFor { requests.get() == 1 }
+            val items = DownloadsRepository.uiState.value.items
+            val profileId = ProfileRepository.activeProfileId
+            assertEquals(profileId, DownloadsRepository.uiState.value.profileId)
+            DownloadsRepository.cancelDownloads(items.map { it.id }.toSet(), profileId + 1)
+            assertEquals(3, DownloadsRepository.uiState.value.items.size, "A stale profile confirmation must be ignored")
+            DownloadsRepository.cancelDownloads(items.map { it.id }.toSet(), profileId)
+            assertTrue(DownloadsRepository.uiState.value.items.isEmpty())
+            gate.countDown()
+            Thread.sleep(400) // let the cancelled request's late response/callbacks arrive
+            assertEquals(1, requests.get(), "Removed queued tasks must never open a transfer")
+            assertTrue(DownloadsRepository.uiState.value.items.isEmpty())
+            waitFor { items.all { !downloadPath(it).exists() && !File(downloadPath(it).path + ".part").exists() } }
+            DownloadsRepository.clearLocalState(); DownloadsRepository.ensureLoaded()
+            assertTrue(DownloadsRepository.uiState.value.items.isEmpty(), "Batch removal must survive reload")
+        } finally {
+            gate.countDown(); server.stop(0)
+            DownloadsRepository.pauseActiveDownloads(); DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original))); root.deleteRecursively()
+        }
+    }
+
+    @Test fun bulkSubsetRemovesOnlyItsOwnedFilesAndPersistsTheRemainingDownloads() {
+        assertNotNull(System.getProperty("nuvio.dataDir"))
+        val root = Files.createTempDirectory("download-bulk-files").toFile()
+        fun fixture(id: String, completed: Boolean): DownloadItem {
+            val folder = File(root, id).apply { mkdirs() }
+            File(folder, ".starlit-owner").writeText(id)
+            val file = File(folder, "$id.mp4")
+            if (completed) file.writeBytes(media) else File(file.path + ".part").writeBytes(media)
+            File(file.path + ".validator").writeText("fixture")
+            return DownloadItem(id, "movie", id, "movie", id, id, streamTitle = "Fixture",
+                providerName = "Fixture", sourceUrl = "https://example.test/$id.mp4",
+                localFileUri = if (completed) file.toURI().toString() else null,
+                destinationDirectory = root.absolutePath, fileName = file.name,
+                status = if (completed) DownloadStatus.Completed else DownloadStatus.Paused,
+                createdAtEpochMs = 0, updatedAtEpochMs = 0)
+        }
+        try {
+            val completed = fixture("completed", true)
+            val partial = fixture("partial", false)
+            val keep = fixture("keep", true)
+            val unrelated = File(root, "user-notes.txt").apply { writeText("Keep me") }
+            val neighbor = File(downloadPath(completed).parentFile, "user-file.txt").apply { writeText("Also keep me") }
+            val sidecars = File(downloadPath(completed).path + ".subtitles").apply { mkdirs() }
+            File(sidecars, "0.srt").writeText("Offline captions")
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{\"items\":" + Json.encodeToString(listOf(completed, partial, keep)) + "}")
+            DownloadsRepository.ensureLoaded()
+            DownloadsRepository.cancelDownloads(setOf(completed.id, partial.id, "missing"), ProfileRepository.activeProfileId)
+            assertEquals(listOf(keep.id), DownloadsRepository.uiState.value.items.map { it.id })
+            waitFor { !downloadPath(completed).exists() && !File(downloadPath(partial).path + ".part").exists() &&
+                !File(downloadPath(partial).path + ".validator").exists() && !sidecars.exists() }
+            assertFalse(File(downloadPath(partial).path + ".validator").exists())
+            assertFalse(sidecars.exists())
+            assertEquals("Keep me", unrelated.readText())
+            assertEquals("Also keep me", neighbor.readText())
+            assertContentEquals(media, downloadPath(keep).readBytes())
+            DownloadsRepository.clearLocalState(); DownloadsRepository.ensureLoaded()
+            assertEquals(listOf(keep.id), DownloadsRepository.uiState.value.items.map { it.id })
+        } finally {
+            DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            root.deleteRecursively()
+        }
     }
 
     @Test fun queueIsBoundedDuplicateSafeAndDurableAndOfflineLookupUsesTheRightEpisode() {
