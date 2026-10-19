@@ -105,4 +105,14 @@
     <string name="watch_later_series">Series</string>
     <string name="watch_later_remove_failed">Couldn't remove: %1$s</string>
     <string name="action_got_it">Got it</string>
+    <string name="player_subs_tab_tracks">Tracks</string>
+    <string name="player_subs_tab_timing">Timing</string>
+    <string name="player_subs_preview_text">Subtitles will look like this</string>
+    <string name="player_subs_custom_style_hint">Replace the subtitle file's colors and outline with your own</string>
+    <string name="player_subs_custom_style_off_hint">Turn on custom styling to change these</string>
+    <string name="player_subs_position">Vertical position</string>
+    <string name="player_subs_delay_hint">Press + if subtitles show before the speech, − if they show after it</string>
+    <string name="player_subs_auto_sync_hint">When you hear a line, press Capture, then pick that line below</string>
+    <string name="player_subs_searching">Searching addons for subtitles…</string>
+    <string name="player_subs_search_addons">Search addons for subtitles</string>
 </resources>
