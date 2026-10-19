@@ -1,3 +1,11 @@
+Starlit 1.0.20 redesigns the episode download dialog and downloads the best quality available by default.
+
+- Pick seasons from chips that show how much of each one is selected, tick a whole season at once, and see each episode's still, air date and runtime.
+- Episodes already in Downloads are marked Downloaded, In queue or Paused and aren't added again. Failed ones can be picked to retry, and episodes that haven't aired show when they air.
+- Quality now offers Highest available, the new default: Starlit asks every source and downloads the sharpest file it finds. Choosing 2160p or 1080p also matches files labelled 4K, UHD or FHD.
+- Quality, source type, provider and the save folder sit in a side panel, and your last choices are remembered next time.
+- Movies get a compact version of the same dialog.
+
 Starlit 1.0.19 lets you download whole seasons ahead of time and play them from disk instead of waiting for a stream, and no longer leaves update installers behind.
 
 - Series pages have a Download episodes / seasons button above the episode list, and movies have Download for offline. Pick one or more seasons or single episodes. Episodes that haven't aired yet can't be selected.
