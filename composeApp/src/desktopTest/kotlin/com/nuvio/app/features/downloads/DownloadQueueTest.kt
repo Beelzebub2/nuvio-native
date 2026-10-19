@@ -55,7 +55,8 @@ class DownloadQueueTest {
             DownloadsRepository.pauseActiveDownloads()
             assertTrue(DownloadsRepository.uiState.value.items.all { it.status == DownloadStatus.Paused })
             val payload = DownloadsStorage.loadPayload()
-            assertTrue(payload.orEmpty().contains(root.absolutePath.replace("\\", "\\\\")))
+            // The folder is stored canonically; CI temp paths can use 8.3 short names (RUNNER~1).
+            assertTrue(payload.orEmpty().contains(root.canonicalPath.replace("\\", "\\\\")))
             DownloadsRepository.clearLocalState()
             DownloadsRepository.ensureLoaded()
             assertEquals(2, DownloadsRepository.uiState.value.items.size)
