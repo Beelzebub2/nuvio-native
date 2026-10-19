@@ -1,3 +1,10 @@
+Starlit 1.0.16 makes Airing Now useful sooner and keeps schedule loading responsive while preserving strict filtering, cooldowns, and updater safeguards.
+
+- The newest released schedule page appears first, then history and upcoming pages fill progressively in the background. Valid partial snapshots persist across failures and missing pages are retried.
+- Cached gateway pages skip unnecessary upstream pacing while cold gateway and direct AniList requests remain paced. Provider failure cooldowns, Retry-After handling, and the 429 fallback guard remain enforced.
+- Restoring schedule snapshots and applying source or policy changes no longer block the UI, and obsolete requests are cancelled safely.
+- Native player setup, window chrome readiness, diagnostics, torrent preparation, Discord startup, and first-use QuickJS initialization move off the initial UI path while preserving their existing lifecycle controls.
+
 Starlit 1.0.15 is the first release under the new name: Nuvio Native is now Starlit, made by Beelzebub2 and based on Nuvio by Tapframe and friends.
 
 - A new logo and app icons: a play button holding a star, in all six App icon colourways, with sharper Windows icons at small sizes.
