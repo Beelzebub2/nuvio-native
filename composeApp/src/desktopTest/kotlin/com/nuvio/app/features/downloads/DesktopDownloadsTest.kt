@@ -271,6 +271,27 @@ class DesktopDownloadsTest {
         assertFalse(matchesDownloadSelection(direct.copy(url = null, externalUrl = "https://example.test/page"), DownloadSourceSelection()))
     }
 
+    @Test fun highestQualityRanksLabelledResolutionsAndKeepsSourceOrderForTies() {
+        fun stream(name: String, title: String? = null) = StreamItem(name = name, title = title, url = "https://example.test/$name.mp4", addonName = "Fixture", addonId = "fixture")
+        assertEquals(2160, downloadStreamQuality(stream("Torrentio\n4K HDR")))
+        assertEquals(2160, downloadStreamQuality(stream("Show.S01E01.2160p.WEB")))
+        assertEquals(1080, downloadStreamQuality(stream("Fixture", "Show S01E01 1080p x265")))
+        assertEquals(720, downloadStreamQuality(stream("720p")))
+        assertNull(downloadStreamQuality(stream("Fixture", "Episode 1 · 720 MB")))
+        val ranked = rankByDownloadQuality(listOf(stream("first", "480p"), stream("second", "unknown"), stream("third", "1080p"), stream("fourth", "1080p"), stream("fifth", "4k")))
+        assertEquals(listOf("fifth", "third", "fourth", "first", "second"), ranked.map { it.name })
+        val uhd = stream("Fixture", "Show 2160p")
+        assertTrue(matchesDownloadSelection(uhd, DownloadSourceSelection(quality = DownloadQuality.Highest)))
+        assertTrue(matchesDownloadSelection(stream("Fixture", "Show 4K"), DownloadSourceSelection(quality = "2160p")))
+        assertFalse(matchesDownloadSelection(uhd, DownloadSourceSelection(quality = "1080p")))
+    }
+
+    @Test fun longFolderPathsKeepTheDriveAndNearestFolders() {
+        assertEquals("D:\\Media", compactFolderPath("D:\\Media"))
+        assertEquals("C:\\…\\Roaming\\NuvioNative", compactFolderPath("C:\\Users\\ricar\\AppData\\Roaming\\NuvioNative"))
+        assertEquals("/home/…/Videos/Anime", compactFolderPath("/home/someone/Media/Library/Videos/Anime"))
+    }
+
     @Test fun torrentsRequireAnExactMediaFileAndUseOnlyTheirOwnBackend() = runBlocking {
         val files = listOf(TorrServerFile(1, "Show/E01.mkv", 100), TorrServerFile(2, "Show/E02.mkv", 200), TorrServerFile(3, "readme.txt", 20))
         assertEquals(2, selectDownloadTorrentFile(files, 1, null).id)

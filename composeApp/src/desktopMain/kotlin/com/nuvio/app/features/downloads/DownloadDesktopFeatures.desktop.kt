@@ -35,6 +35,18 @@ internal actual object DownloadDesktopFeatures {
         store.putString("folder", folder.canonicalPath)
     }
     actual fun remove(item: DownloadItem, idle: Boolean) { requestDownloadRemoval(item) }
+
+    /** The provider, quality and source type chosen last time, so the dialog opens on them. */
+    internal fun lastSelection() = DownloadSourceSelection(
+        providerId = store.getString("provider"),
+        quality = store.getString("quality") ?: DownloadQuality.Highest,
+        transport = store.getString("transport") ?: "Any",
+    )
+    internal fun saveSelection(selection: DownloadSourceSelection) {
+        store.putString("provider", selection.providerId)
+        store.putString("quality", selection.quality)
+        store.putString("transport", selection.transport)
+    }
 }
 
 @Composable internal actual fun DownloadManagementControls() {
@@ -67,7 +79,7 @@ internal actual object DownloadDesktopFeatures {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
 }
-private suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
+internal suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
     SwingUtilities.invokeLater {
         if (!continuation.isActive) return@invokeLater
         val chooser = JFileChooser(current).apply { fileSelectionMode = JFileChooser.DIRECTORIES_ONLY; dialogTitle = "Choose download folder" }
@@ -88,103 +100,7 @@ internal fun downloadEpisodeKey(video: MetaVideo): String = "${video.season}|${v
     OutlinedButton(onClick = { visible = true }) {
         Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
-        Text(if (meta.videos.isEmpty()) "Download for offline" else "Download episodes / seasons")
+        Text(if (meta.videos.isEmpty()) "Download for offline" else "Download episodes")
     }
     if (visible) BatchDownloadDialog(meta, initialSeason, onDismiss = { visible = false })
-}
-
-@Composable internal fun BatchDownloadDialog(meta: MetaDetails, initialSeason: Int, onDismiss: () -> Unit) {
-    val movie = meta.type.equals("movie", true) && meta.videos.isEmpty()
-    val episodes = remember(meta) { if (movie) listOf(MetaVideo(meta.defaultVideoId ?: meta.id, meta.name)) else meta.videos }
-    val today = CurrentDateProvider.todayIsoDate()
-    val eligible = episodes.filter { it.id.isNotBlank() && it.isReleasedBy(today) }
-    var selected by remember(meta.id, initialSeason) { mutableStateOf(eligible.filter { movie || (it.season ?: 0) == initialSeason }.map(::downloadEpisodeKey).toSet()) }
-    val scope = rememberCoroutineScope()
-    var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
-    var picking by remember { mutableStateOf(false) }
-    var folderError by remember { mutableStateOf<String?>(null) }
-    var quality by remember { mutableStateOf("Any") }
-    var transport by remember { mutableStateOf("Any") }
-    val providers = remember(meta.id) {
-        listOf(null to "All enabled sources") + AddonRepository.uiState.value.addons.enabledAddons().mapNotNull { addon ->
-            addon.manifest?.takeIf { manifest -> eligible.any { manifest.supportsStream(meta.type, it.id) } }?.let { addon.streamAddonInstanceId(it.id) to addon.displayTitle }
-        } + PluginRepository.getEnabledScrapersForType(meta.type).map { "plugin:${it.id}" to it.name }
-    }
-    var provider by remember { mutableStateOf<String?>(null) }
-    var providerExpanded by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss,
-        title = { Text(if (movie) "Download for offline" else "Download episodes and seasons") },
-        text = {
-            Column(Modifier.widthIn(max = 600.dp).heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("One file at a time. Uses the first supported file matching your choices. Failures appear in Library > Downloads.")
-                Text("Save to: $folder", style = MaterialTheme.typography.bodySmall)
-                TextButton(enabled = !picking, onClick = {
-                    picking = true
-                    scope.launch {
-                        try {
-                            chooseDownloadFolder(folder)?.let { selectedFolder -> withContext(Dispatchers.IO) { DownloadDesktopFeatures.setDirectory(selectedFolder) } }
-                            folder = DownloadDesktopFeatures.directory().orEmpty()
-                        } catch (e: Exception) { if (e is CancellationException) throw e; folderError = e.message }
-                        finally { picking = false }
-                    }
-                }) { Text("Choose folder") }
-                folderError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Box {
-                    OutlinedButton(onClick = { providerExpanded = true }) { Text("Provider: " + (providers.firstOrNull { it.first == provider }?.second ?: "All enabled sources")) }
-                    DropdownMenu(providerExpanded, onDismissRequest = { providerExpanded = false }) {
-                        providers.forEach { (id, name) -> DropdownMenuItem(text = { Text(name) }, onClick = { provider = id; providerExpanded = false }) }
-                    }
-                }
-                if (episodes.isEmpty()) Text("No episode metadata is available. Open an episode source to download it individually.")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DownloadChoice("Quality", quality, listOf("Any", "2160p", "1080p", "720p", "480p")) { quality = it }
-                    DownloadChoice("Sources", transport, listOf("Any", "Direct files", "Torrents")) { transport = it }
-                }
-                Text("Streaming-only sources cannot be saved offline. Torrent packs need an exact episode file.", style = MaterialTheme.typography.bodySmall)
-                if (!movie) Row {
-                    TextButton(onClick = { selected = eligible.map(::downloadEpisodeKey).toSet() }) { Text("Select all available") }
-                    TextButton(onClick = { selected = emptySet() }) { Text("Clear") }
-                }
-                LazyColumn(Modifier.height(180.dp)) {
-                    episodes.groupBy { it.season ?: 0 }.toSortedMap().forEach { (season, videos) ->
-                        if (!movie) item(key = "season-$season") {
-                            val ids = videos.filter { it in eligible }.map(::downloadEpisodeKey).toSet()
-                            Row(Modifier.fillMaxWidth().clickable(enabled = ids.isNotEmpty()) {
-                                selected = if (ids.all { it in selected }) selected - ids else selected + ids
-                            }, verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(ids.isNotEmpty() && ids.all { it in selected }, onCheckedChange = { checked -> selected = if (checked) selected + ids else selected - ids }, enabled = ids.isNotEmpty())
-                                Text("Season $season - ${ids.size} available")
-                            }
-                        }
-                        items(videos, key = { "${it.id}|${it.season}|${it.episode}" }) { video ->
-                            Row(Modifier.fillMaxWidth().clickable(enabled = video in eligible) {
-                                selected = if (downloadEpisodeKey(video) in selected) selected - downloadEpisodeKey(video) else selected + downloadEpisodeKey(video)
-                            }, verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(downloadEpisodeKey(video) in selected, onCheckedChange = { checked -> selected = if (checked) selected + downloadEpisodeKey(video) else selected - downloadEpisodeKey(video) }, enabled = video in eligible)
-                                Text((video.episode?.let { "E$it - " } ?: "") + video.title + if (video !in eligible) " - Unavailable / unaired" else "")
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { Button(enabled = selected.isNotEmpty() && !picking, onClick = {
-            val sourceMeta = if (movie) meta.copy(videos = episodes) else meta
-            val count = DownloadsRepository.enqueueBatch(sourceMeta, batchDownloadEpisodes(sourceMeta, selected, today), DownloadSourceSelection(provider, quality, transport))
-            NuvioToastController.show(if (count == 0) "Already in Downloads. Manage them in Library > Downloads."
-                else "${downloadCountLabel(count)} queued. Manage them in Library > Downloads.")
-            onDismiss()
-        }) { Text("Queue ${downloadCountLabel(selected.size)}") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
-}
-private fun downloadCountLabel(count: Int) = if (count == 1) "1 download" else "$count downloads"
-
-@Composable private fun DownloadChoice(label: String, value: String, options: List<String>, onSelect: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { expanded = true }) { Text("$label: $value") }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { expanded = false; onSelect(option) }) }
-        }
-    }
 }
