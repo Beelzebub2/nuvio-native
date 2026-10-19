@@ -1,6 +1,8 @@
 // A fixed, read-only provider gateway. Never accepts arbitrary URLs or GraphQL.
 const MEDIA_FIELDS = 'id idMal isAdult tags{name isAdult} title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes';
 const SCHEDULE_QUERY = `query($start:Int,$end:Int,$page:Int){Page(page:$page,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:$start,airingAt_lesser:$end,sort:TIME){episode airingAt media{${MEDIA_FIELDS}}}}}`;
+const RECENT_QUERY = SCHEDULE_QUERY.replace('sort:TIME', 'notYetAired:false,sort:TIME_DESC');
+const FUTURE_QUERY = SCHEDULE_QUERY.replace('sort:TIME', 'notYetAired:true,sort:TIME');
 const MEDIA_QUERY = `query($id:Int){Media(id:$id,type:ANIME){${MEDIA_FIELDS}}Page(perPage:50){airingSchedules(mediaId:$id,notYetAired:false,sort:EPISODE_DESC){episode airingAt}}}`;
 
 function integer(params, name, min, max) {
@@ -11,12 +13,13 @@ function integer(params, name, min, max) {
 
 export function providerRequest(url) {
   const p = url.searchParams;
-  if (url.pathname === '/schedule') {
+  if (url.pathname === '/schedule' || url.pathname === '/schedule-recent') {
     const now = Math.floor(Date.now() / 1000);
     const start = integer(p, 'start', now - 10 * 86400, now + 2 * 86400);
     const end = integer(p, 'end', start + 1, start + 10 * 86400);
     const page = integer(p, 'page', 1, 20);
-    return { url: 'https://graphql.anilist.co', body: { query: SCHEDULE_QUERY, variables: { start, end, page } }, ttl: 300 };
+    if (p.has('future') && p.get('future') !== '1') throw new Error('Invalid future');
+    return { url: 'https://graphql.anilist.co', body: { query: url.pathname === '/schedule-recent' ? RECENT_QUERY : p.get('future') === '1' ? FUTURE_QUERY : SCHEDULE_QUERY, variables: { start, end, page } }, ttl: 300 };
   }
   if (url.pathname === '/classifications') {
     const raw = p.get('ids') || '';
@@ -70,30 +73,38 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
   if (target.body) keyUrl.searchParams.set('body', JSON.stringify(target.body));
   const key = new Request(keyUrl);
   const cached = await cache.match(key);
-  if (cached) return cached;
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('X-Nuvio-Cache', 'HIT');
+    return new Response(cached.body, { headers });
+  }
   const staleKey = new Request(key.url + '&stale=1');
   const cooldownKey = new Request(new URL(`/cooldown/v1/${new URL(target.url).hostname}`, url.origin));
   async function unavailable(status, headers = new Headers(), recordCooldown = true) {
     const seconds = Math.max(60, Number(headers.get('Retry-After')) ||
       Math.ceil((Date.parse(headers.get('Retry-After')) - Date.now()) / 1000) || 0,
       (Number(headers.get('X-RateLimit-Reset')) || 0) - Math.floor(Date.now() / 1000));
-    if (status === 429 && recordCooldown) {
+    if ((status === 429 || status === 403 || status >= 500) && recordCooldown) {
       // Keep the provider cooldown separate from successful response cache entries.
-      await cache.put(cooldownKey, json({ until: Date.now() + seconds * 1000 }, 200,
+      await cache.put(cooldownKey, json({ until: Date.now() + seconds * 1000, status }, 200,
         { 'Cache-Control': `public, max-age=${seconds}` })).catch(() => {});
     }
     const stale = await cache.match(staleKey);
     if (stale) {
-      return new Response(stale.body, { status: 200, headers: { ...Object.fromEntries(stale.headers),
-        'Cache-Control': 'public, max-age=60', 'X-Nuvio-Stale': '1', 'Retry-After': String(seconds) } });
+      const headers = new Headers(stale.headers);
+      headers.set('Cache-Control', 'public, max-age=60');
+      headers.set('X-Nuvio-Stale', '1');
+      headers.set('X-Nuvio-Cache', 'STALE');
+      headers.set('Retry-After', String(seconds));
+      return new Response(stale.body, { headers });
     }
     return json({ error: 'Provider unavailable', providerStatus: status }, status === 429 ? 429 : 503,
       { 'Retry-After': String(seconds) });
   }
   const cooldown = await cache.match(cooldownKey);
   if (cooldown) {
-    const { until } = await cooldown.json();
-    if (until > Date.now()) return unavailable(429, new Headers({ 'Retry-After': String(Math.ceil((until - Date.now()) / 1000)) }), false);
+    const { until, status = 429 } = await cooldown.json();
+    if (until > Date.now()) return unavailable(status, new Headers({ 'Retry-After': String(Math.ceil((until - Date.now()) / 1000)) }), false);
   }
   try {
     const upstream = await fetcher(target.url, {
@@ -125,8 +136,8 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     const payload = JSON.parse(new TextDecoder().decode(bytes));
     if (payload.error || payload.errors?.length) return unavailable(payload.errors?.some(error => error.status === 429) ? 429 : 503, upstream.headers);
-    const response = json(payload, 200, { 'Cache-Control': `public, max-age=${target.ttl}`, 'X-Nuvio-Gateway': '1' });
-    const stale = json(payload, 200, { 'Cache-Control': 'public, max-age=86400', 'X-Nuvio-Gateway': '1' });
+    const response = json(payload, 200, { 'Cache-Control': `public, max-age=${target.ttl}`, 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
+    const stale = json(payload, 200, { 'Cache-Control': 'public, max-age=86400', 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
     ctx.waitUntil(Promise.all([cache.put(key, response.clone()), cache.put(staleKey, stale)]).catch(() => {}));
     return response;
   } catch (e) {

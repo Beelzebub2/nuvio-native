@@ -7,6 +7,10 @@ import androidx.compose.ui.configureSwingGlobalsForCompose
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -24,7 +28,6 @@ import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.ProvideDesktopWindowInsets
 import com.nuvio.app.features.discordrpc.DiscordPresenceManager
 import com.nuvio.app.features.p2p.P2pStreamingEngine
-import com.nuvio.app.features.plugins.configureDesktopQuickJsLibrary
 import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.desktop.DesktopAppFullscreenController
 import com.nuvio.app.features.player.desktop.DesktopHostOs
@@ -57,8 +60,6 @@ fun main(args: Array<String>) {
         runCatching { NativePlayerBridge.initGtkEarly() }
     }
     applyDesktopRendererPreference()
-    SentryInitializer.start()
-    configureDesktopQuickJsLibrary()
     configureDesktopChrome()
     configureLinuxSwingGlobalsBeforeAwt()
     installDesktopOpenUriHandler()
@@ -68,8 +69,6 @@ fun main(args: Array<String>) {
     // on the very first Compose frame (matching Android's SharedPreferences behavior).
     ProfileRepository.loadCachedProfiles()
     AppIconRepository.ensureLoaded()
-    P2pStreamingEngine.prepare()
-    DiscordPresenceManager.start()
 
     application {
         val appIconState by AppIconRepository.state.collectAsState()
@@ -152,6 +151,12 @@ fun main(args: Array<String>) {
             }
 
             LaunchedEffect(window) {
+                // Optional services and their class initializers must not delay the first frame.
+                withFrameNanos { }
+                launch(Dispatchers.IO) { SentryInitializer.start() }
+                launch(Dispatchers.IO) { P2pStreamingEngine.prepare() }
+                launch(Dispatchers.IO) { DiscordPresenceManager.start() }
+                withContext(Dispatchers.IO) { runCatching { NativePlayerBridge.ensureLoaded() } }
                 applyNativeDesktopWindowChrome(window)
                 installLinuxExtendedMouseButtons()
                 // Windows fullscreen is emulated natively and isn't reflected by

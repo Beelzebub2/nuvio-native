@@ -52,12 +52,14 @@ class AiringClientTest {
         client.schedule(AiringSettings(historyDays = 1, zone = "Pacific/Kiritimati"), now)
         client.schedule(AiringSettings(historyDays = 5, zone = "America/New_York"), now)
         val gatewayRequests = requests.filter { it.url.host == "gateway.test" }
-        assertEquals(4, gatewayRequests.size)
-        assertEquals(gatewayRequests.take(2).map { it.url }, gatewayRequests.drop(2).map { it.url })
+        assertEquals(1, gatewayRequests.size)
         assertEquals(4, requests.count { it.url.host == "graphql.anilist.co" })
-        val firstEnd = gatewayRequests[0].url.queryParameter("end")!!.toLong()
-        val nextStart = gatewayRequests[1].url.queryParameter("start")!!.toLong()
-        assertEquals(firstEnd - 1, nextStart)
+        assertEquals("/schedule-recent", gatewayRequests.single().url.encodedPath)
+        val direct = requests.filter { it.url.host == "graphql.anilist.co" }
+        fun body(request: Request) = okio.Buffer().also { request.body!!.writeTo(it) }.readUtf8()
+        assertEquals(direct.take(2).map(::body), direct.drop(2).map(::body))
+        assertTrue(body(direct[0]).contains("notYetAired:false,sort:TIME_DESC"))
+        assertTrue(body(direct[1]).contains("notYetAired:true,sort:TIME"))
     }
 
     @Test fun `release schedules bulk classify once and never trust adult exclusion for Ecchi`() = runBlocking {
@@ -107,6 +109,28 @@ class AiringClientTest {
         }, gateway = "https://gateway.test", clock = { now.toEpochMilli() })
         val known = listOf(AiringEvent(218217, 1, now.epochSecond, "Example", isAdult = false))
         assertNull(client.details(218217, known, AiringSettings()))
+    }
+
+    @Test fun `gateway outage memo expires and does not disable independent schedule providers`() = runBlocking {
+        val clock = java.util.concurrent.atomic.AtomicLong(now.toEpochMilli())
+        var aniListGateway = 0
+        var releaseGateway = 0
+        val client = AiringClient(http { request ->
+            when {
+                request.url.host == "graphql.anilist.co" -> response(request, emptySchedule)
+                request.url.encodedPath.startsWith("/release-schedule") -> {
+                    releaseGateway++; response(request, """{"episodes":[]}""")
+                }
+                else -> { aniListGateway++; response(request, """{"providerStatus":403}""", 503, "60") }
+            }
+        }, gateway = "https://gateway.test", clock = clock::get, pause = { clock.addAndGet(it) })
+        client.schedule(AiringSettings(), now)
+        client.schedule(AiringSettings(airType = "sub"), now)
+        assertEquals(1, aniListGateway)
+        assertEquals(2, releaseGateway)
+        clock.addAndGet(60_000L)
+        client.schedule(AiringSettings(), now)
+        assertEquals(2, aniListGateway)
     }
 
     @Test fun `retry after seconds dates and provider reset use the latest deadline`() {
