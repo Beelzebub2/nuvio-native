@@ -49,6 +49,7 @@ internal actual object DownloadDesktopFeatures {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal actual fun DownloadManagementControls() {
     val scope = rememberCoroutineScope()
     var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
@@ -58,7 +59,7 @@ internal actual object DownloadDesktopFeatures {
         Text("Download folder", style = MaterialTheme.typography.titleSmall)
         Text(folder, style = MaterialTheme.typography.bodySmall)
         Text("Changing this folder applies to new downloads. Existing files stay in their original folders.", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled = !picking, onClick = {
                 picking = true
                 scope.launch {

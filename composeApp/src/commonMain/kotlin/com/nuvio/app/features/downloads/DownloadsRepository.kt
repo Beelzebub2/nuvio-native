@@ -186,17 +186,33 @@ object DownloadsRepository {
         _uiState.value.items.firstOrNull { it.id == downloadId }?.let(::removeItem)
     }
 
-    private fun removeItem(item: DownloadItem) {
-        tokens.remove(item.id)
-        val handle = activeHandles.remove(item.id)
-        handle?.cancel()
-        // Desktop cleanup is deferred until streams are closed; mobile keeps its existing platform cleanup.
-        DownloadDesktopFeatures.remove(item, handle == null)
-        if (!isDesktop) {
-            DownloadsPlatformDownloader.removeFile(DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName) ?: item.localFileUri)
-            DownloadsPlatformDownloader.removePartialFile(item.fileName)
+    fun cancelDownloads(downloadIds: Set<String>, expectedProfileId: Int) = synchronized(lock) {
+        // A confirmation from another profile must never remove the current profile's files.
+        if (com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId ||
+            loadedProfile != expectedProfileId) return
+        removeItems(_uiState.value.items.filter { it.id in downloadIds })
+    }
+
+    private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
+
+    private fun removeItems(items: List<DownloadItem>) {
+        if (items.isEmpty()) return
+        val ids = items.map { it.id }.toSet()
+        // Invalidate the entire batch before cancellation callbacks or the queue can run.
+        ids.forEach(tokens::remove)
+        val handles = ids.associateWith { activeHandles.remove(it) }
+        publish(_uiState.value.items.filterNot { it.id in ids })
+        items.forEach { item ->
+            val handle = handles[item.id]
+            handle?.cancel()
+            // Desktop cleanup waits for closed streams and removes only this task's owned files.
+            DownloadDesktopFeatures.remove(item, handle == null)
+            if (!isDesktop) {
+                DownloadsPlatformDownloader.removeFile(DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName) ?: item.localFileUri)
+                DownloadsPlatformDownloader.removePartialFile(item.fileName)
+            }
         }
-        publish(_uiState.value.items.filterNot { it.id == item.id }); persist(); pumpQueue()
+        persist(); pumpQueue()
     }
 
     private fun invalidateTransfers() {
@@ -291,7 +307,7 @@ object DownloadsRepository {
         val old = _uiState.value.items.associate { it.id to it.status }
         if (items.any { it.status == DownloadStatus.Completed && old[it.id] != DownloadStatus.Completed && old[it.id] != null })
             _hasUnseenCompleted.value = true
-        _uiState.value = DownloadsUiState(items)
+        _uiState.value = DownloadsUiState(items, profileId = loadedProfile)
         notifyLiveStatusPlatform()
     }
     private fun notifyLiveStatusPlatform() { runCatching { DownloadsLiveStatusPlatform.onItemsChanged(_uiState.value.items) } }
