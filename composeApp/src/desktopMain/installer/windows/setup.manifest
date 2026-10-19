@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="NuvioMedia.NuvioNative.Setup" version="1.0.0.0"/>
-  <description>Nuvio Native Setup</description>
+  <assemblyIdentity type="win32" name="Beelzebub2.Starlit.Setup" version="1.0.0.0"/>
+  <description>Starlit Setup</description>
   <!-- Per-user install: never ask for elevation, and opt out of installer detection. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>

@@ -15,10 +15,10 @@ namespace setup {
 // (written by the Gradle task from compose.desktop settings); the uninstaller,
 // which carries no payload, reads them back from its Apps & Features entry.
 struct Product {
-    std::wstring name = L"Nuvio Native";
+    std::wstring name = L"Starlit";
     std::wstring version;
-    std::wstring publisher = L"Nuvio Media";
-    std::wstring exe = L"Nuvio Native.exe";
+    std::wstring publisher = L"Beelzebub2";
+    std::wstring exe = L"Starlit.exe";
     std::wstring legacyUpgradeCode;  // the jpackage MSI's UpgradeCode, removed on upgrade
 };
 
@@ -35,25 +35,36 @@ struct Identity {
     // Whether the MSI found by legacyUpgradeCode is ours to replace.
     bool ownsLegacy() const { return !sandbox || testLegacy; }
     std::wstring displayName() const;
+    std::wstring displayNameFor(const std::wstring& productName) const;
     std::wstring arpKeyPath() const;
     std::wstring shortcutFileName() const;
     std::wstring uninstallerFileName() const;
     std::wstring defaultInstallDir() const;
     std::wstring startMenuShortcut() const;
     std::wstring desktopShortcut() const;
+    std::wstring startMenuShortcutFor(const std::wstring& productName) const;
+    std::wstring desktopShortcutFor(const std::wstring& productName) const;
 };
 
 struct Existing {
     bool ours = false;
     std::wstring version;
     std::wstring location;
+    // What the earlier install was called; differs from Product after a rename
+    // (Nuvio Native -> Starlit), so its folder and shortcuts can be retired.
+    std::wstring name;
+    std::wstring launcher;
     bool startMenu = true;
     bool desktop = true;
 
     bool legacy = false;  // installed by the jpackage MSI/EXE
     std::wstring legacyProductCode;
+    std::wstring legacyName;
     std::wstring legacyVersion;
     std::wstring legacyLocation;
+
+    // True when the earlier copy carries another product name than this setup.
+    bool renamed(const Product& product) const;
 };
 
 struct PayloadSource {
@@ -100,6 +111,7 @@ private:
     bool writeUninstaller(const std::wstring& dir);
     void removeLegacyMsi();
     bool swapInto(const std::wstring& staging, const std::wstring& dir);
+    bool mergeInto(const std::wstring& staging, const std::wstring& dir);
     void writeShortcuts(const InstallRequest& request);
     void registerUninstall(const InstallRequest& request);
     bool closeRunning(const std::vector<std::wstring>& dirs);

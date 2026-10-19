@@ -19,7 +19,7 @@
 
   const PHASES = {
     idle: 'Getting ready…',
-    closing: 'Closing Nuvio…',
+    closing: 'Closing the app…',
     extracting: 'Unpacking files…',
     legacy: 'Removing the previous version…',
     finishing: 'Creating shortcuts…',
@@ -29,7 +29,8 @@
 
   const state = {
     mode: 'install',
-    name: 'Nuvio Native',
+    name: 'Starlit',
+    publisher: '',
     version: '',
     previousVersion: '',
     dir: '',
@@ -176,7 +177,7 @@
       $('welcome-title').textContent = `Update ${state.name}`;
       $('welcome-lead').textContent = state.previousVersion
         ? `Version ${state.previousVersion} is installed. Updating keeps your settings, profiles and library.`
-        : 'Nuvio is already installed. Updating keeps your settings, profiles and library.';
+        : `${state.name} is already installed. Updating keeps your settings, profiles and library.`;
       if (state.previousVersion) addFact('Installed', state.previousVersion);
       addFact('New version', state.version);
       addFact('Location', shortPath(state.dir), state.dir);
@@ -189,13 +190,15 @@
       addFact('Version', state.version);
       addFact('Size', mb(state.required));
       addFact('Access', 'Just your account, no admin rights needed');
+      if (state.publisher) addFact('Made by', state.publisher);
+      addFact('Based on', 'Nuvio, by Tapframe and friends');
       $('welcome-options').hidden = true;
       $('welcome-next').textContent = 'Continue';
       $('welcome-next').disabled = false;
     }
     const notice = $('running-notice');
     notice.hidden = !state.running;
-    notice.textContent = `Nuvio is open. Setup will close it before ${state.mode === 'update' ? 'updating' : 'installing'}.`;
+    notice.textContent = `${state.name} is open. Setup will close it before ${state.mode === 'update' ? 'updating' : 'installing'}.`;
   }
 
   function renderOptions() {
@@ -215,6 +218,7 @@
     $('confirm-title').textContent = `Uninstall ${state.name}`;
     const version = state.version ? ` ${state.version}` : '';
     $('confirm-lead').textContent = `This removes ${state.name}${version}, its shortcuts and its entry in Installed apps.`;
+    $('data-label').textContent = `Also delete my ${state.name} data`;
     setSwitch($('opt-data'), state.removeData);
   }
 
@@ -224,7 +228,7 @@
     if (state.mode === 'uninstall') {
       $('done-title').textContent = `${state.name} is uninstalled`;
       $('done-lead').textContent = state.removeData
-        ? 'Your Nuvio data on this PC was deleted too.'
+        ? `Your ${state.name} data on this PC was deleted too.`
         : 'Your settings, profiles and cache are still on this PC for a reinstall.';
       launch.hidden = true;
       close.className = 'button primary';
@@ -235,6 +239,7 @@
         : state.desktop ? 'Find it on your desktop.'
           : `It's in ${state.dir}.`;
     $('done-title').textContent = `${state.name} is ${state.mode === 'update' ? 'updated' : 'installed'}`;
+    launch.textContent = `Launch ${state.name}`;
     $('done-lead').textContent = state.mode === 'update' && state.version ? `You're on version ${state.version}. ${where}` : where;
   }
 
@@ -278,7 +283,7 @@
     progress.phase = message.phase;
     progress.done = message.done;
     progress.total = message.total;
-    $('progress-status').textContent = PHASES[message.phase] || PHASES.idle;
+    $('progress-status').textContent = message.phase === 'closing' ? `Closing ${state.name}…` : PHASES[message.phase] || PHASES.idle;
     $('progress-file').textContent = message.phase === 'extracting' ? message.file : '';
     animateProgress();
   }
@@ -425,7 +430,7 @@
       if (params.get('step') === 'progress' && value > 0.58) clearInterval(timer);
       else if (value >= 1) {
         clearInterval(timer);
-        if (params.get('step') === 'error') onMessage({ type: 'error', message: 'Some files in C:\\Users\\you\\AppData\\Local\\Nuvio Native are in use, so setup couldn\'t replace them. Close Nuvio, then select Try again.' });
+        if (params.get('step') === 'error') onMessage({ type: 'error', message: 'Some files in C:\\Users\\you\\AppData\\Local\\Starlit are in use, so setup couldn\'t replace them. Close Starlit, then select Try again.' });
         else onMessage({ type: 'done' });
       }
     }, 60);
@@ -433,10 +438,11 @@
   onMessage({
     type: 'init',
     mode,
-    name: 'Nuvio Native',
-    version: '1.0.14',
-    previousVersion: mode === 'update' ? '1.0.13' : '',
-    dir: 'C:\\Users\\you\\AppData\\Local\\Nuvio Native',
+    name: 'Starlit',
+    publisher: 'Beelzebub2',
+    version: '1.0.15',
+    previousVersion: mode === 'update' ? '1.0.14' : '',
+    dir: 'C:\\Users\\you\\AppData\\Local\\Starlit',
     startMenu: true,
     desktop: true,
     required: 282e6,
