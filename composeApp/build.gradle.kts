@@ -531,6 +531,8 @@ val desktopReleaseVersionCode = (
     ?: 1
 val desktopReleasePackageVersion = jpackageCompatibleVersion(desktopReleaseVersionName)
 val windowsMsiUpgradeUuid = "bf8d5dc5-6680-41bc-a83a-1c8d9c98cb49"
+val desktopPackageName = "Nuvio Native"
+val desktopVendor = "Nuvio Media"
 val iosDistribution = (
     providers.gradleProperty("nuvio.ios.distribution").orNull
         ?: System.getenv("NUVIO_IOS_DISTRIBUTION")
@@ -1346,9 +1348,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
-            packageName = "Nuvio Native"
+            packageName = desktopPackageName
             packageVersion = desktopReleasePackageVersion
-            vendor = "Nuvio Media"
+            vendor = desktopVendor
             if (isMacHost) {
                 appResourcesRootDir.set(macosPlayerAppResourcesRoot)
             }
@@ -1547,6 +1549,45 @@ tasks.matching { it.name == "packageReleaseMsi" }.configureEach {
         publishWindowsMsiOutput(release = true)
     }
 }
+
+// The custom Windows installer (src/desktopMain/installer/windows): the app
+// image packed behind a WebView2 setup UI. It replaces the jpackage EXE/MSI for
+// releases and upgrades installs made by that MSI (windowsMsiUpgradeUuid).
+val windowsInstallerSourceDir = layout.projectDirectory.dir("src/desktopMain/installer/windows")
+
+fun registerWindowsInstallerTask(name: String, distributableTask: String, distribution: String) =
+    tasks.register<Exec>(name) {
+        group = "compose desktop"
+        description = "Builds the custom Windows installer from the $distributableTask app image."
+        notCompatibleWithConfigurationCache("Builds the Windows installer with the host MSVC toolchain.")
+        enabled = isWindowsHost
+        dependsOn(distributableTask)
+        val appImage = layout.buildDirectory.dir("compose/binaries/$distribution/app/$desktopPackageName")
+        val output = layout.buildDirectory.file(
+            "compose/binaries/$distribution/installer/" +
+                "Nuvio-Native-Windows-$windowsPlayerBridgeArch-$desktopReleaseVersionName.exe",
+        )
+        inputs.dir(windowsInstallerSourceDir)
+        inputs.dir(appImage)
+        outputs.file(output)
+        commandLine(
+            buildList {
+                addAll(listOf("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"))
+                addAll(listOf("-File", windowsInstallerSourceDir.file("build-installer.ps1").asFile.absolutePath))
+                addAll(listOf("-AppImage", appImage.get().asFile.absolutePath))
+                addAll(listOf("-Output", output.get().asFile.absolutePath))
+                addAll(listOf("-Version", desktopReleaseVersionName))
+                addAll(listOf("-WorkDir", layout.buildDirectory.dir("native/windows-installer/$distribution").get().asFile.absolutePath))
+                addAll(listOf("-WebView2Root", windowsWebView2Root.absolutePath))
+                addAll(listOf("-ProductName", desktopPackageName, "-Publisher", desktopVendor))
+                addAll(listOf("-LegacyUpgradeCode", windowsMsiUpgradeUuid, "-Arch", windowsPlayerBridgeArch))
+                windowsVcvarsPath?.let { addAll(listOf("-Vcvars", it)) }
+            },
+        )
+    }
+
+registerWindowsInstallerTask("packageInstaller", "createDistributable", "main")
+registerWindowsInstallerTask("packageReleaseInstaller", "createReleaseDistributable", "main-release")
 
 if (isLinuxHost) {
     val linuxDebPatchScript = rootProject.layout.projectDirectory.file("scripts/linux/patch-linux-deb.sh")
