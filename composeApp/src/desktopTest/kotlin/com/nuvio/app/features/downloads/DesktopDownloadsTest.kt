@@ -292,6 +292,85 @@ class DesktopDownloadsTest {
         assertEquals("/home/…/Videos/Anime", compactFolderPath("/home/someone/Media/Library/Videos/Anime"))
     }
 
+    @Test fun torrentFilenameWinsOverAnIndexFromADifferentFileOrder() {
+        val firstSeason = TorrServerFile(8, "Pack/Season 1/Show.S01E06.mkv", 100)
+        val secondSeason = TorrServerFile(6, "Pack/Season 2/Show.S02E06.mkv", 200)
+        val files = listOf(secondSeason, firstSeason)
+        for (index in listOf(5, -1, Int.MAX_VALUE, null)) {
+            assertEquals(firstSeason, selectDownloadTorrentFile(files, index, "Show.S01E06.mkv"))
+            assertEquals(firstSeason, selectDownloadTorrentFile(files.reversed(), index, "Show.S01E06.mkv"))
+        }
+        // Specials may intentionally use a regular season's OVA filename from the provider.
+        val ova = TorrServerFile(9, "Pack/Show.S01E11.OVA.mkv", 50)
+        assertEquals(ova, selectDownloadTorrentFile(files + ova, 5, "Show.S01E11.OVA.mkv"))
+    }
+
+    @Test fun torrentPathsDisambiguateRepeatedBasenamesWithoutGuessingAnotherSeason() {
+        val firstSeason = TorrServerFile(7, "Pack/Season 1/E01.mkv", 100)
+        val secondSeason = TorrServerFile(1, "Pack/Season 2/E01.mkv", 200)
+        val files = listOf(secondSeason, firstSeason)
+        assertEquals(firstSeason, selectDownloadTorrentFile(files, 0, "pack\\season 1\\E01.MKV"))
+        assertEquals(firstSeason, selectDownloadTorrentFile(files, 0, "Season 1/E01.mkv"))
+        for (filename in listOf("E01.mkv", "missing.mkv", "Season 3/E01.mkv", "../Season 1/E01.mkv")) {
+            assertFailsWith<IllegalStateException> { selectDownloadTorrentFile(files, 0, filename) }
+        }
+        assertFails { selectDownloadTorrentFile(listOf(firstSeason, firstSeason.copy(id = 8)), 0, firstSeason.path) }
+        assertFails { selectDownloadTorrentFile(listOf(firstSeason, firstSeason.copy(id = 8, path = "Other/Season 1/E01.mkv")), 0, "Season 1/E01.mkv") }
+        // An explicit missing filename must fail even in a single-video torrent.
+        assertFails { selectDownloadTorrentFile(listOf(firstSeason), 6, "missing.mkv") }
+    }
+
+    @Test fun aMixedSeasonTorrentCopiesTheNamedFilesNativeIdAndVerifiesItsSize() = runBlocking {
+        val files = parseTorrServerStats(kotlinx.serialization.json.Json.parseToJsonElement("""
+            {"file_stats":[{"id":7,"path":"Pack/Season 1/E06.mp4","length":16},
+                           {"id":1,"path":"Pack/Season 2/E06.mp4","length":20}]}
+        """).let { it as kotlinx.serialization.json.JsonObject }).files
+        val calls = mutableListOf<String>()
+        val http = server { exchange ->
+            assertEquals("index=7", exchange.requestURI.query)
+            exchange.responseHeaders.add("Content-Type", "video/mp4")
+            exchange.responseHeaders.add("ETag", "\"selected-file\"")
+            exchange.sendResponseHeaders(200, media.size.toLong())
+            exchange.responseBody.use { it.write(media) }
+        }
+        val backend = object : DesktopTorrentBackend {
+            override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
+            override suspend fun restart(settings: P2pSettingsUiState) { error("must not reset any engine") }
+            override suspend fun stop() { error("caller owns the backend") }
+            override suspend fun dropTorrent(hash: String) { calls += "drop" }
+            override suspend fun addTorrent(magnetLink: String) = "fixture"
+            override suspend fun getTorrentStats(hash: String) = TorrServerStats(0,0,0,0,0,0,36,files)
+            override fun getStreamUrl(magnetLink: String, fileIdx: Int): String {
+                calls += "file:$fileIdx"
+                return "${http.url()}?index=$fileIdx"
+            }
+        }
+        val root = Files.createTempDirectory("download-mixed-seasons").toFile()
+        val io = DownloadIo()
+        try {
+            val download = item(root).copy(videoId = "show:1:6", episodeNumber = 6, sourceUrl = "",
+                torrentHash = "a".repeat(40), torrentFileIdx = 0, torrentFilename = "Season 1/E06.mp4")
+            val copied = downloadTorrentFile(download, backend, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
+                assertEquals(16L, size)
+                copyDesktopDownload(download, url, io, { _, _ -> }, size)
+            }
+            assertContentEquals(media, copied.readBytes())
+            assertEquals("16", File(copied.path + ".validator").readLines()[1])
+            assertEquals(listOf("prepare", "file:7", "drop"), calls)
+            calls.clear()
+            assertFails {
+                downloadTorrentFile(download.copy(torrentFilename = "missing.mp4"), backend, { P2pSettingsUiState(p2pEnabled = true) }) { _, _ ->
+                    error("A missing filename must never start copying")
+                }
+            }
+            assertEquals(listOf("prepare", "drop"), calls)
+            // A server returning a different file's length must not produce a completed file.
+            val mismatch = item(root, id = "mismatch")
+            assertFails { copyDesktopDownload(mismatch, "${http.url()}?index=7", io, { _, _ -> }, 20L) }
+            assertFalse(downloadPath(mismatch).exists())
+        } finally { io.close(); http.stop(0); root.deleteRecursively() }
+    }
+
     @Test fun torrentsRequireAnExactMediaFileAndUseOnlyTheirOwnBackend() = runBlocking {
         val files = listOf(TorrServerFile(1, "Show/E01.mkv", 100), TorrServerFile(2, "Show/E02.mkv", 200), TorrServerFile(3, "readme.txt", 20))
         assertEquals(2, selectDownloadTorrentFile(files, 1, null).id)
@@ -299,6 +378,9 @@ class DesktopDownloadsTest {
         assertFails { selectDownloadTorrentFile(files, null, null) }
         assertFails { selectDownloadTorrentFile(files, 2, null) }
         assertFails { selectDownloadTorrentFile(files, 100, null) }
+        assertFails { selectDownloadTorrentFile(files, -1, null) }
+        assertFails { selectDownloadTorrentFile(files, Int.MAX_VALUE, null) }
+        assertEquals(files.first(), selectDownloadTorrentFile(listOf(files.first()), null, null))
         val calls = mutableListOf<String>()
         val backend = object : DesktopTorrentBackend {
             override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
