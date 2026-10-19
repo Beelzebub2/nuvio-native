@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds the custom Nuvio Native Windows installer from a jpackage app image.
+  Builds the custom Starlit Windows installer from a jpackage app image.
 
 .DESCRIPTION
   Compiles the setup stub and the packer in this folder with MSVC, packs the app
@@ -14,8 +14,8 @@ param(
     [Parameter(Mandatory = $true)] [string] $Version,
     [Parameter(Mandatory = $true)] [string] $WorkDir,
     [Parameter(Mandatory = $true)] [string] $WebView2Root,
-    [string] $ProductName = 'Nuvio Native',
-    [string] $Publisher = 'Nuvio Media',
+    [string] $ProductName = 'Starlit',
+    [string] $Publisher = 'Beelzebub2',
     [string] $LauncherExe = '',
     [string] $LegacyUpgradeCode = '',
     [string] $Arch = 'x64',

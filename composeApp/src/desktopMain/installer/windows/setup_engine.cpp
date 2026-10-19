@@ -22,6 +22,8 @@ namespace setup {
 namespace {
 
 constexpr wchar_t kArpRoot[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\";
+// Stable across product renames (this app was "Nuvio Native" before "Starlit"),
+// so an update always finds the copy it replaces.
 constexpr wchar_t kArpKeyName[] = L"NuvioNative";
 constexpr wchar_t kSandboxSuffix[] = L" (setup test)";
 constexpr wchar_t kShortcutDescription[] = L"Browse, organize, and play media from sources you add.";
@@ -90,9 +92,9 @@ bool isDirEmpty(const std::wstring& dir) {
     return PathIsDirectoryEmptyW(dir.c_str()) != FALSE;
 }
 
-bool moveWithRetry(const std::wstring& from, const std::wstring& to) {
+bool moveWithRetry(const std::wstring& from, const std::wstring& to, DWORD flags = 0) {
     for (int attempt = 0; attempt < 20; ++attempt) {
-        if (MoveFileExW(from.c_str(), to.c_str(), 0)) return true;
+        if (MoveFileExW(from.c_str(), to.c_str(), flags)) return true;
         DWORD error = GetLastError();
         if (error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION) return false;
         Sleep(250);
@@ -238,6 +240,24 @@ bool deleteTreeImpl(const std::wstring& path, const std::function<void()>& onFil
     return false;
 }
 
+// Files under `root`, as paths relative to it; junctions are not followed.
+void listFiles(const std::wstring& root, const std::wstring& prefix, std::vector<std::wstring>& out) {
+    WIN32_FIND_DATAW data;
+    HANDLE find = FindFirstFileExW((root + L"\\" + prefix + L"*").c_str(), FindExInfoBasic, &data, FindExSearchNameMatch,
+                                   nullptr, 0);
+    if (find == INVALID_HANDLE_VALUE) return;
+    do {
+        std::wstring name = data.cFileName;
+        if (name == L"." || name == L"..") continue;
+        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            listFiles(root, prefix + name + L"\\", out);
+        } else {
+            out.push_back(prefix + name);
+        }
+    } while (FindNextFileW(find, &data));
+    FindClose(find);
+}
+
 size_t countFiles(const std::wstring& path) {
     size_t count = 0;
     WIN32_FIND_DATAW data;
@@ -281,7 +301,7 @@ std::wstring logPath() {
     wchar_t temp[MAX_PATH + 1];
     DWORD length = GetTempPathW(ARRAYSIZE(temp), temp);
     std::wstring dir = length ? std::wstring(temp, length) : L".\\";
-    return dir + L"Nuvio Native Setup.log";
+    return dir + L"Starlit Setup.log";
 }
 
 void log(const wchar_t* format, ...) {
@@ -370,7 +390,11 @@ std::wstring systemMessage(DWORD code) {
 // Identity
 
 std::wstring Identity::displayName() const {
-    return sandbox ? product.name + kSandboxSuffix : product.name;
+    return displayNameFor(product.name);
+}
+
+std::wstring Identity::displayNameFor(const std::wstring& productName) const {
+    return sandbox ? productName + kSandboxSuffix : productName;
 }
 
 std::wstring Identity::arpKeyPath() const {
@@ -390,11 +414,23 @@ std::wstring Identity::defaultInstallDir() const {
 }
 
 std::wstring Identity::startMenuShortcut() const {
-    return knownFolder(FOLDERID_Programs) + L"\\" + shortcutFileName();
+    return startMenuShortcutFor(product.name);
 }
 
 std::wstring Identity::desktopShortcut() const {
-    return knownFolder(FOLDERID_Desktop) + L"\\" + shortcutFileName();
+    return desktopShortcutFor(product.name);
+}
+
+std::wstring Identity::startMenuShortcutFor(const std::wstring& productName) const {
+    return knownFolder(FOLDERID_Programs) + L"\\" + displayNameFor(productName) + L".lnk";
+}
+
+std::wstring Identity::desktopShortcutFor(const std::wstring& productName) const {
+    return knownFolder(FOLDERID_Desktop) + L"\\" + displayNameFor(productName) + L".lnk";
+}
+
+bool Existing::renamed(const Product& product) const {
+    return ours && !name.empty() && lstrcmpiW(name.c_str(), product.name.c_str()) != 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +504,8 @@ Existing detectExisting(const Identity& identity) {
     if (!existing.location.empty()) {
         existing.ours = true;
         existing.version = regString(HKEY_CURRENT_USER, key, L"DisplayVersion");
+        existing.name = regString(HKEY_CURRENT_USER, key, L"NuvioProductName");
+        existing.launcher = regString(HKEY_CURRENT_USER, key, L"NuvioLauncher");
         DWORD value = 0;
         if (regDword(HKEY_CURRENT_USER, key, L"NuvioStartMenuShortcut", value)) existing.startMenu = value != 0;
         if (regDword(HKEY_CURRENT_USER, key, L"NuvioDesktopShortcut", value)) existing.desktop = value != 0;
@@ -481,12 +519,14 @@ Existing detectExisting(const Identity& identity) {
             existing.legacy = true;
             existing.legacyProductCode = productCode;
             existing.legacyVersion = msiProperty(productCode, INSTALLPROPERTY_VERSIONSTRING);
+            existing.legacyName = msiProperty(productCode, INSTALLPROPERTY_PRODUCTNAME);
             existing.legacyLocation = normalizeDir(msiProperty(productCode, INSTALLPROPERTY_INSTALLLOCATION));
             log(L"Found MSI install %s (%s) in %s", existing.legacyProductCode.c_str(), existing.legacyVersion.c_str(),
                 existing.legacyLocation.c_str());
             if (!existing.ours && !identity.sandbox) {
-                // jpackage named its desktop shortcut after the product; keep the user's choice.
-                existing.desktop = fileExists(knownFolder(FOLDERID_Desktop) + L"\\" + identity.product.name + L".lnk");
+                // jpackage named its desktop shortcut after its product; keep the user's choice.
+                const std::wstring legacyName = existing.legacyName.empty() ? identity.product.name : existing.legacyName;
+                existing.desktop = fileExists(knownFolder(FOLDERID_Desktop) + L"\\" + legacyName + L".lnk");
             }
         }
     }
@@ -547,9 +587,23 @@ void Engine::setFile(const std::wstring& file) {
 }
 
 std::wstring Engine::defaultDir() const {
-    if (existing_.ours) return existing_.location;
+    if (existing_.ours) {
+        // After a rename, leave the folder named after the old product for one
+        // with the new name next to it; any other folder the user chose stays.
+        if (existing_.renamed(identity_.product) &&
+            lstrcmpiW(fileName(existing_.location).c_str(), identity_.displayNameFor(existing_.name).c_str()) == 0) {
+            return parentDir(existing_.location) + L"\\" + identity_.displayName();
+        }
+        return existing_.location;
+    }
     // A sandbox run must never pick the real install's folder.
-    if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) return existing_.legacyLocation;
+    if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) {
+        // The MSI's folder is named after its product, and removing the MSI empties it.
+        const bool sameName = existing_.legacyName.empty() ||
+            lstrcmpiW(existing_.legacyName.c_str(), identity_.product.name.c_str()) == 0;
+        if (!sameName) return parentDir(existing_.legacyLocation) + L"\\" + identity_.displayName();
+        return existing_.legacyLocation;
+    }
     return identity_.defaultInstallDir();
 }
 
@@ -560,7 +614,9 @@ std::wstring Engine::validateDir(const std::wstring& raw) const {
     }
     if (PathIsRootW(dir.c_str())) return L"Choose a folder inside the drive, not the drive itself.";
     if (fileExists(dir)) return L"A file already has this name. Choose a different folder.";
-    if (dirExists(dir) && !isDirEmpty(dir) && !fileExists(dir + L"\\" + identity_.product.exe)) {
+    const bool earlierCopy = samePath(dir, existing_.location) ||
+        (identity_.ownsLegacy() && samePath(dir, existing_.legacyLocation));
+    if (dirExists(dir) && !isDirEmpty(dir) && !earlierCopy && !fileExists(dir + L"\\" + identity_.product.exe)) {
         return L"This folder already has other files in it. Choose an empty or new folder.";
     }
     if (!identity_.ownsLegacy() && existing_.legacy && samePath(dir, existing_.legacyLocation)) {
@@ -568,7 +624,7 @@ std::wstring Engine::validateDir(const std::wstring& raw) const {
     }
     const uint64_t needed = source_.index.totalRaw + 64ull * 1024 * 1024;
     if (source_.present && freeBytesFor(dir) < needed) {
-        return L"There isn't enough space on this drive. Nuvio needs " + megabytes(needed) + L".";
+        return L"There isn't enough space on this drive. " + identity_.product.name + L" needs " + megabytes(needed) + L".";
     }
     return {};
 }
@@ -619,7 +675,7 @@ bool Engine::install(const InstallRequest& request) {
     if (existing_.ours && !samePath(existing_.location, dir)) runningDirs.push_back(existing_.location);
     if (existing_.legacy && identity_.ownsLegacy() && !existing_.legacyLocation.empty()) runningDirs.push_back(existing_.legacyLocation);
     if (!closeRunning(runningDirs)) {
-        fail(L"Nuvio is still running and couldn't be closed. Close it, then select Try again.");
+        fail(identity_.product.name + L" is still running and couldn't be closed. Close it, then select Try again.");
         return false;
     }
 
@@ -639,10 +695,15 @@ bool Engine::install(const InstallRequest& request) {
     }
 
     progress = kExtractEnd;
-    if (existing_.legacy && identity_.ownsLegacy()) {
+    // The MSI must go first only when its files share the target folder (it
+    // would delete ours otherwise). Elsewhere the new copy goes in first, so a
+    // failure never leaves the user without the app.
+    const bool legacyOwned = existing_.legacy && identity_.ownsLegacy();
+    const bool legacyFirst = legacyOwned && samePath(existing_.legacyLocation, dir);
+    if (legacyFirst) {
         phase = Phase::Legacy;
         removeLegacyMsi();
-    } else if (existing_.legacy) {
+    } else if (existing_.legacy && !legacyOwned) {
         log(L"Sandbox: leaving MSI install %s in place", existing_.legacyProductCode.c_str());
     }
     progress = kLegacyEnd;
@@ -652,10 +713,20 @@ bool Engine::install(const InstallRequest& request) {
         deleteTree(staging);
         return false;
     }
+    if (legacyOwned && !legacyFirst) {
+        phase = Phase::Legacy;
+        removeLegacyMsi();
+        phase = Phase::Finishing;
+    }
+    const std::wstring earlierLauncher = existing_.launcher.empty() ? identity_.product.exe : existing_.launcher;
     if (existing_.ours && !samePath(existing_.location, dir) &&
-        fileExists(existing_.location + L"\\" + identity_.product.exe)) {
+        fileExists(existing_.location + L"\\" + earlierLauncher)) {
         log(L"Removing previous location %s", existing_.location.c_str());
         deleteTree(existing_.location);
+    }
+    if (existing_.legacy && identity_.ownsLegacy() && !samePath(existing_.legacyLocation, dir) &&
+        dirExists(existing_.legacyLocation)) {
+        RemoveDirectoryW(existing_.legacyLocation.c_str());  // only succeeds once the MSI emptied it
     }
     InstallRequest applied = request;
     applied.dir = dir;
@@ -804,8 +875,11 @@ bool Engine::swapInto(const std::wstring& staging, const std::wstring& dir) {
     bool movedOld = false;
     if (dirExists(dir)) {
         if (!moveWithRetry(dir, old)) {
-            fail(L"Some files in " + dir + L" are in use, so setup couldn't replace them. Close Nuvio, then select Try again.");
-            return false;
+            // Something still has the folder itself open (a working directory,
+            // an Explorer window); its files can usually be replaced anyway.
+            log(L"Couldn't move %s aside (%s); replacing its files one by one", dir.c_str(),
+                systemMessage(GetLastError()).c_str());
+            return mergeInto(staging, dir);
         }
         movedOld = true;
     }
@@ -817,6 +891,33 @@ bool Engine::swapInto(const std::wstring& staging, const std::wstring& dir) {
         return false;
     }
     if (movedOld && !deleteTree(old)) log(L"Couldn't fully remove %s", old.c_str());
+    return true;
+}
+
+bool Engine::mergeInto(const std::wstring& staging, const std::wstring& dir) {
+    std::vector<std::wstring> shipped;
+    for (const auto& file : source_.index.files) shipped.push_back(utf16(file.path));
+    shipped.push_back(identity_.uninstallerFileName());
+    for (const auto& relative : shipped) {
+        const std::wstring from = staging + L"\\" + relative;
+        const std::wstring to = dir + L"\\" + relative;
+        ensureDir(parentDir(to));
+        SetFileAttributesW(to.c_str(), FILE_ATTRIBUTE_NORMAL);
+        if (!moveWithRetry(from, to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED)) {
+            fail(L"Setup couldn't replace " + to + L": " + systemMessage(GetLastError()) + L" Close " +
+                 identity_.product.name + L", then select Try again.");
+            return false;
+        }
+    }
+    // Drop what the previous version shipped and this one doesn't (jar names change between builds).
+    std::vector<std::wstring> present;
+    listFiles(dir, L"", present);
+    for (const auto& relative : present) {
+        const bool keep = std::any_of(shipped.begin(), shipped.end(),
+                                      [&](const std::wstring& item) { return lstrcmpiW(item.c_str(), relative.c_str()) == 0; });
+        if (!keep) deleteTree(dir + L"\\" + relative);
+    }
+    deleteTree(staging);
     return true;
 }
 
@@ -834,6 +935,12 @@ void Engine::writeShortcuts(const InstallRequest& request) {
     };
     apply(request.startMenu, identity_.startMenuShortcut());
     apply(request.desktop, identity_.desktopShortcut());
+    // Shortcuts named after the product this one replaces would point at removed files.
+    if (existing_.renamed(identity_.product)) {
+        for (const auto& link : {identity_.startMenuShortcutFor(existing_.name), identity_.desktopShortcutFor(existing_.name)}) {
+            if (fileExists(link) && DeleteFileW(link.c_str())) log(L"Shortcut %s: removed after rename", link.c_str());
+        }
+    }
 }
 
 void Engine::registerUninstall(const InstallRequest& request) {
@@ -877,11 +984,11 @@ bool Engine::uninstall(const std::wstring& location, bool removeData) {
     const bool owned = !dir.empty() && (fileExists(dir + L"\\" + identity_.product.exe) ||
                                         fileExists(dir + L"\\" + identity_.uninstallerFileName()));
     if (!dir.empty() && dirExists(dir) && !owned) {
-        fail(dir + L" doesn't look like a Nuvio install folder, so setup left it alone.");
+        fail(dir + L" doesn't look like a " + identity_.product.name + L" install folder, so setup left it alone.");
         return false;
     }
     if (owned && !closeRunning({dir})) {
-        fail(L"Nuvio is still running and couldn't be closed. Close it, then select Try again.");
+        fail(identity_.product.name + L" is still running and couldn't be closed. Close it, then select Try again.");
         return false;
     }
 

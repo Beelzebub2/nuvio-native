@@ -1,4 +1,4 @@
-// Nuvio Native setup: hosts the installer UI (ui/) in a borderless WebView2
+// Starlit setup: hosts the installer UI (ui/) in a borderless WebView2
 // window and drives setup_engine for installs, updates and uninstalls.
 //
 //   setup.exe                         interactive install or update
@@ -31,7 +31,7 @@ using namespace setup;
 
 namespace {
 
-constexpr wchar_t kWindowClass[] = L"NuvioNativeSetupWindow";
+constexpr wchar_t kWindowClass[] = L"StarlitSetupWindow";
 constexpr wchar_t kUiOrigin[] = L"https://setup.nuvio/";
 constexpr wchar_t kWebView2Download[] = L"https://go.microsoft.com/fwlink/p/?LinkId=2124703";
 constexpr int kWidth = 760;
@@ -161,6 +161,7 @@ void sendInit() {
     post(Json(L"init")
              .str(L"mode", gMode)
              .str(L"name", identity.displayName())
+             .str(L"publisher", identity.product.publisher)
              .str(L"version", identity.product.version)
              .str(L"previousVersion", previous)
              .str(L"dir", gDir)
@@ -303,9 +304,9 @@ void webViewUnavailable(HRESULT result) {
     log(L"WebView2 unavailable: 0x%08lx", static_cast<unsigned long>(result));
     KillTimer(gWindow, kShowTimer);
     ShowWindow(gWindow, SW_HIDE);
-    const std::wstring text = gEngine->identity().product.name +
-        L" Setup needs the Microsoft Edge WebView2 Runtime, which Nuvio also uses for its player.\n\n"
-        L"Select OK to open the download page, then run setup again.";
+    const std::wstring& name = gEngine->identity().product.name;
+    const std::wstring text = name + L" Setup needs the Microsoft Edge WebView2 Runtime, which " + name +
+        L" also uses for its player.\n\nSelect OK to open the download page, then run setup again.";
     if (MessageBoxW(nullptr, text.c_str(), L"WebView2 Runtime required", MB_OKCANCEL | MB_ICONINFORMATION) == IDOK) {
         ShellExecuteW(nullptr, L"open", kWebView2Download, nullptr, nullptr, SW_SHOWNORMAL);
     }
@@ -623,7 +624,7 @@ int relaunchFromTemp(const Identity& identity, const PayloadSource& source) {
     if (location.empty()) location = detectExisting(identity).location;
     location = normalizeDir(location);
 
-    const std::wstring copy = tempDir() + L"Nuvio Native Uninstall " + std::to_wstring(GetTickCount64()) + L".exe";
+    const std::wstring copy = tempDir() + identity.product.name + L" Uninstall " + std::to_wstring(GetTickCount64()) + L".exe";
     if (!CopyFileW(source.exePath.c_str(), copy.c_str(), FALSE)) {
         log(L"Couldn't copy the uninstaller to %s: %s", copy.c_str(), systemMessage(GetLastError()).c_str());
         return 1;
@@ -724,13 +725,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (gArgs.silent) {
         exitCode = runSilent(uninstall);
     } else {
-        HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\NuvioNativeSetup");
+        HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\StarlitSetup");
         if (GetLastError() == ERROR_ALREADY_EXISTS) {
             if (HWND other = FindWindowW(kWindowClass, nullptr)) SetForegroundWindow(other);
             CoUninitialize();
             return 0;
         }
-        gWebViewData = tempDir() + L"NuvioNativeSetup.WebView2";
+        gWebViewData = tempDir() + L"StarlitSetup.WebView2";
         if (!createWindow(instance)) {
             log(L"Couldn't create the window: %s", systemMessage(GetLastError()).c_str());
             CoUninitialize();
