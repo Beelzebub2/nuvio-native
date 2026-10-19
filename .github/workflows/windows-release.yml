@@ -53,23 +53,21 @@ jobs:
       - name: Test provider gateway
         working-directory: gateway
         run: node --test worker.test.mjs
-      - name: Install packaging tools and WebView2 SDK
+      - name: Install WebView2 SDK
         shell: pwsh
         run: |
-          choco install wixtoolset --version=3.14.1.20250415 --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed.' }
           nuget install Microsoft.Web.WebView2 -Version $env:WEBVIEW2_VERSION -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
           if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
           "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Test and package the executable
+      - name: Test and build the installer
         shell: pwsh
         run: |
-          & .\gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseExe "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT" '-Pcompose.desktop.packaging.checkJdkVendor=false' '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' '-Pkotlin.daemon.jvmargs=-Xmx3072m' --no-configuration-cache --no-daemon --console=plain
+          & .\gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseInstaller "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT" '-Pcompose.desktop.packaging.checkJdkVendor=false' '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' '-Pkotlin.daemon.jvmargs=-Xmx3072m' --no-configuration-cache --no-daemon --console=plain
           if ($LASTEXITCODE -ne 0) { throw 'Tests or packaging failed.' }
       - name: Verify package and write checksums
         shell: pwsh
         run: |
-          $packages = @(Get-ChildItem composeApp/build/compose/binaries/main-release/exe/*.exe)
+          $packages = @(Get-ChildItem composeApp/build/compose/binaries/main-release/installer/*.exe)
           if ($packages.Count -ne 1) { throw 'Expected one executable installer.' }
           if ($packages[0].Length -lt 100000000) { throw 'Installer is too small to contain the native player and runtime.' }
           New-Item -ItemType Directory -Path release -Force | Out-Null
@@ -77,6 +75,24 @@ jobs:
           Copy-Item -LiteralPath $packages[0].FullName -Destination "release/$name"
           $sha = (Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$sha  $name" | Set-Content release/SHA256SUMS.txt -Encoding ascii
+      - name: Smoke-test silent install and uninstall
+        shell: pwsh
+        run: |
+          $installer = (Get-Item "release/Nuvio-Native-Windows-x64-$env:RELEASE_VERSION.exe").FullName
+          $dir = Join-Path $env:RUNNER_TEMP 'Nuvio Native'
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\NuvioNative'
+          $log = Join-Path $env:TEMP 'Nuvio Native Setup.log'
+          $run = Start-Process -FilePath $installer -ArgumentList '--silent', '--dir', "`"$dir`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue; throw "Silent install failed with exit code $($run.ExitCode)." }
+          foreach ($file in 'Nuvio Native.exe', 'Uninstall Nuvio Native.exe', 'app\Nuvio Native.cfg') {
+            if (-not (Test-Path -LiteralPath (Join-Path $dir $file))) { throw "The installed app is missing $file." }
+          }
+          if ((Get-ItemProperty $key).DisplayVersion -ne $env:RELEASE_VERSION) { throw 'The Apps & Features entry has the wrong version.' }
+          $run = Start-Process -FilePath (Join-Path $dir 'Uninstall Nuvio Native.exe') -ArgumentList '--uninstall', '--silent' -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue; throw "Silent uninstall failed with exit code $($run.ExitCode)." }
+          Start-Sleep -Seconds 8
+          if (Test-Path -LiteralPath $dir) { throw 'Uninstall left the install folder behind.' }
+          if (Test-Path $key) { throw 'Uninstall left the Apps & Features entry behind.' }
       - uses: actions/upload-artifact@v7
         with:
           name: Nuvio-Native-Windows-x64-${{ env.RELEASE_VERSION }}
