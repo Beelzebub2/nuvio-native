@@ -1,0 +1,44 @@
+// Compiled from this directory by build-installer.ps1, which also generates
+// setup_version.h with the release version.
+#include <windows.h>
+#include "resource.h"
+#include "setup_version.h"
+
+IDI_APP ICON "..\\..\\resources\\icons\\nuvio-app-icon-transparent.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "setup.manifest"
+
+IDR_UI_HTML RCDATA "ui\\index.html"
+IDR_UI_CSS RCDATA "ui\\setup.css"
+IDR_UI_JS RCDATA "ui\\setup.js"
+IDR_UI_LOGO RCDATA "..\\..\\resources\\icons\\nuvio-app-icon-transparent.png"
+
+IDR_FONT_REGULAR RCDATA "..\\..\\..\\commonMain\\composeResources\\font\\jetbrains_sans_regular.ttf"
+IDR_FONT_SEMIBOLD RCDATA "..\\..\\..\\commonMain\\composeResources\\font\\jetbrains_sans_semibold.ttf"
+IDR_FONT_BOLD RCDATA "..\\..\\..\\commonMain\\composeResources\\font\\jetbrains_sans_bold.ttf"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION NUVIO_SETUP_VERSION_NUMBER
+PRODUCTVERSION NUVIO_SETUP_VERSION_NUMBER
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", NUVIO_SETUP_PUBLISHER
+            VALUE "FileDescription", NUVIO_SETUP_PRODUCT " Setup"
+            VALUE "FileVersion", NUVIO_SETUP_VERSION
+            VALUE "ProductName", NUVIO_SETUP_PRODUCT
+            VALUE "ProductVersion", NUVIO_SETUP_VERSION
+            VALUE "OriginalFilename", "setup.exe"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

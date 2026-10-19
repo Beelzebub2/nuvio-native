@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nuvio Native Setup</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <div class="window is-intro" id="app" data-mode="install">
+    <aside class="stage" data-drag>
+      <span class="sandbox-pill" id="sandbox-pill" hidden>Test install</span>
+      <div class="stage-light" aria-hidden="true"><div class="stage-light-spin"></div></div>
+      <div class="stage-logo">
+        <img src="logo.png" alt="" width="132" height="132" draggable="false">
+        <span class="stage-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg>
+        </span>
+      </div>
+      <p class="stage-version" id="stage-version"></p>
+    </aside>
+
+    <main class="panel">
+      <header class="bar" data-drag>
+        <ol class="rail" id="rail" aria-label="Setup steps"></ol>
+        <div class="window-controls">
+          <button class="control" id="minimize" type="button" aria-label="Minimize">
+            <svg viewBox="0 0 10 10"><path d="M1.5 5h7"/></svg>
+          </button>
+          <button class="control control-close" id="close" type="button" aria-label="Close">
+            <svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2L2 8"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="steps">
+        <section class="step" data-step="welcome" hidden>
+          <div class="step-body">
+            <h1 data-enter id="welcome-title">Install Nuvio Native</h1>
+            <p class="lead" data-enter id="welcome-lead">Browse, organize, and play media from sources you add.</p>
+            <dl class="facts" data-enter id="welcome-facts"></dl>
+            <p class="notice" data-enter id="running-notice" hidden>Nuvio is open. Setup will close it before installing.</p>
+          </div>
+          <div class="actions" data-enter>
+            <button class="button secondary" id="welcome-options" type="button" hidden>Options</button>
+            <button class="button primary" id="welcome-next" type="button">Continue</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="options" hidden>
+          <div class="step-body">
+            <h1 data-enter>Install options</h1>
+            <div class="field" data-enter>
+              <span class="field-label" id="location-label">Location</span>
+              <div class="path" role="group" aria-labelledby="location-label">
+                <span class="path-text" id="path-text"></span>
+                <button class="button small secondary" id="browse" type="button">Change</button>
+              </div>
+              <p class="hint" id="space-hint" aria-live="polite"></p>
+            </div>
+            <div class="group" data-enter>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-title" id="start-label">Start menu shortcut</span>
+                  <span class="row-desc">Find Nuvio in Start and search.</span>
+                </div>
+                <button class="switch" id="opt-start" type="button" role="switch" aria-checked="true" aria-labelledby="start-label"><span></span></button>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-title" id="desktop-label">Desktop shortcut</span>
+                  <span class="row-desc">Open Nuvio from your desktop.</span>
+                </div>
+                <button class="switch" id="opt-desktop" type="button" role="switch" aria-checked="true" aria-labelledby="desktop-label"><span></span></button>
+              </div>
+            </div>
+          </div>
+          <div class="actions" data-enter>
+            <button class="button secondary" id="options-back" type="button">Back</button>
+            <button class="button primary" id="options-install" type="button">Install</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="confirm" hidden>
+          <div class="step-body">
+            <h1 data-enter id="confirm-title">Uninstall Nuvio Native</h1>
+            <p class="lead" data-enter id="confirm-lead"></p>
+            <div class="group" data-enter>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-title" id="data-label">Also delete my Nuvio data</span>
+                  <span class="row-desc">Settings, profiles and cache on this PC. Keep them to pick up where you left off after a reinstall.</span>
+                </div>
+                <button class="switch" id="opt-data" type="button" role="switch" aria-checked="false" aria-labelledby="data-label"><span></span></button>
+              </div>
+            </div>
+          </div>
+          <div class="actions" data-enter>
+            <button class="button secondary" id="confirm-cancel" type="button">Cancel</button>
+            <button class="button primary" id="confirm-uninstall" type="button">Uninstall</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="progress" hidden>
+          <div class="step-body">
+            <h1 data-enter id="progress-title">Installing Nuvio Native</h1>
+            <p class="lead" data-enter id="progress-status" aria-live="polite">Getting ready…</p>
+            <div class="scrub" data-enter id="scrub" role="progressbar" aria-labelledby="progress-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="scrub-track">
+                <div class="scrub-buffer"></div>
+                <div class="scrub-played"></div>
+              </div>
+              <div class="scrub-head"></div>
+            </div>
+            <div class="scrub-meta" data-enter>
+              <span id="progress-bytes"></span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <p class="ticker" data-enter id="progress-file"></p>
+          </div>
+        </section>
+
+        <section class="step" data-step="done" hidden>
+          <div class="step-body">
+            <h1 data-enter id="done-title">Nuvio Native is installed</h1>
+            <p class="lead" data-enter id="done-lead"></p>
+          </div>
+          <div class="actions" data-enter>
+            <button class="button secondary" id="done-close" type="button">Close</button>
+            <button class="button primary" id="done-launch" type="button">Launch Nuvio</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="error" hidden>
+          <div class="step-body">
+            <h1 data-enter id="error-title">Installation stopped</h1>
+            <p class="lead" data-enter id="error-message"></p>
+            <button class="link" data-enter id="error-log" type="button">Open the setup log</button>
+          </div>
+          <div class="actions" data-enter>
+            <button class="button secondary" id="error-close" type="button">Close</button>
+            <button class="button primary" id="error-retry" type="button">Try again</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="setup.js"></script>
+</body>
+</html>
