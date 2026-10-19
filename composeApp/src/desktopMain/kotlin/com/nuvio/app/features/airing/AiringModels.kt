@@ -8,13 +8,30 @@ import kotlinx.serialization.json.*
 import java.time.Instant
 import java.time.ZoneId
 
+/** Longest "Recently released" window offered on Home. */
+internal const val MAX_AIRING_HISTORY_DAYS = 5
+internal const val AIRING_CONTENT_POLICY_VERSION = 2
+
+/** A title the user hid from Recently released, Coming up and the Airing Now page. */
+@Serializable
+internal data class HiddenAiringTitle(
+    val mediaId: Int,
+    val name: String,
+    val poster: String? = null,
+    val hiddenAt: Long = 0,
+)
+
 @Serializable
 internal data class AiringSettings(
     val zone: String = "Europe/Lisbon",
     val airType: String = "broadcast",
     val historyDays: Int = 2,
     val includeEstimated: Boolean = true,
-)
+    val hideNsfw: Boolean = true,
+    val hidden: List<HiddenAiringTitle> = emptyList(),
+) {
+    val hiddenMediaIds: Set<Int> get() = hidden.mapTo(mutableSetOf()) { it.mediaId }
+}
 
 @Serializable
 internal data class AiringEvent(
@@ -31,11 +48,15 @@ internal data class AiringEvent(
     val airType: String = "broadcast",
     val estimated: Boolean = false,
     val isBreak: Boolean = false,
+    // Null means the source has not verified the title's adult classification.
+    val isAdult: Boolean? = null,
+    val hasAdultTags: Boolean = false,
 ) {
     fun preview() = MetaPreview(
         id = "$NATIVE_AIRING_PREFIX$mediaId", type = "series", name = name,
         poster = poster, rawPosterUrl = poster, banner = banner,
         description = description, genres = genres,
+        watchLaterEpisode = com.nuvio.app.features.watchlater.WatchLaterEpisode("$NATIVE_AIRING_PREFIX$mediaId:$episode", "Episode $episode", 1, episode, banner),
     )
 }
 
@@ -44,10 +65,43 @@ internal data class AiringSnapshot(
     val events: List<AiringEvent> = emptyList(),
     val savedAt: Long = 0,
     val airType: String = "broadcast",
+    // Legacy snapshots are unclassified, so they cannot be reused under either policy.
+    val hideNsfw: Boolean? = null,
+    val contentPolicyVersion: Int = 0,
+    val complete: Boolean = true,
 )
 
 internal enum class AiringWindow(val label: String) {
-    Today("Today"), Upcoming("Next 24 hours"), Recent("Recent"), All("All")
+    Now("Airing Now")
+}
+
+/** Apply the same policy to live responses, saved snapshots, full catalogs and dated schedules. */
+internal fun AiringEvent.allowedBy(settings: AiringSettings): Boolean =
+    !settings.hideNsfw || (isAdult == false && !hasAdultTags && genres.none(::nsfwGenre))
+
+private fun nsfwGenre(genre: String): Boolean =
+    genre.equals("Hentai", ignoreCase = true) || genre.equals("Ecchi", ignoreCase = true)
+
+internal fun filterAiringContent(events: List<AiringEvent>, settings: AiringSettings): List<AiringEvent> {
+    if (!settings.hideNsfw) return events
+    // A title cannot be shown as safe when different episodes disagree about its
+    // classification. Evaluate the whole batch before dropping individual records.
+    val blockedTitles = events.asSequence().filter { event ->
+        event.isAdult == true || event.hasAdultTags || event.genres.any(::nsfwGenre)
+    }.map { it.mediaId }.toSet()
+    return events.filter { it.mediaId !in blockedTitles && it.allowedBy(settings) }
+}
+
+internal data class TsuzukiScheduleRequest(val gatewayPath: String, val directUrl: String)
+
+internal fun tsuzukiScheduleRequest(
+    start: java.time.LocalDate, days: Int, settings: AiringSettings,
+): TsuzukiScheduleRequest {
+    val query = "start=$start&days=$days&airType=${settings.airType}"
+    return TsuzukiScheduleRequest(
+        gatewayPath = if (settings.hideNsfw) "/release-schedule?$query" else "/release-schedule-adult?$query",
+        directUrl = "https://tsuzuki.top/api/v1/schedule?$query" + if (settings.hideNsfw) "" else "&includeAdult=1",
+    )
 }
 
 internal fun selectAiringEvents(
@@ -56,27 +110,23 @@ internal fun selectAiringEvents(
     val zone = ZoneId.of(settings.zone)
     val today = now.atZone(zone).toLocalDate()
     val start = today.minusDays((settings.historyDays - 1).toLong())
-    val eligible = events.filter {
+    val hiddenIds = settings.hiddenMediaIds
+    val eligible = filterAiringContent(events, settings).filter {
         !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
-            (settings.includeEstimated || !it.estimated)
+            (settings.includeEstimated || !it.estimated) && it.mediaId !in hiddenIds
     }
-    fun inWindow(event: AiringEvent, target: AiringWindow): Boolean {
+    fun inWindow(event: AiringEvent): Boolean {
         val date = Instant.ofEpochSecond(event.airingAt).atZone(zone).toLocalDate()
-        return when (target) {
-            AiringWindow.Today -> date == today && event.airingAt <= now.epochSecond
-            AiringWindow.Upcoming -> event.airingAt > now.epochSecond && event.airingAt <= now.plusSeconds(86400).epochSecond
-            AiringWindow.Recent -> date >= start && date < today && event.airingAt <= now.epochSecond
-            AiringWindow.All -> false
-        }
+        return date >= start && date <= today && event.airingAt <= now.epochSecond
     }
-    if (window == AiringWindow.All) {
-        return listOf(AiringWindow.Today, AiringWindow.Upcoming, AiringWindow.Recent)
-            .flatMap { selectAiringEvents(eligible, settings, now, it) }.distinctBy { it.mediaId }
-    }
-    val matching = eligible.filter { inWindow(it, window) }
-    return (if (window == AiringWindow.Upcoming) matching.sortedBy { it.airingAt }
-        else matching.sortedByDescending { it.airingAt }).distinctBy { it.mediaId }
+    return eligible.filter(::inWindow).sortedByDescending { it.airingAt }.distinctBy { it.mediaId }
 }
+
+internal fun selectScheduledEvents(events: List<AiringEvent>, settings: AiringSettings, date: java.time.LocalDate): List<AiringEvent> =
+    filterAiringContent(events, settings).filter { !it.isBreak && it.airingAt > 0 && it.airType == settings.airType &&
+        (settings.includeEstimated || !it.estimated) && it.mediaId !in settings.hiddenMediaIds &&
+        Instant.ofEpochSecond(it.airingAt).atZone(ZoneId.of(settings.zone)).toLocalDate() == date }
+        .sortedBy { it.airingAt }.distinctBy { "${it.mediaId}:${it.episode}" }
 
 internal fun JsonObject.text(key: String): String? =
     (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
@@ -100,9 +150,14 @@ internal fun parseAniListSchedule(page: JsonObject): List<AiringEvent> =
         eventFromAniList(record.obj("media"), record.number("episode"), record.number("airingAt")?.toLong())
     }
 
+/** Skip invalid provider records; demand adult classification for every displayable item. */
+internal fun hasClassifiedAniListMedia(page: JsonObject): Boolean =
+    page["airingSchedules"] is JsonArray && parseAniListSchedule(page).all { it.isAdult != null }
+
 internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?): AiringEvent? {
     val id = media.number("id")?.takeIf { it > 0 } ?: return null
     if (episode == null || episode !in 1..10000 || airingAt == null || airingAt <= 0) return null
+    val adult = (media["isAdult"] as? JsonPrimitive)?.booleanOrNull
     return AiringEvent(
         mediaId = id, episode = episode, airingAt = airingAt,
         name = titleText(media["title"]) ?: "Anime $id", poster = coverText(media["coverImage"]),
@@ -110,6 +165,9 @@ internal fun eventFromAniList(media: JsonObject, episode: Int?, airingAt: Long?)
         description = media.text("description")?.replace(Regex("<[^>]+>"), " ")?.trim(),
         genres = (media["genres"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
         totalEpisodes = media.number("episodes"),
+        // Old gateway payloads without genres/tags cannot establish the stricter policy.
+        isAdult = adult?.takeIf { it || (media["genres"] is JsonArray && media["tags"] is JsonArray) },
+        hasAdultTags = (media["tags"] as? JsonArray).orEmpty().any { (it as? JsonObject)?.flag("isAdult") == true },
     )
 }
 
@@ -126,6 +184,8 @@ internal fun parseTsuzukiSchedule(payload: JsonObject, airType: String): List<Ai
             name = titleText(item["title"]) ?: "Anime $id", poster = coverText(item["coverImage"]),
             airType = airType, estimated = item.flag("estimated") || !item.flag("exact"),
             isBreak = item.flag("isBreak") || item.obj("note").text("kind") == "break",
+            isAdult = (item["isAdult"] as? JsonPrimitive)?.booleanOrNull
+                ?: (item.obj("media")["isAdult"] as? JsonPrimitive)?.booleanOrNull,
         )
     }
 }

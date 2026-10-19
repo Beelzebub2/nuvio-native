@@ -2,6 +2,7 @@ package com.nuvio.app.features.downloads
 
 internal data class DownloadPlatformRequest(
     val item: DownloadItem,
+    val onResolved: (DownloadItem) -> Unit = {},
 ) {
     val sourceUrl: String get() = item.sourceUrl
     val sourceHeaders: Map<String, String> get() = item.sourceHeaders
@@ -10,6 +11,9 @@ internal data class DownloadPlatformRequest(
 
 internal interface DownloadsTaskHandle {
     fun cancel()
+
+    /** Stops callbacks without stopping a transfer the platform can reattach later. */
+    fun detach() = cancel()
 }
 
 internal expect object DownloadsPlatformDownloader {

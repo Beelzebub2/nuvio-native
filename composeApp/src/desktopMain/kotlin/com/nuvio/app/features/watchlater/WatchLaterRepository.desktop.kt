@@ -69,7 +69,14 @@ internal actual object WatchLaterRepository {
     }
 
     private suspend fun resolveEpisode(item: MetaPreview): MetaPreview {
-        if (item.watchLaterEpisode != null || item.type != "series") return item
+        if (item.type != "series") return item
+        item.watchLaterEpisode?.let { episode ->
+            if (!episode.videoId.startsWith(com.nuvio.app.features.airing.NATIVE_AIRING_PREFIX)) return item
+            val cached = MetaDetailsRepository.peek(item.type, item.id)?.videos?.firstOrNull { it.season == episode.seasonNumber && it.episode == episode.episodeNumber }
+            val resolved = cached ?: withTimeoutOrNull(8_000L) { MetaDetailsRepository.fetch(item.type, item.id)?.videos
+                ?.firstOrNull { it.season == episode.seasonNumber && it.episode == episode.episodeNumber } }
+            return if (resolved != null) item.copy(watchLaterEpisode = resolved.toWatchLaterEpisode()) else item
+        }
         WatchProgressRepository.ensureLoaded()
         WatchedRepository.ensureLoaded()
         WatchProgressRepository.uiState.value.entries.filter { it.parentMetaId == item.id &&

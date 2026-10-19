@@ -83,6 +83,7 @@ import com.nuvio.app.core.ui.secondaryClick
 import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.watchlater.WatchLaterPoster
 import com.nuvio.app.features.watchlater.watchLaterMiddleClick
+import com.nuvio.app.features.watchlater.matchesWatchLaterPreview
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.details.components.DetailIconAction
 import com.nuvio.app.features.library.LibraryRepository
@@ -370,7 +371,7 @@ private fun HomePosterPreviewCard(
     onSaveClick: () -> Unit,
 ) {
     val watchLaterItems by WatchLaterRepository.items.collectAsState()
-    val savedForLater = watchLaterItems.any { it.id == item.id && it.type == item.type }
+    val savedForLater = watchLaterItems.any { it.matchesWatchLaterPreview(item) }
     val tokens = MaterialTheme.nuvio
     val shape = RoundedCornerShape(NuvioTokens.Radius.xl)
     val previewBackground = tokens.colors.background
@@ -392,8 +393,8 @@ private fun HomePosterPreviewCard(
             ) {
                 onClick?.invoke()
             }
-            .secondaryClick(onLongClick)
-            .watchLaterMiddleClick(item),
+            .watchLaterMiddleClick(item)
+            .secondaryClick(onLongClick),
     ) {
         Box(
             modifier = Modifier

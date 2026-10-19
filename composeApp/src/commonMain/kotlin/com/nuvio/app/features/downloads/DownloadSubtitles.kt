@@ -1,8 +1,12 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
+import com.nuvio.app.features.player.DeviceLanguagePreferences
+import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.PlayerSubtitleCueParser
 import com.nuvio.app.features.player.loadAddonSubtitles
+import com.nuvio.app.features.player.normalizeLanguageCode
+import com.nuvio.app.features.player.resolvePreferredSubtitleLanguageTargets
 import com.nuvio.app.features.streams.StreamSubtitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +33,16 @@ internal object DownloadSubtitles {
         val addonSubtitles = loadAddonSubtitles(item.subtitleRequests).map {
             StreamSubtitle(url = it.url, language = it.language, name = it.display)
         }
+        // Fetch preferred languages first so a slow addon cannot crowd them out before the timeout.
+        val priority = downloadSubtitleLanguagePriority()
         val pending = (item.sourceSubtitles + addonSubtitles)
             .distinctBy { it.url }
             .filter { subtitle ->
                 (subtitle.url.startsWith("https://", true) || subtitle.url.startsWith("http://", true)) &&
                     saved.none { it.sourceUrl == subtitle.url }
+            }
+            .sortedBy { subtitle ->
+                priority.indexOf(normalizeLanguageCode(subtitle.language)).takeIf { it >= 0 } ?: priority.size
             }
         for (batch in pending.chunked(4)) {
             val fetched = coroutineScope {
@@ -79,6 +88,18 @@ internal object DownloadSubtitles {
             val uri = storage.localFileUri(track.fileName) ?: return@mapNotNull null
             StreamSubtitle(url = uri, language = track.language, name = track.name)
         }
+    }
+
+    private fun downloadSubtitleLanguagePriority(): List<String> {
+        val settings = PlayerSettingsRepository.uiState.value
+        val deviceLanguages = runCatching { DeviceLanguagePreferences.preferredLanguageCodes() }.getOrDefault(emptyList())
+        return (
+            resolvePreferredSubtitleLanguageTargets(
+                preferredSubtitleLanguage = settings.preferredSubtitleLanguage,
+                secondaryPreferredSubtitleLanguage = settings.secondaryPreferredSubtitleLanguage,
+                deviceLanguages = deviceLanguages,
+            ) + deviceLanguages.mapNotNull(::normalizeLanguageCode) + "en"
+        ).distinct()
     }
 
     private fun readManifest(storage: DownloadSubtitleStorage): SubtitleManifest =

@@ -1,6 +1,35 @@
 package com.nuvio.app
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.shape.CircleShape
+import com.nuvio.app.core.ui.isFullscreenActionSupported
+import com.nuvio.app.core.ui.LocalFullscreenActionInTopBar
+import com.nuvio.app.core.ui.FullscreenActionButton
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.app.core.ui.NuvioCompactActionTone
+import com.nuvio.app.core.ui.NuvioIconActionButton
+import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.settings.AppBrandWordmark
+import nuvio.composeapp.generated.resources.compose_nav_discover
+import nuvio.composeapp.generated.resources.top_bar_search_placeholder
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,7 +45,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -81,6 +109,7 @@ internal fun MainTabsDestination(
     onTabSelected: (AppScreenTab) -> Unit,
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
+    onSearchRequested: (() -> Unit)? = null,
 ) {
     PlatformBackHandler(enabled = rootRouteActive, onBack = onBack)
 
@@ -180,19 +209,29 @@ internal fun MainTabsDestination(
                 },
             ),
             ))
-            if (isDesktop) add(2, FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.WatchLater,
-                onClick = { onTabSelected(AppScreenTab.WatchLater) },
-                icon = Icons.Filled.Bookmark,
-                label = "Watch Later",
-            ))
-            if (isDesktop) add(3, FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.MyList,
-                onClick = { onTabSelected(AppScreenTab.MyList) },
-                icon = Icons.Filled.Bookmark,
-                label = "My List",
-            ))
         }
+        // Desktop: three labelled tabs; Watch Later lives inside Library and Settings/profile
+        // move to the right side of the bar.
+        val desktopTopBarItems = listOf(
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Home,
+                onClick = { onTabSelected(AppScreenTab.Home) },
+                icon = Icons.Filled.Home,
+                label = stringResource(Res.string.compose_nav_home),
+            ),
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Search,
+                onClick = { onTabSelected(AppScreenTab.Search) },
+                drawable = Res.drawable.sidebar_search,
+                label = stringResource(Res.string.compose_nav_discover),
+            ),
+            FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Library || selectedTab == AppScreenTab.WatchLater,
+                onClick = { onTabSelected(AppScreenTab.Library) },
+                drawable = Res.drawable.sidebar_library,
+                label = stringResource(Res.string.compose_nav_library),
+            ),
+        )
 
         Scaffold(
             modifier = Modifier
@@ -250,6 +289,7 @@ internal fun MainTabsDestination(
                     navBarStyleSetting == NavBarStyle.ADAPTIVE
                 }
                 CompositionLocalProvider(
+                    LocalFullscreenActionInTopBar provides (useDesktopTopBar && isFullscreenActionSupported),
                     LocalNuvioBottomNavigationOverlayPadding provides if (useNativeBottomTabs) 49.dp else if (!isDesktop && !isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp else 0.dp,
                     LocalNuvioNavBarScrollState provides navBarScrollState,
                 ) {
@@ -317,7 +357,7 @@ internal fun MainTabsDestination(
 
                 if (useDesktopTopBar) {
                     DesktopNavigationBar(
-                        items = floatingNavigationItems,
+                        items = desktopTopBarItems,
                         modifier = Modifier.align(Alignment.TopCenter),
                         contentPadding = PaddingValues(
                             top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp,
@@ -330,6 +370,50 @@ internal fun MainTabsDestination(
                         profileSwitcherOpen = isTopProfileSwitcherOpen,
                         windowWidth = screenWidth,
                         glowEnabled = navBarGlowEnabled,
+                        leadingContent = {
+                            AppBrandWordmark(
+                                modifier = Modifier.height(22.dp).widthIn(max = 112.dp),
+                                contentDescription = "Starlit",
+                            )
+                        },
+                        trailingContent = {
+                            DesktopTopBarSearchField(
+                                onClick = onSearchRequested ?: { onTabSelected(AppScreenTab.Search) },
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            if (isFullscreenActionSupported) {
+                                FullscreenActionButton(
+                                    modifier = Modifier.border(
+                                        NuvioTokens.Border.thin,
+                                        MaterialTheme.nuvio.colors.textPrimary.copy(alpha = 0.14f),
+                                        CircleShape,
+                                    ),
+                                    buttonSize = 44.dp,
+                                    iconSize = 20.dp,
+                                    contentColor = MaterialTheme.nuvio.colors.textSecondary,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            NuvioIconActionButton(
+                                icon = Icons.Rounded.Settings,
+                                contentDescription = stringResource(Res.string.compose_nav_settings),
+                                onClick = { onTabSelected(AppScreenTab.Settings) },
+                                tone = NuvioCompactActionTone.Ghost,
+                                selected = selectedTab == AppScreenTab.Settings,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            ProfileSwitcherTab(
+                                selected = false,
+                                onClick = {},
+                                onProfileSelected = onProfileSelected,
+                                onAddProfileRequested = onAddProfileRequested,
+                                hazeState = navBarHazeState,
+                                onPopupStateChanged = { isTopProfileSwitcherOpen = it },
+                                avatarSize = 30,
+                                popupBelowAnchor = true,
+                                openPopupOnClick = true,
+                            )
+                        },
                     )
                 }
 
@@ -349,5 +433,39 @@ internal fun MainTabsDestination(
                 }
             }
         }
+    }
+}
+
+/** Looks like a search field; opens Discover with its search input focused. */
+@Composable
+private fun DesktopTopBarSearchField(onClick: () -> Unit) {
+    val colors = MaterialTheme.nuvio.colors
+    val shape = RoundedCornerShape(NuvioTokens.Radius.full)
+    val label = stringResource(Res.string.top_bar_search_placeholder)
+    Row(
+        modifier = Modifier
+            .width(280.dp)
+            .height(38.dp)
+            .clip(shape)
+            .background(colors.textPrimary.copy(alpha = 0.06f))
+            .border(NuvioTokens.Border.thin, colors.textPrimary.copy(alpha = 0.12f), shape)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(Res.drawable.sidebar_search),
+            contentDescription = null,
+            tint = colors.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

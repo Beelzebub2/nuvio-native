@@ -111,6 +111,11 @@ private fun LicensesAttributionsBody(
                 item = appLicenseItem(),
                 isTablet = isTablet,
             )
+            PlainStackDivider()
+            LicenseRow(
+                item = upstreamLicenseItem(),
+                isTablet = isTablet,
+            )
         }
 
         PlainSettingsStack(
@@ -392,7 +397,16 @@ private fun attributionItems(): List<AttributionItem> = listOf(
 
 internal fun appLicenseItem(): LicenseItem =
     LicenseItem(
-        titleRes = if (isDesktop) Res.string.app_brand_name else Res.string.settings_licenses_attributions_nuvio_title,
+        titleRes = Res.string.app_brand_name,
+        bodyRes = Res.string.settings_licenses_attributions_app_body,
+        licenseRes = Res.string.settings_licenses_attributions_nuvio_license,
+        link = CreatorProfileUrl,
+    )
+
+// Starlit is a rebrand of Nuvio; its GPLv3 notice and repository stay credited.
+internal fun upstreamLicenseItem(): LicenseItem =
+    LicenseItem(
+        titleRes = if (isDesktop) Res.string.settings_licenses_attributions_upstream_desktop_title else Res.string.settings_licenses_attributions_nuvio_title,
         bodyRes = Res.string.settings_licenses_attributions_nuvio_body,
         licenseRes = Res.string.settings_licenses_attributions_nuvio_license,
         link = if (isDesktop) DesktopRepositoryUrl else NuvioRepositoryUrl,

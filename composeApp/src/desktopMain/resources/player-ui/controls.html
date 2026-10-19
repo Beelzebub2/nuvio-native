@@ -255,92 +255,106 @@
           <div class="track-list" id="audioTrackList"></div>
         </div>
       </section>
-      <section class="modal-layer player-rail-modal" id="subtitleModal" aria-label="Subtitles" hidden>
-        <div class="track-panel subtitle-rail-panel">
-          <div class="track-header" id="subtitlePanelTitle">Subtitles</div>
-          <div class="subtitle-rails">
-            <section class="subtitle-rail subtitle-language-rail">
-              <div class="subtitle-rail-title" id="subtitleLanguageRailTitle">Languages</div>
-              <div class="track-list" id="subtitleTrackList"></div>
-            </section>
-            <section class="subtitle-rail subtitle-options-rail">
-              <div class="subtitle-rail-title" id="subtitleOptionsRailTitle">Subtitles</div>
-              <div class="track-list" id="addonSubtitleList"></div>
-            </section>
-            <section class="subtitle-rail subtitle-style-rail" id="subtitleStyleRail" hidden>
-              <div class="subtitle-rail-title" id="subtitleStyleRailTitle">Style</div>
-              <div class="style-panel" id="subtitleStylePanel">
-                <div class="style-card">
-                  <div class="style-section">
-                    <span class="style-label" id="subtitleDelayLabel">Subtitle Delay</span>
-                    <div class="style-control-row">
-                      <div class="stepper">
-                        <button class="round-step" id="subtitleDelayMinus" type="button">-</button>
-                        <span class="stepper-value" id="subtitleDelayValue">+0.000s</span>
-                        <button class="round-step" id="subtitleDelayPlus" type="button">+</button>
-                      </div>
-                      <button class="panel-button" id="subtitleDelayReset" type="button">Reset</button>
-                    </div>
-                  </div>
-                  <div class="style-section style-toggle-section">
-                    <span class="style-label" id="customSubtitleStyleLabel">Use custom styling</span>
-                    <button class="panel-button" id="customSubtitleStyleToggle" type="button">On</button>
-                  </div>
-                  <div class="style-section">
-                    <span class="style-label" id="fontSizeLabel">Font Size</span>
-                    <div class="stepper">
-                      <button class="round-step" id="fontSizeMinus" type="button">-</button>
-                      <span class="stepper-value" id="fontSizeValue">18sp</span>
-                      <button class="round-step" id="fontSizePlus" type="button">+</button>
-                    </div>
-                  </div>
-                  <div class="style-section">
-                    <span class="style-label" id="bottomOffsetLabel">Bottom Offset</span>
-                    <div class="stepper">
-                      <button class="round-step" id="bottomOffsetMinus" type="button">-</button>
-                      <span class="stepper-value" id="bottomOffsetValue">20</span>
-                      <button class="round-step" id="bottomOffsetPlus" type="button">+</button>
-                    </div>
-                  </div>
-                  <div class="custom-subtitle-style-controls" id="customSubtitleStyleControls">
-                    <div class="style-section">
-                      <span class="style-label" id="boldLabel">Bold</span>
-                      <button class="panel-button" id="boldToggle" type="button">Off</button>
-                    </div>
-                    <div class="style-section">
-                      <span class="style-label" id="subtitleColorLabel">Color</span>
-                      <div class="swatch-row" id="subtitleColorSwatches"></div>
-                    </div>
-                    <div class="style-section">
-                      <span class="style-label" id="textOpacityLabel">Text Opacity</span>
-                      <div class="stepper">
-                        <button class="round-step" id="textOpacityMinus" type="button">-</button>
-                        <span class="stepper-value" id="textOpacityValue">100%</span>
-                        <button class="round-step" id="textOpacityPlus" type="button">+</button>
-                      </div>
-                    </div>
-                    <div class="style-section">
-                      <span class="style-label" id="outlineLabel">Outline</span>
-                      <button class="panel-button" id="outlineToggle" type="button">On</button>
-                      <span class="style-label" id="outlineColorLabel">Outline Color</span>
-                      <div class="swatch-row" id="outlineColorSwatches"></div>
-                    </div>
-                  </div>
-                  <div class="style-section">
-                    <span class="style-label" id="autoSyncLabel">Auto Sync</span>
-                    <div class="style-control-row">
-                      <button class="panel-button" id="autoSyncReload" type="button">Reload</button>
-                      <button class="panel-button" id="autoSyncCapture" type="button">Capture</button>
-                    </div>
-                    <div class="stream-subtitle" id="autoSyncStatus"></div>
-                    <div id="autoSyncCueList"></div>
-                  </div>
-                  <div class="style-section">
-                    <button class="panel-button" id="subtitleStyleReset" type="button">Reset Defaults</button>
-                  </div>
+      <section class="modal-layer player-side-modal subs-modal" id="subtitleModal" aria-label="Subtitles" hidden>
+        <div class="track-panel player-side-panel subs-panel">
+          <div class="track-header-row">
+            <div class="track-title" id="subtitlePanelTitle">Subtitles</div>
+            <button class="panel-button" id="subtitleCloseButton" type="button">Close</button>
+          </div>
+          <div class="subs-tabs" role="tablist" aria-label="Subtitle settings">
+            <button class="subs-tab" id="subtitleTabTracks" data-subs-tab="tracks" role="tab" type="button">Tracks</button>
+            <button class="subs-tab" id="subtitleTabStyle" data-subs-tab="style" role="tab" type="button">Style</button>
+            <button class="subs-tab" id="subtitleTabTiming" data-subs-tab="timing" role="tab" type="button">Timing</button>
+          </div>
+          <div class="subs-view" id="subtitleTracksView" role="tabpanel">
+            <div class="subs-options" id="subtitleOffList"></div>
+            <div class="subs-section-label" id="subtitleLanguageRailTitle">Languages</div>
+            <div class="subs-chips" id="subtitleTrackList"></div>
+            <div class="subs-options" id="addonSubtitleList"></div>
+          </div>
+          <div class="subs-view" id="subtitleStyleView" role="tabpanel" hidden>
+            <div class="subs-preview" id="subtitlePreview" aria-hidden="true">
+              <span class="subs-preview-text" id="subtitlePreviewText">Subtitles will look like this</span>
+            </div>
+            <div class="subs-group">
+              <div class="subs-row">
+                <div class="subs-row-copy">
+                  <span class="subs-row-label" id="customSubtitleStyleLabel">Use custom styling</span>
+                  <span class="subs-row-hint" id="customSubtitleStyleHint"></span>
+                </div>
+                <button class="subs-switch" id="customSubtitleStyleToggle" role="switch" aria-checked="true" aria-labelledby="customSubtitleStyleLabel" type="button"></button>
+              </div>
+            </div>
+            <div class="subs-group">
+              <div class="subs-row">
+                <span class="subs-row-label" id="fontSizeLabel">Font Size</span>
+                <div class="subs-stepper">
+                  <button class="subs-step" id="fontSizeMinus" type="button" aria-label="Smaller">&minus;</button>
+                  <span class="subs-step-value" id="fontSizeValue">18</span>
+                  <button class="subs-step" id="fontSizePlus" type="button" aria-label="Larger">+</button>
                 </div>
               </div>
-            </section>
+              <div class="subs-row">
+                <span class="subs-row-label" id="bottomOffsetLabel">Vertical position</span>
+                <div class="subs-stepper">
+                  <button class="subs-step" id="bottomOffsetMinus" type="button" aria-label="Lower">&minus;</button>
+                  <span class="subs-step-value" id="bottomOffsetValue">20</span>
+                  <button class="subs-step" id="bottomOffsetPlus" type="button" aria-label="Higher">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="subs-group" id="customSubtitleStyleControls">
+              <div class="subs-row-hint subs-group-hint" id="customSubtitleStyleOffHint" hidden></div>
+              <div class="subs-row">
+                <span class="subs-row-label" id="boldLabel">Bold</span>
+                <button class="subs-switch" id="boldToggle" role="switch" aria-checked="false" aria-labelledby="boldLabel" type="button"></button>
+              </div>
+              <div class="subs-row subs-row-stack">
+                <span class="subs-row-label" id="subtitleColorLabel">Color</span>
+                <div class="subs-swatches" id="subtitleColorSwatches"></div>
+              </div>
+              <div class="subs-row">
+                <span class="subs-row-label" id="textOpacityLabel">Text Opacity</span>
+                <div class="subs-stepper">
+                  <button class="subs-step" id="textOpacityMinus" type="button" aria-label="Less opaque">&minus;</button>
+                  <span class="subs-step-value" id="textOpacityValue">100%</span>
+                  <button class="subs-step" id="textOpacityPlus" type="button" aria-label="More opaque">+</button>
+                </div>
+              </div>
+              <div class="subs-row">
+                <span class="subs-row-label" id="outlineLabel">Outline</span>
+                <button class="subs-switch" id="outlineToggle" role="switch" aria-checked="true" aria-labelledby="outlineLabel" type="button"></button>
+              </div>
+              <div class="subs-row subs-row-stack" id="outlineColorRow">
+                <span class="subs-row-label" id="outlineColorLabel">Outline Color</span>
+                <div class="subs-swatches" id="outlineColorSwatches"></div>
+              </div>
+            </div>
+            <button class="subs-text-button" id="subtitleStyleReset" type="button">Reset Defaults</button>
+          </div>
+          <div class="subs-view" id="subtitleTimingView" role="tabpanel" hidden>
+            <div class="subs-group">
+              <span class="subs-row-label" id="subtitleDelayLabel">Subtitle Delay</span>
+              <div class="subs-delay">
+                <button class="subs-step subs-step-coarse" id="subtitleDelayMinusCoarse" type="button">&minus;1s</button>
+                <button class="subs-step" id="subtitleDelayMinus" type="button">&minus;0.1s</button>
+                <span class="subs-delay-value" id="subtitleDelayValue">0.0 s</span>
+                <button class="subs-step" id="subtitleDelayPlus" type="button">+0.1s</button>
+                <button class="subs-step subs-step-coarse" id="subtitleDelayPlusCoarse" type="button">+1s</button>
+              </div>
+              <span class="subs-row-hint" id="subtitleDelayHint"></span>
+              <button class="subs-text-button" id="subtitleDelayReset" type="button">Reset</button>
+            </div>
+            <div class="subs-group">
+              <span class="subs-row-label" id="autoSyncLabel">Auto Sync</span>
+              <span class="subs-row-hint" id="autoSyncHint"></span>
+              <div class="subs-actions">
+                <button class="panel-button primary" id="autoSyncCapture" type="button">Capture</button>
+                <button class="panel-button" id="autoSyncReload" type="button">Reload</button>
+              </div>
+              <div class="subs-status" id="autoSyncStatus"></div>
+              <div class="subs-cues" id="autoSyncCueList"></div>
+            </div>
           </div>
         </div>
       </section>

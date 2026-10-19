@@ -2,6 +2,10 @@ package com.nuvio.app.features.airing
 
 import com.nuvio.app.core.storage.DesktopStorage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,70 +33,167 @@ internal class AiringRepository(
     private val saveSnapshot: suspend (AiringSnapshot) -> Unit = {},
     private val saveSettings: suspend (AiringSettings) -> Unit = {},
     private val now: () -> Instant = Instant::now,
+    private val fetchUpdates: (suspend (AiringSettings, Instant, suspend (List<AiringEvent>) -> Unit) -> List<AiringEvent>)? = null,
+    private val loadSaved: (suspend () -> Pair<AiringSettings, AiringSnapshot>)? = null,
 ) {
     private val mutex = Mutex()
-    private val _state = MutableStateFlow(AiringState(initialSettings, initialSnapshot.takeIf {
-        it.airType == initialSettings.airType
-    } ?: AiringSnapshot(airType = initialSettings.airType), now()))
+    private val refreshMutex = Mutex()
+    private val restoreMutex = Mutex()
+    private var restored = loadSaved == null
+    @Volatile private var generation = 0L
+    private var fetchJob: Job? = null
+    private val _state = MutableStateFlow(AiringState(initialSettings, validSnapshot(initialSnapshot, initialSettings), now()))
     val state = _state.asStateFlow()
-    private var attemptedAt = 0L
+    private var attemptedAt: Long? = null
+    private var retryAt = 0L
+
+    private fun validSnapshot(snapshot: AiringSnapshot, settings: AiringSettings): AiringSnapshot =
+        snapshot.takeIf { it.airType == settings.airType && it.hideNsfw == settings.hideNsfw &&
+            it.contentPolicyVersion == AIRING_CONTENT_POLICY_VERSION }
+            ?.let { it.copy(events = filterAiringContent(it.events, settings)) }
+            ?: AiringSnapshot(airType = settings.airType, hideNsfw = settings.hideNsfw)
+
+    private suspend fun restore() = restoreMutex.withLock {
+        if (restored) return@withLock
+        _state.update { it.copy(loading = true) }
+        val (settings, snapshot) = withContext(Dispatchers.IO) { loadSaved!!.invoke() }
+        mutex.withLock { _state.value = AiringState(settings, validSnapshot(snapshot, settings), now()) }
+        restored = true
+    }
 
     suspend fun updateSettings(settings: AiringSettings) {
         ZoneId.of(settings.zone)
-        require(settings.historyDays in 1..7 && settings.airType in listOf("broadcast", "sub", "dub"))
-        mutex.withLock {
+        require(settings.historyDays in 1..MAX_AIRING_HISTORY_DAYS && settings.airType in listOf("broadcast", "sub", "dub"))
+        restore()
+        val sourceChanged = mutex.withLock {
             val previous = _state.value
             saveSettings(settings)
-            _state.value = previous.copy(settings = settings, error = null,
-                snapshot = previous.snapshot.takeIf { it.airType == settings.airType } ?: AiringSnapshot(airType = settings.airType))
-            attemptedAt = 0
+            val changed = previous.settings.airType != settings.airType || previous.settings.hideNsfw != settings.hideNsfw
+            if (changed) {
+                generation++
+                fetchJob?.cancel()
+                attemptedAt = null
+            }
+            _state.value = previous.copy(settings = settings, error = null, loading = if (changed) false else previous.loading,
+                snapshot = previous.snapshot.takeIf {
+                    it.airType == settings.airType && it.hideNsfw == settings.hideNsfw
+                } ?: AiringSnapshot(airType = settings.airType, hideNsfw = settings.hideNsfw))
+            if (previous.settings.hideNsfw != settings.hideNsfw) {
+                com.nuvio.app.features.details.MetaDetailsRepository.invalidateNativeAiring()
+            }
+            changed
         }
-        refresh(force = true)
+        if (sourceChanged) refreshInternal(force = true, waitForPrevious = true)
+        else if (state.value.snapshot.savedAt == 0L) refresh()
     }
 
-    suspend fun refresh(force: Boolean = false) = mutex.withLock {
-        val instant = now()
-        _state.update { it.copy(now = instant) }
-        val old = _state.value
-        val age = instant.toEpochMilli() - old.snapshot.savedAt
-        if (!force && old.snapshot.savedAt > 0 && age in 0 until 5 * 60_000L) return@withLock
-        if (!force && instant.toEpochMilli() - attemptedAt in 0 until 60_000L) return@withLock
-        attemptedAt = instant.toEpochMilli()
-        _state.update { it.copy(loading = true) }
-        try {
-            val fresh = fetch(old.settings, instant)
-            val cutoff = instant.minusSeconds(8 * 86400).epochSecond
-            val retainedPast = old.snapshot.events.filter { it.airingAt <= instant.epochSecond }
-            val merged = (retainedPast + fresh).filter { it.airingAt >= cutoff }
-                .associateBy { "${it.mediaId}:${it.episode}:${it.airType}" }.values.toList()
-            val snapshot = AiringSnapshot(merged, instant.toEpochMilli(), old.settings.airType)
-            // Persistence failure must not throw away a successful live response.
-            try { saveSnapshot(snapshot) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-            _state.value = old.copy(snapshot = snapshot, now = now(), error = null)
-        } catch (e: CancellationException) {
-            _state.update { it.copy(loading = false) }
-            throw e
-        } catch (e: Exception) {
-            _state.value = old.copy(now = now(), error = e.message ?: "Schedule source is unavailable")
+    /** Hides a title everywhere airing is shown; no refetch is needed. */
+    suspend fun hide(event: AiringEvent) = updateHidden { hidden ->
+        hidden.filterNot { it.mediaId == event.mediaId } +
+            HiddenAiringTitle(event.mediaId, event.name, event.poster, now().toEpochMilli())
+    }
+
+    suspend fun showAgain(mediaId: Int) = updateHidden { hidden -> hidden.filterNot { it.mediaId == mediaId } }
+
+    suspend fun showAllAgain() = updateHidden { emptyList() }
+
+    private suspend fun updateHidden(transform: (List<HiddenAiringTitle>) -> List<HiddenAiringTitle>) {
+        restore()
+        mutex.withLock {
+            val settings = _state.value.settings.let { it.copy(hidden = transform(it.hidden)) }
+            saveSettings(settings)
+            _state.update { it.copy(settings = settings) }
         }
     }
+
+    suspend fun refresh(force: Boolean = false) = refreshInternal(force, waitForPrevious = false)
+
+    private suspend fun refreshInternal(force: Boolean, waitForPrevious: Boolean) {
+        if (waitForPrevious) refreshMutex.lock() else if (!refreshMutex.tryLock()) return
+        try {
+            restore()
+            val instant = now()
+            val (old, version) = mutex.withLock {
+                _state.update { it.copy(now = instant) }
+                val current = _state.value
+                val age = instant.toEpochMilli() - current.snapshot.savedAt
+                if (!force && current.snapshot.complete && current.snapshot.savedAt > 0 && age in 0 until 5 * 60_000L) return
+                if (instant.toEpochMilli() < retryAt) return
+                if (attemptedAt?.let { instant.toEpochMilli() - it in 0 until 60_000L } == true) return
+                attemptedAt = instant.toEpochMilli()
+                _state.update { it.copy(loading = true, error = null) }
+                current to generation
+            }
+            var savedPartial = old.snapshot.events.isNotEmpty()
+            suspend fun publish(fresh: List<AiringEvent>, complete: Boolean) = mutex.withLock {
+                if (version != generation) return@withLock
+                val current = _state.value
+                val retained = old.snapshot.events.filter { !complete || it.airingAt <= instant.epochSecond }
+                val eligible = (retained + fresh).filter { it.airingAt >= instant.minusSeconds(8 * 86400).epochSecond }
+                val merged = filterAiringContent(eligible, current.settings)
+                    .associateBy { "${it.mediaId}:${it.episode}:${it.airType}" }.values.toList()
+                val snapshot = AiringSnapshot(merged, instant.toEpochMilli(), old.settings.airType,
+                    old.settings.hideNsfw, AIRING_CONTENT_POLICY_VERSION, complete)
+                _state.value = current.copy(snapshot = snapshot, now = now(), loading = !complete, error = null)
+                // Persist the first usable batch for offline restarts, then the completed schedule.
+                if (complete || !savedPartial && merged.isNotEmpty()) {
+                    try { saveSnapshot(snapshot) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                    savedPartial = true
+                }
+            }
+            try {
+                coroutineScope {
+                    val job = currentCoroutineContext().job
+                    val active = mutex.withLock {
+                        if (version != generation) false else { fetchJob = job; true }
+                    }
+                    if (!active) return@coroutineScope
+                    val fresh = withContext(Dispatchers.Default) {
+                        fetchUpdates?.invoke(old.settings, instant) { publish(it, complete = false) }
+                            ?: fetch(old.settings, instant)
+                    }
+                    publish(fresh, complete = true)
+                }
+            } catch (e: CancellationException) {
+                if (version == generation) {
+                    _state.update { it.copy(loading = false) }
+                    throw e
+                }
+            } catch (e: Exception) {
+                mutex.withLock {
+                    if (version == generation) {
+                        if (e is AiringRateLimitException) retryAt = maxOf(retryAt, e.retryAt)
+                        _state.update { it.copy(now = now(), loading = false, error = e.message ?: "Schedule source is unavailable") }
+                    }
+                }
+            } finally {
+                mutex.withLock { if (version == generation) fetchJob = null }
+            }
+        } finally { refreshMutex.unlock() }
+    }
+
 }
 
 internal object NativeAiring {
     private val json = Json { ignoreUnknownKeys = true }
     private val store by lazy { DesktopStorage.store("native_airing") }
-    val client = AiringClient()
+    val client by lazy { AiringClient() }
     val repository by lazy {
-        val settings = runCatching { json.decodeFromString<AiringSettings>(store.getString("settings").orEmpty()) }
-            .getOrNull()?.takeIf { runCatching { ZoneId.of(it.zone) }.isSuccess && it.historyDays in 1..7 && it.airType in listOf("broadcast", "sub", "dub") }
-            ?: AiringSettings()
-        val snapshot = runCatching { json.decodeFromString<AiringSnapshot>(store.getString("snapshot").orEmpty()) }
-            .getOrDefault(AiringSnapshot())
-        AiringRepository(settings, snapshot, client::schedule,
+        AiringRepository(AiringSettings(), fetch = { settings, instant -> client.schedule(settings, instant) },
+            fetchUpdates = { settings, instant, onBatch -> client.scheduleWithUpdates(settings, instant, onBatch) },
+            loadSaved = { withContext(Dispatchers.IO) {
+                val settings = runCatching { json.decodeFromString<AiringSettings>(store.getString("settings").orEmpty()) }
+                    .getOrNull()?.takeIf { runCatching { ZoneId.of(it.zone) }.isSuccess && it.historyDays in 1..7 && it.airType in listOf("broadcast", "sub", "dub") }
+                    ?.let { it.copy(historyDays = it.historyDays.coerceAtMost(MAX_AIRING_HISTORY_DAYS)) } ?: AiringSettings()
+                val snapshot = runCatching { json.decodeFromString<AiringSnapshot>(store.getString("snapshot").orEmpty()) }
+                    .getOrDefault(AiringSnapshot())
+                settings to snapshot
+            } },
             saveSnapshot = { withContext(Dispatchers.IO) { store.putString("snapshot", json.encodeToString(it)) } },
             saveSettings = { withContext(Dispatchers.IO) { store.putString("settings", json.encodeToString(it)) } },
         )
     }
+
 }
 
 internal actual suspend fun fetchBuiltInAiringDetails(id: String): com.nuvio.app.features.details.MetaDetails? {

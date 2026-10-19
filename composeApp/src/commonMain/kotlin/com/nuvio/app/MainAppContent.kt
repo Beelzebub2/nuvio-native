@@ -235,6 +235,14 @@ internal fun MainAppContent(
             )
         }
         val appUpdaterController = rememberAppUpdaterController()
+        LaunchedEffect(navController) {
+            com.nuvio.app.features.watchlater.EpisodeDetailsNavigation.requests.collect { item ->
+                val current = navController.currentRoute as? DetailRoute
+                if (current?.id != item.id || current?.type != item.type) {
+                    navController.navigate(DetailRoute(type = item.type, id = item.id, title = item.name))
+                }
+            }
+        }
         val hapticFeedback = LocalHapticFeedback.current
         val focusManager = LocalFocusManager.current
         val uriHandler = LocalUriHandler.current
@@ -414,7 +422,7 @@ internal fun MainAppContent(
                 searchScrollToTopRequests.tryEmit(Unit)
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
-            AppScreenTab.WatchLater, AppScreenTab.MyList -> Unit
+            AppScreenTab.WatchLater -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }
@@ -1326,6 +1334,7 @@ internal fun MainAppContent(
                         ),
                         actions = { isTabletLayout ->
                             AppTabActions(
+                                onTabSelected = ::activateTab,
                                 onCatalogClick = onCatalogClick,
                                 onPosterClick = { meta ->
                                     navController.navigate(
@@ -1461,6 +1470,10 @@ internal fun MainAppContent(
                             }
                         },
                         onTabSelected = ::handleRootTabClick,
+                        onSearchRequested = {
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         onProfileSelected = { profile ->
                             profileSwitchLoading = true
                             NativeTabBridge.publishTabBarVisible(false)

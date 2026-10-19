@@ -41,6 +41,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +110,7 @@ fun LibraryScreen(
     onConnectCloudClick: (() -> Unit)? = null,
     onDownloadsClick: (() -> Unit)? = null,
     disintegrationRequest: DisintegrationRequest<String>? = null,
+    headerAccessory: (@Composable () -> Unit)? = null,
 ) {
     val uiState by remember {
         LibraryRepository.ensureLoaded()
@@ -275,6 +279,8 @@ fun LibraryScreen(
             }
         }
 
+        val pageInset = if (isDesktop) desktopPageHorizontalPaddingForWidth(maxWidth.value) else 16.dp
+        CompositionLocalProvider(LocalLibraryPageInset provides pageInset) {
         NuvioScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalPadding = 0.dp,
@@ -303,7 +309,7 @@ fun LibraryScreen(
                                     LibrarySourceMode.MDBLIST -> stringResource(Res.string.library_mdblist_title)
                                 }
                             },
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = libraryPageInset()),
                             topPadding = topChromePadding,
                             actions = {
                                 if (sourceMode == LibraryViewMode.Saved) {
@@ -344,12 +350,15 @@ fun LibraryScreen(
                                 }
                             },
                         )
+                        headerAccessory?.let { accessory ->
+                            Box(modifier = Modifier.padding(start = libraryPageInset(), end = libraryPageInset(), bottom = 12.dp)) { accessory() }
+                        }
                         LibrarySourceSwitch(
                             selectedMode = sourceMode,
                             onModeSelected = { mode ->
                                 sourceModeName = mode.name
                             },
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = libraryPageInset()),
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                     }
@@ -396,7 +405,7 @@ fun LibraryScreen(
                         } else {
                             items(3) {
                                 HomeSkeletonRow(
-                                    horizontalPadding = 16.dp,
+                                    horizontalPadding = libraryPageInset(),
                                 )
                             }
                         }
@@ -407,12 +416,12 @@ fun LibraryScreen(
                             if (networkStatusUiState.isOfflineLike) {
                                 NuvioNetworkOfflineCard(
                                     condition = networkStatusUiState.condition,
-                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    modifier = Modifier.padding(horizontal = libraryPageInset()),
                                     onRetry = retryLibraryLoad,
                                 )
                             } else {
                                 HomeEmptyStateCard(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    modifier = Modifier.padding(horizontal = libraryPageInset()),
                                     title = when (uiState.sourceMode) {
                                         LibrarySourceMode.LOCAL -> stringResource(Res.string.library_load_failed)
                                         LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_load_failed)
@@ -430,7 +439,7 @@ fun LibraryScreen(
                     uiState.sections.isEmpty() -> {
                         item {
                             HomeEmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = libraryPageInset()),
                                 title = when (uiState.sourceMode) {
                                     LibrarySourceMode.LOCAL -> stringResource(Res.string.library_empty_title)
                                     LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_empty_title)
@@ -464,7 +473,7 @@ fun LibraryScreen(
                                 onTypeSelected = { type -> selectedLibraryType = type },
                                 onSortSelected = LibraryDisplaySettingsRepository::setSortOption,
                                 modifier = libraryContentTransitionModifier()
-                                    .padding(horizontal = 16.dp),
+                                    .padding(horizontal = libraryPageInset()),
                             )
                         }
                         when (displaySettings.layoutMode) {
@@ -490,6 +499,7 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -517,7 +527,7 @@ private fun LazyListScope.cloudLibraryContent(
         !uiState.isEnabled -> {
             item {
                 HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = libraryPageInset()),
                     title = stringResource(Res.string.cloud_library_disabled_title),
                     message = stringResource(Res.string.cloud_library_disabled_message),
                     actionLabel = stringResource(Res.string.cloud_library_disabled_action),
@@ -529,7 +539,7 @@ private fun LazyListScope.cloudLibraryContent(
         !uiState.hasConnectedProvider -> {
             item {
                 HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = libraryPageInset()),
                     title = stringResource(Res.string.cloud_library_connect_title),
                     message = stringResource(Res.string.cloud_library_connect_message),
                     actionLabel = stringResource(Res.string.cloud_library_connect_action),
@@ -580,7 +590,7 @@ private fun LazyListScope.cloudLibraryContent(
                         onProviderSelected = onProviderSelected,
                         onTypeSelected = onTypeSelected,
                         onRefresh = onRefresh,
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        modifier = Modifier.padding(horizontal = libraryPageInset()),
                     )
                 }
 
@@ -588,7 +598,7 @@ private fun LazyListScope.cloudLibraryContent(
                     CloudLibrarySearchField(
                         query = searchQuery,
                         onQueryChange = onSearchQueryChange,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = libraryPageInset(), vertical = 8.dp),
                     )
                 }
 
@@ -601,7 +611,7 @@ private fun LazyListScope.cloudLibraryContent(
                 failedProviderStates.forEach { providerState ->
                     item(key = "cloud-error-${providerState.providerId}") {
                         HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = libraryPageInset()),
                             title = stringResource(Res.string.cloud_library_load_failed, providerState.providerName),
                             message = providerState.errorMessage.orEmpty(),
                             actionLabel = stringResource(Res.string.action_retry),
@@ -615,7 +625,7 @@ private fun LazyListScope.cloudLibraryContent(
                 } else if (filteredItems.isEmpty() && failedProviderStates.isEmpty()) {
                     item {
                         HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = libraryPageInset()),
                             title = stringResource(
                                 if (hasActiveFilter) {
                                     Res.string.cloud_library_no_matches_title
@@ -685,7 +695,7 @@ private fun CloudLibrarySearchField(
 private fun LazyListScope.cloudLibrarySkeletonItems() {
     item(key = "cloud-library-skeleton-toolbar") {
         CloudLibrarySkeletonToolbar(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = libraryPageInset()),
         )
     }
     items(3) {
@@ -1196,8 +1206,8 @@ private fun LazyListScope.librarySections(
             title = section.displayTitle,
             entries = section.previewEntries,
             modifier = libraryContentTransitionModifier(),
-            headerHorizontalPadding = 16.dp,
-            rowContentPadding = PaddingValues(horizontal = 16.dp),
+            headerHorizontalPadding = libraryPageInset(),
+            rowContentPadding = PaddingValues(horizontal = libraryPageInset()),
             onViewAllClick = section.source
                 ?.takeIf { it.items.size > LIBRARY_SECTION_PREVIEW_LIMIT }
                 ?.let { source -> onSectionViewAllClick?.let { { it(source, sortOption) } } },
@@ -1322,3 +1332,9 @@ private class LibraryDisintegrationHolder {
         return result
     }
 }
+
+/** Horizontal page inset: matches the desktop top bar, 16 dp elsewhere. */
+private val LocalLibraryPageInset = staticCompositionLocalOf { 16.dp }
+
+@Composable
+private fun libraryPageInset(): Dp = LocalLibraryPageInset.current

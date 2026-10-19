@@ -291,9 +291,11 @@ internal fun settingsSearchEntries(
         icon = Icons.Rounded.Info,
     )
     val appLicense = appLicenseItem()
+    val upstreamLicense = upstreamLicenseItem()
     val playbackLicense = platformLicenseItem()
     listOf(
         PlaybackSearchRow("nuvio-license", stringResource(appLicense.titleRes), stringResource(appLicense.licenseRes)),
+        PlaybackSearchRow("upstream-license", stringResource(upstreamLicense.titleRes), stringResource(upstreamLicense.bodyRes)),
         PlaybackSearchRow("tmdb-attribution", stringResource(Res.string.settings_licenses_attributions_tmdb_title), stringResource(Res.string.settings_licenses_attributions_tmdb_body)),
         PlaybackSearchRow("trakt-attribution", stringResource(Res.string.settings_licenses_attributions_trakt_title), stringResource(Res.string.settings_licenses_attributions_trakt_body)),
         PlaybackSearchRow("simkl-attribution", stringResource(Res.string.settings_licenses_attributions_simkl_title), stringResource(Res.string.settings_licenses_attributions_simkl_body)),
@@ -1102,8 +1104,9 @@ internal fun LazyListScope.settingsSearchRootContent(
     animateSearchField: Boolean,
     onQueryChange: (String) -> Unit,
     onTargetClick: (SettingsSearchTarget) -> Unit,
+    searchFieldElsewhere: Boolean = false,
 ) {
-    if (showSearchField || query.isNotBlank()) {
+    if (!searchFieldElsewhere && (showSearchField || query.isNotBlank())) {
         item(key = "settings-search-field") {
             SettingsSearchRevealItem(animate = animateSearchField) {
                 SettingsSearchField(

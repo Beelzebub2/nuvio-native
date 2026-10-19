@@ -217,7 +217,15 @@ internal actual object PlayerSettingsStorage {
     actual fun savePreferredAudioLanguage(language: String) = saveString(preferredAudioLanguageKey, language)
     actual fun loadSecondaryPreferredAudioLanguage(): String? = loadString(secondaryPreferredAudioLanguageKey)
     actual fun saveSecondaryPreferredAudioLanguage(language: String?) = saveOptionalString(secondaryPreferredAudioLanguageKey, language)
-    actual fun loadPreferredSubtitleLanguage(): String? = loadString(preferredSubtitleLanguageKey)
+    actual fun loadPreferredSubtitleLanguage(): String? {
+        val migration = "english_subtitle_default_v1_${com.nuvio.app.features.profiles.ProfileRepository.activeProfileId}"
+        val previous = loadString(preferredSubtitleLanguageKey)
+        if (!store.contains(migration)) {
+            if (previous == null || previous.equals(SubtitleLanguageOption.NONE, true)) saveString(preferredSubtitleLanguageKey, "en")
+            store.putString(migration, "true")
+        }
+        return loadString(preferredSubtitleLanguageKey) ?: "en"
+    }
     actual fun savePreferredSubtitleLanguage(language: String) = saveString(preferredSubtitleLanguageKey, language)
     actual fun loadSecondaryPreferredSubtitleLanguage(): String? = loadString(secondaryPreferredSubtitleLanguageKey)
     actual fun saveSecondaryPreferredSubtitleLanguage(language: String?) = saveOptionalString(secondaryPreferredSubtitleLanguageKey, language)
