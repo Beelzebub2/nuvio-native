@@ -8,6 +8,8 @@ Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a32394
 
 Download the latest `Nuvio-Native-Windows-x64-*.exe` from your repository's Releases and run the installer. It bundles its Java runtime and native player. It installs as Nuvio Native for the current Windows user, with a separate installer identity from upstream Nuvio.
 
+The installer is Nuvio's own setup (`composeApp/src/desktopMain/installer/windows`), not the stock jpackage one. It installs to `%LOCALAPPDATA%\Nuvio Native` without administrator rights, lets you change the folder and choose Start menu and desktop shortcuts, and adds Nuvio Native to Installed apps with an uninstaller. Running a newer installer updates the existing copy in place, including copies installed by the earlier MSI-based installers; Nuvio is closed first if it is open, and your data in `%APPDATA%\NuvioNative` is kept. Uninstalling keeps that data unless you choose to delete it. The installer needs the Microsoft Edge WebView2 Runtime, which the player already uses. For scripted installs, run it with `--silent` (optionally `--dir <folder>`, `--no-desktop-shortcut`, `--launch`); the uninstaller accepts `--uninstall --silent`. Setup writes a log to `%TEMP%\Nuvio Native Setup.log`.
+
 Private update access uses your existing GitHub CLI login. On a new computer, install GitHub CLI and run `gh auth login` once with an account that can read this repository. Open Settings → About to check for updates. Updates also check at startup and every six hours. Installation requires choosing Install and restarting the app; catalog refreshes do not require restarting.
 
 An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credential. Use a fine-grained token restricted to this repository with Contents: read. Never put a token in source, build settings, release assets, command arguments, or logs. GitHub CLI manages its credential; the app reads it only into memory. HTTP redirects are followed without forwarding the credential. Every private installer must have GitHub's SHA-256 digest and pass verification before installation.
@@ -42,9 +44,11 @@ On the first Windows launch, local addons, profiles, watch history, and display/
 
 ## Release a new version
 
-Change `composeApp/Configuration/DesktopVersion.properties` (VERSION_NAME and increasing VERSION_CODE), commit and push, then push the matching `vMAJOR.MINOR.PATCH` tag. `.github/workflows/windows-release.yml` validates the version, fetches the pinned native binaries from the original public LFS store, runs desktop tests, packages an .exe, generates SHA256SUMS.txt, and publishes a private GitHub release. No upstream service secrets are required. GitHub-hosted runner availability and private Actions allowances apply.
+Change `composeApp/Configuration/DesktopVersion.properties` (VERSION_NAME and increasing VERSION_CODE), commit and push, then push the matching `vMAJOR.MINOR.PATCH` tag. `.github/workflows/windows-release.yml` validates the version, fetches the pinned native binaries from the original public LFS store, runs desktop tests, builds the installer .exe, checks a silent install and uninstall of it, generates SHA256SUMS.txt, and publishes a private GitHub release. No upstream service secrets are required. GitHub-hosted runner availability and private Actions allowances apply.
 
-Local build: use JDK 21, Visual Studio C++ Build Tools, WiX 3, and the Microsoft.Web.WebView2 NuGet SDK. Run `gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseExe --no-configuration-cache`. Set `-Pnuvio.webview2.dir=...` if needed. Native files must be materialized from upstream Git LFS first.
+Local build: use JDK 21, Visual Studio C++ Build Tools, and the Microsoft.Web.WebView2 NuGet SDK. Run `gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseInstaller --no-configuration-cache`; the installer is written to `composeApp/build/compose/binaries/main-release/installer/`. Set `-Pnuvio.webview2.dir=...` if needed. Native files must be materialized from upstream Git LFS first.
+
+To try the installer without touching an existing install, run it with `--sandbox`: it uses a separate "Nuvio Native (setup test)" name, folder, shortcuts and Installed apps entry, and never removes the earlier MSI install or your data. To work on the setup screens in a browser, open `ui/index.html?preview` (add `&mode=update`, `&mode=uninstall` or `&step=progress|done|error`) from a folder that also holds `logo.png` and `fonts/`.
 
 ## P2P decision
 
