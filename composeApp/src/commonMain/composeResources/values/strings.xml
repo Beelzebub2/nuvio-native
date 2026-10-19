@@ -1945,6 +1945,7 @@
     <string name="details_status">Status</string>
     <string name="details_videos">Videos</string>
     <string name="details_episode_badge_file">FILE</string>
+    <string name="downloads_enqueue_already_added">Already in Downloads</string>
     <string name="downloads_enqueue_missing_url">No direct stream link available</string>
     <string name="downloads_enqueue_replaced">Replaced previous download</string>
     <string name="downloads_enqueue_started">Download started</string>

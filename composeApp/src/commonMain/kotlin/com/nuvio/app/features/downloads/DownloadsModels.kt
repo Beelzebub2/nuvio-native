@@ -5,6 +5,7 @@ import com.nuvio.app.features.streams.StreamSubtitle
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.downloads_enqueue_already_added
 import nuvio.composeapp.generated.resources.downloads_enqueue_missing_url
 import nuvio.composeapp.generated.resources.downloads_enqueue_replaced
 import nuvio.composeapp.generated.resources.downloads_enqueue_started
@@ -44,6 +45,15 @@ data class DownloadItem(
     val subtitleRequests: List<SubtitleAddonRequest> = emptyList(),
     val sourceSubtitles: List<StreamSubtitle> = emptyList(),
     val localFileUri: String? = null,
+    // Each task keeps its destination when the default folder changes.
+    val destinationDirectory: String? = null,
+    val torrentHash: String? = null,
+    val torrentFileIdx: Int? = null,
+    val torrentFilename: String? = null,
+    val torrentTrackers: List<String> = emptyList(),
+    val sourceSelection: DownloadSourceSelection? = null,
+    val phase: String? = null,
+    val bytesPerSecond: Long = 0L,
     val fileName: String,
     val status: DownloadStatus,
     val downloadedBytes: Long = 0L,
@@ -71,9 +81,9 @@ data class DownloadItem(
 
     val logicalContentKey: String
         get() = if (isEpisode) {
-            "${parentMetaId.trim()}|${seasonNumber ?: -1}|${episodeNumber ?: -1}"
+            "${parentMetaType.trim()}|${parentMetaId.trim()}|${seasonNumber ?: -1}|${episodeNumber ?: -1}"
         } else {
-            "${parentMetaId.trim()}|movie"
+            "${parentMetaType.trim()}|${parentMetaId.trim()}|${videoId.trim()}"
         }
 }
 
@@ -91,7 +101,8 @@ enum class DownloadEnqueueResult {
     Started,
     Replaced,
     MissingUrl,
-    UnsupportedFormat;
+    UnsupportedFormat,
+    AlreadyAdded;
 
     fun toastMessage(): String = runBlocking {
         when (this@DownloadEnqueueResult) {
@@ -99,6 +110,7 @@ enum class DownloadEnqueueResult {
             Replaced -> getString(Res.string.downloads_enqueue_replaced)
             MissingUrl -> getString(Res.string.downloads_enqueue_missing_url)
             UnsupportedFormat -> getString(Res.string.downloads_enqueue_unsupported_format)
+            AlreadyAdded -> getString(Res.string.downloads_enqueue_already_added)
         }
     }
 }
@@ -112,3 +124,10 @@ internal val downloadSeriesEpisodeComparator: Comparator<DownloadItem> =
         .thenBy { it.episodeTitle?.trim().orEmpty().lowercase() }
         .thenBy { it.title.trim().lowercase() }
         .thenBy { it.id }
+
+@Serializable
+data class DownloadSourceSelection(
+    val providerId: String? = null,
+    val quality: String = "Any",
+    val transport: String = "Any",
+)

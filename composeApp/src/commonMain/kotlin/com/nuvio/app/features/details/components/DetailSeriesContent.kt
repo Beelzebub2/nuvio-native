@@ -203,6 +203,8 @@ fun DetailSeriesContent(
                 summary = currentSeasonSummary,
             )
 
+            if (isDesktop) com.nuvio.app.features.downloads.BatchDownloadAction(meta, currentSeason)
+
             AnimatedContent(
                 targetState = currentSeason,
                 transitionSpec = {

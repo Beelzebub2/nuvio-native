@@ -9,6 +9,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
+import com.nuvio.app.isDesktop
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +47,14 @@ internal fun LibraryDownloadsButton(onClick: () -> Unit) {
     }.collectAsStateWithLifecycle()
     val hasUnseenCompleted by DownloadsRepository.hasUnseenCompleted.collectAsStateWithLifecycle()
 
+    if (isDesktop) {
+        TextButton(onClick = onClick) {
+            DownloadIcon(tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(6.dp))
+            Text("Downloads" + downloads.items.size.takeIf { it > 0 }?.let { " ($it)" }.orEmpty())
+        }
+        return
+    }
     IconButton(onClick = onClick) {
         when {
             downloads.items.any { it.status == DownloadStatus.Downloading } -> FlowingDownloadIcon()

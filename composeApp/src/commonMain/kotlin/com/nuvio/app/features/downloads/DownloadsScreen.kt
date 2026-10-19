@@ -109,6 +109,8 @@ fun DownloadsScreen(
             )
         }
 
+        item { DownloadManagementControls() }
+
         if (selectedShowId == null) {
             downloadsRootContent(
                 uiState = uiState,
@@ -506,7 +508,9 @@ private fun statusText(item: DownloadItem): String {
     }
 
     return when (item.status) {
-        DownloadStatus.Downloading -> stringResource(Res.string.downloads_status_downloading, size)
+        DownloadStatus.Downloading -> if (item.phase != null) "${item.phase} - $size" +
+            (if (item.bytesPerSecond > 0) " - ${formatBytes(item.bytesPerSecond)}/s" else "")
+            else stringResource(Res.string.downloads_status_downloading, size)
         DownloadStatus.Paused -> stringResource(Res.string.downloads_status_paused, size)
         DownloadStatus.Completed -> stringResource(
             Res.string.downloads_status_completed,
