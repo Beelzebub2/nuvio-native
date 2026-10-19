@@ -1,10 +1,15 @@
 package com.nuvio.app.features.myanimelist
 
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.net.BindException
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.URI
@@ -16,11 +21,20 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.test.*
 
 class MalClientTest {
-    private fun callbackResponse(query: String): Int {
-        val connection = URL("$MAL_REDIRECT?$query").openConnection() as HttpURLConnection
+    private fun callbackResponse(listener: HttpServer, query: String): Int {
+        val connection = URL("http://127.0.0.1:${listener.address.port}/myanimelist/callback?$query").openConnection() as HttpURLConnection
         connection.connectTimeout = 1500
         connection.readTimeout = 1500
         return try { connection.responseCode } finally { connection.disconnect() }
+    }
+
+    private suspend fun testAuthorization(open: (URI, HttpServer) -> Unit): Pair<String, String> {
+        val listener = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        return awaitMalAuthorization("test-client-id", createListener = { listener }) { authorization ->
+            // Only the local transport is replaced; MAL still receives its registered redirect.
+            assertEquals(MAL_REDIRECT, authorization.toString().toHttpUrl().queryParameter("redirect_uri"))
+            open(authorization, listener)
+        }
     }
 
     @Test fun statusAndScoreUpdateTheRealApiFieldsWithoutOverwritingEpisodeProgress(): Unit = runBlocking {
@@ -58,6 +72,7 @@ class MalClientTest {
         val verifier = malNonce()
         val state = malNonce()
         val url = malAuthorizationUrl("test-client-id", state, verifier).toHttpUrl()
+        assertEquals("http://127.0.0.1:54328/myanimelist/callback", url.queryParameter("redirect_uri"))
         assertEquals(verifier, url.queryParameter("code_challenge"))
         assertEquals("plain", url.queryParameter("code_challenge_method"))
         assertTrue(verifier.length in 43..128)
@@ -65,14 +80,16 @@ class MalClientTest {
         assertFailsWith<IllegalArgumentException> { malCallbackCode("$MAL_REDIRECT?state=wrong&code=test-code", state) }
         assertFailsWith<IllegalArgumentException> { malCallbackCode("$MAL_REDIRECT?state=$state&state=$state&code=test-code", state) }
         assertFailsWith<IllegalArgumentException> { malCallbackCode("https://example.com/myanimelist/callback?state=$state&code=test-code", state) }
+        assertFailsWith<IllegalArgumentException> { malCallbackCode("http://127.0.0.1:54329/myanimelist/callback?state=$state&code=test-code", state) }
+        assertFailsWith<IllegalArgumentException> { malCallbackCode("$MAL_REDIRECT/extra?state=$state&code=test-code", state) }
     }
     @Test fun validStateAuthorizationErrorsCompleteImmediatelyInsteadOfTimingOut(): Unit = runBlocking {
         for ((errorCode, expected) in listOf("access_denied" to "declined", "access%5Fdenied" to "declined", "server_error" to "server_error")) {
             val failure = assertFailsWith<Exception> {
                 withTimeout(2_000L) {
-                    awaitMalAuthorization("test-client-id") { authorization: URI ->
+                    testAuthorization { authorization, listener ->
                         val state = authorization.toString().toHttpUrl().queryParameter("state")!!
-                        assertEquals(400, callbackResponse("state=$state&error=$errorCode"))
+                        assertEquals(400, callbackResponse(listener, "state=$state&error=$errorCode"))
                     }
                 }
             }
@@ -81,10 +98,10 @@ class MalClientTest {
     }
     @Test fun wrongStateCallbackCannotEndLoginButAValidCodeStillWorks(): Unit = runBlocking {
         val (code, verifier) = withTimeout(2_000L) {
-            awaitMalAuthorization("test-client-id") { authorization: URI ->
+            testAuthorization { authorization, listener ->
                 val state = authorization.toString().toHttpUrl().queryParameter("state")!!
-                assertEquals(400, callbackResponse("state=wrong&error=access_denied"))
-                assertEquals(200, callbackResponse("state=$state&code=valid-code"))
+                assertEquals(400, callbackResponse(listener, "state=wrong&error=access_denied"))
+                assertEquals(200, callbackResponse(listener, "state=$state&code=valid-code"))
             }
         }
         assertEquals("valid-code", code)
@@ -93,24 +110,44 @@ class MalClientTest {
     @Test fun missingAuthorizationCodeWithValidStateReportsErrorImmediately(): Unit = runBlocking {
         val failure = assertFailsWith<Exception> {
             withTimeout(2_000L) {
-                awaitMalAuthorization("test-client-id") { authorization: URI ->
+                testAuthorization { authorization, listener ->
                     val state = authorization.toString().toHttpUrl().queryParameter("state")!!
-                    assertEquals(400, callbackResponse("state=$state"))
+                    assertEquals(400, callbackResponse(listener, "state=$state"))
                 }
             }
         }
         assertContains(failure.message.orEmpty(), "authorization code")
     }
     @Test fun occupiedCallbackPortProducesActionableError(): Unit = runBlocking {
-        val occupying = HttpServer.create(InetSocketAddress("127.0.0.1", 54328), 0)
-        occupying.start()
-        try {
-            val failure = assertFailsWith<IllegalStateException> {
-                awaitMalAuthorization("test-client-id") { error("Browser must not open without a listener") }
+        val occupied = BindException("Fixture: callback port is occupied")
+        val failure = assertFailsWith<IllegalStateException> {
+            awaitMalAuthorization("test-client-id", createListener = { throw occupied }) {
+                error("Browser must not open without a listener")
             }
-            assertContains(failure.message.orEmpty(), "54328")
-            assertContains(failure.message.orEmpty(), "already in use")
-        } finally { occupying.stop(0) }
+        }
+        assertSame(occupied, failure.cause)
+        assertContains(failure.message.orEmpty(), "54328")
+        assertContains(failure.message.orEmpty(), "already in use")
+    }
+    @Test fun independentCallbackListenersDoNotSharePortsOrAuthorizationState(): Unit = runBlocking {
+        val listenersReady = java.util.concurrent.CountDownLatch(3)
+        val ports = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+        val codes = withTimeout(5_000L) {
+            coroutineScope {
+                (1..3).map { index -> async(Dispatchers.IO) {
+                    testAuthorization { authorization, listener ->
+                        assertTrue(ports.add(listener.address.port))
+                        listenersReady.countDown()
+                        assertTrue(listenersReady.await(2, java.util.concurrent.TimeUnit.SECONDS))
+                        val state = authorization.toString().toHttpUrl().queryParameter("state")!!
+                        assertEquals(400, callbackResponse(listener, "state=wrong&code=ignored"))
+                        assertEquals(200, callbackResponse(listener, "state=$state&code=code-$index"))
+                    }.first
+                } }.awaitAll()
+            }
+        }
+        assertEquals(setOf("code-1", "code-2", "code-3"), codes.toSet())
+        assertEquals(3, ports.size)
     }
     @Test fun oauthTokensSupportPublicAndWebClientsWithoutLosingTheSecretOnRefresh(): Unit = runBlocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
