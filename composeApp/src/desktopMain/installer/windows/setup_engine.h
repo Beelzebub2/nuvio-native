@@ -25,10 +25,15 @@ struct Product {
 // --sandbox gives every user-visible artifact a separate identity (Apps &
 // Features entry, shortcuts, default folder) and never removes the legacy MSI
 // or app data, so the full flow can be exercised next to a real install.
+// --legacy-upgrade-code points a sandbox run at a throwaway test MSI instead,
+// which it may then upgrade like a real one.
 struct Identity {
     Product product;
     bool sandbox = false;
+    bool testLegacy = false;
 
+    // Whether the MSI found by legacyUpgradeCode is ours to replace.
+    bool ownsLegacy() const { return !sandbox || testLegacy; }
     std::wstring displayName() const;
     std::wstring arpKeyPath() const;
     std::wstring shortcutFileName() const;
