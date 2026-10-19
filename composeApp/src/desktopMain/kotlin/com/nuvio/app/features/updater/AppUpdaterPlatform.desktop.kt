@@ -4,6 +4,7 @@ import com.nuvio.app.core.build.AppVersionConfig
 import com.nuvio.app.core.storage.DesktopStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -24,7 +25,6 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
-import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
 private const val desktopUpdaterPreferencesName = "nuvio_updater"
@@ -91,6 +91,26 @@ actual object AppUpdaterPlatform {
         File(path).delete()
     }
 
+    // Local cache, not the roaming profile: installers are large and only needed until setup runs.
+    private val installerFolder by lazy {
+        UpdateInstallerFolder(
+            current = DesktopStorage.cacheDir.resolve("updates").toFile(),
+            legacy = listOf(DesktopStorage.rootDir.resolve("updates").toFile()),
+        )
+    }
+
+    /**
+     * Removes installers left by earlier updates. Setup may still be open (it can launch the
+     * updated app), keeping its own file locked, so locked files are retried a little later.
+     */
+    suspend fun removeLeftoverUpdateInstallers() = withContext(Dispatchers.IO) {
+        for (retryDelayMs in listOf(60_000L, 300_000L)) {
+            if (installerFolder.removeLeftovers()) return@withContext
+            delay(retryDelayMs)
+        }
+        installerFolder.removeLeftovers()
+    }
+
     actual suspend fun downloadUpdateAsset(
         assetUrl: String,
         assetName: String,
@@ -98,10 +118,10 @@ actual object AppUpdaterPlatform {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            clearDir(updatesDir())
+            val updatesDir = installerFolder.claimForDownload()
             val safeName = assetName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val destination = File(updatesDir(), safeName)
-            val tempFile = File(updatesDir(), "$safeName.part")
+            val destination = File(updatesDir, safeName)
+            val tempFile = File(updatesDir, "$safeName.part")
 
             require(expectedSha256 != null && expectedSha256.matches(Regex("[a-fA-F0-9]{64}"))) {
                 "This private update has no SHA-256 digest. Publish it through the Windows release workflow."
@@ -188,17 +208,6 @@ actual object AppUpdaterPlatform {
         scheduleAppExit()
     }
 
-    private fun updatesDir(): File =
-        File(DesktopStorage.rootDir.resolve("updates").also { it.createDirectories() }.toUri())
-
-    private fun clearDir(dirPath: File) {
-        if (dirPath.exists() and dirPath.isDirectory) {
-            dirPath.listFiles()?.forEach { file ->
-                file.deleteRecursively()
-            }
-        }
-    }
-
     private fun launchInstaller(updateFile: File) {
         val command = when (currentOs) {
             DesktopUpdaterOs.WINDOWS -> windowsInstallerCommand(updateFile)
@@ -221,6 +230,41 @@ actual object AppUpdaterPlatform {
             Thread.sleep(500)
             exitProcess(0)
         }
+    }
+}
+
+/**
+ * The folder update installers are downloaded into. A downloaded installer is only remembered
+ * in memory, so whatever is here when the app starts belongs to an update that already ran.
+ */
+internal class UpdateInstallerFolder(
+    private val current: File,
+    private val legacy: List<File> = emptyList(),
+) {
+    private var claimed = false
+
+    /** Empties the folder for a new download; later leftover cleanup must not touch it. */
+    @Synchronized
+    fun claimForDownload(): File {
+        claimed = true
+        clear(current)
+        check(current.isDirectory || current.mkdirs()) { "Cannot create the update download folder" }
+        return current
+    }
+
+    /** Returns false while a file is still locked, for example by setup that is still open. */
+    @Synchronized
+    fun removeLeftovers(): Boolean {
+        if (claimed) return true
+        val cleared = (legacy + current).map(::clear).all { it }
+        legacy.forEach { it.delete() } // only succeeds once empty
+        return cleared
+    }
+
+    private fun clear(directory: File): Boolean {
+        if (!directory.isDirectory) return true
+        directory.listFiles()?.forEach { it.deleteRecursively() }
+        return directory.listFiles().isNullOrEmpty()
     }
 }
 

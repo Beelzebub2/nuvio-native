@@ -44,6 +44,7 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.settings.AppIconRepository
 import com.nuvio.app.features.settings.applyDesktopRendererPreference
 import com.nuvio.app.features.settings.transparentPreviewResource
+import com.nuvio.app.features.updater.AppUpdaterPlatform
 import java.awt.Desktop
 import javax.imageio.ImageIO
 import java.awt.Color as AwtColor
@@ -156,6 +157,7 @@ fun main(args: Array<String>) {
                 launch(Dispatchers.IO) { SentryInitializer.start() }
                 launch(Dispatchers.IO) { P2pStreamingEngine.prepare() }
                 launch(Dispatchers.IO) { DiscordPresenceManager.start() }
+                launch { AppUpdaterPlatform.removeLeftoverUpdateInstallers() }
                 withContext(Dispatchers.IO) { runCatching { NativePlayerBridge.ensureLoaded() } }
                 applyNativeDesktopWindowChrome(window)
                 installLinuxExtendedMouseButtons()
