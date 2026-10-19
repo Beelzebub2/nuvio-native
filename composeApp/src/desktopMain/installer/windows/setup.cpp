@@ -670,6 +670,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // (see the delay-load flags in build-installer.ps1).
     SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
     parseArgs();
+    // Started by the app's updater, setup inherits the app's working directory:
+    // the install folder, which Windows won't rename or delete while it is any
+    // process's current directory, setup's own included. Resolve --dir against
+    // it first, then step out.
+    gArgs.dir = normalizeDir(gArgs.dir);
+    wchar_t systemDir[MAX_PATH + 1];
+    if (GetSystemDirectoryW(systemDir, ARRAYSIZE(systemDir))) SetCurrentDirectoryW(systemDir);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     log(L"Started: %s", GetCommandLineW());
 

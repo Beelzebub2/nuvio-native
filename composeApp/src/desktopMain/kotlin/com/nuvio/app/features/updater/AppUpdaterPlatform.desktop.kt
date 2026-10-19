@@ -211,7 +211,9 @@ actual object AppUpdaterPlatform {
             )
             DesktopUpdaterOs.UNKNOWN -> error("Desktop updates are not supported on this operating system.")
         }
-        ProcessBuilder(command).start()
+        // Not the app's own working directory: that is the install folder, which the
+        // Windows installer has to move aside.
+        ProcessBuilder(command).directory(updateFile.parentFile).start()
     }
 
     private fun scheduleAppExit() {
