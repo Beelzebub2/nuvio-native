@@ -15,37 +15,10 @@ class DesktopNavigationBarTest {
     }
 
     @Test
-    fun adaptiveHomeWithHeroExpandsForHoverAndProfilePopup() {
-        assertEquals(0f, labels(hero = true))
-        assertEquals(1f, labels(hero = true, hovered = true))
-        assertEquals(1f, labels(hero = true, popup = true))
-        assertEquals(0f, labels(hero = true, scrolled = true))
+    fun desktopKeepsLabelsUnlessCompact() {
+        assertEquals(1f, desktopNavigationLabelFraction(NavBarStyle.ADAPTIVE))
+        assertEquals(1f, desktopNavigationLabelFraction(NavBarStyle.EXPANDED))
+        assertEquals(1f, desktopNavigationLabelFraction(NavBarStyle.CLASSIC))
+        assertEquals(0f, desktopNavigationLabelFraction(NavBarStyle.COMPACT))
     }
-
-    @Test
-    fun adaptiveHomeWithoutHeroCollapsesAfterScrolling() {
-        assertEquals(1f, labels())
-        assertEquals(0f, labels(scrolled = true))
-        assertEquals(1f, labels(scrolled = true, hovered = true))
-    }
-
-    @Test
-    fun otherTabsKeepTheirLabelsWhileScrolling() {
-        assertEquals(1f, labels(home = false, scrolled = true))
-    }
-
-    @Test
-    fun explicitStylesOverrideHoverAndScrolling() {
-        assertEquals(0f, labels(style = NavBarStyle.COMPACT, hovered = true, popup = true))
-        assertEquals(1f, labels(style = NavBarStyle.EXPANDED, hero = true, scrolled = true))
-    }
-
-    private fun labels(
-        style: NavBarStyle = NavBarStyle.ADAPTIVE,
-        home: Boolean = true,
-        hero: Boolean = false,
-        hovered: Boolean = false,
-        popup: Boolean = false,
-        scrolled: Boolean = false,
-    ): Float = desktopNavigationLabelFraction(style, home, hero, hovered, popup, scrolled)
 }

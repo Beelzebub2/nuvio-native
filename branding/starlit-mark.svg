@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <path id="m-play" d="M381.5 262.2 Q250.0 190.0 250.0 340.0 L250.0 684.0 Q250.0 834.0 381.5 761.8 L704.5 584.2 Q836.0 512.0 704.5 439.8 Z"/>
+    <clipPath id="m-clip"><use href="#m-play"/></clipPath>
+    <linearGradient id="m-body" x1="250" y1="190" x2="836" y2="834" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45D6EB"/><stop offset="0.52" stop-color="#3965D4"/><stop offset="1" stop-color="#B250EF"/>
+    </linearGradient>
+    <linearGradient id="m-twinkle" x1="730" y1="252" x2="846" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45D6EB"/><stop offset="1" stop-color="#B250EF"/>
+    </linearGradient>
+    <linearGradient id="m-sheen" x1="250" y1="190" x2="520" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.30"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="m-glow" cx="470" cy="512" r="250" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(-36 0)">
+    <use href="#m-play" fill="url(#m-body)"/>
+    <g clip-path="url(#m-clip)">
+      <rect x="0" y="0" width="1024" height="1024" fill="url(#m-sheen)"/>
+      <circle cx="470" cy="512" r="250" fill="url(#m-glow)"/>
+    </g>
+    <path d="M470 334 Q488.0 490.6 620 512 Q488.0 533.4 470 690 Q452.0 533.4 320 512 Q452.0 490.6 470 334 Z" fill="#FFFFFF"/>
+    <path d="M788 252 Q795.0 310.1 846 318 Q795.0 325.9 788 384 Q781.0 325.9 730 318 Q781.0 310.1 788 252 Z" fill="url(#m-twinkle)"/>
+  </g>
+</svg>

@@ -162,6 +162,7 @@ object ProfileRepository {
     }
 
     private fun selectProfile(profileIndex: Int) {
+        DownloadsRepository.clearLocalState()
         activeProfileIndex = profileIndex
         CustomPosterUrlRepository.onProfileChanged()
         val selectedProfile = _state.value.profiles.find { it.profileIndex == profileIndex }

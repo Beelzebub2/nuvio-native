@@ -77,7 +77,6 @@ import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryScreen
 import com.nuvio.app.features.catalog.CatalogScreen
 import com.nuvio.app.features.catalog.CatalogTarget
-import androidx.compose.material.icons.filled.Bookmark
 import com.nuvio.app.features.library.LibrarySection
 import com.nuvio.app.features.library.LibrarySortOption
 import com.nuvio.app.features.player.PlayerBackReleaseGuard
@@ -193,6 +192,7 @@ internal data class AppTabActions(
     val onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
     val onRequestedSettingsPageConsumed: () -> Unit = {},
     val onInitialHomeContentRendered: () -> Unit = {},
+    val onTabSelected: (AppScreenTab) -> Unit = {},
 )
 
 @Composable
@@ -279,15 +279,30 @@ internal fun AppTabHost(
                     onConnectCloudClick = actions.onConnectCloudClick,
                     onDownloadsClick = actions.onDownloadsClick,
                     disintegrationRequest = state.libraryDisintegrationRequest,
+                    headerAccessory = if (isDesktop) {
+                        {
+                            com.nuvio.app.features.watchlater.LibraryViewSwitcher(
+                                selected = com.nuvio.app.features.watchlater.LibraryView.Library,
+                                onSelect = { view ->
+                                    if (view == com.nuvio.app.features.watchlater.LibraryView.WatchLater) {
+                                        actions.onTabSelected(AppScreenTab.WatchLater)
+                                    }
+                                },
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
 
-            AppScreenTab.WatchLater, AppScreenTab.MyList -> {
+            AppScreenTab.WatchLater -> {
                 com.nuvio.app.features.watchlater.WatchLaterScreen(
-                    personalList = tab == AppScreenTab.MyList,
                     onPosterClick = { actions.onPosterClick?.invoke(it) },
                     onPlay = { actions.onContinueWatchingClick?.invoke(it) },
-                    modifier = Modifier.fillMaxSize().padding(top = state.topChromePadding ?: 0.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    topChromePadding = state.topChromePadding,
+                    onShowLibrary = { actions.onTabSelected(AppScreenTab.Library) },
                 )
             }
 
@@ -856,7 +871,7 @@ internal fun DesktopHoverSidebar(
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_nav_library),
-                    selected = selectedTab == AppScreenTab.Library,
+                    selected = selectedTab == AppScreenTab.Library || selectedTab == AppScreenTab.WatchLater,
                     expanded = sidebarExpanded,
                     onClick = { selectTab(AppScreenTab.Library) },
                 ) { color ->
@@ -866,24 +881,6 @@ internal fun DesktopHoverSidebar(
                         modifier = Modifier.size(DesktopSidebarIconSize),
                         tint = color,
                     )
-                }
-                DesktopSidebarItem(
-                    label = "Watch Later",
-                    selected = selectedTab == AppScreenTab.WatchLater,
-                    expanded = sidebarExpanded,
-                    onClick = { selectTab(AppScreenTab.WatchLater) },
-                ) { color ->
-                    Icon(Icons.Filled.Bookmark, contentDescription = "Watch Later",
-                        modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
-                }
-                DesktopSidebarItem(
-                    label = "My List",
-                    selected = selectedTab == AppScreenTab.MyList,
-                    expanded = sidebarExpanded,
-                    onClick = { selectTab(AppScreenTab.MyList) },
-                ) { color ->
-                    Icon(Icons.Filled.Bookmark, contentDescription = "My List",
-                        modifier = Modifier.size(DesktopSidebarIconSize), tint = color)
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_settings_page_root),

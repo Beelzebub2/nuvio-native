@@ -31,6 +31,7 @@ import org.junit.Rule
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import com.nuvio.app.features.settings.NavBarStyle
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -65,24 +66,23 @@ class DesktopJellyNavigationTest {
     }
 
     @Test
-    fun hoveringExpandsHomeAndLeavingCollapsesIt() {
+    fun homeKeepsItsLabelWithTheHeroAndOnHover() {
         setContent()
         compose.waitForIdle()
         val home = compose.onNodeWithContentDescription("Home")
-        val compactWidth = home.fetchSemanticsNode().boundsInRoot.width
-        savePreview("compact")
+        val restingWidth = home.fetchSemanticsNode().boundsInRoot.width
+        savePreview("labels")
         home.performMouseInput { enter(center) }
         compose.waitForIdle()
-        val expandedWidth = home.fetchSemanticsNode().boundsInRoot.width
-        assertTrue(expandedWidth > compactWidth * 1.5f)
+        assertEquals(restingWidth, home.fetchSemanticsNode().boundsInRoot.width, 2f)
         home.performMouseInput { exit() }
         compose.waitForIdle()
-        assertEquals(compactWidth, home.fetchSemanticsNode().boundsInRoot.width, 2f)
+        assertEquals(restingWidth, home.fetchSemanticsNode().boundsInRoot.width, 2f)
     }
 
     @Test
     fun profileHoldOpensTheSwitcherWithoutNavigating() {
-        setContent(withProfile = true)
+        setContent(withProfile = true, style = NavBarStyle.COMPACT)
         compose.onNodeWithContentDescription("Settings").performTouchInput { longClick() }
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Home").assertIsSelected()
@@ -92,7 +92,7 @@ class DesktopJellyNavigationTest {
         }
     }
 
-    private fun setContent(withProfile: Boolean = false) {
+    private fun setContent(withProfile: Boolean = false, style: NavBarStyle = NavBarStyle.ADAPTIVE) {
         val labels = listOf("Home", "Search", "Watch Later", "Library", "Settings")
         val icons = listOf(Icons.Default.Home, Icons.Default.Search, Icons.Default.Bookmark, Icons.Default.VideoLibrary, Icons.Default.Settings)
         compose.setContent {
@@ -125,6 +125,7 @@ class DesktopJellyNavigationTest {
                             )
                         },
                         isHeroEnabled = true,
+                        navBarStyle = style,
                         modifier = Modifier.align(Alignment.TopCenter),
                     )
                 }

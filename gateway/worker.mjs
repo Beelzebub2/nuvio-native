@@ -1,6 +1,8 @@
 // A fixed, read-only provider gateway. Never accepts arbitrary URLs or GraphQL.
-const MEDIA_FIELDS = 'id idMal title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes';
+const MEDIA_FIELDS = 'id idMal isAdult tags{name isAdult} title{english romaji native} coverImage{extraLarge large} bannerImage description genres episodes';
 const SCHEDULE_QUERY = `query($start:Int,$end:Int,$page:Int){Page(page:$page,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:$start,airingAt_lesser:$end,sort:TIME){episode airingAt media{${MEDIA_FIELDS}}}}}`;
+const RECENT_QUERY = SCHEDULE_QUERY.replace('sort:TIME', 'notYetAired:false,sort:TIME_DESC');
+const FUTURE_QUERY = SCHEDULE_QUERY.replace('sort:TIME', 'notYetAired:true,sort:TIME');
 const MEDIA_QUERY = `query($id:Int){Media(id:$id,type:ANIME){${MEDIA_FIELDS}}Page(perPage:50){airingSchedules(mediaId:$id,notYetAired:false,sort:EPISODE_DESC){episode airingAt}}}`;
 
 function integer(params, name, min, max) {
@@ -11,12 +13,22 @@ function integer(params, name, min, max) {
 
 export function providerRequest(url) {
   const p = url.searchParams;
-  if (url.pathname === '/schedule') {
+  if (url.pathname === '/schedule' || url.pathname === '/schedule-recent') {
     const now = Math.floor(Date.now() / 1000);
     const start = integer(p, 'start', now - 10 * 86400, now + 2 * 86400);
     const end = integer(p, 'end', start + 1, start + 10 * 86400);
     const page = integer(p, 'page', 1, 20);
-    return { url: 'https://graphql.anilist.co', body: { query: SCHEDULE_QUERY, variables: { start, end, page } }, ttl: 300 };
+    if (p.has('future') && p.get('future') !== '1') throw new Error('Invalid future');
+    return { url: 'https://graphql.anilist.co', body: { query: url.pathname === '/schedule-recent' ? RECENT_QUERY : p.get('future') === '1' ? FUTURE_QUERY : SCHEDULE_QUERY, variables: { start, end, page } }, ttl: 300 };
+  }
+  if (url.pathname === '/classifications') {
+    const raw = p.get('ids') || '';
+    if (!/^\d+(,\d+){0,49}$/.test(raw)) throw new Error('Invalid ids');
+    const ids = [...new Set(raw.split(',').map(Number))].sort((a, b) => a - b);
+    if (ids.some(id => !Number.isSafeInteger(id) || id < 1 || id > 2147483647)) throw new Error('Invalid ids');
+    return { url: 'https://graphql.anilist.co', body: {
+      query: `query($ids:[Int]){Page(perPage:50){media(id_in:$ids,type:ANIME){${MEDIA_FIELDS}}}}`, variables: { ids },
+    }, ttl: 86400 };
   }
   if (url.pathname === '/media') {
     const id = integer(p, 'id', 1, 2147483647);
@@ -27,7 +39,7 @@ export function providerRequest(url) {
     const path = url.pathname === '/episodes' ? 'episodes' : 'mappings';
     return { url: `https://hayase.ani.zip/v1/${path}?anilist_id=${id}`, ttl: 3600 };
   }
-  if (url.pathname === '/release-schedule') {
+  if (url.pathname === '/release-schedule' || url.pathname === '/release-schedule-adult') {
     const start = p.get('start');
     const date = Date.parse(`${start}T00:00:00Z`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !Number.isFinite(date) ||
@@ -35,7 +47,11 @@ export function providerRequest(url) {
     const days = integer(p, 'days', 1, 9);
     const airType = p.get('airType');
     if (!['sub', 'dub'].includes(airType)) throw new Error('Invalid airType');
-    return { url: `https://tsuzuki.top/api/v1/schedule?start=${start}&days=${days}&airType=${airType}`, ttl: 300 };
+    const includeAdult = p.get('includeAdult');
+    if (includeAdult !== null && !['0', '1'].includes(includeAdult)) throw new Error('Invalid includeAdult');
+    if (url.pathname === '/release-schedule-adult' && includeAdult === '0') throw new Error('Invalid includeAdult');
+    const adult = url.pathname === '/release-schedule-adult' || includeAdult === '1';
+    return { url: `https://tsuzuki.top/api/v1/schedule?start=${start}&days=${days}&airType=${airType}${adult ? '&includeAdult=1' : ''}`, ttl: 300 };
   }
   return null;
 }
@@ -52,12 +68,44 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
   try { target = providerRequest(url); } catch (e) { return json({ error: e.message }, 400); }
   if (!target) return json({ error: 'Unknown route' }, 404);
   // Ignore unrecognized query parameters and canonicalize requests for a shared cache.
-  const keyUrl = new URL('/cache/v1', url.origin);
+  const keyUrl = new URL('/cache/v2', url.origin);
   keyUrl.searchParams.set('provider', target.url);
   if (target.body) keyUrl.searchParams.set('body', JSON.stringify(target.body));
   const key = new Request(keyUrl);
   const cached = await cache.match(key);
-  if (cached) return cached;
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('X-Nuvio-Cache', 'HIT');
+    return new Response(cached.body, { headers });
+  }
+  const staleKey = new Request(key.url + '&stale=1');
+  const cooldownKey = new Request(new URL(`/cooldown/v1/${new URL(target.url).hostname}`, url.origin));
+  async function unavailable(status, headers = new Headers(), recordCooldown = true) {
+    const seconds = Math.max(60, Number(headers.get('Retry-After')) ||
+      Math.ceil((Date.parse(headers.get('Retry-After')) - Date.now()) / 1000) || 0,
+      (Number(headers.get('X-RateLimit-Reset')) || 0) - Math.floor(Date.now() / 1000));
+    if ((status === 429 || status === 403 || status >= 500) && recordCooldown) {
+      // Keep the provider cooldown separate from successful response cache entries.
+      await cache.put(cooldownKey, json({ until: Date.now() + seconds * 1000, status }, 200,
+        { 'Cache-Control': `public, max-age=${seconds}` })).catch(() => {});
+    }
+    const stale = await cache.match(staleKey);
+    if (stale) {
+      const headers = new Headers(stale.headers);
+      headers.set('Cache-Control', 'public, max-age=60');
+      headers.set('X-Nuvio-Stale', '1');
+      headers.set('X-Nuvio-Cache', 'STALE');
+      headers.set('Retry-After', String(seconds));
+      return new Response(stale.body, { headers });
+    }
+    return json({ error: 'Provider unavailable', providerStatus: status }, status === 429 ? 429 : 503,
+      { 'Retry-After': String(seconds) });
+  }
+  const cooldown = await cache.match(cooldownKey);
+  if (cooldown) {
+    const { until, status = 429 } = await cooldown.json();
+    if (until > Date.now()) return unavailable(status, new Headers({ 'Retry-After': String(Math.ceil((until - Date.now()) / 1000)) }), false);
+  }
   try {
     const upstream = await fetcher(target.url, {
       method: target.body ? 'POST' : 'GET',
@@ -68,7 +116,7 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     if (!upstream.ok) {
       await upstream.body?.cancel();
       console.warn(JSON.stringify({ event: 'provider_error', provider: new URL(target.url).hostname, status: upstream.status }));
-      return json({ error: 'Provider unavailable', providerStatus: upstream.status }, 503, { 'Retry-After': '60' });
+      return unavailable(upstream.status, upstream.headers);
     }
     // Providers are fixed JSON APIs; bound their bodies before parsing/cache insertion.
     const reader = upstream.body.getReader();
@@ -87,13 +135,14 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     const payload = JSON.parse(new TextDecoder().decode(bytes));
-    if (payload.error || payload.errors?.length) return json({ error: 'Provider returned an error' }, 503, { 'Retry-After': '60' });
-    const response = json(payload, 200, { 'Cache-Control': `public, max-age=${target.ttl}`, 'X-Nuvio-Gateway': '1' });
-    ctx.waitUntil(cache.put(key, response.clone()).catch(() => {}));
+    if (payload.error || payload.errors?.length) return unavailable(payload.errors?.some(error => error.status === 429) ? 429 : 503, upstream.headers);
+    const response = json(payload, 200, { 'Cache-Control': `public, max-age=${target.ttl}`, 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
+    const stale = json(payload, 200, { 'Cache-Control': 'public, max-age=86400', 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
+    ctx.waitUntil(Promise.all([cache.put(key, response.clone()), cache.put(staleKey, stale)]).catch(() => {}));
     return response;
   } catch (e) {
     console.warn(JSON.stringify({ event: 'provider_request_failed', provider: new URL(target.url).hostname, name: e.name, message: String(e.message).slice(0, 160) }));
-    return json({ error: 'Provider request failed' }, 503, { 'Retry-After': '60' });
+    return unavailable(503);
   }
 }
 

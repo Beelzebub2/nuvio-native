@@ -11,3 +11,5 @@ internal val pluginDispatcher: CoroutineDispatcher =
     Dispatchers.IO.limitedParallelism(MAX_CONCURRENT_PLUGINS)
 
 internal fun QuickJs.configurePluginRuntime() = Unit
+
+internal suspend fun preparePluginRuntime() = Unit

@@ -1,5 +1,7 @@
 package com.nuvio.app.core.ui
 
+import androidx.compose.runtime.staticCompositionLocalOf
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +30,12 @@ import nuvio.composeapp.generated.resources.action_fullscreen
 import org.jetbrains.compose.resources.stringResource
 
 internal expect val isFullscreenActionSupported: Boolean
+
+/**
+ * True where the desktop top bar shows the fullscreen action, so screen headers and heroes
+ * below it don't draw a second one in a different corner.
+ */
+internal val LocalFullscreenActionInTopBar = staticCompositionLocalOf { false }
 
 @Composable
 internal expect fun isFullscreenActionActive(): Boolean

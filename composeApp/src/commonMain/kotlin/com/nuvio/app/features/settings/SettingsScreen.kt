@@ -1,5 +1,13 @@
 package com.nuvio.app.features.settings
 
+import com.nuvio.app.isDesktop
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
+import com.nuvio.app.core.ui.nuvio
+import nuvio.composeapp.generated.resources.compose_settings_category_about
+import nuvio.composeapp.generated.resources.settings_group_system
+
 import com.nuvio.app.AppScreenTab
 import com.nuvio.app.core.build.AppFeaturePolicy
 
@@ -960,15 +968,65 @@ private fun TabletSettingsScreen(
     }
 
     val saveableStateHolder = rememberSaveableStateHolder()
+    var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
+    // Desktop: About is shown from the root page, and an empty root lands on Account.
+    var desktopAboutSelected by rememberSaveable { mutableStateOf(false) }
+    val effectivePage = if (isDesktop && page == SettingsPage.Root && settingsSearchQuery.isBlank() && !desktopAboutSelected) {
+        SettingsPage.Account
+    } else {
+        page
+    }
+    val sidebarDivider = MaterialTheme.nuvio.colors.borderSubtle
+    val dividerTopPx = with(LocalDensity.current) { effectiveTopOffset.toPx() }
 
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val desktopInset = desktopPageHorizontalPaddingForWidth(maxWidth.value)
     Row(modifier = Modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier
-                .width(240.dp)
-                .fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
+                .width(if (isDesktop) 256.dp + desktopInset else 240.dp)
+                .fillMaxSize()
+                .then(
+                    if (isDesktop) {
+                        Modifier.drawBehind {
+                            drawLine(
+                                color = sidebarDivider,
+                                start = androidx.compose.ui.geometry.Offset(size.width - 0.5f, dividerTopPx),
+                                end = androidx.compose.ui.geometry.Offset(size.width - 0.5f, size.height),
+                                strokeWidth = 1.dp.toPx(),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+            color = if (isDesktop) Color.Transparent else MaterialTheme.colorScheme.surface,
         ) {
-            Column(
+            if (isDesktop) {
+                DesktopSettingsSidebar(
+                    currentPage = effectivePage,
+                    query = settingsSearchQuery,
+                    onQueryChange = { query ->
+                        settingsSearchQuery = query
+                        if (query.isNotBlank() && page != SettingsPage.Root) onPageChange(SettingsPage.Root)
+                    },
+                    onOpenPage = { target ->
+                        settingsSearchQuery = ""
+                        desktopAboutSelected = false
+                        if (target.isEnabledByPolicy()) openInlinePage(target)
+                    },
+                    topPadding = effectiveTopOffset,
+                    startPadding = desktopInset,
+                    aboutSelected = desktopAboutSelected && page == SettingsPage.Root,
+                    onOpenAbout = {
+                        settingsSearchQuery = ""
+                        desktopAboutSelected = true
+                        if (page != SettingsPage.Root) onPageChange(SettingsPage.Root)
+                    },
+                    onCollections = onCollectionsClick,
+                    onSwitchProfile = onSwitchProfile,
+                )
+            } else Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = effectiveTopOffset),
@@ -1006,7 +1064,6 @@ private fun TabletSettingsScreen(
 
         Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             saveableStateHolder.SaveableStateProvider(page.name) {
-                var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
                 var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
                 var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
                 val hapticFeedback = LocalHapticFeedback.current
@@ -1095,27 +1152,38 @@ private fun TabletSettingsScreen(
                             item {
                                 val previousPage = page.previousPage()
                                 TabletPageHeader(
-                                    title = if (page == SettingsPage.Root) {
-                                        if (settingsSearchQuery.isBlank()) {
-                                            stringResource(activeCategory.labelRes)
-                                        } else {
-                                            stringResource(Res.string.compose_settings_page_root)
+                                    title = if (effectivePage == SettingsPage.Root) {
+                                        when {
+                                            isDesktop && desktopAboutSelected && settingsSearchQuery.isBlank() ->
+                                                stringResource(Res.string.compose_settings_category_about)
+                                            settingsSearchQuery.isBlank() && !isDesktop -> stringResource(activeCategory.labelRes)
+                                            else -> stringResource(Res.string.compose_settings_page_root)
                                         }
                                     } else {
-                                        stringResource(page.titleRes)
+                                        stringResource(effectivePage.titleRes)
                                     },
-                                    showBack = previousPage != null,
+                                    showBack = previousPage != null && !isDesktop,
                                     onBack = { if (previousPage != null) onNavigateBack() },
+                                    eyebrow = if (isDesktop) {
+                                        (if (effectivePage == SettingsPage.Root && desktopAboutSelected) {
+                                            Res.string.settings_group_system
+                                        } else {
+                                            effectivePage.desktopGroupLabel()
+                                        })?.let { stringResource(it) }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                         }
-                        when (page) {
+                        when (effectivePage) {
                             SettingsPage.Root -> {
                                 settingsSearchRootContent(
                                     query = settingsSearchQuery,
                                     entries = searchEntries,
                                     isTablet = true,
-                                    showSearchField = rootSearchVisible,
+                                    showSearchField = rootSearchVisible && !isDesktop,
+                                    searchFieldElsewhere = isDesktop,
                                     animateSearchField = rootSearchRevealAnimating,
                                     onQueryChange = { settingsSearchQuery = it },
                                     onTargetClick = { openSearchTarget(it) },
@@ -1137,11 +1205,11 @@ private fun TabletSettingsScreen(
                                         onAccountClick = { openInlinePage(SettingsPage.Account) },
                                         onSwitchProfileClick = onSwitchProfile,
                                         showNotificationsEntry = AppFeaturePolicy.notificationsEnabled,
-                                        showAccountSection = activeCategory == SettingsCategory.Account,
-                                        showGeneralSection = activeCategory == SettingsCategory.General,
-                                        showAboutSection = activeCategory == SettingsCategory.About,
+                                        showAccountSection = !isDesktop && activeCategory == SettingsCategory.Account,
+                                        showGeneralSection = !isDesktop && activeCategory == SettingsCategory.General,
+                                        showAboutSection = if (isDesktop) desktopAboutSelected else activeCategory == SettingsCategory.About,
                                         showAttribution = false,
-                                        showAdvancedSection = activeCategory == SettingsCategory.Advanced,
+                                        showAdvancedSection = !isDesktop && activeCategory == SettingsCategory.Advanced,
                                         showSupportersContributorsPage = AppFeaturePolicy.supportersContributorsPageEnabled,
                                     )
                                 }
@@ -1300,5 +1368,6 @@ private fun TabletSettingsScreen(
                 )
             }
         }
+    }
     }
 }

@@ -177,7 +177,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.player.skip
                 |
                 |object IntroDbConfig {
-                |    const val URL = "${props.getProperty("INTRODB_API_URL", "")}" 
+                |    const val URL = "${props.getProperty("INTRODB_API_URL", "").ifBlank { "https://api.introdb.app" }}"
                 |}
                 """.trimMargin()
             )
@@ -531,6 +531,8 @@ val desktopReleaseVersionCode = (
     ?: 1
 val desktopReleasePackageVersion = jpackageCompatibleVersion(desktopReleaseVersionName)
 val windowsMsiUpgradeUuid = "bf8d5dc5-6680-41bc-a83a-1c8d9c98cb49"
+val desktopPackageName = "Starlit"
+val desktopVendor = "Beelzebub2"
 val iosDistribution = (
     providers.gradleProperty("nuvio.ios.distribution").orNull
         ?: System.getenv("NUVIO_IOS_DISTRIBUTION")
@@ -1346,9 +1348,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
-            packageName = "Nuvio Native"
+            packageName = desktopPackageName
             packageVersion = desktopReleasePackageVersion
-            vendor = "Nuvio Media"
+            vendor = desktopVendor
             if (isMacHost) {
                 appResourcesRootDir.set(macosPlayerAppResourcesRoot)
             }
@@ -1403,14 +1405,14 @@ compose.desktop {
                 upgradeUuid = windowsMsiUpgradeUuid
                 shortcut = true
                 menu = true
-                menuGroup = "Nuvio Native"
+                menuGroup = desktopPackageName
                 perUserInstall = true
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon-transparent.png"))
                 debMaintainer = "contact@nuvio.tv"
                 shortcut = true
-                menuGroup = "Nuvio"
+                menuGroup = desktopPackageName
                 appCategory = "AudioVideo"
             }
         }
@@ -1426,8 +1428,8 @@ fun renameMacosDmgOutput(release: Boolean) {
 
     val distributionName = if (release) "main-release" else "main"
     val outputDir = layout.buildDirectory.dir("compose/binaries/$distributionName/dmg").get().asFile
-    val finalDmg = outputDir.resolve("Nuvio-macOS-$macosDmgArchName-$desktopReleaseVersionName.dmg")
-    val defaultDmg = outputDir.resolve("Nuvio-$desktopReleasePackageVersion.dmg")
+    val finalDmg = outputDir.resolve("$desktopPackageName-macOS-$macosDmgArchName-$desktopReleaseVersionName.dmg")
+    val defaultDmg = outputDir.resolve("$desktopPackageName-$desktopReleasePackageVersion.dmg")
     val sourceDmg = defaultDmg.takeIf { it.exists() }
         ?: finalDmg.takeIf { it.exists() }
         ?: error("Expected macOS DMG output in ${outputDir.absolutePath}")
@@ -1463,8 +1465,8 @@ fun publishWindowsMsiOutput(release: Boolean) {
 
     val distributionName = if (release) "main-release" else "main"
     val outputDir = layout.buildDirectory.dir("compose/binaries/$distributionName/msi").get().asFile
-    val finalMsi = outputDir.resolve("Nuvio-Windows-$windowsPlayerBridgeArch-$desktopReleaseVersionName.msi")
-    val defaultMsi = outputDir.resolve("Nuvio-$desktopReleasePackageVersion.msi")
+    val finalMsi = outputDir.resolve("$desktopPackageName-Windows-$windowsPlayerBridgeArch-$desktopReleaseVersionName.msi")
+    val defaultMsi = outputDir.resolve("$desktopPackageName-$desktopReleasePackageVersion.msi")
     val sourceMsi = defaultMsi.takeIf { it.exists() }
         ?: finalMsi.takeIf { it.exists() }
         ?: error("Expected Windows MSI output in ${outputDir.absolutePath}")
@@ -1548,6 +1550,45 @@ tasks.matching { it.name == "packageReleaseMsi" }.configureEach {
     }
 }
 
+// The custom Windows installer (src/desktopMain/installer/windows): the app
+// image packed behind a WebView2 setup UI. It replaces the jpackage EXE/MSI for
+// releases and upgrades installs made by that MSI (windowsMsiUpgradeUuid).
+val windowsInstallerSourceDir = layout.projectDirectory.dir("src/desktopMain/installer/windows")
+
+fun registerWindowsInstallerTask(name: String, distributableTask: String, distribution: String) =
+    tasks.register<Exec>(name) {
+        group = "compose desktop"
+        description = "Builds the custom Windows installer from the $distributableTask app image."
+        notCompatibleWithConfigurationCache("Builds the Windows installer with the host MSVC toolchain.")
+        enabled = isWindowsHost
+        dependsOn(distributableTask)
+        val appImage = layout.buildDirectory.dir("compose/binaries/$distribution/app/$desktopPackageName")
+        val output = layout.buildDirectory.file(
+            "compose/binaries/$distribution/installer/" +
+                "$desktopPackageName-Windows-$windowsPlayerBridgeArch-$desktopReleaseVersionName.exe",
+        )
+        inputs.dir(windowsInstallerSourceDir)
+        inputs.dir(appImage)
+        outputs.file(output)
+        commandLine(
+            buildList {
+                addAll(listOf("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"))
+                addAll(listOf("-File", windowsInstallerSourceDir.file("build-installer.ps1").asFile.absolutePath))
+                addAll(listOf("-AppImage", appImage.get().asFile.absolutePath))
+                addAll(listOf("-Output", output.get().asFile.absolutePath))
+                addAll(listOf("-Version", desktopReleaseVersionName))
+                addAll(listOf("-WorkDir", layout.buildDirectory.dir("native/windows-installer/$distribution").get().asFile.absolutePath))
+                addAll(listOf("-WebView2Root", windowsWebView2Root.absolutePath))
+                addAll(listOf("-ProductName", desktopPackageName, "-Publisher", desktopVendor))
+                addAll(listOf("-LegacyUpgradeCode", windowsMsiUpgradeUuid, "-Arch", windowsPlayerBridgeArch))
+                windowsVcvarsPath?.let { addAll(listOf("-Vcvars", it)) }
+            },
+        )
+    }
+
+registerWindowsInstallerTask("packageInstaller", "createDistributable", "main")
+registerWindowsInstallerTask("packageReleaseInstaller", "createReleaseDistributable", "main-release")
+
 if (isLinuxHost) {
     val linuxDebPatchScript = rootProject.layout.projectDirectory.file("scripts/linux/patch-linux-deb.sh")
     val linuxDebVerifyScript = rootProject.layout.projectDirectory.file("scripts/linux/verify-linux-deb.sh")
@@ -1622,7 +1663,7 @@ if (isLinuxHost) {
             ?: System.getenv("APPIMAGE_WEBSITE_URL")?.takeIf { it.isNotBlank() }
 
         val distributionName = if (release) "main-release" else "main"
-        val appImageName = "Nuvio-Linux-$linuxAppImageArch-$desktopReleaseVersionName.AppImage"
+        val appImageName = "$desktopPackageName-Linux-$linuxAppImageArch-$desktopReleaseVersionName.AppImage"
         val outputAppImage = layout.buildDirectory
             .dir("compose/binaries/$distributionName/app")
             .get()
@@ -1731,8 +1772,8 @@ if (isMacHost) {
         dependsOn("packageReleaseDmg")
         dmgDir.set(layout.buildDirectory.dir("compose/binaries/main-release/dmg"))
         artifactDir.set(layout.buildDirectory.dir("compose/release-dmgs"))
-        finalDmgName.set("Nuvio-macOS-$macosDmgArchName-$desktopReleaseVersionName.dmg")
-        defaultDmgName.set("Nuvio-$desktopReleasePackageVersion.dmg")
+        finalDmgName.set("$desktopPackageName-macOS-$macosDmgArchName-$desktopReleaseVersionName.dmg")
+        defaultDmgName.set("$desktopPackageName-$desktopReleasePackageVersion.dmg")
         keychainProfile.set(macosNotaryKeychainProfile.orEmpty())
         keychainPath.set(macosNotaryKeychainPath.orEmpty())
         signingIdentity.set(macosSigningIdentity.orEmpty())

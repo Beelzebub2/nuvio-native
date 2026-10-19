@@ -4,6 +4,7 @@ import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
+import com.nuvio.app.features.library.toLibraryItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.WatchProgressUiState
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
@@ -17,14 +18,30 @@ data class WatchLaterEpisode(
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val thumbnail: String? = null,
+    val overview: String? = null,
 )
 
-internal fun MetaVideo.toWatchLaterEpisode() = WatchLaterEpisode(id, title, season, episode, thumbnail)
+internal fun MetaVideo.toWatchLaterEpisode() = WatchLaterEpisode(id, title, season, episode, thumbnail, overview)
+
+internal fun MetaVideo.matchesWatchLaterEpisode(episode: WatchLaterEpisode): Boolean =
+    if (episode.seasonNumber != null && episode.episodeNumber != null) {
+        season == episode.seasonNumber && this.episode == episode.episodeNumber
+    } else {
+        id == episode.videoId
+    }
 internal fun MetaDetails.toWatchLaterPreview(video: MetaVideo? = null) = MetaPreview(
     id, type, name, poster = poster, banner = background, logo = logo, description = description,
     watchLaterEpisode = video?.toWatchLaterEpisode(),
 )
-internal fun LibraryItem.watchLaterKey(): String = "$type|$id|${watchLaterEpisode?.videoId.orEmpty()}"
+internal fun LibraryItem.watchLaterKey(): String {
+    val episode = watchLaterEpisode
+    val identity = if (episode?.seasonNumber != null && episode.episodeNumber != null)
+        "episode:${episode.seasonNumber}:${episode.episodeNumber}" else episode?.videoId.orEmpty()
+    return "$type|$id|$identity"
+}
+internal fun LibraryItem.matchesWatchLaterPreview(preview: MetaPreview): Boolean =
+    id == preview.id && type == preview.type &&
+        (preview.watchLaterEpisode == null || watchLaterKey() == preview.toLibraryItem(0L).watchLaterKey())
 internal fun LibraryItem.watchLaterProgress(progress: WatchProgressUiState): WatchProgressEntry? {
     val episode = watchLaterEpisode
     progress.progressForVideo(episode?.videoId ?: id, id, episode?.seasonNumber, episode?.episodeNumber)?.let { return it }

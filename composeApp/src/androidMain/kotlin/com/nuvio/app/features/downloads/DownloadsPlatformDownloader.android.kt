@@ -66,6 +66,11 @@ internal actual object DownloadsPlatformDownloader {
                     scheduler.pause(request.destinationFileName)
                 }
             }
+
+            // The scheduler keeps running the transfer; restoreItem reattaches it after a reload.
+            override fun detach() {
+                observer.cancel()
+            }
         }
     }
 

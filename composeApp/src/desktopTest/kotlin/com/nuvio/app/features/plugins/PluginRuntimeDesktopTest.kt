@@ -1,11 +1,17 @@
 package com.nuvio.app.features.plugins
 
 import com.nuvio.app.features.plugins.runtime.PluginRuntime
+import com.nuvio.app.features.plugins.runtime.js.JsRuntime
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,6 +45,7 @@ class PluginRuntimeDesktopTest {
 
     @Test
     fun `desktop runtime handles concurrent scraper executions`() = runBlocking {
+        repeat(20) {
         val results = coroutineScope {
             (0 until 32).map { index ->
                 async(Dispatchers.Default) {
@@ -68,5 +75,24 @@ class PluginRuntimeDesktopTest {
             assertEquals(1, streams.size)
             assertEquals("https://example.test/$index.mp4", streams.single().url)
         }
+        }
+    }
+
+    @Test fun `canceled runtime closes safely and a fresh scraper still returns results`(): Unit = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val job = launch(Dispatchers.Default) {
+            JsRuntime().use<Unit> {
+                started.complete(Unit)
+                awaitCancellation()
+            }
+        }
+        try { withTimeout(10_000) { started.await() } }
+        finally { job.cancelAndJoin() }
+        val results = PluginRuntime.executePlugin(
+            code = "module.exports.getStreams = async function() { return [{url: 'https://example.test/after-cancel.mp4', title: 'Recovered'}]; };",
+            tmdbId = "603", mediaType = "movie", season = null, episode = null,
+            scraperId = "after-cancel-runtime-test",
+        )
+        assertEquals("https://example.test/after-cancel.mp4", results.single().url)
     }
 }
