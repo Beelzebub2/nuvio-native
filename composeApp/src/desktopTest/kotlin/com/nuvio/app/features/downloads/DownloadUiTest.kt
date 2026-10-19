@@ -31,13 +31,37 @@ class DownloadUiTest {
             MetaVideo("ep1", "First", "2020-01-01", season = 1, episode = 1),
             MetaVideo("ep2", "Second", "2020-01-01", season = 2, episode = 1),
             MetaVideo("future", "Future", "2099-01-01", season = 2, episode = 2)))
+        DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
         compose.setContent { NuvioTheme { Surface { BatchDownloadDialog(meta,1,{}) } } }
-        compose.onNodeWithText("Queue 1 download").assertIsEnabled()
-        compose.onNodeWithText("Select all available").performScrollTo().performClick()
-        compose.onNodeWithText("Queue 2 downloads").assertIsEnabled()
-        compose.onNode(hasScrollToIndexAction()).performScrollTo().performScrollToIndex(4)
-        compose.onNodeWithText("E2 - Future - Unavailable / unaired").assertExists()
-        compose.onNodeWithText("Clear").performScrollTo().performClick()
-        compose.onNodeWithText("Queue 0 downloads").assertIsNotEnabled()
+        compose.onNodeWithText("Download 1 episode").assertIsEnabled()
+        compose.onNodeWithText("Highest available").assertIsSelected()
+        compose.onNodeWithText("Select all seasons").performClick()
+        compose.onNodeWithText("Download 2 episodes").assertIsEnabled()
+        compose.onNodeWithText("Seasons 1–2").assertExists()
+        compose.onNodeWithText("Season 2").performClick()
+        compose.onNodeWithText("Future").assertIsNotEnabled()
+        compose.onNodeWithText("Airs", substring = true).assertExists()
+        compose.onNodeWithText("Clear all").performClick()
+        compose.onNodeWithText("No episodes selected").assertExists()
+        compose.onNodeWithText("Download").assertIsNotEnabled()
+    }
+
+    @Test fun episodesAlreadyInDownloadsAreShownAndNotQueuedAgain() {
+        DownloadsRepository.clearLocalState()
+        DownloadsStorage.savePayload("""{"items":[{"id":"done1","contentType":"series","parentMetaId":"fixture","parentMetaType":"series",
+            "videoId":"ep1","title":"Fixture","seasonNumber":1,"episodeNumber":1,"streamTitle":"1080p","providerName":"fixture",
+            "sourceUrl":"https://example.test/a.mp4","fileName":"a_done1.mp4","status":"Paused","createdAtEpochMs":0,"updatedAtEpochMs":0}]}""")
+        DownloadsRepository.ensureLoaded()
+        val meta = MetaDetails("fixture", "series", "Fixture", videos = listOf(
+            MetaVideo("ep1", "First", "2020-01-01", season = 1, episode = 1),
+            MetaVideo("ep2", "Second", "2020-01-02", season = 1, episode = 2)))
+        try {
+            compose.setContent { NuvioTheme { Surface { BatchDownloadDialog(meta,1,{}) } } }
+            compose.onNodeWithText("Paused").assertExists()
+            compose.onNodeWithText("First").assertIsNotEnabled()
+            compose.onNodeWithText("Download 1 episode").assertIsEnabled()
+        } finally {
+            DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+        }
     }
 }
