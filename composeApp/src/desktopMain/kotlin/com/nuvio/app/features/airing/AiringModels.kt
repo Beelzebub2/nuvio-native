@@ -68,6 +68,7 @@ internal data class AiringSnapshot(
     // Legacy snapshots are unclassified, so they cannot be reused under either policy.
     val hideNsfw: Boolean? = null,
     val contentPolicyVersion: Int = 0,
+    val complete: Boolean = true,
 )
 
 internal enum class AiringWindow(val label: String) {

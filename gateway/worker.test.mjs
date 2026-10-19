@@ -78,7 +78,7 @@ test('HTTP and GraphQL errors are never cached as a successful schedule', async 
     const env = environment(async () => { calls++; return response(); });
     assert.equal((await handleRequest(new Request(schedule), ctx, env)).status, 503);
     assert.equal((await handleRequest(new Request(schedule), ctx, env)).status, 503);
-    assert.equal(calls, 2);
+    assert.equal(calls, 1, "provider failures are cooled down without caching a successful schedule");
   }
 });
 
@@ -123,4 +123,28 @@ test('retained stale JSON is served during provider limits and fresh cache remai
   assert.deepEqual(await stale.json(), { data: { safe: true } });
   assert.equal((await handleRequest(new Request(schedule), ctx, env)).headers.get('X-Nuvio-Stale'), '1');
   assert.equal(calls, 2);
+});
+
+test('recent page is newest-first and future requests stay separate from legacy schedules', () => {
+  const recent = providerRequest(new URL(schedule.replace('/schedule?', '/schedule-recent?')));
+  const future = providerRequest(new URL(schedule + '&future=1'));
+  const legacy = providerRequest(new URL(schedule));
+  assert.match(recent.body.query, /notYetAired:false,sort:TIME_DESC/);
+  assert.match(future.body.query, /notYetAired:true,sort:TIME/);
+  assert.doesNotMatch(legacy.body.query, /notYetAired/);
+  assert.throws(() => providerRequest(new URL(schedule + '&future=invalid')));
+});
+
+test('cached pages identify hits and gateway outages are cooled down across routes', async () => {
+  let calls = 0;
+  const env = environment(async () => { calls++; return Response.json({ data: {} }); });
+  assert.equal((await handleRequest(new Request(schedule), ctx, env)).headers.get('X-Nuvio-Cache'), 'MISS');
+  assert.equal((await handleRequest(new Request(schedule), ctx, env)).headers.get('X-Nuvio-Cache'), 'HIT');
+  assert.equal(calls, 1);
+  const failed = environment(async () => { calls++; return new Response('blocked', { status: 403 }); });
+  assert.equal((await handleRequest(new Request(schedule), ctx, failed)).status, 503);
+  const later = await handleRequest(new Request('https://gateway.test/media?id=21'), ctx, failed);
+  assert.equal(later.status, 503);
+  assert.equal((await later.json()).providerStatus, 403);
+  assert.equal(calls, 2, 'one failed origin attempt; other routes honor the outage cooldown');
 });

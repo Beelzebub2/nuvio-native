@@ -3,6 +3,7 @@ package com.nuvio.app.features.plugins.runtime.js
 import com.dokar.quickjs.QuickJs
 import com.nuvio.app.features.plugins.runtime.configurePluginRuntime
 import com.nuvio.app.features.plugins.runtime.pluginDispatcher
+import com.nuvio.app.features.plugins.runtime.preparePluginRuntime
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -16,7 +17,7 @@ internal class JsRuntime {
     suspend fun <T> use(block: suspend QuickJs.() -> T): T {
         val dispatcher = (coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)
             ?: pluginDispatcher
-        val runtime = lifecycleMutex.withLock { QuickJs.create(dispatcher) }
+        val runtime = lifecycleMutex.withLock { preparePluginRuntime(); QuickJs.create(dispatcher) }
         return try {
             runtime.configurePluginRuntime()
             runtime.block()

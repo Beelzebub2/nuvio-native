@@ -119,6 +119,8 @@ internal object NativePlayerBridge {
     val controlsPageUrl: String by lazy { controlsPageAssets.url }
     private val controlsPageAssets: ControlsPageAssets by lazy { exportControlsPageAssets() }
 
+    fun ensureLoaded() = Unit
+
     fun preloadAsync() {
         if (!preloadStarted.compareAndSet(false, true)) return
         Thread {
@@ -341,13 +343,19 @@ internal object NativePlayerBridge {
     )
 }
 
-internal fun preloadNativePlayerBridgeAsync() {
+internal fun preloadNativePlayerBridgeAsync(
+    preload: () -> Unit = { NativePlayerBridge.preloadAsync() },
+): Thread? {
     if (DesktopHostOs.current == DesktopHostOs.MACOS ||
         DesktopHostOs.current == DesktopHostOs.WINDOWS ||
         DesktopHostOs.current == DesktopHostOs.LINUX
     ) {
-        runCatching {
-            NativePlayerBridge.preloadAsync()
+        // Referencing the object runs its DLL-loading initializer. That first
+        // reference must itself happen on the background thread.
+        return Thread({ runCatching(preload) }, "nuvio-native-bridge-load").apply {
+            isDaemon = true
+            start()
         }
     }
+    return null
 }

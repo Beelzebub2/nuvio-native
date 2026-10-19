@@ -19,3 +19,5 @@ internal val pluginDispatcher: CoroutineDispatcher =
 internal fun QuickJs.configurePluginRuntime() {
     evaluationTimeoutMillis = PLUGIN_TIMEOUT_MS
 }
+
+internal suspend fun preparePluginRuntime() = Unit
