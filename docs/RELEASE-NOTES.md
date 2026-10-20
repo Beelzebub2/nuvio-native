@@ -1,3 +1,10 @@
+## Starlit 1.0.24
+
+### Fixes
+
+- Episode prompts now wait for an explicit post-credits scene instead of treating every long ending tail as post-credits content.
+- Playback avoids restarting when torrent status reporting alone fails; it still recovers when the engine, torrent, sleep, or network genuinely needs it.
+
 ## Starlit 1.0.23
 
 ### Improvements
