@@ -56,6 +56,7 @@ internal sealed class SettingsSearchTarget {
     object Collections : SettingsSearchTarget()
     object SwitchProfile : SettingsSearchTarget()
     object CheckForUpdates : SettingsSearchTarget()
+    object Changelog : SettingsSearchTarget()
 }
 
 internal data class SettingsSearchEntry(
@@ -321,6 +322,15 @@ internal fun settingsSearchEntries(
             icon = Icons.Rounded.Info,
         )
     }
+    add(
+        key = "changelog",
+        title = stringResource(Res.string.changelog_title),
+        description = stringResource(Res.string.changelog_description),
+        section = stringResource(Res.string.compose_settings_root_about_section),
+        category = aboutCategory,
+        icon = Icons.Rounded.Info,
+        target = SettingsSearchTarget.Changelog,
+    )
     if (checkForUpdatesAvailable) {
         add(
             key = "check-updates",

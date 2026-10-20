@@ -50,6 +50,8 @@ import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
+import nuvio.composeapp.generated.resources.changelog_title
+import nuvio.composeapp.generated.resources.changelog_description
 import org.jetbrains.compose.resources.stringResource
 
 private const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
@@ -67,6 +69,7 @@ internal fun LazyListScope.settingsRootContent(
     onLicensesAttributionsClick: () -> Unit,
     onCheckForUpdatesClick: (() -> Unit)? = null,
     onTestUpdateBannerClick: (() -> Unit)? = null,
+    onChangelogClick: (() -> Unit)? = null,
     onAccountClick: () -> Unit,
     onSwitchProfileClick: (() -> Unit)? = null,
     showNotificationsEntry: Boolean = true,
@@ -198,6 +201,16 @@ internal fun LazyListScope.settingsRootContent(
                         isTablet = isTablet,
                         onClick = onLicensesAttributionsClick,
                     )
+                    if (onChangelogClick != null) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.changelog_title),
+                            description = stringResource(Res.string.changelog_description),
+                            icon = Icons.Rounded.Info,
+                            isTablet = isTablet,
+                            onClick = onChangelogClick,
+                        )
+                    }
                     if (onCheckForUpdatesClick != null) {
                         SettingsGroupDivider(isTablet = isTablet)
                         UpdateChannelSettingsRow(isTablet = isTablet)

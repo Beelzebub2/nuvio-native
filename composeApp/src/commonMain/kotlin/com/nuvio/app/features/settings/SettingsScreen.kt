@@ -10,6 +10,7 @@ import nuvio.composeapp.generated.resources.settings_group_system
 
 import com.nuvio.app.AppScreenTab
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.features.updater.BundledChangelogDialog
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -161,6 +162,8 @@ fun SettingsScreen(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
+        var showChangelog by rememberSaveable { mutableStateOf(false) }
+        if (showChangelog) BundledChangelogDialog(onDismiss = { showChangelog = false })
         val screenActive = LocalScreenActive.current
         val pageStateHolder = rememberSaveableStateHolder()
         val playerSettingsUiState by remember {
@@ -413,6 +416,7 @@ fun SettingsScreen(
                 onSupportersContributorsClick = openSupportersContributors,
                 onLicensesAttributionsClick = openLicensesAttributions,
                 onCheckForUpdatesClick = onCheckForUpdatesClick,
+                onChangelogClick = { showChangelog = true },
                 onTestUpdateBannerClick = onTestUpdateBannerClick,
                 onCollectionsClick = onCollectionsClick,
             )
@@ -486,6 +490,7 @@ fun SettingsScreen(
                 onSupportersContributorsClick = openSupportersContributors,
                 onLicensesAttributionsClick = openLicensesAttributions,
                 onCheckForUpdatesClick = onCheckForUpdatesClick,
+                onChangelogClick = { showChangelog = true },
                 onTestUpdateBannerClick = onTestUpdateBannerClick,
                 onCollectionsClick = onCollectionsClick,
             )
@@ -565,6 +570,7 @@ private fun MobileSettingsScreen(
     onSupportersContributorsClick: () -> Unit = {},
     onLicensesAttributionsClick: () -> Unit = {},
     onCheckForUpdatesClick: (() -> Unit)? = null,
+    onChangelogClick: () -> Unit = {},
     onTestUpdateBannerClick: (() -> Unit)? = null,
     onCollectionsClick: () -> Unit = {},
 ) {
@@ -616,6 +622,7 @@ private fun MobileSettingsScreen(
                 SettingsSearchTarget.Collections -> onCollectionsClick()
                 SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
                 SettingsSearchTarget.CheckForUpdates -> onCheckForUpdatesClick?.invoke()
+                SettingsSearchTarget.Changelog -> onChangelogClick()
             }
         }
 
@@ -691,6 +698,7 @@ private fun MobileSettingsScreen(
                             onSupportersContributorsClick = onSupportersContributorsClick,
                             onLicensesAttributionsClick = onLicensesAttributionsClick,
                             onCheckForUpdatesClick = onCheckForUpdatesClick,
+                            onChangelogClick = onChangelogClick,
                             onTestUpdateBannerClick = onTestUpdateBannerClick,
                             onAccountClick = onAccountClick,
                             onSwitchProfileClick = onSwitchProfile,
@@ -945,6 +953,7 @@ private fun TabletSettingsScreen(
     onSupportersContributorsClick: () -> Unit = {},
     onLicensesAttributionsClick: () -> Unit = {},
     onCheckForUpdatesClick: (() -> Unit)? = null,
+    onChangelogClick: () -> Unit = {},
     onTestUpdateBannerClick: (() -> Unit)? = null,
     onCollectionsClick: () -> Unit = {},
 ) {
@@ -1092,6 +1101,7 @@ private fun TabletSettingsScreen(
                         SettingsSearchTarget.Collections -> onCollectionsClick()
                         SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
                         SettingsSearchTarget.CheckForUpdates -> onCheckForUpdatesClick?.invoke()
+                        SettingsSearchTarget.Changelog -> onChangelogClick()
                     }
                 }
 
@@ -1201,6 +1211,7 @@ private fun TabletSettingsScreen(
                                         onSupportersContributorsClick = { openInlinePage(SettingsPage.SupportersContributors) },
                                         onLicensesAttributionsClick = { openInlinePage(SettingsPage.LicensesAttributions) },
                                         onCheckForUpdatesClick = onCheckForUpdatesClick,
+                                        onChangelogClick = onChangelogClick,
                                         onTestUpdateBannerClick = onTestUpdateBannerClick,
                                         onAccountClick = { openInlinePage(SettingsPage.Account) },
                                         onSwitchProfileClick = onSwitchProfile,
