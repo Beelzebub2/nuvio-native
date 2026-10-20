@@ -39,8 +39,8 @@ object PlayerNextEpisodeRules {
         if (outroSegments.isNotEmpty()) {
             if (durationMs <= 0L) return false
 
-            // Use the same post-credits detection as the skip button so the
-            // next-episode card never appears over a post-credits scene.
+            // Only explicit scene metadata can postpone this prompt. Trailing padding,
+            // previews or imprecise ED bounds must not postpone it until the file ends.
             val latestOutro = outroSegments.maxByOrNull { it.endTime }
             val postCreditsScene = latestOutro?.findFollowingPostCreditsScene(skipIntervals, durationMs)
 
@@ -129,8 +129,6 @@ object PlayerNextEpisodeRules {
 
     val OUTRO_SEGMENT_TYPES = setOf("outro", "ed", "mixed-ed")
 
-    private const val POST_CREDITS_GAP_MS = 5_000L
-
     private fun SkipInterval.findFollowingPostCreditsScene(
         intervals: List<SkipInterval>,
         durationMs: Long,
@@ -142,20 +140,7 @@ object PlayerNextEpisodeRules {
                 it.startTime >= endTime && it.endTime > it.startTime &&
                 (durationMs <= 0L || it.startTime * 1000.0 < durationMs)
         }.minByOrNull { it.startTime }
-        if (explicit != null) return explicit
-        if (durationMs > 0L) {
-            val creditsEndMs = (endTime * 1000.0).toLong()
-            val gapMs = durationMs - creditsEndMs
-            if (gapMs > POST_CREDITS_GAP_MS) {
-                return SkipInterval(
-                    startTime = endTime,
-                    endTime = durationMs / 1000.0,
-                    type = "post-credits",
-                    provider = "heuristic",
-                )
-            }
-        }
-        return null
+        return explicit
     }
 
     private fun userThresholdPositionMs(

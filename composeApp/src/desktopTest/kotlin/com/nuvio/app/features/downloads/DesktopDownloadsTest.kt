@@ -334,6 +334,7 @@ class DesktopDownloadsTest {
             exchange.responseBody.use { it.write(media) }
         }
         val backend = object : DesktopTorrentBackend {
+            override suspend fun isHealthy() = true
             override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
             override suspend fun restart(settings: P2pSettingsUiState) { error("must not reset any engine") }
             override suspend fun stop() { error("caller owns the backend") }
@@ -383,6 +384,7 @@ class DesktopDownloadsTest {
         assertEquals(files.first(), selectDownloadTorrentFile(listOf(files.first()), null, null))
         val calls = mutableListOf<String>()
         val backend = object : DesktopTorrentBackend {
+            override suspend fun isHealthy() = true
             override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
             override suspend fun restart(settings: P2pSettingsUiState) { error("must not reset any engine") }
             override suspend fun stop() { calls += "stop" }
