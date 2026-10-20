@@ -1,3 +1,12 @@
+## Starlit 1.0.23
+
+### Improvements
+
+- The in-app changelog presents the current release in an expanded version card and keeps older history collapsed until you open it.
+- Changelog text is formatted and selectable, with readable headings, bullets, emphasis, code, and safe links.
+- The wider responsive viewer is easier to read on desktop and narrow screens.
+- **Settings → About → Changelog** stays available offline and can be found through Settings search.
+
 Starlit 1.0.22 adds bulk removal for downloads from Library → Downloads.
 
 - Select individual downloads or whole displayed shows, use Select all or Clear selection, then choose Remove selected and confirm the exact count. Active, queued, paused, failed and completed items are handled together; cancellation and owned-file cleanup run as one batch while unrelated files and downloads remain intact.
