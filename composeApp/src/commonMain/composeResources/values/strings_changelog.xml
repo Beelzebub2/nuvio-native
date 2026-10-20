@@ -1,0 +1,12 @@
+<resources>
+    <string name="changelog_title">Changelog</string>
+    <string name="changelog_description">What’s new in this version and earlier releases. Available offline.</string>
+    <string name="changelog_subtitle">What’s new · Select a version to expand its changes</string>
+    <string name="changelog_installed">Installed</string>
+    <string name="changelog_available">Available update</string>
+    <string name="changelog_expanded">Expanded</string>
+    <string name="changelog_collapsed">Collapsed</string>
+    <string name="changelog_loading">Loading changelog…</string>
+    <string name="changelog_load_failed">The bundled changelog couldn’t be read. Try opening it again.</string>
+    <string name="changelog_view_github">View on GitHub</string>
+</resources>
