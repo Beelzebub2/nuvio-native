@@ -1,3 +1,12 @@
+## Starlit 1.0.29
+
+### Improvements
+
+- The update banner is clearer: it shows the new version, the download size and one action (Update, Install or Retry), with a thin progress bar while the update downloads. On narrow windows its buttons move under the text.
+- **What's new** opens redesigned release notes with the current version highlighted, one-line previews of older releases, and an Update button so you can update straight from the notes.
+- **Settings → About → Changelog** uses the same refreshed design.
+- On desktop, **Library → Downloads** has a new layout: an overview of what is ready to watch and how much space it uses, the download queue with progress and time left, your downloaded shows and movies as poster cards, and the save folder with Change folder and Open folder.
+
 ## Starlit 1.0.28
 
 ### Improvements
