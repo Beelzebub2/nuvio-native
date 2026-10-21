@@ -1,3 +1,11 @@
+## Starlit 1.0.28
+
+### Improvements
+
+- Episode artwork can optionally use a configured TMDB season fallback, while TVmaze artwork works automatically without a provider key.
+- Provider-specific IDs, season offsets and air dates are checked before fallback images are accepted, with bounded caching to avoid repeated lookups.
+- TMDB Worker setup is documented in `gateway/README.md`; a local app TMDB key does not configure the Worker.
+
 ## Starlit 1.0.25
 
 ### Fixes

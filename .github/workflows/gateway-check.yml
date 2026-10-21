@@ -1,0 +1,26 @@
+name: Check provider gateway
+
+on:
+  pull_request:
+    paths:
+      - 'gateway/**'
+      - '.github/workflows/gateway-check.yml'
+      - '.github/workflows/windows-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install provider gateway test dependencies
+        working-directory: gateway
+        run: npm ci
+      - name: Test provider gateway
+        working-directory: gateway
+        run: npm test

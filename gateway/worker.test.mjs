@@ -2,6 +2,99 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { handleRequest, providerRequest } from './worker.mjs';
 
+test('artwork routes are bounded fixed endpoints and never contain credentials', () => {
+  const target = providerRequest(new URL('https://gateway.test/artwork/tmdb-season?id=220542&season=0&api_key=ignored'));
+  assert.equal(target.url, 'https://api.themoviedb.org/3/tv/220542/season/0');
+  assert.equal(target.ttl, 3600);
+  for (const path of ['tmdb-season?id=1&season=-1', 'tmdb-season?id=1&season=1001', 'tvmaze-lookup?imdb=bad', 'tvmaze-lookup?imdb=tt26743760&tvdb=431162', 'tvmaze-episodes?id=../2']) {
+    assert.throws(() => providerRequest(new URL('https://gateway.test/artwork/' + path)));
+  }
+});
+
+test('TMDB server token is header-only and absent configuration does not affect TVmaze', async () => {
+  let calls = 0;
+  const env = environment(async (url, options) => {
+    calls++;
+    assert.equal(new URL(url).searchParams.has('api_key'), false);
+    if (url.includes('themoviedb')) assert.equal(options.headers.Authorization, 'Bearer fixture-token');
+    else assert.equal(options.headers.Authorization, undefined);
+    return Response.json({ season_number: 0, episodes: [] });
+  });
+  const request = new Request('https://gateway.test/artwork/tmdb-season?id=220542&season=0');
+  assert.equal((await handleRequest(request, ctx, env)).status, 503);
+  assert.equal(calls, 0);
+  const configured = { ...env, tmdbToken: 'fixture-token' };
+  assert.equal((await handleRequest(request, ctx, configured)).status, 200);
+  assert.equal((await handleRequest(request, ctx, configured)).headers.get('X-Nuvio-Cache'), 'HIT');
+  assert.equal((await handleRequest(new Request('https://gateway.test/artwork/tvmaze-lookup?tvdb=431162'), ctx, env)).status, 200);
+  assert.equal(calls, 2);
+});
+
+test('TVmaze lookup follows only its fixed canonical show redirect and wraps entire episode lists', async () => {
+  const urls = [];
+  const env = environment(async url => {
+    urls.push(url);
+    if (url.includes('/lookup/')) return new Response(null, { status: 301, headers: { Location: 'https://api.tvmaze.com/shows/67017' } });
+    return Response.json(url.includes('/episodes') ? [{ id: 1, season: 2, number: 1 }] : { id: 67017, externals: { thetvdb: 431162 } });
+  });
+  const lookup = new Request('https://gateway.test/artwork/tvmaze-lookup?tvdb=431162');
+  assert.equal((await (await handleRequest(lookup, ctx, env)).json()).id, 67017);
+  assert.equal((await handleRequest(lookup, ctx, env)).headers.get('X-Nuvio-Cache'), 'HIT');
+  const result = await handleRequest(new Request('https://gateway.test/artwork/tvmaze-episodes?id=67017'), ctx, env);
+  assert.deepEqual(await result.json(), { episodes: [{ id: 1, season: 2, number: 1 }] });
+  assert.equal(urls.length, 3);
+  for (const location of ['https://evil.test/shows/1', 'https://api.tvmaze.com/shows/1?url=evil', 'http://api.tvmaze.com/shows/1']) {
+    const unsafe = environment(async () => new Response(null, { status: 301, headers: { Location: location } }));
+    assert.equal((await handleRequest(lookup, ctx, unsafe)).status, 503);
+  }
+});
+
+test('artwork 404 misses stay ID-specific while rate limits isolate providers', async () => {
+  let calls = 0;
+  const missing = environment(async () => { calls++; return new Response(null, { status: 404 }); });
+  const first = new Request('https://gateway.test/artwork/tvmaze-lookup?tvdb=1');
+  assert.equal((await handleRequest(first, ctx, missing)).status, 404);
+  assert.equal((await handleRequest(first, ctx, missing)).status, 404);
+  assert.equal((await handleRequest(new Request('https://gateway.test/artwork/tvmaze-lookup?tvdb=2'), ctx, missing)).status, 404);
+  assert.equal(calls, 2);
+  const limited = { ...environment(async () => new Response(null, { status: 429, headers: { 'Retry-After': '180' } })), tmdbToken: 'fixture-token' };
+  assert.equal((await handleRequest(first, ctx, limited)).status, 429);
+  limited.fetcher = async () => Response.json({ season_number: 0, episodes: [] });
+  assert.equal((await handleRequest(new Request('https://gateway.test/artwork/tmdb-season?id=220542&season=0'), ctx, limited)).status, 200);
+});
+
+test('real Workers runtime forwards whole seasons with the server binding and TVmaze redirects', async () => {
+  const { Miniflare, convertV4MiniflareOptions } = await import('miniflare');
+  const { readFileSync } = await import('node:fs');
+  const requests = [];
+  const runtime = new Miniflare(convertV4MiniflareOptions({ workers: [{
+    modules: true, script: readFileSync(new URL('./worker.mjs', import.meta.url), 'utf8'),
+    // The project's pinned workerd supports dates through September 17.
+    // Production retains its existing October 4 date; no newer APIs are used here.
+    compatibilityDate: '2026-09-17', bindings: { TMDB_READ_ACCESS_TOKEN: 'fixture-token' },
+    outboundService: async request => {
+      requests.push(request.url);
+      if (request.url.includes('themoviedb')) {
+        assert.equal(request.headers.get('Authorization'), 'Bearer fixture-token');
+        return Response.json({ season_number: 0, episodes: [{ show_id: 220542, episode_number: 51, air_date: '2026-10-05', still_path: '/first.jpg' }] });
+      }
+      assert.equal(request.headers.get('Authorization'), null);
+      if (request.url.includes('/lookup/')) return new Response(null, { status: 301, headers: { Location: 'https://api.tvmaze.com/shows/67017' } });
+      return Response.json(request.url.includes('/episodes') ? [{ season: 2, number: 1, airdate: '2025-01-10' }] : { id: 67017, externals: { thetvdb: 431162 } });
+    },
+  }] }));
+  try {
+    const tmdb = await runtime.dispatchFetch('https://gateway.test/artwork/tmdb-season?id=220542&season=0');
+    assert.equal(tmdb.status, 200);
+    assert.equal((await tmdb.json()).episodes[0].episode_number, 51);
+    const show = await runtime.dispatchFetch('https://gateway.test/artwork/tvmaze-lookup?tvdb=431162');
+    assert.equal((await show.json()).id, 67017);
+    const episodes = await runtime.dispatchFetch('https://gateway.test/artwork/tvmaze-episodes?id=67017');
+    assert.equal((await episodes.json()).episodes[0].airdate, '2025-01-10');
+    assert.equal(requests.length, 4);
+  } finally { await runtime.dispose(); }
+});
+
 const now = Math.floor(Date.now() / 1000);
 const schedule = `https://gateway.test/schedule?start=${now - 86400}&end=${now + 86400}&page=1`;
 function environment(fetcher) {

@@ -2494,4 +2494,6 @@
     <string name="downloads_select_item">Select %1$s</string>
     <string name="downloads_remove_selected">Remove selected (%1$d)</string>
     <string name="downloads_remove_selected_message">Remove %1$d selected downloads? Their downloaded files and partial files will be deleted, and any queued or active transfers will be cancelled.</string>
+    <string name="settings_licenses_attributions_tvmaze_title">TVmaze</string>
+    <string name="settings_licenses_attributions_tvmaze_body">Episode metadata and images from TVmaze (https://www.tvmaze.com), used under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). Artwork matching is adapted to anime episode dates. Starlit is not affiliated with or endorsed by TVmaze.</string>
 </resources>
