@@ -53,6 +53,7 @@ internal class AiringClient(
     private val classifications = mutableMapOf<Int, Pair<Long, AiringEvent>>()
     private val episodesMutex = Mutex()
     private val episodeMetadataCache = linkedMapOf<Int, Pair<Long, JsonObject?>>()
+    private val artworkFallbacks = AiringArtworkFallbacks({ gatewayGet(it) }, clock)
 
     suspend fun schedule(settings: AiringSettings, now: Instant): List<AiringEvent> =
         scheduleWithUpdates(settings, now) {}
@@ -159,7 +160,10 @@ internal class AiringClient(
         val events = if (settings.airType == "broadcast") historical + known else known
         // Artwork providers may describe a different TVDB season/numbering scheme.
         // Keep stream/download identities on the existing anime mapping authority.
-        buildAiringDetails(record, events, databaseMapping, extra.obj("episodes"), Instant.now())
+        artworkFallbacks.enrich(
+            buildAiringDetails(record, events, databaseMapping, extra.obj("episodes"), Instant.ofEpochMilli(clock())),
+            record, databaseMapping,
+        )
     }
 
     internal suspend fun episodeMetadata(id: Int): JsonObject? = episodesMutex.withLock {
@@ -223,6 +227,8 @@ internal class AiringClient(
         request.url.toString().startsWith(gateway + "/release-schedule") -> "tsuzuki.top"
         request.url.toString().startsWith(gateway + "/") && request.url.encodedPath in
             listOf("/episodes", "/mapping") -> "api.ani.zip"
+        request.url.toString().startsWith(gateway + "/artwork/tmdb-") -> "api.themoviedb.org"
+        request.url.toString().startsWith(gateway + "/artwork/tvmaze-") -> "api.tvmaze.com"
         else -> request.url.host
     }
 
@@ -236,7 +242,7 @@ internal class AiringClient(
         catch (e: AiringRateLimitException) { throw e }
         catch (e: CancellationException) { throw e }
         catch (e: AiringHttpException) {
-            if (e.status == 404 && provider == "api.ani.zip") throw e
+            if (e.status == 404 && provider in listOf("api.ani.zip", "api.themoviedb.org", "api.tvmaze.com")) throw e
             gatewayUnavailableUntil[provider] = clock() + 60_000L
             null
         }
