@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.isDesktop
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.build.AppFeaturePolicy
@@ -73,7 +74,20 @@ private fun AccountSettingsBody(
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
     val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled && authState is AuthState.Authenticated
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    if (isDesktop) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            DesktopAccountCard(authState = authState, onSignOutClick = { showSignOutConfirm = true })
+            if (canDeleteAccount) {
+                DesktopDeleteAccountRow(
+                    errorMessage = deleteErrorMessage,
+                    onDeleteClick = {
+                        deleteErrorMessage = null
+                        showDeleteConfirm = true
+                    },
+                )
+            }
+        }
+    } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         NuvioSurfaceCard {
             Text(
                 text = stringResource(Res.string.compose_settings_page_account),

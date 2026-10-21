@@ -49,6 +49,45 @@
     <string name="settings_group_integrations">Integrations</string>
     <string name="settings_group_system">System</string>
 
+    <!-- Settings: desktop page names and one-line summaries -->
+    <string name="settings_desktop_appearance">Appearance</string>
+    <string name="settings_desktop_home_screen">Home screen</string>
+    <string name="settings_desktop_details_page">Details page</string>
+    <string name="settings_desktop_poster_cards">Poster cards</string>
+    <string name="settings_desktop_hover_previews">Hover previews</string>
+    <string name="settings_desktop_continue_watching">Continue watching</string>
+    <string name="settings_desktop_addons">Add-ons</string>
+    <string name="settings_desktop_debrid">Debrid</string>
+    <string name="settings_desktop_source_list">Source list</string>
+    <string name="settings_desktop_tmdb">TMDB</string>
+    <string name="settings_desktop_mdblist">MDBList</string>
+    <string name="settings_desktop_updates">Updates</string>
+    <string name="settings_desktop_about">About</string>
+    <string name="settings_desktop_account_summary">Your sign-in and account details.</string>
+    <string name="settings_desktop_playback_summary">How the player starts, picks a stream, shows subtitles and plays the next episode.</string>
+    <string name="settings_desktop_continue_watching_summary">What the Continue watching row shows and how Up next works.</string>
+    <string name="settings_desktop_appearance_summary">Theme, navigation style, app icon and language.</string>
+    <string name="settings_desktop_home_screen_summary">The hero banner and which catalogs appear on Home, in what order.</string>
+    <string name="settings_desktop_details_page_summary">Background, trailers and the sections a title page shows.</string>
+    <string name="settings_desktop_poster_cards_summary">Size, shape, labels and depth of poster cards.</string>
+    <string name="settings_desktop_hover_previews_summary">What happens when you rest the pointer on a poster.</string>
+    <string name="settings_desktop_addons_summary">Add-ons supply catalogs, metadata and streams. Install, order and configure them here.</string>
+    <string name="settings_desktop_plugins_summary">Install and manage plugins that find more streams.</string>
+    <string name="settings_desktop_debrid_summary">Connect debrid services and choose how their results are resolved and listed.</string>
+    <string name="settings_desktop_source_list_summary">How sources are labelled when you choose a stream.</string>
+    <string name="settings_desktop_tmdb_summary">Artwork, cast and translated metadata from TMDB.</string>
+    <string name="settings_desktop_mdblist_summary">Ratings from IMDb, Rotten Tomatoes and others, through MDBList.</string>
+    <string name="settings_desktop_advanced_summary">Startup, graphics, Discord, cache and other technical settings.</string>
+    <string name="settings_desktop_updates_summary">Check for new versions and see what changed.</string>
+    <string name="settings_desktop_about_summary">Version, credits, licenses and privacy.</string>
+    <string name="settings_desktop_search_title">Search</string>
+    <string name="settings_desktop_search_summary">Results for “%1$s”</string>
+    <string name="settings_desktop_switch_profile">Switch profile</string>
+    <string name="settings_desktop_current_version">Starlit %1$s</string>
+    <string name="settings_desktop_current_version_detail">Build %1$s</string>
+    <string name="settings_desktop_check_for_updates">Check for updates</string>
+    <string name="settings_desktop_signed_in_as">Signed in as %1$s</string>
+
     <!-- Home: airing -->
     <string name="airing_now_title">Airing Now</string>
     <string name="airing_recent_title">Recently released</string>

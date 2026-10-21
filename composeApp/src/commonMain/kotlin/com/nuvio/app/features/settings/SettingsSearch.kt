@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.isDesktop
+import org.jetbrains.compose.resources.StringResource
 import com.nuvio.app.isIos
 import com.nuvio.app.supportsPosterNavigationMotion
 import nuvio.composeapp.generated.resources.*
@@ -97,27 +98,29 @@ internal fun settingsSearchEntries(
     val aboutCategory = stringResource(SettingsCategory.About.labelRes)
     val advancedCategory = stringResource(SettingsCategory.Advanced.labelRes)
 
-    val accountPage = stringResource(Res.string.compose_settings_page_account)
-    val trackingPage = stringResource(Res.string.compose_settings_page_tracking)
-    val layoutPage = stringResource(Res.string.compose_settings_page_appearance)
-    val advancedPage = stringResource(Res.string.compose_settings_page_advanced)
-    val contentDiscoveryPage = stringResource(Res.string.compose_settings_page_content_discovery)
-    val playbackPage = stringResource(Res.string.compose_settings_page_playback)
-    val streamsPage = stringResource(Res.string.compose_settings_page_streams)
-    val integrationsPage = stringResource(Res.string.compose_settings_page_integrations)
-    val notificationsPage = stringResource(Res.string.compose_settings_page_notifications)
-    val supportersPage = stringResource(Res.string.compose_settings_page_supporters_contributors)
-    val licensesPage = stringResource(Res.string.compose_settings_page_licenses_attributions)
-    val homeLayoutPage = stringResource(Res.string.compose_settings_page_homescreen)
-    val detailPage = stringResource(Res.string.compose_settings_page_meta_screen)
-    val continueWatchingPage = stringResource(Res.string.compose_settings_page_continue_watching)
-    val posterStylePage = stringResource(Res.string.compose_settings_page_poster_customization)
-    val hoverPreviewPage = stringResource(Res.string.compose_settings_page_hover_preview)
-    val addonsPage = stringResource(Res.string.compose_settings_page_addons)
-    val pluginsPage = stringResource(Res.string.compose_settings_page_plugins)
+    // The wide desktop layout names pages as its sidebar does.
+    val desktopNames = isTablet && isDesktop
+    val accountPage = stringResource(SettingsPage.Account.searchTitleRes(desktopNames))
+    val trackingPage = stringResource(SettingsPage.TraktAuthentication.searchTitleRes(desktopNames))
+    val layoutPage = stringResource(SettingsPage.Appearance.searchTitleRes(desktopNames))
+    val advancedPage = stringResource(SettingsPage.Advanced.searchTitleRes(desktopNames))
+    val contentDiscoveryPage = stringResource(SettingsPage.ContentDiscovery.searchTitleRes(desktopNames))
+    val playbackPage = stringResource(SettingsPage.Playback.searchTitleRes(desktopNames))
+    val streamsPage = stringResource(SettingsPage.Streams.searchTitleRes(desktopNames))
+    val integrationsPage = stringResource(SettingsPage.Integrations.searchTitleRes(desktopNames))
+    val notificationsPage = stringResource(SettingsPage.Notifications.searchTitleRes(desktopNames))
+    val supportersPage = stringResource(SettingsPage.SupportersContributors.searchTitleRes(desktopNames))
+    val licensesPage = stringResource(SettingsPage.LicensesAttributions.searchTitleRes(desktopNames))
+    val homeLayoutPage = stringResource(SettingsPage.Homescreen.searchTitleRes(desktopNames))
+    val detailPage = stringResource(SettingsPage.MetaScreen.searchTitleRes(desktopNames))
+    val continueWatchingPage = stringResource(SettingsPage.ContinueWatching.searchTitleRes(desktopNames))
+    val posterStylePage = stringResource(SettingsPage.PosterCustomization.searchTitleRes(desktopNames))
+    val hoverPreviewPage = stringResource(SettingsPage.HoverPreview.searchTitleRes(desktopNames))
+    val addonsPage = stringResource(SettingsPage.Addons.searchTitleRes(desktopNames))
+    val pluginsPage = stringResource(SettingsPage.Plugins.searchTitleRes(desktopNames))
     val collectionsPage = stringResource(Res.string.collections_header)
-    val tmdbPage = stringResource(Res.string.compose_settings_page_tmdb_enrichment)
-    val mdbListPage = stringResource(Res.string.compose_settings_page_mdblist_ratings)
+    val tmdbPage = stringResource(SettingsPage.TmdbEnrichment.searchTitleRes(desktopNames))
+    val mdbListPage = stringResource(SettingsPage.MdbListRatings.searchTitleRes(desktopNames))
 
     val entries = mutableListOf<SettingsSearchEntry>()
 
@@ -1285,3 +1288,6 @@ private fun settingsSearchResults(
 private fun SettingsSearchEntry.resultDescription(): String {
     return description.ifBlank { contextLabel }
 }
+
+private fun SettingsPage.searchTitleRes(desktopNames: Boolean): StringResource =
+    if (desktopNames) desktopTitleRes() else titleRes
