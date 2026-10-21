@@ -8,6 +8,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.app.core.ui.nuvio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,33 +62,92 @@ internal actual object DownloadDesktopFeatures {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal actual fun DownloadManagementControls() {
+    val tokens = MaterialTheme.nuvio
     val scope = rememberCoroutineScope()
+    val state by DownloadsRepository.uiState.collectAsState()
     var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
     var picking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Download folder", style = MaterialTheme.typography.titleSmall)
-        Text(folder, style = MaterialTheme.typography.bodySmall)
-        Text("Changing this folder applies to new downloads. Existing files stay in their original folders.", style = MaterialTheme.typography.bodySmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = !picking, onClick = {
-                picking = true
-                scope.launch {
-                    try {
-                        val selected = chooseDownloadFolder(folder)
-                        if (selected != null) withContext(Dispatchers.IO) { DownloadDesktopFeatures.setDirectory(selected) }
-                        folder = DownloadDesktopFeatures.directory().orEmpty()
-                    } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message }
-                    finally { picking = false }
-                }
-            }) { Text("Choose folder") }
-            OutlinedButton(onClick = { scope.launch(Dispatchers.IO) {
-                if (!openDownloadDirectory(File(folder))) withContext(Dispatchers.Main) { error = "Download folder is unavailable" }
-            } }) { Text("Open folder") }
-            TextButton(onClick = DownloadsRepository::pauseActiveDownloads) { Text("Pause all") }
-            TextButton(onClick = DownloadsRepository::resumeAll) { Text("Resume all") }
+    val items = state.items
+    val transferring = items.count { it.status == DownloadStatus.Downloading }
+    val paused = items.count { it.status == DownloadStatus.Paused }
+    val failed = items.count { it.status == DownloadStatus.Failed }
+    val ready = items.count { it.status == DownloadStatus.Completed }
+    val queueButtons: @Composable () -> Unit = {
+        DownloadsPillButton("Pause all", Icons.Rounded.Pause, DownloadsRepository::pauseActiveDownloads, enabled = transferring > 0)
+        DownloadsPillButton("Resume all", Icons.Rounded.PlayArrow, DownloadsRepository::resumeAll, enabled = paused > 0)
+    }
+    val folderButtons: @Composable () -> Unit = {
+        DownloadsPillButton(if (picking) "Choosing…" else "Change folder", null, enabled = !picking, onClick = {
+            picking = true
+            scope.launch {
+                try {
+                    val selected = chooseDownloadFolder(folder)
+                    if (selected != null) withContext(Dispatchers.IO) { DownloadDesktopFeatures.setDirectory(selected) }
+                    folder = DownloadDesktopFeatures.directory().orEmpty()
+                    error = null
+                } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message }
+                finally { picking = false }
+            }
+        })
+        DownloadsPillButton("Open folder", null, onClick = { scope.launch(Dispatchers.IO) {
+            if (!openDownloadDirectory(File(folder))) withContext(Dispatchers.Main) { error = "Download folder is unavailable" }
+        } })
+    }
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(tokens.shapes.compactCard)
+            .background(tokens.colors.textPrimary.copy(alpha = 0.04f))
+            .border(1.dp, tokens.colors.borderSubtle, tokens.shapes.compactCard)
+            .padding(20.dp),
+    ) {
+    // Narrow windows put the buttons under their text instead of beside it.
+    val narrow = maxWidth < 680.dp
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp).clip(CircleShape).background(tokens.colors.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.DownloadForOffline, null, tint = tokens.colors.accent, modifier = Modifier.size(26.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = if (items.isEmpty()) "Nothing downloaded yet"
+                        else "$ready ready to watch  ·  ${formatDownloadBytes(items.sumOf { it.fileSize })} on disk",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = listOfNotNull(
+                        transferring.takeIf { it > 0 }?.let { "$it in the queue" },
+                        paused.takeIf { it > 0 }?.let { "$it paused" },
+                        failed.takeIf { it > 0 }?.let { "$it failed" },
+                    ).joinToString("  ·  ").ifEmpty {
+                        if (items.isEmpty()) "Queue whole seasons from any series page and watch them here offline." else "Nothing in the queue"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.colors.textMuted,
+                )
+            }
+            if (!narrow) queueButtons()
         }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (narrow) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { queueButtons() }
+        HorizontalDivider(color = tokens.colors.borderSubtle)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Folder, null, tint = tokens.colors.textSecondary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(File(folder).name.ifBlank { folder }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    File(folder).parent?.let {
+                        Text(compactFolderPath(it, maxLength = 48), style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Text("New downloads are saved here. Earlier files stay where they were saved.", style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
+            }
+            if (!narrow) folderButtons()
+        }
+        if (narrow) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { folderButtons() }
+        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
+    }
     }
 }
 internal suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
