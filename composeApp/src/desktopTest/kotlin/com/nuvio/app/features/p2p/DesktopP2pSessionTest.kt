@@ -22,6 +22,11 @@ class DesktopP2pSessionTest {
         var running = false
         var failures = 0
         var failAfterMetadata = false
+        var healthy = true
+        var healthChecks = 0
+        var statusDelayMs = 0L
+        var statusHttpCode: Int? = null
+        var healthGate: CompletableDeferred<Unit>? = null
         var startupFailures = 0
         var metadata = true
         var startGate: CompletableDeferred<Unit>? = null
@@ -37,6 +42,7 @@ class DesktopP2pSessionTest {
             running = false
             starts += 1
             callsSinceStart = 0
+            healthy = true
             if (startupFailures > 0) {
                 startupFailures -= 1
                 throw DesktopTorrentEngineUnavailable("Transient startup failure")
@@ -53,11 +59,17 @@ class DesktopP2pSessionTest {
         override suspend fun getTorrentStats(hash: String): TorrServerStats {
             callsSinceStart += 1
             if (failures > 0 || (failAfterMetadata && callsSinceStart > 1)) {
+                kotlinx.coroutines.delay(statusDelayMs)
                 failures = (failures - 1).coerceAtLeast(0)
-                throw DesktopTorrentEngineUnavailable("Lost local server")
+                throw DesktopTorrentEngineUnavailable("Status unavailable", httpStatusCode = statusHttpCode)
             }
             return TorrServerStats(0, 0, 0, 0, 10, 20, 100,
                 if (metadata) listOf(TorrServerFile(1, "sample.mp4", 100)) else emptyList())
+        }
+        override suspend fun isHealthy(): Boolean {
+            healthChecks++
+            healthGate?.await()
+            return running && healthy && !failAfterMetadata
         }
         override fun getStreamUrl(magnetLink: String, fileIdx: Int): String = "http://127.0.0.1:${8000 + starts}/stream?index=$fileIdx"
     }
@@ -208,17 +220,58 @@ class DesktopP2pSessionTest {
         engine.stopStream().join()
     }
 
-    @Test fun repeatedLocalApiFailuresRecoverButZeroPeersDoNot() = runTest {
+    @Test fun repeatedLocalApiFailuresRecoverAnUnhealthyEngineButZeroPeersDoNot() = runTest {
         val backend = Backend()
         val engine = engine(backend)
         engine.startStream(request)
         advanceTimeBy(30_001L)
         assertEquals(1, backend.starts)
         backend.failures = 3
+        backend.healthy = false
         advanceTimeBy(6_001L)
         assertEquals(2, backend.starts)
         assertIs<P2pStreamingState.Streaming>(engine.state.value)
         engine.stopStream().join()
+    }
+
+    @Test fun threeSlowStatusFailuresDoNotInterruptAHealthyStream() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        val url = engine.startStream(request)
+        backend.failures = 3
+        backend.statusDelayMs = 8_000L
+        advanceTimeBy(32_001L)
+        assertEquals(1, backend.starts)
+        assertEquals(1, backend.healthChecks)
+        assertEquals(url, assertIs<P2pStreamingState.Streaming>(engine.state.value).localUrl)
+        engine.stopStream().join()
+    }
+
+    @Test fun missingActiveTorrentRecoversEvenWhileTheProcessIsHealthy() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        val url = engine.startStream(request)
+        backend.failures = 3
+        backend.statusHttpCode = 404
+        advanceTimeBy(6_001L)
+        assertEquals(2, backend.starts)
+        assertTrue(assertIs<P2pStreamingState.Streaming>(engine.state.value).localUrl != url)
+        engine.stopStream().join()
+    }
+
+    @Test fun cancellingDuringAHealthProbeDoesNotRestartOrResurrectPlayback() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.startStream(request)
+        backend.failures = 3
+        backend.healthGate = CompletableDeferred()
+        advanceTimeBy(6_001L)
+        assertEquals(1, backend.healthChecks)
+        engine.stopStream().join()
+        backend.healthGate!!.complete(Unit)
+        advanceTimeBy(10_001L)
+        assertEquals(1, backend.starts)
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
     }
 
     @Test fun aPersistentlyBrokenBackendStopsAfterBoundedRecovery() = runTest {

@@ -307,7 +307,14 @@ internal class DesktopP2pSession(
                             healthySamples = 0
                             failures += 1
                             if (failures >= 3 && !session.signals.waitingForNetwork) {
-                                reason = DesktopP2pRecoveryReason.EngineUnavailable
+                                // Status/serialization failures do not prove the media reader is broken.
+                                // A missing active hash does: /echo can still succeed in that case.
+                                val torrentMissing = e is DesktopTorrentEngineUnavailable && e.httpStatusCode == 404
+                                if (torrentMissing || !backend.isHealthy()) {
+                                    reason = DesktopP2pRecoveryReason.EngineUnavailable
+                                } else {
+                                    failures = 0
+                                }
                             }
                         }
                     }

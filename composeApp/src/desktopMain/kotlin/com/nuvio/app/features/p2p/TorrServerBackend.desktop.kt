@@ -44,10 +44,15 @@ internal interface DesktopTorrentBackend {
     suspend fun stop()
     suspend fun addTorrent(magnetLink: String): String
     suspend fun getTorrentStats(hash: String): TorrServerStats
+    suspend fun isHealthy(): Boolean
     fun getStreamUrl(magnetLink: String, fileIdx: Int): String
 }
 
-internal class DesktopTorrentEngineUnavailable(message: String, cause: Throwable? = null) : Exception(message, cause)
+internal class DesktopTorrentEngineUnavailable(
+    message: String,
+    cause: Throwable? = null,
+    val httpStatusCode: Int? = null,
+) : Exception(message, cause)
 
 /** The torrent library binds TCP and UDP to the same port; TCP autoselection alone can collide on Windows. */
 internal fun availableTorrentPeerPort(candidate: () -> Int = { Random.nextInt(20_000, 49_152) }): Int {
@@ -117,6 +122,7 @@ internal class TorrServerBackend(
     override suspend fun dropTorrent(hash: String) = api.dropTorrent(hash)
     override suspend fun addTorrent(magnetLink: String): String = api.addTorrent(magnetLink)
     override suspend fun getTorrentStats(hash: String): TorrServerStats = api.getTorrentStats(hash)
+    override suspend fun isHealthy(): Boolean = binary.processId != null && binary.isRunning()
     override fun getStreamUrl(magnetLink: String, fileIdx: Int): String = api.getStreamUrl(magnetLink, fileIdx)
 }
 
@@ -423,7 +429,10 @@ private class TorrServerApi(
             .build()
         val response = sendTorrServerRequest(client, request)
         if (response.statusCode() !in 200..299) {
-            throw DesktopTorrentEngineUnavailable("Torrent engine request failed (HTTP ${response.statusCode()})")
+            throw DesktopTorrentEngineUnavailable(
+                "Torrent engine request failed (HTTP ${response.statusCode()})",
+                httpStatusCode = response.statusCode(),
+            )
         }
         // Settings writes return a successful empty body, not a JSON object.
         val raw = response.body().orEmpty()
