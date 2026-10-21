@@ -148,3 +148,61 @@ test('cached pages identify hits and gateway outages are cooled down across rout
   assert.equal((await later.json()).providerStatus, 403);
   assert.equal(calls, 2, 'one failed origin attempt; other routes honor the outage cooldown');
 });
+
+test('episode and mapping aliases share the supported upstream and canonical cache', async () => {
+  let calls = 0;
+  const env = environment(async url => {
+    calls++;
+    assert.equal(url, 'https://api.ani.zip/mappings?anilist_id=176301');
+    return Response.json({ mappings: { anilist_id: 176301 }, episodes: { 1: { image: 'https://images.test/1.jpg' } } });
+  });
+  // A cache entry from the old upstream must not mask the repaired route.
+  const old = new URL('/cache/v2', 'https://gateway.test');
+  old.searchParams.set('provider', 'https://hayase.ani.zip/v1/episodes?anilist_id=176301');
+  await env.cache.put(new Request(old), Response.json({ old: true }));
+  const first = await handleRequest(new Request('https://gateway.test/episodes?id=176301'), ctx, env);
+  assert.equal(first.status, 200);
+  assert.match(first.headers.get('cache-control'), /max-age=3600/);
+  assert.equal((await first.json()).mappings.anilist_id, 176301);
+  const second = await handleRequest(new Request('https://gateway.test/mapping?id=176301&ignored=1'), ctx, env);
+  assert.equal(second.headers.get('X-Nuvio-Cache'), 'HIT');
+  assert.equal(calls, 1);
+});
+
+test('unmapped anime has a short ID-specific negative cache and does not disable other anime', async () => {
+  const calls = [];
+  const env = environment(async url => {
+    calls.push(url);
+    return url.endsWith('=218532') ? new Response('not found', { status: 404 })
+      : Response.json({ mappings: { anilist_id: 176301 }, episodes: {} });
+  });
+  const missing = 'https://gateway.test/episodes?id=218532';
+  const first = await handleRequest(new Request(missing), ctx, env);
+  assert.equal(first.status, 404);
+  assert.match(first.headers.get('cache-control'), /max-age=60/);
+  assert.equal((await first.json()).providerStatus, 404);
+  const repeated = await handleRequest(new Request(missing.replace('/episodes?', '/mapping?')), ctx, env);
+  assert.equal(repeated.status, 404);
+  assert.equal(repeated.headers.get('X-Nuvio-Cache'), 'HIT');
+  assert.equal((await handleRequest(new Request('https://gateway.test/episodes?id=176301'), ctx, env)).status, 200);
+  assert.equal(calls.length, 2);
+});
+
+test('AniZip aliases preserve shared cooldown and valid stale artwork on rate limits', async () => {
+  let calls = 0;
+  const env = environment(async () => {
+    calls++;
+    if (calls === 1) return Response.json({ mappings: { anilist_id: 176301 }, episodes: { 1: { image: 'still' } } });
+    return new Response('quota', { status: 429, headers: { 'Retry-After': '120' } });
+  });
+  await handleRequest(new Request('https://gateway.test/episodes?id=176301'), ctx, env);
+  // Simulate fresh expiry while retaining the existing longer-lived stale entry.
+  const cacheMatch = env.cache.match;
+  env.cache.match = async key => key.url.includes('/cache/v2') && !key.url.endsWith('&stale=1') ? undefined : cacheMatch(key);
+  const stale = await handleRequest(new Request('https://gateway.test/mapping?id=176301'), ctx, env);
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers.get('X-Nuvio-Stale'), '1');
+  assert.equal((await stale.json()).episodes['1'].image, 'still');
+  assert.equal((await handleRequest(new Request('https://gateway.test/episodes?id=218532'), ctx, env)).status, 429);
+  assert.equal(calls, 2);
+});
