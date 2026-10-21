@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -29,7 +27,6 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,7 +67,7 @@ import nuvio.composeapp.generated.resources.updates_debug_test_complete
 import nuvio.composeapp.generated.resources.updates_downloading_progress
 import nuvio.composeapp.generated.resources.updates_message_allow_installs
 import nuvio.composeapp.generated.resources.updates_message_ready
-import nuvio.composeapp.generated.resources.updates_no_release_notes
+import nuvio.composeapp.generated.resources.changelog_available
 import nuvio.composeapp.generated.resources.updates_preparing_download
 import nuvio.composeapp.generated.resources.updates_release_notes
 import nuvio.composeapp.generated.resources.updates_title_allow_installs
@@ -143,7 +140,12 @@ fun AppUpdaterHost(
 
     if (showReleaseNotes && update != null) {
         ReleaseNotesDialog(
-            update = update,
+            notes = update.notes,
+            title = stringResource(Res.string.updates_release_notes),
+            fallbackTitle = update.title,
+            highlightedVersion = update.tag,
+            highlightedLabel = stringResource(Res.string.changelog_available),
+            releaseUrl = update.releaseUrl,
             onDismiss = { showReleaseNotes = false },
         )
     }
@@ -302,60 +304,6 @@ private fun AppUpdateBanner(
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ReleaseNotesDialog(
-    update: AppUpdate,
-    onDismiss: () -> Unit,
-) {
-    DialogSurface(
-        onDismissRequest = onDismiss,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = stringResource(Res.string.updates_release_notes),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = update.title,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = stringResource(Res.string.action_close),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-        Text(
-            text = update.notes.ifBlank { stringResource(Res.string.updates_no_release_notes) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 420.dp)
-                .verticalScroll(rememberScrollState()),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
