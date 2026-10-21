@@ -344,6 +344,12 @@ private fun PlainStackDivider() {
 
 private fun attributionItems(): List<AttributionItem> = listOf(
     AttributionItem(
+        titleRes = Res.string.settings_licenses_attributions_tvmaze_title,
+        bodyRes = Res.string.settings_licenses_attributions_tvmaze_body,
+        logo = null,
+        link = "https://www.tvmaze.com/api#licensing",
+    ),
+    AttributionItem(
         titleRes = Res.string.settings_licenses_attributions_tmdb_title,
         bodyRes = Res.string.settings_licenses_attributions_tmdb_body,
         logo = IntegrationLogo.Tmdb,

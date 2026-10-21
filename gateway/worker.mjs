@@ -38,6 +38,22 @@ export function providerRequest(url) {
     const id = integer(p, 'id', 1, 2147483647);
     return { url: `https://api.ani.zip/mappings?anilist_id=${id}`, ttl: 3600 };
   }
+  if (url.pathname === '/artwork/tmdb-season') {
+    const id = integer(p, 'id', 1, 2147483647);
+    const season = integer(p, 'season', 0, 1000);
+    return { url: `https://api.themoviedb.org/3/tv/${id}/season/${season}`, ttl: 3600, tmdb: true };
+  }
+  if (url.pathname === '/artwork/tvmaze-lookup') {
+    const imdb = p.get('imdb');
+    if (imdb !== null) {
+      if (!/^tt\d{5,12}$/.test(imdb) || p.has('tvdb')) throw new Error('Invalid imdb');
+      return { url: `https://api.tvmaze.com/lookup/shows?imdb=${imdb}`, ttl: 86400 };
+    }
+    return { url: `https://api.tvmaze.com/lookup/shows?thetvdb=${integer(p, 'tvdb', 1, 2147483647)}`, ttl: 86400 };
+  }
+  if (url.pathname === '/artwork/tvmaze-episodes') {
+    return { url: `https://api.tvmaze.com/shows/${integer(p, 'id', 1, 2147483647)}/episodes?specials=1`, ttl: 3600, episodeList: true };
+  }
   if (url.pathname === '/release-schedule' || url.pathname === '/release-schedule-adult') {
     const start = p.get('start');
     const date = Date.parse(`${start}T00:00:00Z`);
@@ -59,13 +75,15 @@ function json(payload, status = 200, headers = {}) {
   return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
 }
 
-export async function handleRequest(request, ctx, { fetcher = fetch, cache = caches.default } = {}) {
+export async function handleRequest(request, ctx, { fetcher = fetch, cache = caches.default, tmdbToken = '' } = {}) {
   const url = new URL(request.url);
   if (request.method !== 'GET') return json({ error: 'Only GET requests are supported' }, 405, { Allow: 'GET' });
   if (url.pathname === '/health') return json({ ok: true, service: 'nuvio-native-gateway', version: '1.0.0' });
   let target;
   try { target = providerRequest(url); } catch (e) { return json({ error: e.message }, 400); }
   if (!target) return json({ error: 'Unknown route' }, 404);
+  // Server-only bearer authentication: never put credentials in URLs or cache keys.
+  if (target.tmdb && !tmdbToken) return json({ error: 'Artwork provider is not configured' }, 503);
   // Ignore unrecognized query parameters and canonicalize requests for a shared cache.
   const keyUrl = new URL('/cache/v2', url.origin);
   keyUrl.searchParams.set('provider', target.url);
@@ -106,17 +124,27 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     if (until > Date.now()) return unavailable(status, new Headers({ 'Retry-After': String(Math.ceil((until - Date.now()) / 1000)) }), false);
   }
   try {
-    const upstream = await fetcher(target.url, {
+    const options = {
       method: target.body ? 'POST' : 'GET',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'NuvioNative/1.0' },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'NuvioNative/1.0',
+        ...(target.tmdb ? { Authorization: `Bearer ${tmdbToken}` } : {}) },
       body: target.body ? JSON.stringify(target.body) : undefined,
       redirect: 'manual', signal: AbortSignal.timeout(12000),
-    });
+    };
+    let upstream = await fetcher(target.url, options);
+    // TVmaze lookup documents a redirect to the canonical show. Follow exactly
+    // that fixed-host shape, never a provider-supplied arbitrary redirect.
+    if (url.pathname === '/artwork/tvmaze-lookup' && [301, 302].includes(upstream.status)) {
+      const location = upstream.headers.get('Location');
+      await upstream.body?.cancel();
+      if (!/^https:\/\/api\.tvmaze\.com\/shows\/\d+$/.test(location || '')) return unavailable(503);
+      upstream = await fetcher(location, options);
+    }
     if (!upstream.ok) {
       await upstream.body?.cancel();
       // A missing anime is not a provider outage. Share a short, ID-specific miss
       // across both aliases without replacing valid stale data or a global cooldown.
-      if (upstream.status === 404 && new URL(target.url).hostname === 'api.ani.zip') {
+      if (upstream.status === 404 && ['api.ani.zip', 'api.themoviedb.org', 'api.tvmaze.com'].includes(new URL(target.url).hostname)) {
         const missing = json({ error: 'Episode metadata not found', providerStatus: 404 }, 404,
           { 'Cache-Control': 'public, max-age=60', 'X-Nuvio-Cache': 'MISS' });
         ctx.waitUntil(cache.put(key, missing.clone()).catch(() => {}));
@@ -141,7 +169,9 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     const bytes = new Uint8Array(size);
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    const parsed = JSON.parse(new TextDecoder().decode(bytes));
+    if (target.episodeList && !Array.isArray(parsed)) return unavailable(503);
+    const payload = target.episodeList ? { episodes: parsed } : parsed;
     if (payload.error || payload.errors?.length) return unavailable(payload.errors?.some(error => error.status === 429) ? 429 : 503, upstream.headers);
     const response = json(payload, 200, { 'Cache-Control': `public, max-age=${target.ttl}`, 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
     const stale = json(payload, 200, { 'Cache-Control': 'public, max-age=86400', 'X-Nuvio-Gateway': '1', 'X-Nuvio-Cache': 'MISS' });
@@ -153,4 +183,4 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
   }
 }
 
-export default { fetch(request, env, ctx) { return handleRequest(request, ctx); } };
+export default { fetch(request, env, ctx) { return handleRequest(request, ctx, { tmdbToken: env.TMDB_READ_ACCESS_TOKEN }); } };
