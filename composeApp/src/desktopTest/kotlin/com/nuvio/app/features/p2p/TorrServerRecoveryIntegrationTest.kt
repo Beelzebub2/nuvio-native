@@ -110,6 +110,10 @@ class TorrServerRecoveryIntegrationTest {
             val otherPid = assertNotNull(other.processId)
             engine.restart(settings)
             val oldPid = assertNotNull(engine.processId)
+            assertTrue(engine.isHealthy())
+            val missing = assertFailsWith<DesktopTorrentEngineUnavailable> { engine.getTorrentStats("0".repeat(40)) }
+            assertEquals(404, missing.httpStatusCode)
+            assertTrue(engine.isHealthy(), "A missing torrent must not be mistaken for a dead process")
             engine.prepare(settings)
             assertEquals(oldPid, engine.processId, "Preparing an unchanged engine must reuse its process")
             engine.prepare(settings.copy(hideTorrentStats = true))
@@ -123,6 +127,7 @@ class TorrServerRecoveryIntegrationTest {
         } finally {
             engine.stop()
             other.stop()
+            assertFalse(engine.isHealthy())
             dir.deleteRecursively()
         }
     }
