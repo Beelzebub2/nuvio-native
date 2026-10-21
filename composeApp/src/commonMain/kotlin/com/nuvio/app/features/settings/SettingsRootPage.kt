@@ -54,7 +54,7 @@ import nuvio.composeapp.generated.resources.changelog_title
 import nuvio.composeapp.generated.resources.changelog_description
 import org.jetbrains.compose.resources.stringResource
 
-private const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
+internal const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
 
 internal fun LazyListScope.settingsRootContent(
     isTablet: Boolean,

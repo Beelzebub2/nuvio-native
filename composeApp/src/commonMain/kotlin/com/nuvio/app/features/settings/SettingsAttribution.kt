@@ -34,7 +34,9 @@ internal const val CreatorProfileUrl = "https://github.com/Beelzebub2"
 internal fun SettingsAttribution(
     isTablet: Boolean,
     modifier: Modifier = Modifier,
+    centered: Boolean = true,
 ) {
+    val textAlign = if (centered) TextAlign.Center else TextAlign.Start
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -42,7 +44,7 @@ internal fun SettingsAttribution(
     ) {
         MemberBrandWordmark(
             height = if (isTablet) 30.dp else 26.dp,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
+            modifier = Modifier.align(if (centered) Alignment.CenterHorizontally else Alignment.Start),
         )
         Spacer(
             modifier = Modifier.height(if (isTablet) 10.dp else 8.dp),
@@ -67,7 +69,7 @@ internal fun SettingsAttribution(
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            textAlign = textAlign,
         )
         Text(
             text = stringResource(
@@ -78,7 +80,7 @@ internal fun SettingsAttribution(
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            textAlign = textAlign,
         )
         Text(
             text = AppVersionPolicy.basedOnVersionName
@@ -87,7 +89,7 @@ internal fun SettingsAttribution(
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            textAlign = textAlign,
         )
     }
 }
