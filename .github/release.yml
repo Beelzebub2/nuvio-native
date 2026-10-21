@@ -1,4 +1,6 @@
 changelog:
+  exclude:
+    labels: [already-released]
   categories:
     - title: Features
       labels: [feat, enhancement]
