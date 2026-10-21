@@ -1,6 +1,7 @@
 package com.nuvio.app.features.airing
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -140,4 +141,117 @@ class AiringClientTest {
         assertEquals(clock + 600_000, retryTime(Headers.headersOf("Retry-After", "120", "X-RateLimit-Reset", (now.epochSecond + 600).toString()), clock))
         assertEquals(clock + 60_000, retryTime(Headers.headersOf("Retry-After", "invalid"), clock))
     }
+    private fun artwork(id: Int) = """{"mappings":{"anilist_id":$id,"kitsu_id":999999},"episodes":{"1":{"title":{"en":"First"},"image":"https://images.test/$id/1.jpg"},"2":{"title":{"en":"Second"},"image":"https://images.test/$id/2.jpg"}}}"""
+
+    @Test fun `artwork uses supported direct fallback validates exact anime and caches per title`() = runBlocking {
+        var clock = now.toEpochMilli()
+        val requests = java.util.Collections.synchronizedList(mutableListOf<Request>())
+        val client = AiringClient(http { r ->
+            requests += r
+            if (r.url.host == "gateway.test") response(r, artwork(999))
+            else {
+                assertEquals("api.ani.zip", r.url.host)
+                assertEquals("/mappings", r.url.encodedPath)
+                response(r, artwork(r.url.queryParameter("anilist_id")!!.toInt()))
+            }
+        }, gateway = "https://gateway.test", clock = { clock })
+        assertEquals(artwork(176301), client.episodeMetadata(176301).toString())
+        repeat(3) { assertNotNull(client.episodeMetadata(176301)) }
+        assertEquals(2, requests.size)
+        assertEquals(artwork(218532), client.episodeMetadata(218532).toString())
+        assertEquals(4, requests.size)
+        clock += 3600_000L
+        client.episodeMetadata(176301)
+        assertEquals(6, requests.size)
+    }
+
+    @Test fun `missing artwork is cached briefly per ID without direct duplication or disabling provider`() = runBlocking {
+        var clock = now.toEpochMilli()
+        val requests = mutableListOf<Request>()
+        val client = AiringClient(http { r ->
+            requests += r
+            assertEquals("gateway.test", r.url.host)
+            if (r.url.queryParameter("id") == "218532") response(r, "{}", 404)
+            else response(r, artwork(176301))
+        }, gateway = "https://gateway.test", clock = { clock })
+        repeat(2) { assertNull(client.episodeMetadata(218532)) }
+        assertNotNull(client.episodeMetadata(176301))
+        assertEquals(2, requests.size)
+        clock += 60_000L
+        assertNull(client.episodeMetadata(218532))
+        assertEquals(3, requests.size)
+    }
+
+    @Test fun `artwork rate limits share gateway and direct cooldown instead of bypassing quota`() = runBlocking {
+        var calls = 0
+        val client = AiringClient(http { r ->
+            calls++
+            assertEquals("gateway.test", r.url.host)
+            response(r, "{}", 429, "180")
+        }, gateway = "https://gateway.test", clock = { now.toEpochMilli() })
+        assertNull(client.episodeMetadata(176301))
+        assertNull(client.episodeMetadata(218532))
+        assertEquals(1, calls)
+    }
+
+    @Test fun `concurrent artwork opens coalesce and payload cache stays bounded`() = runBlocking {
+        var calls = 0
+        val client = AiringClient(http { r ->
+            calls++
+            response(r, artwork(r.url.queryParameter("id")!!.toInt()))
+        }, gateway = "https://gateway.test", clock = { now.toEpochMilli() })
+        kotlinx.coroutines.coroutineScope {
+            List(8) { async { client.episodeMetadata(1) } }.forEach { it.await() }
+        }
+        assertEquals(1, calls)
+        for (id in 2..33) client.episodeMetadata(id)
+        client.episodeMetadata(1)
+        assertEquals(34, calls)
+    }
+
+    @Test fun `cancelled artwork request is never remembered as a missing image`() = runBlocking {
+        val started = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val client = AiringClient(http { r ->
+            if (calls.incrementAndGet() == 1) { started.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS) }
+            response(r, artwork(176301))
+        }, gateway = "https://gateway.test", clock = { now.toEpochMilli() })
+        val pending = async(kotlinx.coroutines.Dispatchers.Default) { client.episodeMetadata(176301) }
+        try {
+            assertTrue(started.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            pending.cancel()
+            pending.join()
+        } finally { release.countDown() }
+        assertNotNull(client.episodeMetadata(176301))
+        assertEquals(2, calls.get())
+    }
+
+    @Test fun `old gateway missing schedule route still falls back to direct AniList`() = runBlocking {
+        val requests = mutableListOf<Request>()
+        val client = AiringClient(http { r ->
+            requests += r
+            response(r, emptySchedule, if (r.url.host == "gateway.test") 404 else 200)
+        }, gateway = "https://gateway.test", clock = { now.toEpochMilli() }, pause = {})
+        assertTrue(client.schedule(AiringSettings(), now).isEmpty())
+        assertEquals(listOf("gateway.test", "graphql.anilist.co", "graphql.anilist.co"), requests.map { it.url.host })
+    }
+
+    @Test fun `artwork mapping cannot replace existing stream and download identity`() = runBlocking {
+        val client = AiringClient(http { r ->
+            response(r, if (r.url.encodedPath == "/media")
+                """{"data":{"Media":{"id":176301,"idMal":58514,"title":{"english":"Example"},"isAdult":false,"genres":[],"tags":[]}}}"""
+                else artwork(176301))
+        }, gateway = "https://gateway.test", pause = {})
+        // Seed the existing ID-mapping cache without disk writes or a live mapping fetch.
+        client.javaClass.getDeclaredField("mappings").apply { isAccessible = true }.set(client,
+            kotlinx.serialization.json.Json.parseToJsonElement("""[{"anilist_id":176301,"kitsu_id":48649,"mal_id":58514}]"""))
+        client.javaClass.getDeclaredField("mappingSavedAt").apply { isAccessible = true }.setLong(client, System.currentTimeMillis())
+        val record = AiringEvent(176301, 2, now.epochSecond, "Example", isAdult = false)
+        val details = client.details(176301, listOf(record), AiringSettings())!!
+        assertEquals(listOf("kitsu:48649:1", "kitsu:48649:2"), details.videos.map { it.id })
+        assertEquals(listOf(1, 2), details.videos.map { it.episode })
+        assertEquals(2, details.videos.mapNotNull { it.thumbnail }.distinct().size)
+    }
+
 }

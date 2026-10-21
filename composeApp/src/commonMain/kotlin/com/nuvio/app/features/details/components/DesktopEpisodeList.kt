@@ -41,10 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioActionSize
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
-import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.ui.NuvioCompactActionButton
 import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.core.ui.NuvioContextMenuAnchorHolder
@@ -234,7 +231,6 @@ internal fun DesktopSeasonToolbar(
 @Composable
 internal fun DesktopEpisodeRow(
     video: MetaVideo,
-    fallbackImage: String?,
     progressEntry: WatchProgressEntry?,
     imdbRating: Double?,
     isWatched: Boolean,
@@ -296,21 +292,14 @@ internal fun DesktopEpisodeRow(
                 .clip(RoundedCornerShape(10.dp))
                 .background(colors.surfaceCard),
         ) {
-            val imageUrl = video.thumbnail ?: fallbackImage
-            if (imageUrl != null) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = video.title,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(if (blurUnwatchedEpisodes && !isWatched) Modifier.blur(18.dp) else Modifier)
-                        .alpha(if (upcoming) 0.45f else 1f),
-                    contentScale = ContentScale.Crop,
-                )
-            }
+            EpisodeArtwork(
+                video = video,
+                blur = blurUnwatchedEpisodes && !isWatched,
+                modifier = Modifier.fillMaxSize().alpha(if (upcoming) 0.45f else 1f),
+            )
             if (upcoming && formattedDate != null) {
                 Row(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = NuvioTokens.Space.s12),
                     horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

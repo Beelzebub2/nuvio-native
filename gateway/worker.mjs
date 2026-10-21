@@ -36,8 +36,7 @@ export function providerRequest(url) {
   }
   if (url.pathname === '/episodes' || url.pathname === '/mapping') {
     const id = integer(p, 'id', 1, 2147483647);
-    const path = url.pathname === '/episodes' ? 'episodes' : 'mappings';
-    return { url: `https://hayase.ani.zip/v1/${path}?anilist_id=${id}`, ttl: 3600 };
+    return { url: `https://api.ani.zip/mappings?anilist_id=${id}`, ttl: 3600 };
   }
   if (url.pathname === '/release-schedule' || url.pathname === '/release-schedule-adult') {
     const start = p.get('start');
@@ -76,7 +75,7 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
   if (cached) {
     const headers = new Headers(cached.headers);
     headers.set('X-Nuvio-Cache', 'HIT');
-    return new Response(cached.body, { headers });
+    return new Response(cached.body, { status: cached.status, headers });
   }
   const staleKey = new Request(key.url + '&stale=1');
   const cooldownKey = new Request(new URL(`/cooldown/v1/${new URL(target.url).hostname}`, url.origin));
@@ -115,6 +114,14 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
     });
     if (!upstream.ok) {
       await upstream.body?.cancel();
+      // A missing anime is not a provider outage. Share a short, ID-specific miss
+      // across both aliases without replacing valid stale data or a global cooldown.
+      if (upstream.status === 404 && new URL(target.url).hostname === 'api.ani.zip') {
+        const missing = json({ error: 'Episode metadata not found', providerStatus: 404 }, 404,
+          { 'Cache-Control': 'public, max-age=60', 'X-Nuvio-Cache': 'MISS' });
+        ctx.waitUntil(cache.put(key, missing.clone()).catch(() => {}));
+        return missing;
+      }
       console.warn(JSON.stringify({ event: 'provider_error', provider: new URL(target.url).hostname, status: upstream.status }));
       return unavailable(upstream.status, upstream.headers);
     }

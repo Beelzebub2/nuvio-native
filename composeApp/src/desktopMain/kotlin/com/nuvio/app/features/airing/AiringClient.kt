@@ -28,6 +28,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal class AiringRateLimitException(val retryAt: Long) : IOException("Schedule provider is rate limited; will retry after the cooldown")
+internal class AiringHttpException(val status: Int, host: String) : IOException("$host: HTTP $status")
 
 internal class AiringClient(
     private val http: OkHttpClient = OkHttpClient.Builder().dns(DesktopIPv4FirstDns())
@@ -50,6 +51,8 @@ internal class AiringClient(
     private var gatewayCacheHit = false
     private val gatewayUnavailableUntil = ConcurrentHashMap<String, Long>()
     private val classifications = mutableMapOf<Int, Pair<Long, AiringEvent>>()
+    private val episodesMutex = Mutex()
+    private val episodeMetadataCache = linkedMapOf<Int, Pair<Long, JsonObject?>>()
 
     suspend fun schedule(settings: AiringSettings, now: Instant): List<AiringEvent> =
         scheduleWithUpdates(settings, now) {}
@@ -137,14 +140,11 @@ internal class AiringClient(
                 ?: graphql(MEDIA_QUERY, buildJsonObject { put("id", id) })
         } }
         val mappingRequest = async { optional { mapping(id) } }
-        val extraRequest = async { optional {
-            gatewayGet("/episodes?id=$id") ?: get("https://hayase.ani.zip/v1/episodes?anilist_id=$id")
-        } }
+        val extraRequest = async { episodeMetadata(id) }
         val metadata = mediaRequest.await()
         val info = metadata?.obj("Media")
         val extra = extraRequest.await() ?: JsonObject(emptyMap())
         val databaseMapping = mappingRequest.await() ?: JsonObject(emptyMap())
-        val mapped = JsonObject(databaseMapping + extra.obj("mappings"))
         val record = info?.let { eventFromAniList(it, existing?.episode ?: 1, existing?.airingAt ?: 1) }
             ?.copy(airType = settings.airType) ?: existing ?: return@coroutineScope null
         if (!record.allowedBy(settings)) return@coroutineScope null
@@ -157,7 +157,25 @@ internal class AiringClient(
         }.filter { it.episode in 1..10000 && it.airingAt > 0 }
         // AniList broadcast history must never claim a sub or dub episode is available.
         val events = if (settings.airType == "broadcast") historical + known else known
-        buildAiringDetails(record, events, mapped, extra.obj("episodes"), Instant.now())
+        // Artwork providers may describe a different TVDB season/numbering scheme.
+        // Keep stream/download identities on the existing anime mapping authority.
+        buildAiringDetails(record, events, databaseMapping, extra.obj("episodes"), Instant.now())
+    }
+
+    internal suspend fun episodeMetadata(id: Int): JsonObject? = episodesMutex.withLock {
+        episodeMetadataCache[id]?.takeIf { it.first > clock() }?.let { return@withLock it.second }
+        fun matching(value: JsonObject?): JsonObject? = value?.takeIf {
+            it.obj("mappings").number("anilist_id") == id && it["episodes"] is JsonObject
+        }
+        val value = try {
+            matching(gatewayGet("/episodes?id=$id"))
+                ?: matching(get("https://api.ani.zip/mappings?anilist_id=$id"))
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
+        // Coalesce repeat detail opens, including unmapped anime, without per-card requests.
+        episodeMetadataCache[id] = (clock() + if (value == null) 60_000L else 3600_000L) to value
+        while (episodeMetadataCache.size > 32) episodeMetadataCache.remove(episodeMetadataCache.keys.first())
+        value
     }
 
     internal suspend fun resolveMalId(id: String): Int? {
@@ -203,6 +221,8 @@ internal class AiringClient(
         request.url.toString().startsWith(gateway + "/") && request.url.encodedPath in
             listOf("/schedule", "/schedule-recent", "/media", "/classifications") -> "graphql.anilist.co"
         request.url.toString().startsWith(gateway + "/release-schedule") -> "tsuzuki.top"
+        request.url.toString().startsWith(gateway + "/") && request.url.encodedPath in
+            listOf("/episodes", "/mapping") -> "api.ani.zip"
         else -> request.url.host
     }
 
@@ -215,6 +235,11 @@ internal class AiringClient(
         return try { json.parseToJsonElement(this.request(request)).jsonObject }
         catch (e: AiringRateLimitException) { throw e }
         catch (e: CancellationException) { throw e }
+        catch (e: AiringHttpException) {
+            if (e.status == 404 && provider == "api.ani.zip") throw e
+            gatewayUnavailableUntil[provider] = clock() + 60_000L
+            null
+        }
         catch (_: Exception) {
             gatewayUnavailableUntil[provider] = clock() + 60_000L
             null
@@ -291,7 +316,7 @@ internal class AiringClient(
                                     throw AiringRateLimitException(reset)
                                 }
                             }
-                            check(it.isSuccessful) { "${request.url.host}: HTTP ${it.code}" }
+                            if (!it.isSuccessful) throw AiringHttpException(it.code, request.url.host)
                             payload
                         }
                     }
