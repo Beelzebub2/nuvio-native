@@ -53,7 +53,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -240,7 +239,6 @@ fun DetailSeriesContent(
                             watchLaterParent = meta.toWatchLaterPreview(),
                             metaType = meta.type,
                             watchedKeys = watchedKeys,
-                            fallbackImage = meta.background ?: meta.poster,
                             progressByVideoId = progressByVideoId,
                             episodeRatings = episodeRatings,
                             episodeRatingsVisibility = episodeRatingsVisibility,
@@ -268,7 +266,6 @@ fun DetailSeriesContent(
                                     video = episode,
                                     modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode), openDetailsOnSecondaryClick = false),
                                     preview = meta.toWatchLaterPreview(episode),
-                                    fallbackImage = meta.background ?: meta.poster,
                                     progressEntry = progressByVideoId[episodeVideoId],
                                     imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
                                     isWatched = progressByVideoId[episodeVideoId]?.isEffectivelyCompleted == true ||
@@ -364,7 +361,6 @@ internal fun DetailSeriesListEpisode(
             video = episode,
             modifier = Modifier.watchLaterMiddleClick(meta.toWatchLaterPreview(episode), openDetailsOnSecondaryClick = false),
             preview = meta.toWatchLaterPreview(episode),
-            fallbackImage = meta.background ?: meta.poster,
             progressEntry = progressByVideoId[episodeVideoId],
             imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
             isWatched = progressByVideoId[episodeVideoId]?.isEffectivelyCompleted == true ||
@@ -755,7 +751,6 @@ private fun EpisodeHorizontalRow(
     watchLaterParent: MetaPreview,
     metaType: String,
     watchedKeys: Set<String>,
-    fallbackImage: String?,
     progressByVideoId: Map<String, WatchProgressEntry>,
     episodeRatings: Map<Pair<Int, Int>, Double>,
     episodeRatingsVisibility: EpisodeRatingsVisibility,
@@ -813,7 +808,6 @@ private fun EpisodeHorizontalRow(
                     openDetailsOnSecondaryClick = false,
                 ),
                 preview = watchLaterParent.copy(watchLaterEpisode = episode.toWatchLaterEpisode()),
-                fallbackImage = fallbackImage,
                 progressEntry = progressByVideoId[episodeVideoId],
                 imdbRating = episode.seasonEpisodeKey()?.let { episodeRatings[it] } ?: episode.rating,
                 isWatched = progressByVideoId[episodeVideoId]?.isEffectivelyCompleted == true ||
@@ -837,7 +831,6 @@ private fun EpisodeHorizontalRow(
 @Composable
 private fun EpisodeHorizontalCard(
     video: MetaVideo,
-    fallbackImage: String?,
     progressEntry: WatchProgressEntry?,
     imdbRating: Double?,
     isWatched: Boolean,
@@ -856,7 +849,7 @@ private fun EpisodeHorizontalCard(
     }
     val formattedDate = remember(video.released) { video.released?.let { formatReleaseDateForDisplay(it) } }
     val runtimeLabel = remember(video.runtime) { video.runtime?.takeIf { it > 0 }?.let(::formatEpisodeRuntime) }
-    val imageUrl = video.thumbnail ?: fallbackImage
+    val imageUrl = episodeArtworkUrl(video.thumbnail)
     val visibleProgressEntry = progressEntry?.takeIf { it.durationMs > 0L && !it.isCompleted }
     val progressBarHeight = 4.dp
     val progressBarContentSpacing = 6.dp
@@ -885,17 +878,11 @@ private fun EpisodeHorizontalCard(
                 zoomCornerRadius = metrics.cornerRadius,
             ),
     ) {
-        val shouldBlurArtwork = blurUnwatchedEpisodes && !isWatched
-        if (imageUrl != null) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = video.title,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (shouldBlurArtwork) Modifier.blur(18.dp) else Modifier),
-                contentScale = ContentScale.Crop,
-            )
-        }
+        EpisodeArtwork(
+            video = video,
+            blur = blurUnwatchedEpisodes && !isWatched,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         Box(
             modifier = Modifier
@@ -1226,7 +1213,6 @@ private fun ImdbEpisodeRatingBadge(
 @Composable
 private fun EpisodeListCard(
     video: MetaVideo,
-    fallbackImage: String?,
     progressEntry: WatchProgressEntry?,
     imdbRating: Double?,
     isWatched: Boolean,
@@ -1242,7 +1228,6 @@ private fun EpisodeListCard(
     if (isDesktop) {
         DesktopEpisodeRow(
             video = video,
-            fallbackImage = fallbackImage,
             progressEntry = progressEntry,
             imdbRating = imdbRating,
             isWatched = isWatched,
@@ -1291,24 +1276,11 @@ private fun EpisodeListCard(
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(topStart = cornerRadius, bottomStart = cornerRadius)),
             ) {
-                val imageUrl = video.thumbnail ?: fallbackImage
-                val shouldBlurArtwork = blurUnwatchedEpisodes && !isWatched
-                if (imageUrl != null) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = video.title,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(if (shouldBlurArtwork) Modifier.blur(18.dp) else Modifier),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surface),
-                    )
-                }
+                EpisodeArtwork(
+                    video = video,
+                    blur = blurUnwatchedEpisodes && !isWatched,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
                 EpisodeCodeBadge(
                     text = video.episodeBadge(),
