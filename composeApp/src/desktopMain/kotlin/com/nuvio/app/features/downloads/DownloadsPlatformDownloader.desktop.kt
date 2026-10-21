@@ -386,8 +386,20 @@ internal suspend fun downloadTorrentFile(item: DownloadItem, backend: DesktopTor
 }
 internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?, filename: String?): TorrServerFile {
     val videos = files.filter { it.path.substringAfterLast('.', "").lowercase() in setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts") && it.length > 0 }
-    val selected = if (index != null) files.firstOrNull { it.id == index + 1 }
-        else if (!filename.isNullOrBlank()) videos.singleOrNull { it.path.replace('\\', '/').substringAfterLast('/').equals(filename.replace('\\', '/').substringAfterLast('/'), true) }
+    // TorrServer assigns IDs after sorting paths; an addon's fileIdx uses the torrent's own order.
+    // Resolve the supplied filename first, then pass that file's native ID to /stream.
+    val selected = if (!filename.isNullOrBlank()) {
+        val path = filename.trim().replace('\\', '/')
+        check(path.split('/').none { it == "." || it == ".." || it.isEmpty() }) { "Invalid torrent filename. Choose another source." }
+        val exact = videos.filter { it.path.replace('\\', '/').equals(path, true) }
+        val matches = if (exact.isNotEmpty()) exact else videos.filter {
+            val candidate = it.path.replace('\\', '/')
+            if ('/' in path) candidate.endsWith("/$path", true)
+            else candidate.substringAfterLast('/').equals(path, true)
+        }
+        check(matches.size == 1) { "The requested torrent filename is missing or ambiguous. Choose another episode source." }
+        matches.single()
+    } else if (index != null) files.singleOrNull { index >= 0 && index < Int.MAX_VALUE && it.id == index + 1 }
         else videos.singleOrNull()
     check(selected != null && selected in videos) { "Multi-file torrent needs an exact file index / filename. Choose the episode's source manually." }
     return selected
