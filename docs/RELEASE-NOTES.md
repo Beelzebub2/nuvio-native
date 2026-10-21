@@ -1,3 +1,11 @@
+## Starlit 1.0.25
+
+### Fixes
+
+- Episode lists restore real episode stills through the repaired cached artwork provider without changing playback numbering.
+- Missing or broken artwork now shows a clear season and episode placeholder instead of repeating the series poster.
+- Per-title caching and exact ID matching make artwork lookups more reliable while keeping unrelated episode mappings intact.
+
 ## Starlit 1.0.24
 
 ### Fixes
