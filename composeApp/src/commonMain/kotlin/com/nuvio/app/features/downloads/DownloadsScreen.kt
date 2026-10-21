@@ -3,6 +3,7 @@ package com.nuvio.app.features.downloads
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,9 @@ import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -106,7 +110,11 @@ fun DownloadsScreen(
         }
     }
 
-    NuvioScreen {
+    BoxWithConstraints {
+    NuvioScreen(
+        horizontalPadding = if (isDesktop) desktopPageHorizontalPaddingForWidth(maxWidth.value)
+            else MaterialTheme.nuvio.spacing.screenHorizontal,
+    ) {
         stickyHeader {
             NuvioScreenHeader(
                 title = if (selectedShowId == null) {
@@ -122,7 +130,8 @@ fun DownloadsScreen(
                     }
                 },
                 actions = {
-                    IconButton(
+                    // Desktop shows the folder, with Open folder, in its overview card.
+                    if (!isDesktop) IconButton(
                         onClick = {
                             if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
                                 NuvioToastController.show(openDownloadsDirectoryFailedText)
@@ -138,7 +147,28 @@ fun DownloadsScreen(
             )
         }
 
-        item { DownloadManagementControls() }
+        if (isDesktop) {
+            desktopDownloadsContent(
+                uiState = uiState,
+                selectedShowId = selectedShowId,
+                canManage = canManage,
+                visibleIds = visibleIds,
+                selection = selection,
+                onSelectAll = { selectedIds = visibleIds },
+                onClearSelection = { selectedIds = emptySet() },
+                onRemoveSelected = {
+                    bulkDeletion = true
+                    pendingDeletionIds = selection.toSet()
+                },
+                onToggleSelection = toggleSelection,
+                onOpenDownload = onOpenDownload,
+                onOpenShow = { showId, title ->
+                    onNavigateToShow?.invoke(showId, title) ?: run { selectedShowId = showId }
+                },
+                onDelete = requestSingleDeletion,
+            )
+            return@NuvioScreen
+        }
         if (canManage && visibleIds.isNotEmpty()) {
             item {
                 DownloadSelectionControls(
@@ -175,6 +205,7 @@ fun DownloadsScreen(
                 onToggleSelection = toggleSelection,
             )
         }
+    }
     }
 
     val deletionIds = pendingDeletionIds
@@ -607,25 +638,25 @@ private fun SectionTitle(title: String) {
 @Composable
 private fun statusText(item: DownloadItem): String {
     val size = if (item.totalBytes != null && item.totalBytes > 0L) {
-        "${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalBytes)}"
+        "${formatDownloadBytes(item.downloadedBytes)} / ${formatDownloadBytes(item.totalBytes)}"
     } else {
-        formatBytes(item.downloadedBytes)
+        formatDownloadBytes(item.downloadedBytes)
     }
 
     return when (item.status) {
         DownloadStatus.Downloading -> if (item.phase != null) "${item.phase} - $size" +
-            (if (item.bytesPerSecond > 0) " - ${formatBytes(item.bytesPerSecond)}/s" else "")
+            (if (item.bytesPerSecond > 0) " - ${formatDownloadBytes(item.bytesPerSecond)}/s" else "")
             else stringResource(Res.string.downloads_status_downloading, size)
         DownloadStatus.Paused -> stringResource(Res.string.downloads_status_paused, size)
         DownloadStatus.Completed -> stringResource(
             Res.string.downloads_status_completed,
-            formatBytes(item.totalBytes ?: item.downloadedBytes),
+            formatDownloadBytes(item.totalBytes ?: item.downloadedBytes),
         )
         DownloadStatus.Failed -> item.errorMessage ?: stringResource(Res.string.downloads_status_failed)
     }
 }
 
-private fun formatBytes(bytes: Long): String {
+internal fun formatDownloadBytes(bytes: Long): String {
     if (bytes <= 0L) return "0 ${localizedByteUnit("B")}"
     val kib = 1024.0
     val mib = kib * 1024.0
