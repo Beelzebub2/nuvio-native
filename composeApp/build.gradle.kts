@@ -1316,6 +1316,21 @@ kotlin {
     }
 }
 
+// Keep the installed changelog in sync with the release workflow's single source of notes.
+val bundleReleaseNotes = tasks.register<Sync>("bundleReleaseNotes") {
+    // customDirectory replaces the default directory, so retain all existing app resources too.
+    from(layout.projectDirectory.dir("src/commonMain/composeResources"))
+    from(rootProject.layout.projectDirectory.file("docs/RELEASE-NOTES.md")) { into("files") }
+    into(layout.buildDirectory.dir("generated/changelogResources"))
+}
+
+compose.resources {
+    customDirectory(
+        sourceSetName = "commonMain",
+        directoryProvider = bundleReleaseNotes.map { layout.buildDirectory.dir("generated/changelogResources").get() },
+    )
+}
+
 tasks.matching {
     it.name == "desktopProcessResources" || it.name == "processDesktopMainResources"
 }.configureEach {
