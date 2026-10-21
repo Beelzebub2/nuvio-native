@@ -1,3 +1,7 @@
+Starlit 1.0.22 adds bulk removal for downloads from Library → Downloads.
+
+- Select individual downloads or whole displayed shows, use Select all or Clear selection, then choose Remove selected and confirm the exact count. Active, queued, paused, failed and completed items are handled together; cancellation and owned-file cleanup run as one batch while unrelated files and downloads remain intact.
+
 Starlit 1.0.21 fixes episode downloads from multi-season torrent packs by using the provider's exact filename and failing clearly when that filename is missing or ambiguous.
 
 - Existing incorrect copies from an earlier download must be removed and queued again after updating.
