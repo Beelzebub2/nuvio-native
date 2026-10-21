@@ -1,3 +1,12 @@
+## Starlit 1.0.30
+
+### Improvements
+
+- On desktop, **Settings** has a new layout. The sidebar shows an icon for every page and your profile at the top (click it to switch profiles), pages have clearer names such as **Appearance**, **Debrid** and **Source list**, and each page opens with a one-line summary of what it covers.
+- **Settings → Updates** shows the version you have, a **Check for updates** button and the changelog. **Settings → About** holds the credits, licenses and privacy policy.
+- **Settings → Account** is a single card with **Sign out** beside your account, instead of a full-width button.
+- Clearing a settings search takes you back to the page you had open, and Esc clears the search box.
+
 ## Starlit 1.0.29
 
 ### Improvements
