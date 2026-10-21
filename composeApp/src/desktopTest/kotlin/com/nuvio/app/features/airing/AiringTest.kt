@@ -296,4 +296,20 @@ class AiringTest {
         assertNotNull(meta)
         assertTrue("Exact mapping should support Kitsu addon streams", meta!!.videos.any { it.id.startsWith("kitsu:12:") })
     }
+    @Test fun `AniZip stills retain numeric anime episode identity and exclude specials`() {
+        val extra = Json.parseToJsonElement("""{"mappings":{"anilist_id":176301,"kitsu_id":9999},"episodes":{
+            "1":{"title":{"en":"Maomao and Maomao"},"image":"https://artworks.thetvdb.com/banners/v4/episode/10400908/screencap/677f93cd0265e.jpg","seasonNumber":2,"episodeNumber":25},
+            "2":{"title":{"en":"Caravan"},"image":"https://images.test/10756303.jpg","seasonNumber":2,"episodeNumber":26},
+            "S1":{"title":{"en":"Special"},"image":"https://images.test/special.jpg"}
+        }}""").jsonObject
+        val mapped = Json.parseToJsonElement("""{"kitsu_id":48649}""").jsonObject
+        val record = event(176301, 2, "2026-10-04T10:00:00Z")
+        val details = buildAiringDetails(record, listOf(record), mapped, extra.obj("episodes"), now)
+        assertEquals(listOf("kitsu:48649:1", "kitsu:48649:2"), details.videos.map { it.id })
+        assertEquals(listOf(1, 1), details.videos.map { it.season })
+        assertEquals(listOf(1, 2), details.videos.map { it.episode })
+        assertEquals(listOf("Maomao and Maomao", "Caravan"), details.videos.map { it.title })
+        assertEquals(2, details.videos.mapNotNull { it.thumbnail }.distinct().size)
+    }
+
 }
