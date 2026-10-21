@@ -50,9 +50,12 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Install provider gateway test dependencies
+        working-directory: gateway
+        run: npm ci
       - name: Test provider gateway
         working-directory: gateway
-        run: node --test worker.test.mjs
+        run: npm test
       - name: Install WebView2 SDK
         shell: pwsh
         run: |
