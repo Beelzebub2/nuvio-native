@@ -50,6 +50,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate and extract current release notes
+        shell: pwsh
+        run: |
+          node --test .github/release-notes.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes tests failed.' }
+          node .github/release-notes.mjs extract docs/RELEASE-NOTES.md $env:RELEASE_TAG "$env:RUNNER_TEMP/current-release-notes.md"
+          if ($LASTEXITCODE -ne 0) { throw 'Current release notes are missing, duplicated, or empty.' }
       - name: Install provider gateway test dependencies
         working-directory: gateway
         run: npm ci
@@ -107,5 +114,12 @@ jobs:
           gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) { throw 'This release already exists; do not overwrite published installers.' }
           $installer = "release/Starlit-Windows-x64-$env:RELEASE_VERSION.exe"
-          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --title "Starlit $env:RELEASE_VERSION" --generate-notes --notes-file docs/RELEASE-NOTES.md $installer release/SHA256SUMS.txt
+          gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --paginate --slurp | Set-Content "$env:RUNNER_TEMP/published-releases.json" -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'Could not determine the previous published release.' }
+          $previous = node .github/release-notes.mjs previous "$env:RUNNER_TEMP/published-releases.json" $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw 'Could not select the previous published stable release.' }
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', "Starlit $env:RELEASE_VERSION", '--notes-file', "$env:RUNNER_TEMP/current-release-notes.md", $installer, 'release/SHA256SUMS.txt')
+          # With no published predecessor, publish only the authored notes: automatic tag inference can select failed tags.
+          if ($previous) { $releaseArgs += @('--generate-notes', '--notes-start-tag', $previous) }
+          gh @releaseArgs
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
