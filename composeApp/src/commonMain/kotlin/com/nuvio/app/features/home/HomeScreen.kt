@@ -35,6 +35,7 @@ import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioSmoothWheelScroll
 import com.nuvio.app.core.ui.rememberHeroStretchState
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
@@ -991,7 +992,8 @@ fun HomeScreen(
         }
 
         NuvioScreen(
-            modifier = Modifier.fillMaxSize().then(heroStretchModifier),
+            // Home has only sideways rows inside, so the page can own every vertical wheel turn.
+            modifier = Modifier.fillMaxSize().then(heroStretchModifier).nuvioSmoothWheelScroll(homeListState),
             horizontalPadding = 0.dp,
             topPadding = effectiveTopPadding,
             listState = homeListState,

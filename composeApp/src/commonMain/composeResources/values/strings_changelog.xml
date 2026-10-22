@@ -9,4 +9,6 @@
     <string name="changelog_loading">Loading changelog…</string>
     <string name="changelog_load_failed">The bundled changelog couldn’t be read. Try opening it again.</string>
     <string name="changelog_view_github">View on GitHub</string>
+    <string name="updates_whats_new">What’s new</string>
+    <string name="updates_download_size">%1$s download</string>
 </resources>

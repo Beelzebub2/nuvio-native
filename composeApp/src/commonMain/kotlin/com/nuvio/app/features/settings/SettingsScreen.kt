@@ -5,8 +5,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.nuvio
-import nuvio.composeapp.generated.resources.compose_settings_category_about
-import nuvio.composeapp.generated.resources.settings_group_system
+import nuvio.composeapp.generated.resources.settings_desktop_search_summary
+import nuvio.composeapp.generated.resources.settings_desktop_search_title
 
 import com.nuvio.app.AppScreenTab
 import com.nuvio.app.core.build.AppFeaturePolicy
@@ -978,12 +978,53 @@ private fun TabletSettingsScreen(
 
     val saveableStateHolder = rememberSaveableStateHolder()
     var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
-    // Desktop: About is shown from the root page, and an empty root lands on Account.
-    var desktopAboutSelected by rememberSaveable { mutableStateOf(false) }
-    val effectivePage = if (isDesktop && page == SettingsPage.Root && settingsSearchQuery.isBlank() && !desktopAboutSelected) {
+    // Desktop: Updates and About are screens of the root page, and an empty root lands on Account.
+    var desktopRootScreenName by rememberSaveable { mutableStateOf<String?>(null) }
+    // Desktop: the page open before a search started, reopened when the search is cleared.
+    var desktopPageBeforeSearch by rememberSaveable { mutableStateOf<String?>(null) }
+    val desktopSearching = isDesktop && page == SettingsPage.Root && settingsSearchQuery.isNotBlank()
+    val desktopRootScreen = desktopRootScreenName
+        ?.let { name -> DesktopSettingsEntry.entries.firstOrNull { it.name == name } }
+        ?.takeIf { it.isRootScreen && (it != DesktopSettingsEntry.Updates || onCheckForUpdatesClick != null) }
+    val effectivePage = if (isDesktop && page == SettingsPage.Root && !desktopSearching && desktopRootScreen == null) {
         SettingsPage.Account
     } else {
         page
+    }
+    val desktopSelectedEntry = when {
+        !isDesktop || desktopSearching -> null
+        effectivePage == SettingsPage.Root -> desktopRootScreen
+        else -> effectivePage.desktopEntry()
+    }
+
+    fun openDesktopEntry(entry: DesktopSettingsEntry) {
+        settingsSearchQuery = ""
+        desktopPageBeforeSearch = null
+        when {
+            entry == DesktopSettingsEntry.Collections -> onCollectionsClick()
+            entry.isRootScreen -> {
+                desktopRootScreenName = entry.name
+                if (page != SettingsPage.Root) onPageChange(SettingsPage.Root)
+            }
+            else -> entry.page?.takeIf { it.isEnabledByPolicy() }?.let { target ->
+                desktopRootScreenName = null
+                openInlinePage(target)
+            }
+        }
+    }
+
+    fun onDesktopQueryChange(query: String) {
+        val wasSearching = settingsSearchQuery.isNotBlank()
+        settingsSearchQuery = query
+        if (query.isNotBlank() && !wasSearching && page != SettingsPage.Root) {
+            desktopPageBeforeSearch = page.name
+            onPageChange(SettingsPage.Root)
+        } else if (query.isBlank() && wasSearching) {
+            desktopPageBeforeSearch
+                ?.let { name -> runCatching { SettingsPage.valueOf(name) }.getOrNull() }
+                ?.let(::openInlinePage)
+            desktopPageBeforeSearch = null
+        }
     }
     val sidebarDivider = MaterialTheme.nuvio.colors.borderSubtle
     val dividerTopPx = with(LocalDensity.current) { effectiveTopOffset.toPx() }
@@ -1013,26 +1054,13 @@ private fun TabletSettingsScreen(
         ) {
             if (isDesktop) {
                 DesktopSettingsSidebar(
-                    currentPage = effectivePage,
+                    groups = desktopSettingsGroups(updatesAvailable = onCheckForUpdatesClick != null),
+                    selectedEntry = desktopSelectedEntry,
                     query = settingsSearchQuery,
-                    onQueryChange = { query ->
-                        settingsSearchQuery = query
-                        if (query.isNotBlank() && page != SettingsPage.Root) onPageChange(SettingsPage.Root)
-                    },
-                    onOpenPage = { target ->
-                        settingsSearchQuery = ""
-                        desktopAboutSelected = false
-                        if (target.isEnabledByPolicy()) openInlinePage(target)
-                    },
+                    onQueryChange = ::onDesktopQueryChange,
+                    onEntryClick = ::openDesktopEntry,
                     topPadding = effectiveTopOffset,
                     startPadding = desktopInset,
-                    aboutSelected = desktopAboutSelected && page == SettingsPage.Root,
-                    onOpenAbout = {
-                        settingsSearchQuery = ""
-                        desktopAboutSelected = true
-                        if (page != SettingsPage.Root) onPageChange(SettingsPage.Root)
-                    },
-                    onCollections = onCollectionsClick,
                     onSwitchProfile = onSwitchProfile,
                 )
             } else Column(
@@ -1072,7 +1100,13 @@ private fun TabletSettingsScreen(
         }
 
         Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            saveableStateHolder.SaveableStateProvider(page.name) {
+            val contentStateKey = when {
+                !isDesktop -> page.name
+                desktopSearching -> "${SettingsPage.Root.name}/search"
+                page == SettingsPage.Root -> "${SettingsPage.Root.name}/${desktopRootScreen?.name ?: SettingsPage.Account.name}"
+                else -> page.name
+            }
+            saveableStateHolder.SaveableStateProvider(contentStateKey) {
                 var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
                 var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
                 val hapticFeedback = LocalHapticFeedback.current
@@ -1095,6 +1129,12 @@ private fun TabletSettingsScreen(
                     when (target) {
                         is SettingsSearchTarget.Page -> {
                             if (target.page.isEnabledByPolicy()) {
+                                if (isDesktop) {
+                                    // Opening a result ends the search, like picking a sidebar entry.
+                                    settingsSearchQuery = ""
+                                    desktopPageBeforeSearch = null
+                                    desktopRootScreenName = null
+                                }
                                 openInlinePage(target.page)
                             }
                         }
@@ -1144,56 +1184,87 @@ private fun TabletSettingsScreen(
                         }
                     }
                 }
-                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    // Desktop keeps rows at a readable width instead of stretching them across the window.
+                    val contentStart = if (isDesktop) 48.dp else 40.dp
+                    val contentEnd = if (isDesktop) {
+                        max(48.dp, maxWidth - contentStart - DesktopSettingsContentMaxWidth)
+                    } else {
+                        40.dp
+                    }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
                             .nestedScroll(rootSearchRevealConnection),
                         contentPadding = PaddingValues(
-                            start = 40.dp,
+                            start = contentStart,
                             top = effectiveTopOffset,
-                            end = 40.dp,
+                            end = contentEnd,
                             bottom = 40.dp + bottomOverlayPadding,
                         ),
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
                         if (showInternalHeader) {
-                            item {
-                                val previousPage = page.previousPage()
-                                TabletPageHeader(
-                                    title = if (effectivePage == SettingsPage.Root) {
-                                        when {
-                                            isDesktop && desktopAboutSelected && settingsSearchQuery.isBlank() ->
-                                                stringResource(Res.string.compose_settings_category_about)
-                                            settingsSearchQuery.isBlank() && !isDesktop -> stringResource(activeCategory.labelRes)
-                                            else -> stringResource(Res.string.compose_settings_page_root)
-                                        }
-                                    } else {
-                                        stringResource(effectivePage.titleRes)
-                                    },
-                                    showBack = previousPage != null && !isDesktop,
-                                    onBack = { if (previousPage != null) onNavigateBack() },
-                                    eyebrow = if (isDesktop) {
-                                        (if (effectivePage == SettingsPage.Root && desktopAboutSelected) {
-                                            Res.string.settings_group_system
+                            item(key = "settings-page-header") {
+                                if (isDesktop) {
+                                    DesktopSettingsHeaderFor(
+                                        page = effectivePage,
+                                        searching = desktopSearching,
+                                        query = settingsSearchQuery,
+                                        rootScreen = desktopRootScreen,
+                                        onOpenAbout = { openDesktopEntry(DesktopSettingsEntry.About) },
+                                    )
+                                } else {
+                                    val previousPage = page.previousPage()
+                                    TabletPageHeader(
+                                        title = if (effectivePage == SettingsPage.Root) {
+                                            if (settingsSearchQuery.isBlank()) {
+                                                stringResource(activeCategory.labelRes)
+                                            } else {
+                                                stringResource(Res.string.compose_settings_page_root)
+                                            }
                                         } else {
-                                            effectivePage.desktopGroupLabel()
-                                        })?.let { stringResource(it) }
-                                    } else {
-                                        null
-                                    },
-                                )
+                                            stringResource(effectivePage.titleRes)
+                                        },
+                                        showBack = previousPage != null,
+                                        onBack = { if (previousPage != null) onNavigateBack() },
+                                    )
+                                }
                             }
                         }
                         when (effectivePage) {
-                            SettingsPage.Root -> {
+                            SettingsPage.Root -> if (isDesktop) {
+                                when {
+                                    desktopSearching -> settingsSearchRootContent(
+                                        query = settingsSearchQuery,
+                                        entries = searchEntries,
+                                        isTablet = true,
+                                        showSearchField = false,
+                                        searchFieldElsewhere = true,
+                                        animateSearchField = false,
+                                        onQueryChange = ::onDesktopQueryChange,
+                                        onTargetClick = { openSearchTarget(it) },
+                                    )
+                                    desktopRootScreen == DesktopSettingsEntry.Updates -> desktopUpdatesContent(
+                                        onCheckForUpdatesClick = { onCheckForUpdatesClick?.invoke() },
+                                        onChangelogClick = onChangelogClick,
+                                        onTestUpdateBannerClick = onTestUpdateBannerClick,
+                                    )
+                                    else -> desktopAboutContent(
+                                        showSupporters = AppFeaturePolicy.supportersContributorsPageEnabled,
+                                        showChangelog = onCheckForUpdatesClick == null,
+                                        onSupportersClick = { openInlinePage(SettingsPage.SupportersContributors) },
+                                        onLicensesClick = { openInlinePage(SettingsPage.LicensesAttributions) },
+                                        onChangelogClick = onChangelogClick,
+                                    )
+                                }
+                            } else {
                                 settingsSearchRootContent(
                                     query = settingsSearchQuery,
                                     entries = searchEntries,
                                     isTablet = true,
-                                    showSearchField = rootSearchVisible && !isDesktop,
-                                    searchFieldElsewhere = isDesktop,
+                                    showSearchField = rootSearchVisible,
                                     animateSearchField = rootSearchRevealAnimating,
                                     onQueryChange = { settingsSearchQuery = it },
                                     onTargetClick = { openSearchTarget(it) },
@@ -1216,11 +1287,11 @@ private fun TabletSettingsScreen(
                                         onAccountClick = { openInlinePage(SettingsPage.Account) },
                                         onSwitchProfileClick = onSwitchProfile,
                                         showNotificationsEntry = AppFeaturePolicy.notificationsEnabled,
-                                        showAccountSection = !isDesktop && activeCategory == SettingsCategory.Account,
-                                        showGeneralSection = !isDesktop && activeCategory == SettingsCategory.General,
-                                        showAboutSection = if (isDesktop) desktopAboutSelected else activeCategory == SettingsCategory.About,
+                                        showAccountSection = activeCategory == SettingsCategory.Account,
+                                        showGeneralSection = activeCategory == SettingsCategory.General,
+                                        showAboutSection = activeCategory == SettingsCategory.About,
                                         showAttribution = false,
-                                        showAdvancedSection = !isDesktop && activeCategory == SettingsCategory.Advanced,
+                                        showAdvancedSection = activeCategory == SettingsCategory.Advanced,
                                         showSupportersContributorsPage = AppFeaturePolicy.supportersContributorsPageEnabled,
                                     )
                                 }
@@ -1284,6 +1355,7 @@ private fun TabletSettingsScreen(
                                 onContinueWatchingClick = { openInlinePage(SettingsPage.ContinueWatching) },
                                 onPosterCustomizationClick = { openInlinePage(SettingsPage.PosterCustomization) },
                                 onHoverPreviewClick = { openInlinePage(SettingsPage.HoverPreview) },
+                                subpagesInSidebar = isDesktop,
                             )
                             SettingsPage.HoverPreview -> hoverPreviewSettingsContent(
                                 isTablet = true,
@@ -1372,7 +1444,8 @@ private fun TabletSettingsScreen(
                     )
                 }
             }
-            if (page == SettingsPage.Root) {
+            // Desktop shows the attribution on its About screen instead.
+            if (page == SettingsPage.Root && !isDesktop) {
                 SettingsAttribution(
                     isTablet = true,
                     modifier = Modifier.padding(bottom = 40.dp + LocalNuvioBottomNavigationOverlayPadding.current),
@@ -1380,5 +1453,46 @@ private fun TabletSettingsScreen(
             }
         }
     }
+    }
+}
+
+private val DesktopSettingsContentMaxWidth = 760.dp
+
+@Composable
+private fun DesktopSettingsHeaderFor(
+    page: SettingsPage,
+    searching: Boolean,
+    query: String,
+    rootScreen: DesktopSettingsEntry?,
+    onOpenAbout: () -> Unit,
+) {
+    when {
+        searching -> DesktopSettingsPageHeader(
+            title = stringResource(Res.string.settings_desktop_search_title),
+            eyebrow = null,
+            summary = stringResource(Res.string.settings_desktop_search_summary, query.trim()),
+        )
+        page == SettingsPage.SupportersContributors || page == SettingsPage.LicensesAttributions -> DesktopSettingsPageHeader(
+            title = stringResource(page.titleRes),
+            eyebrow = stringResource(DesktopSettingsEntry.About.labelRes),
+            summary = null,
+            onEyebrowClick = onOpenAbout,
+        )
+        else -> {
+            val entry = if (page == SettingsPage.Root) rootScreen else page.desktopEntry()
+            if (entry != null) {
+                DesktopSettingsPageHeader(
+                    title = stringResource(entry.labelRes),
+                    eyebrow = desktopGroupLabelFor(entry)?.let { stringResource(it) },
+                    summary = entry.summaryRes?.let { stringResource(it) },
+                )
+            } else {
+                DesktopSettingsPageHeader(
+                    title = stringResource(page.titleRes),
+                    eyebrow = page.desktopHubGroupLabel()?.let { stringResource(it) },
+                    summary = null,
+                )
+            }
+        }
     }
 }

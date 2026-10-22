@@ -55,6 +55,7 @@ import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioSectionLabel
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -98,8 +99,57 @@ internal fun AddonsSettingsPageContent(
     val usePersonalMediaCopy = AppFeaturePolicy.personalMediaAddonCopyEnabled
 
     val overview = remember(uiState.addons) { uiState.addons.toOverview() }
+    val installAddon: () -> Unit = install@{
+        val requestedUrl = addonUrl.trim()
+        if (requestedUrl.isBlank()) {
+            formMessage = enterAddonUrlMessage
+            return@install
+        }
 
-    Column(
+        formMessage = null
+        installModalState = AddonInstallModalState.Checking
+        coroutineScope.launch {
+            val result = AddonRepository.addAddon(requestedUrl)
+            installModalState = when (result) {
+                is AddAddonResult.Success -> {
+                    addonUrl = ""
+                    AddonInstallModalState.Success(result.manifest.name)
+                }
+
+                is AddAddonResult.Error -> {
+                    AddonInstallModalState.Error(result.message)
+                }
+            }
+        }
+    }
+    val configureAction: (ManagedAddon) -> (() -> Unit)? = { addon ->
+        val behaviorHints = addon.manifest?.behaviorHints
+        val showConfigureAction = behaviorHints?.configurable == true || behaviorHints?.configurationRequired == true
+        val configureUrl = addon.manifestUrl.toConfigureUrl()
+        if (showConfigureAction && configureUrl.isNotBlank()) {
+            { runCatching { uriHandler.openUri(configureUrl) } }
+        } else {
+            null
+        }
+    }
+
+    if (isDesktop) DesktopAddonsContent(
+        addons = uiState.addons,
+        addonUrl = addonUrl,
+        formMessage = formMessage,
+        usePersonalMediaCopy = usePersonalMediaCopy,
+        onAddonUrlChange = {
+            addonUrl = it
+            formMessage = null
+        },
+        onInstall = installAddon,
+        onMove = AddonRepository::moveAddon,
+        onRefresh = { addon -> AddonRepository.refreshAddon(manifestUrl = addon.manifestUrl, forceRefresh = true) },
+        onEnabledChange = { addon, enabled -> AddonRepository.setAddonEnabled(addon.manifestUrl, enabled) },
+        configureAction = configureAction,
+        onDelete = { addon -> addonPendingDeletionUrl = addon.manifestUrl },
+        modifier = modifier,
+    ) else Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -115,29 +165,7 @@ internal fun AddonsSettingsPageContent(
                 addonUrl = it
                 formMessage = null
             },
-            onAddClick = {
-                val requestedUrl = addonUrl.trim()
-                if (requestedUrl.isBlank()) {
-                    formMessage = enterAddonUrlMessage
-                    return@AddAddonCard
-                }
-
-                formMessage = null
-                installModalState = AddonInstallModalState.Checking
-                coroutineScope.launch {
-                    val result = AddonRepository.addAddon(requestedUrl)
-                    installModalState = when (result) {
-                        is AddAddonResult.Success -> {
-                            addonUrl = ""
-                            AddonInstallModalState.Success(result.manifest.name)
-                        }
-
-                        is AddAddonResult.Error -> {
-                            AddonInstallModalState.Error(result.message)
-                        }
-                    }
-                }
-            },
+            onAddClick = installAddon,
         )
 
         SectionHeader(stringResource(Res.string.addons_section_installed))
@@ -146,10 +174,6 @@ internal fun AddonsSettingsPageContent(
         } else {
             val lastIndex = uiState.addons.lastIndex
             uiState.addons.forEachIndexed { index, addon ->
-                val manifest = addon.manifest
-                val behaviorHints = manifest?.behaviorHints
-                val showConfigureAction = behaviorHints?.configurable == true || behaviorHints?.configurationRequired == true
-                val configureUrl = addon.manifestUrl.toConfigureUrl()
                 InstalledAddonCard(
                     addon = addon,
                     onMoveUpClick = if (index > 0) {
@@ -171,15 +195,7 @@ internal fun AddonsSettingsPageContent(
                     onEnabledChange = { enabled ->
                         AddonRepository.setAddonEnabled(addon.manifestUrl, enabled)
                     },
-                    onConfigureClick = if (showConfigureAction && !configureUrl.isNullOrBlank()) {
-                        {
-                            runCatching {
-                                uriHandler.openUri(configureUrl)
-                            }
-                        }
-                    } else {
-                        null
-                    },
+                    onConfigureClick = configureAction(addon),
                     onDeleteClick = { addonPendingDeletionUrl = addon.manifestUrl },
                 )
             }
