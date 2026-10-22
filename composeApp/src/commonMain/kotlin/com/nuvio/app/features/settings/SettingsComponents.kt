@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.NuvioActionLabel
 import com.nuvio.app.core.ui.NuvioBackButton
@@ -319,7 +321,17 @@ internal fun SettingsNavigationRow(
                 }
             }
         }
-        trailingContent?.invoke(this)
+        if (trailingContent != null) {
+            trailingContent()
+        } else if (isDesktop) {
+            // Desktop rows have no ripple-only affordance, so show that the row opens something.
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = tokens.colors.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

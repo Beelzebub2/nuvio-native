@@ -106,6 +106,7 @@ internal fun LazyListScope.appearanceSettingsContent(
     onContinueWatchingClick: () -> Unit,
     onPosterCustomizationClick: () -> Unit,
     onHoverPreviewClick: () -> Unit,
+    subpagesInSidebar: Boolean = false,
 ) {
     item {
         SettingsSection(
@@ -193,7 +194,7 @@ internal fun LazyListScope.appearanceSettingsContent(
                         onClick = { showNavBarStyleSheet = true },
                     )
                 }
-                if (isDesktop) {
+                if (isDesktop && !subpagesInSidebar) {
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsNavigationRow(
                         title = stringResource(Res.string.compose_settings_page_hover_preview),
@@ -300,6 +301,8 @@ internal fun LazyListScope.appearanceSettingsContent(
         }
     }
 
+    // The desktop sidebar lists these pages itself, so they are not repeated here.
+    if (subpagesInSidebar) return
     item {
         SettingsSection(
             title = stringResource(Res.string.settings_appearance_section_home),

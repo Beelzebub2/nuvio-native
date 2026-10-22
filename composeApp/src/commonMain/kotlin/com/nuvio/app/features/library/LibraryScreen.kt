@@ -42,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
+import com.nuvio.app.core.ui.nuvioSmoothWheelScroll
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.stopScroll
@@ -145,6 +146,7 @@ fun LibraryScreen(
     var selectedCloudItemKey by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedLibrarySectionKey by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedLibraryType by rememberSaveable { mutableStateOf<String?>(null) }
+    var librarySearchQuery by rememberSaveable { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     ScreenActivityEffect(listState) { screenActive ->
@@ -202,6 +204,58 @@ fun LibraryScreen(
             )
         }
     }
+    // Desktop: a search box and a type filter narrow both layouts. The grid's own projection
+    // already filters by type, so only rows need the type applied here.
+    val isGridLayout = displaySettings.layoutMode == LibraryLayoutMode.VERTICAL
+    val desktopQuery = if (isDesktop) librarySearchQuery.trim() else ""
+    val desktopRowTypes = remember(uiState.sections, isGridLayout) {
+        if (!isDesktop || isGridLayout) {
+            emptyList()
+        } else {
+            uiState.sections.asSequence()
+                .flatMap { section -> section.items.asSequence() }
+                .map { item -> item.libraryFilterType() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+                .toList()
+        }
+    }
+    val desktopRowType = selectedLibraryType?.trim()?.lowercase()?.takeIf { it in desktopRowTypes }
+    val visibleSortedSections = remember(sortedSections, desktopQuery, desktopRowType) {
+        if (desktopQuery.isEmpty() && desktopRowType == null) {
+            sortedSections
+        } else {
+            sortedSections.mapNotNull { section ->
+                section.copy(
+                    items = section.items.filter { item ->
+                        item.matchesLibrarySearch(desktopQuery) &&
+                            (desktopRowType == null || item.libraryFilterType() == desktopRowType)
+                    },
+                ).takeIf { it.items.isNotEmpty() }
+            }
+        }
+    }
+    val visibleVerticalProjection = remember(verticalProjection, desktopQuery) {
+        if (desktopQuery.isEmpty()) {
+            verticalProjection
+        } else {
+            verticalProjection.copy(entries = verticalProjection.entries.filter { it.item.matchesLibrarySearch(desktopQuery) })
+        }
+    }
+    val desktopTotalCount = remember(uiState.sections, isGridLayout, verticalProjection.selectedSectionKey) {
+        val counted = if (isGridLayout && verticalProjection.selectedSectionKey != null) {
+            uiState.sections.filter { it.type == verticalProjection.selectedSectionKey }
+        } else {
+            uiState.sections
+        }
+        counted.flatMap { it.items }.distinctBy(::libraryDisplayItemKey).size
+    }
+    val desktopShownCount = if (isGridLayout) {
+        visibleVerticalProjection.entries.size
+    } else {
+        visibleSortedSections.flatMap { it.items }.distinctBy(::libraryDisplayItemKey).size
+    }
     val retryLibraryLoad: () -> Unit = {
         NetworkStatusRepository.requestRefresh(force = true)
         coroutineScope.launch {
@@ -256,11 +310,11 @@ fun LibraryScreen(
         sourceMode != LibraryViewMode.Cloud &&
         displaySettings.layoutMode == LibraryLayoutMode.HORIZONTAL &&
         uiState.isLoaded &&
-        sortedSections.isNotEmpty()
+        visibleSortedSections.isNotEmpty()
     ) {
         disintegration.sync(
             sourceMode = uiState.sourceMode,
-            sections = sortedSections,
+            sections = visibleSortedSections,
             previewLimit = LIBRARY_SECTION_PREVIEW_LIMIT,
             request = disintegrationRequest,
         )
@@ -282,7 +336,8 @@ fun LibraryScreen(
         val pageInset = if (isDesktop) desktopPageHorizontalPaddingForWidth(maxWidth.value) else 16.dp
         CompositionLocalProvider(LocalLibraryPageInset provides pageInset) {
         NuvioScreen(
-            modifier = Modifier.fillMaxSize(),
+            // Like Home, the library has only sideways rows inside, so the page owns vertical wheel turns.
+            modifier = Modifier.fillMaxSize().nuvioSmoothWheelScroll(listState),
             horizontalPadding = 0.dp,
             topPadding = if (topChromePadding != null) 0.dp else null,
             listState = listState,
@@ -314,6 +369,9 @@ fun LibraryScreen(
                             actions = {
                                 if (sourceMode == LibraryViewMode.Saved) {
                                     LibraryListManagementButton()
+                                }
+                                // Desktop switches Rows/Grid from its toolbar.
+                                if (sourceMode == LibraryViewMode.Saved && !isDesktop) {
                                     val targetLayout = if (displaySettings.layoutMode == LibraryLayoutMode.HORIZONTAL) {
                                         LibraryLayoutMode.VERTICAL
                                     } else {
@@ -353,14 +411,44 @@ fun LibraryScreen(
                         headerAccessory?.let { accessory ->
                             Box(modifier = Modifier.padding(start = libraryPageInset(), end = libraryPageInset(), bottom = 12.dp)) { accessory() }
                         }
-                        LibrarySourceSwitch(
-                            selectedMode = sourceMode,
-                            onModeSelected = { mode ->
-                                sourceModeName = mode.name
-                            },
-                            modifier = Modifier.padding(horizontal = libraryPageInset()),
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        if (isDesktop) {
+                            val savedReady = sourceMode == LibraryViewMode.Saved &&
+                                uiState.isLoaded && uiState.sections.isNotEmpty()
+                            DesktopLibraryToolbar(
+                                cloudSelected = sourceMode == LibraryViewMode.Cloud,
+                                onCloudSelectedChange = { cloud ->
+                                    sourceModeName = if (cloud) LibraryViewMode.Cloud.name else LibraryViewMode.Saved.name
+                                },
+                                savedControls = if (!savedReady) null else DesktopLibrarySavedControls(
+                                    query = librarySearchQuery,
+                                    onQueryChange = { librarySearchQuery = it },
+                                    types = if (isGridLayout) verticalProjection.availableTypes else desktopRowTypes,
+                                    selectedType = if (isGridLayout) verticalProjection.selectedType else desktopRowType,
+                                    onTypeSelected = { type -> selectedLibraryType = type },
+                                    layoutMode = displaySettings.layoutMode,
+                                    onLayoutModeChange = LibraryDisplaySettingsRepository::setLayoutMode,
+                                    sortOption = effectiveSortOption,
+                                    sortOptions = availableLibrarySortOptions(uiState.sourceMode),
+                                    onSortSelected = LibraryDisplaySettingsRepository::setSortOption,
+                                    lists = if (isGridLayout) verticalProjection.availableSections else emptyList(),
+                                    selectedListKey = verticalProjection.selectedSectionKey,
+                                    onListSelected = { sectionKey ->
+                                        selectedLibrarySectionKey = sectionKey
+                                        selectedLibraryType = null
+                                    },
+                                ),
+                                modifier = Modifier.padding(horizontal = libraryPageInset()).padding(top = 4.dp, bottom = 10.dp),
+                            )
+                        } else {
+                            LibrarySourceSwitch(
+                                selectedMode = sourceMode,
+                                onModeSelected = { mode ->
+                                    sourceModeName = mode.name
+                                },
+                                modifier = Modifier.padding(horizontal = libraryPageInset()),
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
                     }
                 }
             }
@@ -401,7 +489,7 @@ fun LibraryScreen(
                 when {
                     !uiState.isLoaded || (uiState.isLoading && uiState.sections.isEmpty()) -> {
                         if (displaySettings.layoutMode == LibraryLayoutMode.VERTICAL) {
-                            libraryVerticalSkeletonItems(gridColumns)
+                            libraryVerticalSkeletonItems(gridColumns, horizontalPadding = pageInset)
                         } else {
                             items(3) {
                                 HomeSkeletonRow(
@@ -457,7 +545,15 @@ fun LibraryScreen(
                     }
 
                     else -> {
-                        item(
+                        // Desktop keeps these controls in the pinned toolbar and shows a count here.
+                        if (isDesktop) item(key = "library-results-count") {
+                            // An empty search shows its own message instead of "0 / 48 titles".
+                            if (desktopShownCount > 0) LibraryResultsCount(
+                                shown = desktopShownCount,
+                                total = desktopTotalCount,
+                                modifier = libraryContentTransitionModifier().padding(horizontal = libraryPageInset()),
+                            )
+                        } else item(
                             key = "library-saved-controls:${uiState.sourceMode}:" +
                                 "${displaySettings.layoutMode}:$effectiveSortOption",
                         ) {
@@ -476,7 +572,13 @@ fun LibraryScreen(
                                     .padding(horizontal = libraryPageInset()),
                             )
                         }
-                        when (displaySettings.layoutMode) {
+                        if (isDesktop && desktopShownCount == 0 && desktopQuery.isNotEmpty()) item(key = "library-no-matches") {
+                            LibraryNoMatches(
+                                query = desktopQuery,
+                                onClear = { librarySearchQuery = "" },
+                                modifier = Modifier.padding(horizontal = libraryPageInset()),
+                            )
+                        } else when (displaySettings.layoutMode) {
                             LibraryLayoutMode.HORIZONTAL -> librarySections(
                                 displaySections = librarySectionsDisplay,
                                 watchedKeys = watchedUiState.watchedKeys,
@@ -488,8 +590,9 @@ fun LibraryScreen(
                                 onDisintegrated = disintegration::onExited,
                             )
                             LibraryLayoutMode.VERTICAL -> libraryVerticalContent(
-                                projection = verticalProjection,
+                                projection = visibleVerticalProjection,
                                 columns = gridColumns,
+                                horizontalPadding = pageInset,
                                 watchedKeys = watchedUiState.watchedKeys,
                                 fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                                 onPosterClick = onPosterClick,
@@ -862,7 +965,7 @@ private fun CloudLibraryRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = cloudRowInset(), vertical = 6.dp)
             .clickable(enabled = playableCount > 0, onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -936,7 +1039,7 @@ private fun CloudLibraryFilePicker(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = cloudRowInset(), vertical = 6.dp),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -1142,7 +1245,7 @@ private fun CloudLibrarySkeletonRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = cloudRowInset(), vertical = 6.dp),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -1338,3 +1441,7 @@ private val LocalLibraryPageInset = staticCompositionLocalOf { 16.dp }
 
 @Composable
 private fun libraryPageInset(): Dp = LocalLibraryPageInset.current
+
+/** Cloud rows line up with the page edges on desktop and keep their slimmer inset elsewhere. */
+@Composable
+private fun cloudRowInset(): Dp = if (isDesktop) libraryPageInset() else 12.dp

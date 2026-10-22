@@ -111,7 +111,7 @@ internal fun UpdateChannelSettingsRow(isTablet: Boolean) {
 }
 
 @Composable
-private fun updateChannelLabel(channel: UpdateChannel): String = stringResource(
+internal fun updateChannelLabel(channel: UpdateChannel): String = stringResource(
     when (channel) {
         UpdateChannel.STABLE -> Res.string.updates_channel_stable
         UpdateChannel.BETA -> Res.string.updates_channel_beta

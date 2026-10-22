@@ -138,7 +138,7 @@ class DownloadUiTest {
             DownloadManagementControls()
         } } } }
         compose.onNodeWithText("Downloads").assertIsDisplayed()
-        compose.onNodeWithText("Choose folder").assertIsDisplayed()
+        compose.onNodeWithText("Change folder").assertIsDisplayed()
         compose.onNodeWithText("Open folder").assertIsDisplayed()
         compose.onNodeWithText("Pause all").assertIsDisplayed()
         compose.onNodeWithText("Resume all").assertIsDisplayed()

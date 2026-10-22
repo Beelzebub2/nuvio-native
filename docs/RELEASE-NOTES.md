@@ -1,3 +1,30 @@
+## Starlit 1.0.31
+
+### Improvements
+
+- Desktop Home and Library scrolling now eases and glides smoothly between mouse wheel notches while preserving scroll distance, touchpad handling and Shift+wheel behavior.
+- Desktop Collections cards now show folder covers and pinned badges, with drag handles for reordering.
+- **Settings → Add-ons** uses compact rows with inline install actions, stat tiles and manifest fallback server names.
+- Desktop Library unifies Saved and Cloud behind a shared toolbar with type filters, search, sorting, Rows/Grid views, title counts, a clear No matches state and aligned grid spacing.
+
+## Starlit 1.0.30
+
+### Improvements
+
+- On desktop, **Settings** has a new layout. The sidebar shows an icon for every page and your profile at the top (click it to switch profiles), pages have clearer names such as **Appearance**, **Debrid** and **Source list**, and each page opens with a one-line summary of what it covers.
+- **Settings → Updates** shows the version you have, a **Check for updates** button and the changelog. **Settings → About** holds the credits, licenses and privacy policy.
+- **Settings → Account** is a single card with **Sign out** beside your account, instead of a full-width button.
+- Clearing a settings search takes you back to the page you had open, and Esc clears the search box.
+
+## Starlit 1.0.29
+
+### Improvements
+
+- The update banner is clearer: it shows the new version, the download size and one action (Update, Install or Retry), with a thin progress bar while the update downloads. On narrow windows its buttons move under the text.
+- **What's new** opens redesigned release notes with the current version highlighted, one-line previews of older releases, and an Update button so you can update straight from the notes.
+- **Settings → About → Changelog** uses the same refreshed design.
+- On desktop, **Library → Downloads** has a new layout: an overview of what is ready to watch and how much space it uses, the download queue with progress and time left, your downloaded shows and movies as poster cards, and the save folder with Change folder and Open folder.
+
 ## Starlit 1.0.28
 
 ### Improvements
