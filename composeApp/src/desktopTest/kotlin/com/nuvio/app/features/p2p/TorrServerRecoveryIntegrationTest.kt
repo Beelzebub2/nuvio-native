@@ -8,6 +8,7 @@ import java.net.DatagramSocket
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
@@ -27,6 +28,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertContentEquals
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -105,10 +107,14 @@ class TorrServerRecoveryIntegrationTest {
         val engine = TorrServerBackend(File(dir, "owned"), File(dir, "owned-cache"), binary)
         val other = TorrServerBackend(File(dir, "other"), File(dir, "other-cache"), binary)
         val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
+        val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
         try {
             other.restart(settings)
             val otherPid = assertNotNull(other.processId)
+            val settingsFile = File(dir, "owned/settings.json").apply { parentFile.mkdirs(); writeBytes(ByteArray(1223)) }
             engine.restart(settings)
+            val firstBackup = settingsFile.parentFile.listFiles()!!.single { it.name.startsWith("settings-corrupt-") }
+            assertContentEquals(ByteArray(1223), firstBackup.readBytes())
             val oldPid = assertNotNull(engine.processId)
             assertTrue(engine.isHealthy())
             val missing = assertFailsWith<DesktopTorrentEngineUnavailable> { engine.getTorrentStats("0".repeat(40)) }
@@ -120,13 +126,42 @@ class TorrServerRecoveryIntegrationTest {
             assertEquals(oldPid, engine.processId, "UI-only settings must not restart the engine")
             val sentinel = File(dir, "owned/user-file.txt").apply { writeText("retain") }
             engine.restart(settings)
-            assertNotEquals(oldPid, engine.processId)
+            val restartedPid = assertNotNull(engine.processId)
+            assertNotEquals(oldPid, restartedPid)
             assertFalse(ProcessHandle.of(oldPid).map { it.isAlive }.orElse(false))
             assertTrue(ProcessHandle.of(otherPid).map { it.isAlive }.orElse(false))
             assertTrue(sentinel.isFile && sentinel.readText() == "retain")
+            engine.stop()
+            val truncated = """{"BitTorr":{ """.toByteArray()
+            settingsFile.writeBytes(truncated)
+            engine.restart(settings)
+            val secondBackup = settingsFile.parentFile.listFiles()!!.single {
+                it.name.startsWith("settings-corrupt-") && it != firstBackup
+            }
+            assertContentEquals(truncated, secondBackup.readBytes())
+            assertContentEquals(ByteArray(1223), firstBackup.readBytes())
+            assertNotEquals(restartedPid, engine.processId)
+            assertFalse(ProcessHandle.of(restartedPid).map { it.isAlive }.orElse(false))
+            assertTrue(ProcessHandle.of(otherPid).map { it.isAlive }.orElse(false))
+            assertTrue(sentinel.isFile && sentinel.readText() == "retain")
+            val baseUrl = engine.getStreamUrl("magnet:", 1).substringBefore("/stream")
+            val echo = client.send(HttpRequest.newBuilder(URI("$baseUrl/echo"))
+                .timeout(Duration.ofSeconds(8)).GET().build(), HttpResponse.BodyHandlers.ofString())
+            assertEquals(200, echo.statusCode())
+            println("Bundled engine version: ${echo.body()}")
+            val response = client.send(HttpRequest.newBuilder(URI("$baseUrl/settings"))
+                .timeout(Duration.ofSeconds(8)).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("""{"action":"get"}""")).build(),
+                HttpResponse.BodyHandlers.ofString())
+            assertEquals(200, response.statusCode())
+            val applied = Json.parseToJsonElement(response.body()).jsonObject
+            assertEquals("268435456", applied["CacheSize"]!!.jsonPrimitive.content)
+            assertEquals("false", applied["UseDisk"]!!.jsonPrimitive.content)
+            assertEquals("true", applied["DisableUpload"]!!.jsonPrimitive.content)
         } finally {
             engine.stop()
             other.stop()
+            client.shutdownNow()
             assertFalse(engine.isHealthy())
             dir.deleteRecursively()
         }

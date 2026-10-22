@@ -6,6 +6,10 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.io.File
+import java.nio.file.Files
+import kotlin.test.assertContentEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -35,5 +39,57 @@ class DesktopTorrentSettingsTest {
             assertEquals(mib * 1024 * 1024, configured.getValue("CacheSize").jsonPrimitive.long)
             assertEquals("", configured.getValue("TorrentsSavePath").jsonPrimitive.content)
         }
+    }
+
+    @Test fun corruptSettingsAreQuarantinedByteForByteWithoutTouchingOtherFiles() {
+        val directory = Files.createTempDirectory("nuvio-corrupt-settings-test").toFile()
+        try {
+            val file = File(directory, "settings.json")
+            val database = File(directory, "config.db").apply { writeText("retain database") }
+            val oldBackup = File(directory, "settings-corrupt-existing.json").apply { writeText("retain backup") }
+            val corruptions = listOf(ByteArray(1223), byteArrayOf(), byteArrayOf(0xff.toByte()), "{\"BitTorr\":".toByteArray(),
+                "not json".toByteArray(), "[]".toByteArray(), "null".toByteArray(),
+                "{\"BitTorr\":[]}".toByteArray(), "{\"BitTorr\":{\"StoreSettingsInJson\":{}}}".toByteArray())
+            corruptions.forEach { bytes ->
+                val previous = directory.listFiles()!!.toSet()
+                file.writeBytes(bytes)
+                prepareTorrServerSettingsFile(directory, File(directory, "cache"), P2pSettingsUiState())
+                assertFalse(file.exists())
+                val backup = (directory.listFiles()!!.toSet() - previous).single()
+                assertTrue(backup.name.startsWith("settings-corrupt-"))
+                assertContentEquals(bytes, backup.readBytes())
+            }
+            assertEquals("retain database", database.readText())
+            assertEquals("retain backup", oldBackup.readText())
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun validSettingsWithoutJsonPersistenceStayByteForByteUnchanged() {
+        val directory = Files.createTempDirectory("nuvio-valid-settings-test").toFile()
+        try {
+            val file = File(directory, "settings.json")
+            listOf("""{ "BitTorr": { "StoreSettingsInJson": false, "EnableIPv6": true }, "Other": 42 }""",
+                """{"Other":{"future":true}}""").forEach { text ->
+                file.writeText(text)
+                prepareTorrServerSettingsFile(directory, File(directory, "cache"), P2pSettingsUiState())
+                assertEquals(text, file.readText())
+                assertEquals(listOf(file), directory.listFiles()!!.toList())
+            }
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun filesystemFailuresAreReportedWithoutBeingTreatedAsCorruptJson() {
+        val directory = Files.createTempDirectory("nuvio-private-settings-test").toFile()
+        try {
+            val file = File(directory, "settings.json").apply { mkdir() }
+            val sentinel = File(file, "private-data").apply { writeText("retain") }
+            val error = assertFailsWith<P2pStreamingException> {
+                prepareTorrServerSettingsFile(directory, File(directory, "cache"), P2pSettingsUiState())
+            }
+            assertEquals("Torrent engine settings could not be read or repaired. Check app storage permissions and retry.", error.message)
+            assertFalse(error.toString().contains(directory.name))
+            assertEquals("retain", sentinel.readText())
+            assertEquals(listOf(file), directory.listFiles()!!.toList())
+        } finally { directory.deleteRecursively() }
     }
 }
