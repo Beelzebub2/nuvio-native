@@ -3,7 +3,7 @@
 ### Fixes
 
 - Torrent engine settings now automatically back up and recreate corrupt preferences while preserving downloads, history and valid settings.
-- Settings writes use safe fsync-backed atomic replacement, and storage failures show a clear error instead of raw JSON.
+- App-managed torrent settings are flushed to disk before replacement to reduce damage from interrupted saves. Storage failures now show a clear error.
 
 ## Starlit 1.0.31
 
