@@ -154,4 +154,48 @@
     <string name="player_subs_auto_sync_hint">When you hear a line, press Capture, then pick that line below</string>
     <string name="player_subs_searching">Searching addons for subtitles…</string>
     <string name="player_subs_search_addons">Search addons for subtitles</string>
+    <!-- Collections: desktop page -->
+    <string name="collections_desktop_intro">Collections group catalogs into folders. Each one becomes a row on Home, and pinned ones sit above your catalogs.</string>
+    <string name="collections_desktop_reorder_hint">Drag the handle to change the order on Home.</string>
+    <plurals name="collections_desktop_collection_count">
+        <item quantity="one">%1$d collection</item>
+        <item quantity="other">%1$d collections</item>
+    </plurals>
+    <plurals name="collections_desktop_folder_count">
+        <item quantity="one">%1$d folder</item>
+        <item quantity="other">%1$d folders</item>
+    </plurals>
+    <string name="collections_desktop_pinned_count">%1$d pinned</string>
+    <string name="collections_desktop_no_folders">No folders yet</string>
+    <string name="collections_desktop_more_folders">+%1$d</string>
+    <string name="collections_desktop_empty_message">Make a collection, add folders, and pick the catalogs that fill each one. It shows up on Home as its own row.</string>
+
+    <!-- Add-ons: desktop page -->
+    <string name="addons_desktop_stat_installed">Installed</string>
+    <string name="addons_desktop_install_title">Install an add-on</string>
+    <string name="addons_desktop_install_placeholder">Paste a manifest URL, for example https://…/manifest.json</string>
+    <string name="addons_desktop_install_hint">Starlit checks the manifest before adding it.</string>
+    <string name="addons_desktop_install_action">Install</string>
+    <string name="addons_desktop_installed_title">Installed</string>
+    <string name="addons_desktop_order_hint">Starlit asks add-ons in this order.</string>
+    <string name="addons_desktop_resource_catalog">Catalogs</string>
+    <string name="addons_desktop_resource_meta">Metadata</string>
+    <string name="addons_desktop_resource_stream">Streams</string>
+    <string name="addons_desktop_resource_subtitles">Subtitles</string>
+    <plurals name="addons_desktop_catalog_count">
+        <item quantity="one">%1$d catalog</item>
+        <item quantity="other">%1$d catalogs</item>
+    </plurals>
+
+    <!-- Library: desktop page -->
+    <string name="library_desktop_search_placeholder">Search your library</string>
+    <string name="library_desktop_no_matches_title">No matches</string>
+    <string name="library_desktop_no_matches_message">Nothing in your library matches “%1$s”.</string>
+    <string name="library_desktop_all">All</string>
+    <string name="library_desktop_layout_rows">Rows</string>
+    <string name="library_desktop_layout_grid">Grid</string>
+    <plurals name="library_desktop_title_count">
+        <item quantity="one">%1$d title</item>
+        <item quantity="other">%1$d titles</item>
+    </plurals>
 </resources>
