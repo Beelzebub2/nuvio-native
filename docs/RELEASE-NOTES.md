@@ -1,3 +1,12 @@
+## Starlit 1.0.31
+
+### Improvements
+
+- Desktop Home and Library scrolling now eases and glides smoothly between mouse wheel notches while preserving scroll distance, touchpad handling and Shift+wheel behavior.
+- Desktop Collections cards now show folder covers and pinned badges, with drag handles for reordering.
+- **Settings → Add-ons** uses compact rows with inline install actions, stat tiles and manifest fallback server names.
+- Desktop Library unifies Saved and Cloud behind a shared toolbar with type filters, search, sorting, Rows/Grid views, title counts, a clear No matches state and aligned grid spacing.
+
 ## Starlit 1.0.30
 
 ### Improvements
