@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.i18n.localizedMediaTypeLabel
 import com.nuvio.app.core.ui.NuvioDropdownChip
@@ -104,6 +105,7 @@ internal fun LibrarySavedControls(
 internal fun LazyListScope.libraryVerticalContent(
     projection: LibraryVerticalProjection,
     columns: Int,
+    horizontalPadding: Dp = 16.dp,
     watchedKeys: Set<String>,
     fullyWatchedSeriesKeys: Set<String>,
     onPosterClick: ((LibraryItem) -> Unit)?,
@@ -120,7 +122,7 @@ internal fun LazyListScope.libraryVerticalContent(
             items = rowEntries.map { entry -> entry.item.toMetaPreview() },
             columns = columns,
             modifier = libraryContentTransitionModifier()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = horizontalPadding),
             watchedKeys = watchedKeys,
             fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
             onPosterClick = onPosterClick?.let { callback ->
@@ -135,7 +137,7 @@ internal fun LazyListScope.libraryVerticalContent(
     }
 }
 
-internal fun LazyListScope.libraryVerticalSkeletonItems(columns: Int) {
+internal fun LazyListScope.libraryVerticalSkeletonItems(columns: Int, horizontalPadding: Dp = 16.dp) {
     items(
         count = 2,
         key = { index -> "library-vertical-skeleton:$index" },
@@ -143,7 +145,7 @@ internal fun LazyListScope.libraryVerticalSkeletonItems(columns: Int) {
         PosterGridSkeletonRow(
             columns = columns,
             modifier = libraryContentTransitionModifier()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = horizontalPadding),
         )
     }
 }
@@ -156,7 +158,7 @@ internal fun LazyItemScope.libraryContentTransitionModifier(): Modifier =
     )
 
 @Composable
-private fun librarySortOptionLabel(option: LibrarySortOption): String =
+internal fun librarySortOptionLabel(option: LibrarySortOption): String =
     when (option) {
         LibrarySortOption.DEFAULT -> stringResource(Res.string.library_sort_provider_order)
         LibrarySortOption.ADDED_DESC -> stringResource(Res.string.library_sort_added_desc)

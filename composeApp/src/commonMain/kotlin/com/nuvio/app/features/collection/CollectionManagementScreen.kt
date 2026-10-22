@@ -1,8 +1,11 @@
 package com.nuvio.app.features.collection
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,7 +61,10 @@ import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioSectionLabel
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import sh.calvin.reorderable.ReorderableCollectionItemScope
@@ -78,19 +84,30 @@ fun CollectionManagementScreen(
     var importError by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
     var showCopyError by remember { mutableStateOf(false) }
+    val copyJson: () -> Unit = {
+        val json = CollectionRepository.exportToJson()
+        showCopyError = runCatching {
+            clipboardManager.setText(AnnotatedString(json))
+        }.isFailure
+    }
 
-    NuvioScreen {
+    if (isDesktop) {
+        DesktopCollectionManagement(
+            collections = collections,
+            onBack = onBack,
+            onNew = { onNavigateToEditor(null) },
+            onImport = { showImportDialog = true },
+            onCopyJson = copyJson,
+            onEdit = { onNavigateToEditor(it) },
+            onDelete = { showDeleteConfirm = it },
+        )
+    } else NuvioScreen {
         stickyHeader {
             NuvioScreenHeader(
                 title = stringResource(Res.string.collections_header),
                 onBack = onBack,
             ) {
-                IconButton(onClick = {
-                    val json = CollectionRepository.exportToJson()
-                    showCopyError = runCatching {
-                        clipboardManager.setText(AnnotatedString(json))
-                    }.isFailure
-                }) {
+                IconButton(onClick = copyJson) {
                     Icon(
                         imageVector = Icons.Rounded.ContentCopy,
                         contentDescription = stringResource(Res.string.collections_copy_json),
@@ -221,6 +238,60 @@ fun CollectionManagementScreen(
         },
         onDismiss = { showDeleteConfirm = null },
     )
+}
+
+@Composable
+private fun DesktopCollectionManagement(
+    collections: List<Collection>,
+    onBack: () -> Unit,
+    onNew: () -> Unit,
+    onImport: () -> Unit,
+    onCopyJson: () -> Unit,
+    onEdit: (String) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val keyedCollections = remember(collections) {
+        collections.withDuplicateSafeLazyKeys { collection -> collection.id }
+            .map { KeyedCollection(it.lazyKey, it.value) }
+    }
+    // Cards reorder within the page's own list; anything that is not a card is never a drop target.
+    val reorderState = rememberReorderableLazyListState(lazyListState = listState) { from, to ->
+        val fromIndex = keyedCollections.indexOfFirst { collectionLazyKey(it.key) == from.key }
+        val toIndex = keyedCollections.indexOfFirst { collectionLazyKey(it.key) == to.key }
+        if (fromIndex >= 0 && toIndex >= 0) {
+            CollectionRepository.moveByIndex(fromIndex, toIndex)
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        NuvioScreen(
+            horizontalPadding = desktopPageHorizontalPaddingForWidth(maxWidth.value),
+            listState = listState,
+        ) {
+            stickyHeader {
+                // Full-width background so cards never show beside the header; the title lines up with them.
+                Box(Modifier.fillMaxWidth().background(MaterialTheme.nuvio.colors.background)) {
+                    CollectionsPageWidth {
+                        NuvioScreenHeader(
+                            title = stringResource(Res.string.collections_header),
+                            onBack = onBack,
+                        )
+                    }
+                }
+            }
+            desktopCollectionsContent(
+                collections = keyedCollections,
+                reorderState = reorderState,
+                onNew = onNew,
+                onImport = onImport,
+                onCopyJson = onCopyJson,
+                onEdit = onEdit,
+                onDelete = onDelete,
+            )
+        }
+    }
 }
 
 @Composable
