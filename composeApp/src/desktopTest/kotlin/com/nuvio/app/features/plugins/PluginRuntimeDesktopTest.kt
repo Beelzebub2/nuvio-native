@@ -12,11 +12,11 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertEquals
 
 class PluginRuntimeDesktopTest {
-    @Test
+    @Test(timeout = 120_000)
     fun `desktop runtime executes scraper code`() = runBlocking {
         val results = PluginRuntime.executePlugin(
             code = """
@@ -43,7 +43,7 @@ class PluginRuntimeDesktopTest {
         assertEquals("Desktop Test", results.single().provider)
     }
 
-    @Test
+    @Test(timeout = 120_000)
     fun `desktop runtime handles concurrent scraper executions`() = runBlocking {
         repeat(20) {
         val results = coroutineScope {
@@ -78,7 +78,7 @@ class PluginRuntimeDesktopTest {
         }
     }
 
-    @Test fun `canceled runtime closes safely and a fresh scraper still returns results`(): Unit = runBlocking {
+    @Test(timeout = 120_000) fun `canceled runtime closes safely and a fresh scraper still returns results`(): Unit = runBlocking {
         val started = CompletableDeferred<Unit>()
         val job = launch(Dispatchers.Default) {
             JsRuntime().use<Unit> {

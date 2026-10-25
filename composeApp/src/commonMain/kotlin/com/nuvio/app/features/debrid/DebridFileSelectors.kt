@@ -117,7 +117,7 @@ private fun <T> List<T>.matchingFiles(name: String, path: (T) -> String): List<T
     return emptyList()
 }
 
-private fun buildEpisodePattern(season: Int?, episode: Int?): Regex? {
+internal fun buildEpisodePattern(season: Int?, episode: Int?): Regex? {
     if (season == null || episode == null) return null
     return Regex(
         "(?<![a-z0-9])(?:s0*${season}e0*${episode}|0*${season}x0*${episode})(?![0-9])",
