@@ -1,3 +1,9 @@
+## Starlit 1.0.33
+
+### Fixes
+
+- Desktop Play Next no longer cancels a pending episode transition when clicked while searching or during the selected-source countdown, preventing the selected source from being shown without switching episodes.
+
 ## Starlit 1.0.32
 
 ### Fixes
