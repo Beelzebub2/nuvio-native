@@ -2,7 +2,7 @@
 
 ### Fixes
 
-- Desktop Play Next clicks during source search or countdown now keep the pending transition, so the selected source is shown for the next episode.
+- Desktop Play Next no longer gets stuck when clicked during source search or the selected-source countdown; the pending transition completes and opens the next episode.
 - Selecting an episode from a season or multi-episode torrent now opens the requested episode instead of replaying the largest file, with clear errors for ambiguous sources.
 
 ## Starlit 1.0.32
