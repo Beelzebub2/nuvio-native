@@ -16,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
-import com.nuvio.app.features.p2p.P2pStreamRequest
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.player.skip.AutoSkipSegmentType
@@ -123,17 +122,14 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         WatchProgressRepository.ensureLoaded()
     }
 
+    val p2pRequest = currentP2pStreamRequest()
     LaunchedEffect(
         p2pRequestGeneration,
-        activeTorrentInfoHash,
-        activeTorrentFileIdx,
-        activeTorrentFilename,
-        activeTorrentTrackers,
+        p2pRequest,
         p2pSettingsUiState.p2pEnabled,
     ) {
         p2pRecoveryInProgress = false
-        val infoHash = activeTorrentInfoHash
-        if (infoHash == null) {
+        if (p2pRequest == null) {
             p2pResolvedSourceUrl = null
             P2pStreamingEngine.stopStream()
             return@LaunchedEffect
@@ -145,9 +141,6 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         }
 
         p2pResolvedSourceUrl = null
-        val requestedFileIdx = activeTorrentFileIdx
-        val requestedFilename = activeTorrentFilename
-        val requestedTrackers = activeTorrentTrackers
         errorMessage = null
         playerController = null
         playerControllerSourceUrl = null
@@ -155,15 +148,8 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         initialLoadCompleted = false
 
         try {
-            val localUrl = P2pStreamingEngine.startStream(
-                P2pStreamRequest(
-                    infoHash = infoHash,
-                    fileIdx = requestedFileIdx,
-                    filename = requestedFilename,
-                    trackers = requestedTrackers,
-                ),
-            )
-            if (activeTorrentInfoHash == infoHash && activeTorrentFileIdx == requestedFileIdx) {
+            val localUrl = P2pStreamingEngine.startStream(p2pRequest)
+            if (currentP2pStreamRequest() == p2pRequest) {
                 activeSourceAudioUrl = null
                 activeSourceHeaders = emptyMap()
                 activeSourceResponseHeaders = emptyMap()
