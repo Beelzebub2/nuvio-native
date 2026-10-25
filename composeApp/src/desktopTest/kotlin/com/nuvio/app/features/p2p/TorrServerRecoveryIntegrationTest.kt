@@ -107,7 +107,7 @@ class TorrServerRecoveryIntegrationTest {
         val engine = TorrServerBackend(File(dir, "owned"), File(dir, "owned-cache"), binary)
         val other = TorrServerBackend(File(dir, "other"), File(dir, "other-cache"), binary)
         val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
-        val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
+        val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
         try {
             other.restart(settings)
             val otherPid = assertNotNull(other.processId)

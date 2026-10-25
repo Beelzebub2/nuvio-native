@@ -4,12 +4,15 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Modifier
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
+import com.nuvio.app.features.plugins.PluginRepository
+import com.nuvio.app.features.streams.AddonStreamGroup
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,6 +21,11 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class PlayerScreenRuntimeStateTest {
+
+    @AfterTest
+    fun restorePluginSearchState() {
+        PluginRepository.setLocalPluginSearchPaused(false)
+    }
 
     @Test
     fun controlsStartHidden() {
@@ -223,6 +231,37 @@ class PlayerScreenRuntimeStateTest {
 
         assertTrue(runtime.showParentalGuide)
         assertFalse(runtime.controlsVisible)
+    }
+
+    @Test
+    fun nativeEpisodeSourceSelectionUsesTheOriginalIndexWithAnActiveFilter() = runTest {
+        val runtime = PlayerScreenRuntime(testPlayerScreenArgs()).apply { scope = backgroundScope }
+        val episode = MetaVideo(id = "tt1234567:1:2", title = "Episode two", season = 1, episode = 2)
+        val first = StreamItem(url = "https://example.com/first.mp4", addonName = "First", addonId = "first")
+        val selected = StreamItem(url = "https://example.com/episode-2.mp4", addonName = "Selected", addonId = "selected")
+        runtime.episodeStreamsPanelState = EpisodeStreamsPanelState(showStreams = true, selectedEpisode = episode)
+        runtime.episodeStreamsRepoState = StreamsUiState(
+            groups = listOf(
+                AddonStreamGroup("First", "first", listOf(first)),
+                AddonStreamGroup("Selected", "selected", listOf(selected)),
+            ),
+            selectedFilter = "selected",
+        )
+
+        try {
+            assertTrue(runtime.handlePlayerControlsEvent("selectEpisodeStream", 1.0))
+
+            assertEquals(selected.url, runtime.activeSourceUrl)
+            assertEquals(episode.id, runtime.activeVideoId)
+            assertEquals(1, runtime.activeSeasonNumber)
+            assertEquals(2, runtime.activeEpisodeNumber)
+            assertEquals(episode.title, runtime.activeEpisodeTitle)
+            assertFalse(runtime.episodeStreamsPanelState.showStreams)
+            assertNull(runtime.episodeStreamsPanelState.selectedEpisode)
+            assertEquals(1, runtime.playerControlsCloseModalsToken)
+        } finally {
+            PluginRepository.setLocalPluginSearchPaused(false)
+        }
     }
 
     @Test
@@ -432,43 +471,6 @@ class PlayerScreenRuntimeStateTest {
         assertFalse(runtime.playbackSnapshot.isLoading)
     }
 
-    private fun testPlayerScreenArgs() = PlayerScreenArgs(
-        profileId = 1,
-        title = "Title",
-        sourceUrl = "https://example.com/video.mp4",
-        sourceAudioUrl = null,
-        sourceHeaders = emptyMap(),
-        sourceResponseHeaders = emptyMap(),
-        streamType = null,
-        providerName = "Provider",
-        streamTitle = "Source",
-        streamSubtitle = null,
-        initialBingeGroup = null,
-        pauseDescription = null,
-        onBack = {},
-        onOpenInExternalPlayer = null,
-        onOpenExternalUrl = null,
-        modifier = Modifier,
-        logo = null,
-        poster = null,
-        background = null,
-        seasonNumber = null,
-        episodeNumber = null,
-        episodeTitle = null,
-        episodeThumbnail = null,
-        contentType = "movie",
-        videoId = "tt1234567",
-        parentMetaId = "tt1234567",
-        parentMetaType = "movie",
-        providerAddonId = null,
-        torrentInfoHash = null,
-        torrentFileIdx = null,
-        torrentFilename = null,
-        torrentTrackers = emptyList(),
-        initialPositionMs = 0L,
-        initialProgressFraction = null,
-    )
-
     private fun testPlayerLaunch() = PlayerLaunch(
         profileId = 1,
         title = "Title",
@@ -481,3 +483,40 @@ class PlayerScreenRuntimeStateTest {
         parentMetaType = "movie",
     )
 }
+
+internal fun testPlayerScreenArgs() = PlayerScreenArgs(
+    profileId = 1,
+    title = "Title",
+    sourceUrl = "https://example.com/video.mp4",
+    sourceAudioUrl = null,
+    sourceHeaders = emptyMap(),
+    sourceResponseHeaders = emptyMap(),
+    streamType = null,
+    providerName = "Provider",
+    streamTitle = "Source",
+    streamSubtitle = null,
+    initialBingeGroup = null,
+    pauseDescription = null,
+    onBack = {},
+    onOpenInExternalPlayer = null,
+    onOpenExternalUrl = null,
+    modifier = Modifier,
+    logo = null,
+    poster = null,
+    background = null,
+    seasonNumber = null,
+    episodeNumber = null,
+    episodeTitle = null,
+    episodeThumbnail = null,
+    contentType = "movie",
+    videoId = "tt1234567",
+    parentMetaId = "tt1234567",
+    parentMetaType = "movie",
+    providerAddonId = null,
+    torrentInfoHash = null,
+    torrentFileIdx = null,
+    torrentFilename = null,
+    torrentTrackers = emptyList(),
+    initialPositionMs = 0L,
+    initialProgressFraction = null,
+)
