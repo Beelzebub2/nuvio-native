@@ -2,6 +2,7 @@ package com.nuvio.app.features.watchlater
 
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
+import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import kotlinx.coroutines.flow.StateFlow
 
 internal expect object WatchLaterRepository {
@@ -10,5 +11,6 @@ internal expect object WatchLaterRepository {
     fun clearLocalState()
     fun toggle(item: MetaPreview)
     fun remove(item: LibraryItem)
+    fun removeCompletedEpisode(session: WatchProgressPlaybackSession)
     fun resolveEpisodes()
 }

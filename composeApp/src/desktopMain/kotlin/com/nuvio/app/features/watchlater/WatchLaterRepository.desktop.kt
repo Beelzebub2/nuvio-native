@@ -15,6 +15,7 @@ import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.seriesPrimaryAction
 import com.nuvio.app.features.library.toMetaPreview
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.coroutines.*
@@ -28,7 +29,15 @@ internal actual object WatchLaterRepository {
     private val list = WatchLaterList(
         profileId = { ProfileRepository.activeProfileId },
         load = { storage.getString("items_$it") },
-        save = { profile, payload -> storage.putString("items_$profile", payload) },
+        save = { profile, payload ->
+            try {
+                storage.putString("items_$profile", payload)
+            } catch (error: Exception) {
+                // A failed write must not let the storage cache suppress the next retry.
+                storage.clearInMemory()
+                throw error
+            }
+        },
     )
     actual val items: StateFlow<List<LibraryItem>> get() = list.items
     actual fun ensureLoaded() = list.ensureLoaded()
@@ -52,6 +61,7 @@ internal actual object WatchLaterRepository {
     }
 
     actual fun remove(item: LibraryItem) = list.remove(item)
+    actual fun removeCompletedEpisode(session: WatchProgressPlaybackSession) = list.removeCompletedEpisode(session)
     actual fun resolveEpisodes() {
         val profile = ProfileRepository.activeProfileId
         scope.launch {
@@ -115,9 +125,7 @@ internal class WatchLaterList(
     fun ensureLoaded() {
         val profile = profileId()
         if (profile == loadedProfile) return
-        val payload = load(profile)
-        val loaded = if (payload.isNullOrBlank()) emptyList() else json.decodeFromString<List<LibraryItem>>(payload)
-        state.value = loaded.distinctBy { it.watchLaterKey() }.sortedByDescending { it.savedAtEpochMs }
+        state.value = loadItems(profile)
         loadedProfile = profile
     }
 
@@ -146,6 +154,27 @@ internal class WatchLaterList(
         persist(state.value.filterNot { it.watchLaterKey() == item.watchLaterKey() })
     }
 
+    @Synchronized fun removeCompletedEpisode(session: WatchProgressPlaybackSession) {
+        val profile = session.profileId
+        val current = if (loadedProfile == profile) state.value else loadItems(profile)
+        val updated = current.filterNot { item ->
+            val episode = item.watchLaterEpisode
+            item.id == session.parentMetaId && item.type == session.parentMetaType && episode != null &&
+                (episode.seasonNumber == null || session.seasonNumber == null || episode.seasonNumber == session.seasonNumber) &&
+                (episode.episodeNumber == null || session.episodeNumber == null || episode.episodeNumber == session.episodeNumber) &&
+                if (episode.seasonNumber != null && episode.episodeNumber != null &&
+                    session.seasonNumber != null && session.episodeNumber != null) {
+                    true
+                } else episode.videoId.isNotBlank() && episode.videoId == session.videoId
+        }
+        if (updated.size == current.size) return
+        save(profile, json.encodeToString(updated))
+        // A final player flush may arrive after the user switched profiles.
+        if (loadedProfile == profile) {
+            if (profileId() == profile) state.value = updated else loadedProfile = null
+        }
+    }
+
     @Synchronized fun replace(old: LibraryItem, replacement: LibraryItem) {
         ensureLoaded()
         persist(state.value.map { if (it.watchLaterKey() == old.watchLaterKey()) replacement else it }
@@ -155,5 +184,11 @@ internal class WatchLaterList(
     private fun persist(updated: List<LibraryItem>) {
         save(requireNotNull(loadedProfile), json.encodeToString(updated))
         state.value = updated
+    }
+
+    private fun loadItems(profile: Int): List<LibraryItem> {
+        val payload = load(profile)
+        val loaded = if (payload.isNullOrBlank()) emptyList() else json.decodeFromString<List<LibraryItem>>(payload)
+        return loaded.distinctBy { it.watchLaterKey() }.sortedByDescending { it.savedAtEpochMs }
     }
 }
