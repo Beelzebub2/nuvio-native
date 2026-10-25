@@ -1,3 +1,9 @@
+## Starlit 1.0.35
+
+### Fixes
+
+- Completed episodes are now automatically removed from Watch Later, while unfinished episodes retain their saved progress.
+
 ## Starlit 1.0.34
 
 ### Fixes

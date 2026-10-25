@@ -1,6 +1,7 @@
 package com.nuvio.app.features.watchlater
 
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -68,5 +69,53 @@ class WatchLaterListTest {
         val list = WatchLaterList({ 1 }, { null }, { _, _ -> throw java.io.IOException("Full disk") })
         assertFailsWith<java.io.IOException> { list.toggle(MetaPreview("id", "movie", "Movie")) }
         assertTrue(list.items.value.isEmpty())
+    }
+
+    @Test fun `completion uses video identity when either episode number is unknown and writes only once`() {
+        val disk = mutableMapOf<Int, String>()
+        var writes = 0
+        val list = WatchLaterList({ 1 }, { disk[it] }, { p, value -> writes++; disk[p] = value })
+        val unknown = MetaPreview("series", "series", "Series", watchLaterEpisode = WatchLaterEpisode("unknown", "Unknown"))
+        val known = unknown.copy(watchLaterEpisode = WatchLaterEpisode("known", "Known", 1, 3))
+        list.toggle(unknown); list.toggle(known)
+        val session = WatchProgressPlaybackSession(1, "series", "series", "series", "unknown", "Series", seasonNumber = 1, episodeNumber = 2)
+        list.removeCompletedEpisode(session)
+        assertEquals("known", list.items.value.single().watchLaterEpisode?.videoId)
+        list.removeCompletedEpisode(session.copy(videoId = "unrelated", seasonNumber = null))
+        assertEquals("known", list.items.value.single().watchLaterEpisode?.videoId)
+        list.removeCompletedEpisode(session.copy(videoId = "known", seasonNumber = null, episodeNumber = 3))
+        list.removeCompletedEpisode(session.copy(videoId = "known", seasonNumber = null, episodeNumber = 3))
+        assertTrue(list.items.value.isEmpty())
+        assertEquals(4, writes, "Only two additions and two actual removals should write")
+    }
+
+    @Test fun `completion invalidates a stale loaded profile without publishing into the newly active profile`() {
+        var profile = 1
+        var writes = 0
+        val disk = mutableMapOf<Int, String>()
+        val list = WatchLaterList({ profile }, { disk[it] }, { p, value -> writes++; disk[p] = value })
+        list.toggle(MetaPreview("series", "series", "Series", watchLaterEpisode = WatchLaterEpisode("video", "Episode", 1, 1)))
+        val session = WatchProgressPlaybackSession(1, "series", "series", "series", "video", "Series", seasonNumber = 1, episodeNumber = 1)
+        profile = 2
+        list.removeCompletedEpisode(session)
+        list.removeCompletedEpisode(session)
+        assertEquals(2, writes, "A stale loaded profile must not repeat the removal write")
+        list.ensureLoaded()
+        assertTrue(list.items.value.isEmpty())
+        profile = 1
+        list.ensureLoaded()
+        assertTrue(list.items.value.isEmpty(), "Switching back must load the removal from disk")
+    }
+
+    @Test fun `blank video identities and conflicting partial episode numbers do not remove bookmarks`() {
+        val list = WatchLaterList({ 1 }, { null }, { _, _ -> })
+        val episodes = listOf(WatchLaterEpisode("", "Blank"),
+            WatchLaterEpisode("season", "Other season", 2, null), WatchLaterEpisode("episode", "Other episode", null, 3))
+        episodes.forEach { list.toggle(MetaPreview("series", "series", "Series", watchLaterEpisode = it)) }
+        episodes.forEach { episode ->
+            list.removeCompletedEpisode(WatchProgressPlaybackSession(1, "series", "series", "series", episode.videoId,
+                "Series", seasonNumber = 1, episodeNumber = 2))
+        }
+        assertEquals(3, list.items.value.size)
     }
 }

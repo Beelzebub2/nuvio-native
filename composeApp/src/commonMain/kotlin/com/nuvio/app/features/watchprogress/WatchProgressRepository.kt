@@ -21,6 +21,7 @@ import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.tracking.effectiveWatchProgressSource
 import com.nuvio.app.features.tracking.providerId
 import com.nuvio.app.features.watching.application.WatchingActions
+import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.watching.sync.ProgressDeltaEvent
 import com.nuvio.app.features.watching.sync.ProgressSyncRecord
 import com.nuvio.app.features.watching.sync.ProgressSyncAdapter
@@ -1248,6 +1249,14 @@ object WatchProgressRepository {
         )
         if (!isCompleted && !shouldStoreWatchProgress(positionMs = positionMs, durationMs = durationMs)) {
             return
+        }
+        if (isCompleted) {
+            try {
+                WatchLaterRepository.removeCompletedEpisode(session)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                log.w { "Failed to remove completed episode from Watch Later: ${error.message}" }
+            }
         }
 
         val progressProvider = activeProgressProvider()
