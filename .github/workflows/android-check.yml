@@ -1,0 +1,59 @@
+name: Check Starlit for Android
+
+on:
+  pull_request:
+    paths:
+      - 'androidApp/**'
+      - 'composeApp/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew*'
+      - 'iosApp/Configuration/Version.xcconfig'
+      - '.github/workflows/android-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distribution: full
+            variant: Full
+          - distribution: playstore
+            variant: Playstore
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Android compilation SDK
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - name: Build and test Android
+        run: >-
+          ./gradlew :androidApp:assemble${{ matrix.variant }}Debug
+          :composeApp:testAndroidHostTest
+          -Pnuvio.android.distribution=${{ matrix.distribution }}
+          '-Dorg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx2048m'
+          --no-configuration-cache --no-daemon --console=plain
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: starlit-android-${{ matrix.distribution }}-debug
+          path: |
+            androidApp/build/outputs/apk/${{ matrix.distribution }}/debug/*.apk
+            composeApp/build/reports/tests/
+          if-no-files-found: warn

@@ -81,6 +81,10 @@ Building the installer also needs the Visual Studio C++ Build Tools and the [Mic
 
 The installer is written to `composeApp/build/compose/binaries/main-release/installer/`. Run it with `--sandbox` to try it without touching an existing install: it uses a separate name, folder and Installed apps entry.
 
+### Android mobile
+
+The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account-sync requirements. Android builds can run as a local guest without Nuvio's backend configuration. For cross-device accounts, run the independent [Starlit sync backend](private-server-setup) and sign into the same server on desktop and Android. iOS sources are also present, but require macOS and Xcode to build and test.
+
 ### Releasing
 
 Bump `VERSION_NAME` and `VERSION_CODE` in `composeApp/Configuration/DesktopVersion.properties`, add the changes to `docs/RELEASE-NOTES.md`, commit, and push a matching `vMAJOR.MINOR.PATCH` tag. The [release workflow](.github/workflows/windows-release.yml) runs the tests, builds the installer, checks a silent install and uninstall, and publishes the release with its checksum. The schedule gateway in `gateway/` is deployed separately with Wrangler.

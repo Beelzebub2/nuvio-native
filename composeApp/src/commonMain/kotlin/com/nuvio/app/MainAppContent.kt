@@ -184,7 +184,7 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.isBackPressed
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import com.nuvio.app.core.ui.AppPresenceState
@@ -1254,11 +1254,15 @@ internal fun MainAppContent(
                     .background(MaterialTheme.nuvio.colors.background)
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
+                            var backWasPressed = false
                             while (true) {
                                 val event = awaitPointerEvent()
+                                val backPressed = event.buttons.isBackPressed
+                                val newBackPress = backPressed && !backWasPressed
+                                backWasPressed = backPressed
                                 if (event.type == PointerEventType.Press) {
                                     if (!event.changes.any { it.isConsumed }) {
-                                        if (event.button == PointerButton.Back) {
+                                        if (newBackPress) {
                                             event.changes.forEach { it.consume() }
                                             navController.popBackStack()
                                         }

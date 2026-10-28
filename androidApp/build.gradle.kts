@@ -66,7 +66,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.nuvio.app"
+        applicationId = "com.starlit.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = releaseAppVersionCode
@@ -119,6 +119,9 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+        }
         getByName("release") {
             val minifyRelease = providers.gradleProperty("releaseMinifyEnabled")
                 .map(String::toBooleanStrict)
@@ -140,12 +143,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-androidComponents {
-    onVariants(selector().withBuildType("debug")) { variant ->
-        variant.applicationId.set("com.nuviodebug.com")
     }
 }
 

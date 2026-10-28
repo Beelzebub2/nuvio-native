@@ -191,7 +191,12 @@ object AuthRepository {
         _error.value = null
         val anonymousClear = runCatching { AuthStorage.clearAnonymousUserId() }
         validatedRemoteUserId = null
-        val sessionClear = runCatching { SupabaseProvider.client.auth.clearSession() }
+        val server = ServerConfigurationRepository.active.value
+        val sessionClear = if (server.backendUrl.isBlank() || server.publishableKey.isBlank()) {
+            Result.success(Unit)
+        } else {
+            runCatching { SupabaseProvider.client.auth.clearSession() }
+        }
         _state.value = AuthState.Unauthenticated
         val failure = anonymousClear.exceptionOrNull() ?: sessionClear.exceptionOrNull()
         val cancellation = sessionClear.exceptionOrNull() as? CancellationException
