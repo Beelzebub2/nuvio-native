@@ -1,3 +1,9 @@
+## Starlit 1.0.36
+
+### Improvements
+
+- Batch episode downloads set to **Highest available** now check every source and pick the least compressed file at the best resolution, preferring remuxes and larger files (for example a 4 GB 1080p file over a 300 MB encode). If the best file can't be reached, the next best one is used.
+
 ## Starlit 1.0.35
 
 ### Fixes

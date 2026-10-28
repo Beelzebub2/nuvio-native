@@ -9,20 +9,62 @@ import com.nuvio.app.features.streams.*
 import kotlinx.coroutines.*
 
 internal object DownloadQuality {
-    /** Asks every source, then downloads the best resolution any of them offers. */
+    /** Compares every source by resolution, remux status and episode file size. */
     const val Highest = "Highest"
     const val Any = "Any"
     val fixed = listOf("2160p", "1080p", "720p", "480p")
-    private const val Best = 2160
 
     fun height(quality: String): Int? = quality.removeSuffix("p").toIntOrNull()
-    fun isBest(stream: StreamItem): Boolean = downloadStreamQuality(stream) == Best
 }
 
 /** Independent of both source-screen repositories: downloading cannot cancel playback searches. */
 internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
     delay(750L) // Bound repeated unavailable-episode lookups as well as successful transfers.
     val selection = checkNotNull(item.sourceSelection)
+    val sources = buildList<suspend () -> List<StreamItem>> {
+        // Embedded streams belong to whichever title is open now; only trust them for this task's title.
+        if (MetaDetailsRepository.uiState.value.meta?.id == item.parentMetaId) {
+            add { MetaDetailsRepository.findEmbeddedStreams(item.videoId) }
+        }
+        for (addon in AddonRepository.uiState.value.addons.enabledAddons()) {
+            val manifest = addon.manifest ?: continue
+            val id = addon.streamAddonInstanceId(manifest.id)
+            if (selection.providerId != null && selection.providerId != id) continue
+            if (!manifest.supportsStream(item.contentType, item.videoId)) continue
+            add {
+                withTimeoutOrNull(20_000L) {
+                    runCatchingUnlessCancelled {
+                        StreamParser.parse(fetchAddonResponseText(buildAddonResourceUrl(
+                            manifestUrl = manifest.transportUrl, resource = "stream", type = item.contentType, id = item.videoId)),
+                            addon.displayTitle.ifBlank { manifest.name }, id, manifest.logoUrl)
+                    }.getOrDefault(emptyList())
+                }.orEmpty()
+            }
+        }
+        for (scraper in PluginRepository.getEnabledScrapersForType(item.contentType)) {
+            if (selection.providerId != null && selection.providerId != "plugin:${scraper.id}") continue
+            add {
+                withTimeoutOrNull(25_000L) {
+                    PluginRepository.executeScraper(scraper = scraper,
+                        tmdbId = pluginContentId(item.videoId, item.seasonNumber, item.episodeNumber),
+                        mediaType = item.contentType, season = item.seasonNumber, episode = item.episodeNumber, respectSearchPause = false)
+                        .getOrNull()?.map { it.toStreamItem(scraper) }
+                }.orEmpty()
+            }
+        }
+    }
+    return selectDownloadSource(selection, sources) { stream ->
+        if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+            (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
+        } else stream
+    }
+}
+
+internal suspend fun selectDownloadSource(
+    selection: DownloadSourceSelection,
+    sources: List<suspend () -> List<StreamItem>>,
+    resolve: suspend (StreamItem) -> StreamItem? = { it },
+): StreamItem {
     val highest = selection.quality == DownloadQuality.Highest
     val wanted = DownloadQuality.height(selection.quality)
     val candidates = mutableListOf<StreamItem>()
@@ -30,51 +72,23 @@ internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
     suspend fun firstUsable(streams: List<StreamItem>): StreamItem? {
         for (stream in streams) {
             if (!tried.add(stream)) continue
-            val resolved = if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
-                (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream ?: continue
-            } else stream
+            val resolved = resolve(stream) ?: continue
             // Quality was read from the listed stream; a resolved debrid link may not repeat it.
             if (matchesDownloadSelection(resolved, selection.copy(quality = DownloadQuality.Any))) return resolved
         }
         return null
     }
-    suspend fun offer(streams: List<StreamItem>): StreamItem? {
-        val eligible = streams.filter { stream ->
+    for (source in sources) {
+        val eligible = source().filter { stream ->
             (selection.providerId == null || selection.providerId == stream.addonId) &&
                 (wanted == null || downloadStreamQuality(stream) == wanted)
         }
-        if (!highest) return firstUsable(eligible)
-        candidates += eligible
-        // Nothing beats the best resolution, so later sources need not be asked.
-        return firstUsable(eligible.filter(DownloadQuality::isBest))
-    }
-    // Embedded streams belong to whichever title is open now; only trust them for this task's title.
-    if (MetaDetailsRepository.uiState.value.meta?.id == item.parentMetaId) {
-        offer(MetaDetailsRepository.findEmbeddedStreams(item.videoId))?.let { return it }
-    }
-    for (addon in AddonRepository.uiState.value.addons.enabledAddons()) {
-        val manifest = addon.manifest ?: continue
-        val id = addon.streamAddonInstanceId(manifest.id)
-        if (selection.providerId != null && selection.providerId != id) continue
-        if (!manifest.supportsStream(item.contentType, item.videoId)) continue
-        val streams = withTimeoutOrNull(20_000L) {
-            runCatchingUnlessCancelled {
-                StreamParser.parse(fetchAddonResponseText(buildAddonResourceUrl(
-                    manifestUrl = manifest.transportUrl, resource = "stream", type = item.contentType, id = item.videoId)),
-                    addon.displayTitle.ifBlank { manifest.name }, id, manifest.logoUrl)
-            }.getOrDefault(emptyList())
-        }.orEmpty()
-        offer(streams)?.let { return it }
-    }
-    for (scraper in PluginRepository.getEnabledScrapersForType(item.contentType)) {
-        if (selection.providerId != null && selection.providerId != "plugin:${scraper.id}") continue
-        val streams = withTimeoutOrNull(25_000L) {
-            PluginRepository.executeScraper(scraper = scraper,
-                tmdbId = pluginContentId(item.videoId, item.seasonNumber, item.episodeNumber),
-                mediaType = item.contentType, season = item.seasonNumber, episode = item.episodeNumber, respectSearchPause = false)
-                .getOrNull()?.map { it.toStreamItem(scraper) }
-        }.orEmpty()
-        offer(streams)?.let { return it }
+        if (highest) {
+            // A later provider can have a less compressed file, even after finding 4K.
+            candidates += eligible
+        } else {
+            firstUsable(eligible)?.let { return it }
+        }
     }
     if (highest) firstUsable(rankByDownloadQuality(candidates))?.let { return it }
     error("No supported file source matches your provider / quality preferences. Retry or choose a source manually.")
@@ -92,13 +106,64 @@ private val labelledQualities = listOf(
 
 /** The vertical resolution a stream is labelled with, or null when its labels don't say. */
 internal fun downloadStreamQuality(stream: StreamItem): Int? {
-    val text = listOfNotNull(stream.name, stream.title, stream.description, stream.behaviorHints.filename).joinToString(" ")
+    val parsed = stream.clientResolve?.stream?.raw?.parsed?.resolution
+    parsed?.trim()?.removeSuffix("p")?.toIntOrNull()?.takeIf { height -> labelledQualities.any { it.second == height } }?.let { return it }
+    labelledQualities.firstOrNull { (pattern, _) -> parsed != null && pattern.containsMatchIn(parsed) }?.let { return it.second }
+    val text = downloadReleaseText(stream)
     return labelledQualities.firstOrNull { (pattern, _) -> pattern.containsMatchIn(text) }?.second
 }
 
-/** Best resolution first; unlabelled streams last. Ties keep the sources' own order. */
+private fun downloadReleaseText(stream: StreamItem): String {
+    val raw = stream.clientResolve?.stream?.raw
+    return listOfNotNull(
+        stream.name, stream.title, stream.description, stream.behaviorHints.filename,
+        stream.clientResolve?.filename, stream.clientResolve?.torrentName,
+        raw?.filename, raw?.torrentName, raw?.parsed?.rawTitle, raw?.parsed?.quality,
+    ).joinToString(" ")
+}
+
+private val remuxPattern = Regex("(?i)(?<![a-z0-9])(bd|uhd)?remux(?![a-z0-9])")
+private val downloadSizePattern = Regex("(?i)(?<![\\w.,+-])(\\d+(?:[.,]\\d+)?)\\s*([kmgt]i?b)(?![a-z]|/)")
+private val packSizePattern = Regex("(?i)\\b(pack|season|folder|total|complete|collection)\\b|📦")
+
+/** Only the selected file's size is useful here; folderSize/cachedSize may describe a season pack. */
+private fun downloadFileSize(stream: StreamItem): Long? {
+    stream.behaviorHints.videoSize?.takeIf { it > 0 }?.let { return it }
+    stream.clientResolve?.stream?.raw?.size?.takeIf { it > 0 }?.let { return it }
+    for (text in listOfNotNull(stream.description, stream.title, stream.name)) {
+        for (part in text.split('\n', '|', '•', '·')) {
+            if (packSizePattern.containsMatchIn(part)) continue
+            for (match in downloadSizePattern.findAll(part)) {
+                val amount = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: continue
+                val unit = match.groupValues[2].lowercase()
+                val base = if ('i' in unit) 1024.0 else 1000.0
+                val multiplier = when (unit.first()) {
+                    'k' -> base
+                    'm' -> base * base
+                    'g' -> base * base * base
+                    else -> base * base * base * base
+                }
+                val bytes = amount * multiplier
+                if (bytes.isFinite() && bytes >= 1 && bytes < Long.MAX_VALUE.toDouble()) return bytes.toLong()
+            }
+        }
+    }
+    return null
+}
+
+private data class DownloadFidelity(val stream: StreamItem, val resolution: Int, val remux: Boolean, val bytes: Long)
+
+/** At each resolution prefer remuxes, then larger files as a compression signal for the same episode.
+ * Codec alone does not tell us the bitrate. Unknown sizes sort last; true ties retain provider order.
+ */
 internal fun rankByDownloadQuality(streams: List<StreamItem>): List<StreamItem> =
-    streams.sortedByDescending { downloadStreamQuality(it) ?: 0 }
+    streams.map { stream ->
+        DownloadFidelity(stream, downloadStreamQuality(stream) ?: 0,
+            remuxPattern.containsMatchIn(downloadReleaseText(stream)), downloadFileSize(stream) ?: 0)
+    }.sortedWith(compareByDescending<DownloadFidelity> { it.resolution }
+        .thenByDescending { it.remux }
+        .thenByDescending { it.bytes })
+        .map { it.stream }
 
 internal fun matchesDownloadSelection(stream: StreamItem, selection: DownloadSourceSelection): Boolean {
     val direct = stream.playableDirectUrl

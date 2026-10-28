@@ -286,6 +286,41 @@ class DesktopDownloadsTest {
         assertFalse(matchesDownloadSelection(uhd, DownloadSourceSelection(quality = "1080p")))
     }
 
+    @Test fun highestQualityPrefersTheLeastCompressedFileAtTheBestResolution() {
+        fun stream(name: String, description: String, videoSize: Long? = null) = StreamItem(
+            name = name, description = description, url = "https://example.test/$name.mkv", addonName = "Fixture", addonId = "fixture",
+            behaviorHints = StreamBehaviorHints(videoSize = videoSize))
+        val ranked = rankByDownloadQuality(listOf(
+            stream("small", "Show S01E01 1080p WEB x265\n👤 900 💾 300 MB ⚙️ Fixture"),
+            stream("unknown", "Show S01E01 1080p WEB"),
+            stream("large", "Show S01E01 1080p WEB-DL\n👤 40 💾 4.21 GB ⚙️ Fixture"),
+            // The provider's exact byte count beats a size written in the label.
+            stream("hinted", "Show S01E01 1080p BluRay 💾 900 MB", videoSize = 6_000_000_000L),
+            stream("remux", "Show.S01E01.1080p.BDRemux 💾 3.8 GiB"),
+            stream("uhd", "Show S01E01 2160p WEB 💾 1.9 GB"),
+            // A season pack's total says nothing about this episode's file.
+            stream("pack", "Show S01 1080p complete season\n📦 48 GB"),
+        ))
+        assertEquals(listOf("uhd", "remux", "hinted", "large", "small", "unknown", "pack"), ranked.map { it.name })
+    }
+
+    @Test fun highestQualityAsksEverySourceAndFallsBackWhenTheBestFileWontResolve() = runBlocking {
+        fun stream(name: String, description: String) = StreamItem(
+            name = name, description = description, url = "https://example.test/$name.mkv", addonName = "Fixture", addonId = "fixture")
+        val asked = mutableListOf<Int>()
+        val sources = listOf<suspend () -> List<StreamItem>>(
+            { asked += 1; listOf(stream("compressed", "Show S01E01 1080p x265 💾 310 MB")) },
+            { asked += 2; listOf(stream("dead", "Show S01E01 1080p WEB-DL 💾 5.6 GB"), stream("full", "Show S01E01 1080p WEB-DL 💾 4.2 GB")) },
+        )
+        val highest = selectDownloadSource(DownloadSourceSelection(quality = DownloadQuality.Highest), sources) { it.takeUnless { s -> s.name == "dead" } }
+        assertEquals("full", highest.name)
+        assertEquals(listOf(1, 2), asked)
+        // "Any" still takes the first usable file so downloads start sooner.
+        asked.clear()
+        assertEquals("compressed", selectDownloadSource(DownloadSourceSelection(), sources).name)
+        assertEquals(listOf(1), asked)
+    }
+
     @Test fun longFolderPathsKeepTheDriveAndNearestFolders() {
         assertEquals("D:\\Media", compactFolderPath("D:\\Media"))
         assertEquals("C:\\…\\Roaming\\NuvioNative", compactFolderPath("C:\\Users\\ricar\\AppData\\Roaming\\NuvioNative"))
