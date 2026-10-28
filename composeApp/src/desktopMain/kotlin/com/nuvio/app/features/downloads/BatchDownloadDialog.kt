@@ -573,7 +573,7 @@ private fun OptionsPane(
     val tokens = MaterialTheme.nuvio
     Column(modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         OptionSection("Quality", caption = when (quality) {
-            DownloadQuality.Highest -> "Checks every source and picks the sharpest file it finds."
+            DownloadQuality.Highest -> "Checks every source for the highest resolution, preferring remuxes and larger, less compressed files at that resolution."
             DownloadQuality.Any -> "Takes the first file found, so downloads start sooner."
             else -> "Only files labelled $quality. Episodes without one fail and can be retried."
         }) {
