@@ -60,6 +60,10 @@ Run the Android host suite separately for each distribution:
 
 Use `:androidApp:lintFullDebug` or `:androidApp:lintPlaystoreDebug` for lint. Instrumented tests require a connected phone or emulator; some existing tests explicitly require configured provider accounts/network access. A successful APK build or host suite alone does not validate playback on every device, account sync, or real provider credentials.
 
+On 2026-10-28 the Full debug APK was verified on an Android 16 (API 36, x86_64) emulator: clearing app data and launching creates a usable guest profile and reaches Home; custom-server discovery and email/password signup work; a second account session's library addition appears after restart, and removing it in Android is reflected in that second session. An owned local test add-on also loaded its catalog/details and played a generated H.264/AAC video through ExoPlayer without an app crash.
+
+The broad Windows host suite is not green: download persistence/subtitle, hero pager, episode rating, and subtitle restore cases fail, with additional playback failures sensitive to test ordering. The fresh-guest/server-switch regressions and updated tab/catalog tests pass. Both complete CI suites remain enabled; see [the mobile/backend pull request](https://github.com/Beelzebub2/nuvio-native/pull/14) for the recorded results and current CI status.
+
 ## Servers and account sync
 
 Without `NUVIO_SUPABASE_URL` and `NUVIO_SUPABASE_ANON_KEY`, startup creates a local guest. Browsing and locally configured add-ons do not need an upstream account. Guest libraries, profiles and watch progress remain on that installation; they are not a cloud account and do not sync to another device.
