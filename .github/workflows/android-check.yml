@@ -40,14 +40,16 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
       - name: Install Android compilation SDK
-        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - name: Build and test Android
         run: >-
           ./gradlew :androidApp:assemble${{ matrix.variant }}Debug
           :composeApp:testAndroidHostTest
           -Pnuvio.android.distribution=${{ matrix.distribution }}
-          '-Dorg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8'
-          '-Pkotlin.daemon.jvmargs=-Xmx2048m'
+          '-Dorg.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --no-configuration-cache --no-daemon --console=plain
       - uses: actions/upload-artifact@v7
         if: always()
