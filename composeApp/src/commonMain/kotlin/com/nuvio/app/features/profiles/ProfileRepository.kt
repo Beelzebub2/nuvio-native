@@ -126,7 +126,13 @@ object ProfileRepository {
 
     suspend fun pullProfiles() {
         if (AuthRepository.state.value.isAnonymous) {
-            if (!_state.value.isLoaded) {
+            if (_state.value.profiles.isEmpty()) {
+                applyPayloadsLocally(listOf(ProfilePushPayload(
+                    profileIndex = 1,
+                    name = getString(Res.string.profile_label_number, 1),
+                    avatarColorHex = PROFILE_COLORS.first(),
+                )))
+            } else if (!_state.value.isLoaded) {
                 _state.value = _state.value.copy(isLoaded = true)
             }
             return

@@ -1,0 +1,41 @@
+name: Check Starlit sync backend
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Start disposable local Supabase
+        run: npx supabase start
+      - name: Configure local public client settings
+        run: npx supabase status -o json | node configure-local.mjs
+      - run: npx supabase test db
+      - run: npm run test:integration
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop --no-backup
