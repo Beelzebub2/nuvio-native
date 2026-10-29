@@ -360,7 +360,7 @@ class DesktopDownloadsTest {
             {"file_stats":[{"id":7,"path":"Pack/Season 1/E06.mp4","length":16},
                            {"id":1,"path":"Pack/Season 2/E06.mp4","length":20}]}
         """).let { it as kotlinx.serialization.json.JsonObject }).files
-        val calls = mutableListOf<String>()
+        val calls = java.util.Collections.synchronizedList(mutableListOf<String>())
         val http = server { exchange ->
             assertEquals("index=7", exchange.requestURI.query)
             exchange.responseHeaders.add("Content-Type", "video/mp4")
@@ -372,7 +372,7 @@ class DesktopDownloadsTest {
             override suspend fun isHealthy() = true
             override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
             override suspend fun restart(settings: P2pSettingsUiState) { error("must not reset any engine") }
-            override suspend fun stop() { error("caller owns the backend") }
+            override suspend fun stop() { calls += "stop" }
             override suspend fun dropTorrent(hash: String) { calls += "drop" }
             override suspend fun addTorrent(magnetLink: String) = "fixture"
             override suspend fun getTorrentStats(hash: String) = TorrServerStats(0,0,0,0,0,0,36,files)
@@ -383,28 +383,92 @@ class DesktopDownloadsTest {
         }
         val root = Files.createTempDirectory("download-mixed-seasons").toFile()
         val io = DownloadIo()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 60_000)
         try {
             val download = item(root).copy(videoId = "show:1:6", episodeNumber = 6, sourceUrl = "",
                 torrentHash = "a".repeat(40), torrentFileIdx = 0, torrentFilename = "Season 1/E06.mp4")
-            val copied = downloadTorrentFile(download, backend, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
+            val copied = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
                 assertEquals(16L, size)
                 copyDesktopDownload(download, url, io, { _, _ -> }, size)
             }
             assertContentEquals(media, copied.readBytes())
             assertEquals("16", File(copied.path + ".validator").readLines()[1])
-            assertEquals(listOf("prepare", "file:7", "drop"), calls)
+            assertEquals(listOf("prepare", "file:7"), calls)
             calls.clear()
             assertFails {
-                downloadTorrentFile(download.copy(torrentFilename = "missing.mp4"), backend, { P2pSettingsUiState(p2pEnabled = true) }) { _, _ ->
+                downloadTorrentFile(download.copy(torrentFilename = "missing.mp4"), engines, { P2pSettingsUiState(p2pEnabled = true) }) { _, _ ->
                     error("A missing filename must never start copying")
                 }
             }
-            assertEquals(listOf("prepare", "drop"), calls)
+            assertEquals(emptyList(), calls, "The warm engine is reused, not restarted or dropped")
             // A server returning a different file's length must not produce a completed file.
             val mismatch = item(root, id = "mismatch")
             assertFails { copyDesktopDownload(mismatch, "${http.url()}?index=7", io, { _, _ -> }, 20L) }
             assertFalse(downloadPath(mismatch).exists())
-        } finally { io.close(); http.stop(0); root.deleteRecursively() }
+        } finally { scope.cancel(); io.close(); http.stop(0); root.deleteRecursively() }
+    }
+
+    @Test fun episodesOfOneTorrentShareAWarmEngineThatRetiresWhenIdle() = runBlocking {
+        val calls = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val retired = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val created = AtomicInteger()
+        fun backend(hash: String) = object : DesktopTorrentBackend {
+            @Volatile var running = false
+            override suspend fun isHealthy() = running
+            override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare:$hash"; running = true }
+            override suspend fun restart(settings: P2pSettingsUiState) { error("must not reset a shared engine") }
+            override suspend fun stop() { calls += "stop:$hash"; running = false }
+            override suspend fun dropTorrent(hash: String) { calls += "drop:$hash" }
+            override suspend fun addTorrent(magnetLink: String) = error("unused")
+            override suspend fun getTorrentStats(hash: String) = error("unused")
+            override fun getStreamUrl(magnetLink: String, fileIdx: Int) = error("unused")
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val engines = DownloadTorrentEngines(create = { created.incrementAndGet(); backend(it) }, scope = scope,
+                idleMs = 200, onRetired = { retired += it })
+            val settings = P2pSettingsUiState(p2pEnabled = true)
+            val pack = "A".repeat(40)
+            val key = pack.lowercase()
+            val entered = AtomicInteger()
+            val release = CompletableDeferred<Unit>()
+            val first = async(Dispatchers.Default) { engines.use(pack, settings) { b -> entered.incrementAndGet(); release.await(); b } }
+            val second = async(Dispatchers.Default) { engines.use(pack, settings) { b -> entered.incrementAndGet(); release.await(); b } }
+            withTimeout(3_000) { while (entered.get() < 2) delay(10) }
+            release.complete(Unit)
+            assertSame(first.await(), second.await(), "Two episodes of one torrent share one engine")
+            assertEquals(listOf("prepare:$key"), calls)
+            // The next episode within the idle window reuses the running engine and its peers.
+            engines.use(pack, settings) { }
+            assertEquals(listOf("prepare:$key"), calls)
+            // A different torrent gets its own engine.
+            engines.use("b".repeat(40), settings) { }
+            assertEquals(2, created.get())
+            // Once idle, each engine drops its torrent, stops and clears its cache.
+            withTimeout(3_000) { while (retired.size < 2) delay(20) }
+            assertTrue(calls.containsAll(listOf("drop:$key", "stop:$key", "drop:${"b".repeat(40)}", "stop:${"b".repeat(40)}")))
+            assertEquals(setOf(key, "b".repeat(40)), retired.toSet())
+            // Using a retired engine starts its process again.
+            engines.use(pack, settings) { }
+            assertEquals(2, calls.count { it == "prepare:$key" })
+            assertEquals(2, created.get())
+        } finally { scope.cancel() }
+    }
+
+    @Test fun downloadSpeedIsAveragedOverSeveralSeconds() {
+        val meter = DownloadRateMeter(windowMs = 8_000)
+        assertEquals(0L, meter.sample(0, 0))
+        // A burst then a stall: the shown speed stays near the real average instead of jumping.
+        assertEquals(20_000_000L, meter.sample(500, 10_000_000))
+        assertEquals(10_000_000L, meter.sample(1_000, 10_000_000))
+        assertEquals(5_000_000L, meter.sample(2_000, 10_000_000))
+        // Old samples leave the window, so a long stall eventually reads as slow.
+        for (t in 3_000L..20_000L step 1_000) meter.sample(t, 10_000_000)
+        assertEquals(0L, meter.sample(21_000, 10_000_000))
+        // A restart from an earlier offset begins a fresh average.
+        assertEquals(0L, meter.sample(22_000, 0))
+        assertEquals(2_000_000L, meter.sample(23_000, 2_000_000))
     }
 
     @Test fun torrentsRequireAnExactMediaFileAndUseOnlyTheirOwnBackend() = runBlocking {
@@ -417,7 +481,7 @@ class DesktopDownloadsTest {
         assertFails { selectDownloadTorrentFile(files, -1, null) }
         assertFails { selectDownloadTorrentFile(files, Int.MAX_VALUE, null) }
         assertEquals(files.first(), selectDownloadTorrentFile(listOf(files.first()), null, null))
-        val calls = mutableListOf<String>()
+        val calls = java.util.Collections.synchronizedList(mutableListOf<String>())
         val backend = object : DesktopTorrentBackend {
             override suspend fun isHealthy() = true
             override suspend fun prepare(settings: P2pSettingsUiState) { calls += "prepare" }
@@ -429,16 +493,19 @@ class DesktopDownloadsTest {
             override fun getStreamUrl(magnetLink: String, fileIdx: Int): String { calls += "file:$fileIdx"; return "http://127.0.0.1/own-stream" }
         }
         val root = Files.createTempDirectory("download-torrent").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 50)
         try {
             val download = item(root).copy(sourceUrl = "", torrentHash = "a".repeat(40), torrentFileIdx = 1)
-            assertFails { downloadTorrentFile(download, backend, { P2pSettingsUiState(p2pEnabled = false) }) { _, _ -> error("P2P disabled") } }
+            assertFails { downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = false) }) { _, _ -> error("P2P disabled") } }
             assertTrue(calls.isEmpty())
-            val result = downloadTorrentFile(download, backend, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
+            val result = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
                 assertEquals(200L, size)
                 assertEquals("http://127.0.0.1/own-stream", url); File(root, "copied.mkv").also { it.writeBytes(media) }
             }
             assertContentEquals(media, result.readBytes())
-            assertEquals(listOf("prepare", "add", "file:2", "drop:own-hash"), calls)
-        } finally { root.deleteRecursively() }
+            withTimeout(3_000) { while ("stop" !in calls) delay(10) }
+            assertEquals(listOf("prepare", "add", "file:2", "drop:${"a".repeat(40)}", "stop"), calls)
+        } finally { scope.cancel(); root.deleteRecursively() }
     }
 }

@@ -11,6 +11,11 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.features.details.*
 import com.nuvio.app.features.library.LibraryDownloadsButton
+import com.nuvio.app.features.streams.StreamItem
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import org.junit.Rule
 import org.junit.Test
 import kotlinx.serialization.encodeToString
@@ -58,6 +63,67 @@ class DownloadUiTest {
     private fun capture(name: String) {
         val directory = File("build/bulk-download-proof").apply { mkdirs() }
         ImageIO.write(compose.onRoot().captureToImage().toAwtImage(), "png", File(directory, "$name.png"))
+    }
+
+    @Test fun severalEpisodesDownloadTogetherAndTheLimitCanBeChangedFromTheQueue() {
+        val root = Files.createTempDirectory("downloads-parallel-ui").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val body = ByteArray(4 * 1024 * 1024).also {
+            System.arraycopy(byteArrayOf(0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109), 0, it, 0, 12)
+        }
+        val release = CountDownLatch(1)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            executor = Executors.newCachedThreadPool { r -> Thread(r).apply { isDaemon = true } }
+            createContext("/") { exchange ->
+                runCatching {
+                    exchange.responseHeaders.add("Content-Type", "video/mp4")
+                    exchange.responseHeaders.add("ETag", "\"slow\"")
+                    exchange.sendResponseHeaders(200, body.size.toLong())
+                    exchange.responseBody.use { out ->
+                        var sent = 0
+                        while (sent < body.size) {
+                            val count = minOf(64 * 1024, body.size - sent)
+                            out.write(body, sent, count); out.flush(); sent += count
+                            if (release.count > 0) Thread.sleep(100) // about 640 KB/s per episode until released
+                        }
+                    }
+                }
+            }
+            start()
+        }
+        try {
+            DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(root)
+            DownloadDesktopFeatures.setParallelDownloads(3)
+            val url = "http://127.0.0.1:${server.address.port}/episode.mp4"
+            (1..4).forEach { episode ->
+                DownloadsRepository.enqueueFromStream("series", "parallel:$episode", "parallel-show", "series", "Parallel Show",
+                    null, null, null, 1, episode, "Episode $episode", null,
+                    StreamItem(name = "1080p", url = url, addonName = "Local fixture", addonId = "fixture"))
+            }
+            compose.setContent { NuvioTheme { Surface(Modifier.size(1100.dp, 900.dp)) { DownloadsScreen({}, {}) } } }
+            compose.waitUntil(10_000) {
+                DownloadsRepository.uiState.value.items.count { it.phase == "Downloading" && it.bytesPerSecond > 0 } == 3
+            }
+            Thread.sleep(1_500) // let the averaged speed settle before the screenshot
+            compose.waitForIdle()
+            compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("3 downloading", substring = true))
+            compose.onNodeWithText("1 waiting", substring = true).assertExists()
+            compose.onNodeWithText("/s  ·  1 waiting", substring = true).assertExists()
+            compose.onNodeWithContentDescription("3 at once").assertIsSelected()
+            capture("parallel-downloads")
+            // Lowering the limit lets the running transfers finish; the fourth waits for a free slot.
+            compose.onNodeWithContentDescription("2 at once").performClick().assertIsSelected()
+            assertEquals(2, DownloadDesktopFeatures.parallelDownloads())
+            assertEquals(3, DownloadsRepository.uiState.value.items.count { it.phase == "Downloading" })
+            release.countDown()
+            compose.waitUntil(15_000) { DownloadsRepository.uiState.value.items.all { it.status == DownloadStatus.Completed } }
+        } finally {
+            release.countDown(); server.stop(0)
+            DownloadsRepository.pauseActiveDownloads(); DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setParallelDownloads(DefaultParallelDownloads)
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original))); root.deleteRecursively()
+        }
     }
 
     @Test fun rootSelectsEveryDownloadAndConfirmsAnExactGroupSnapshot() {

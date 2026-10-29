@@ -466,6 +466,15 @@ private fun DefaultHomeHeroFrame(
                 ),
         )
 
+        // Keeps the light status bar icons readable over pale artwork.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp)
+                .align(Alignment.TopCenter)
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.4f), Color.Transparent))),
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()

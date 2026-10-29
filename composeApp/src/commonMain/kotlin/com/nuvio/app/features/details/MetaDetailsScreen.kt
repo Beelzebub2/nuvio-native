@@ -1676,13 +1676,26 @@ fun MetaDetailsScreen(
                         }
 
                         if (!isDesktop && !useDesktopDetailLayout && showHeroBackButton) {
+                            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                            // Keeps the light status bar icons and back arrow readable over pale backdrops.
+                            Box(
+                                modifier = Modifier
+                                    .zIndex(1.5f)
+                                    .fillMaxWidth()
+                                    .height(statusBarTop + 72.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent),
+                                        ),
+                                    ),
+                            )
                             NuvioBackButton(
                                 onClick = onBackFromDetails,
                                 modifier = Modifier.padding(
                                     start = 12.dp,
-                                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                                    top = statusBarTop + 8.dp,
                                 ).zIndex(2f),
-                                containerColor = Color.Transparent,
+                                containerColor = Color.Black.copy(alpha = 0.28f),
                                 contentColor = MaterialTheme.colorScheme.onBackground,
                             )
                         }
