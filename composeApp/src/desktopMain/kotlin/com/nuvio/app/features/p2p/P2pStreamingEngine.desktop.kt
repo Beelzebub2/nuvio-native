@@ -3,6 +3,7 @@ package com.nuvio.app.features.p2p
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.i18n.localizedP2pUnknownTorrentError
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.features.debrid.buildEpisodePattern
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
@@ -238,7 +239,7 @@ internal class DesktopP2pSession(
                 activeHash = hash
                 ensureCurrent(currentIntent)
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "prepare_stream", request = request))
-                val index = resolveFileIndex(hash, request.fileIdx, request.filename, currentIntent, signals)
+                val index = resolveFileIndex(hash, request, currentIntent, signals)
                 ensureCurrent(currentIntent)
                 val url = backend.getStreamUrl(magnet, index)
                 publish(currentIntent, P2pStreamingState.Streaming(url, 0L, 0L, 0, 0, 0f, 0f, request = request))
@@ -380,7 +381,9 @@ internal class DesktopP2pSession(
         if (intent == expected) _state.value = state
     }
 
-    private suspend fun resolveFileIndex(hash: String, requestedIdx: Int?, filename: String?, intent: Long, signals: DesktopP2pRecoverySignals): Int {
+    private suspend fun resolveFileIndex(hash: String, request: P2pStreamRequest, intent: Long, signals: DesktopP2pRecoverySignals): Int {
+        val requestedIdx = request.fileIdx
+        val filename = request.filename
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90)
         var files: List<TorrServerFile> = emptyList()
 
@@ -407,7 +410,7 @@ internal class DesktopP2pSession(
 
         if (!filename.isNullOrBlank()) {
             val name = filename.trim()
-            val exact = files.firstOrNull { file ->
+            val exact = files.singleOrNull { file ->
                 file.path.substringAfterLast('/').equals(name, ignoreCase = true)
             }
             if (exact != null) {
@@ -415,7 +418,7 @@ internal class DesktopP2pSession(
                 return exact.id
             }
 
-            val contains = files.firstOrNull { file ->
+            val contains = files.singleOrNull { file ->
                 file.path.contains(name, ignoreCase = true)
             }
             if (contains != null) {
@@ -442,14 +445,17 @@ internal class DesktopP2pSession(
             throw P2pStreamingException("The requested torrent file is missing. Choose another source.")
         }
 
-        val videoFile = files
-            .filter { file ->
-                val ext = file.path.substringAfterLast('.', "").lowercase()
-                ext in VIDEO_EXTENSIONS
+        val videos = files.filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
+        if (request.season != null && request.episode != null) {
+            val candidates = videos.map { it to matchesEpisodeFile(it.path, request.season, request.episode) }
+            val matching = candidates.filter { it.second == true }
+            if (matching.size == 1) return matching.single().first.id
+            if (!(candidates.size == 1 && candidates.single().second == null)) {
+                throw P2pStreamingException("The requested episode is missing or ambiguous in this torrent. Choose another source.")
             }
-            .maxByOrNull { it.length }
+        }
 
-        val result = videoFile?.id ?: files.maxByOrNull { it.length }?.id ?: 1
+        val result = videos.maxByOrNull { it.length }?.id ?: files.maxByOrNull { it.length }?.id ?: 1
         log.d { "File resolved by largest video fallback: id=$result" }
         return result
     }
@@ -468,3 +474,28 @@ internal class DesktopP2pSession(
         )
     }
 }
+
+// null means a standalone video has no episode hints to contradict its source.
+private fun matchesEpisodeFile(path: String, season: Int, episode: Int): Boolean? {
+    val normalizedPath = path.replace('\\', '/')
+    val seasons = TORRENT_SEASON_PATTERN.findAll(normalizedPath)
+    if (seasons.any { match -> match.groupValues.drop(1).first { it.isNotBlank() }.toIntOrNull() != season }) {
+        return false
+    }
+    val name = normalizedPath.substringAfterLast('/')
+    if (TORRENT_SEASON_EPISODE_PATTERN.containsMatchIn(name)) {
+        return buildEpisodePattern(season, episode)?.containsMatchIn(name) == true
+    }
+    val numbers = TORRENT_EPISODE_NUMBER_PATTERN.findAll(name).map { it.groupValues[1].toIntOrNull() }.toList()
+    return if (numbers.isEmpty()) null else numbers.singleOrNull() == episode
+}
+
+private val TORRENT_SEASON_PATTERN = Regex(
+    "(?<![a-z0-9])(?:season[ ._-]*(\\d+)|s(\\d+)(?=e\\d|[^a-z0-9]|$)|(\\d{1,2})x\\d+)",
+    RegexOption.IGNORE_CASE,
+)
+private val TORRENT_SEASON_EPISODE_PATTERN = Regex("(?<![a-z0-9])(?:s\\d+e\\d+|\\d{1,2}x\\d+)(?![0-9])", RegexOption.IGNORE_CASE)
+private val TORRENT_EPISODE_NUMBER_PATTERN = Regex(
+    "(?<![a-z0-9])(?:(?:ep(?:isode)?|e)[ ._-]*|-[ ._-]+)(\\d+)(?![a-z0-9])",
+    RegexOption.IGNORE_CASE,
+)

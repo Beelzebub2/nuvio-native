@@ -1,3 +1,38 @@
+## Starlit 1.0.36
+
+### Improvements
+
+- Batch episode downloads set to **Highest available** now check every source and pick the least compressed file at the best resolution, preferring remuxes and larger files (for example a 4 GB 1080p file over a 300 MB encode). If the best file can't be reached, the next best one is used.
+
+## Starlit 1.0.35
+
+### Fixes
+
+- Completed episodes are now automatically removed from Watch Later, while unfinished episodes retain their saved progress.
+
+## Starlit 1.0.34
+
+### Fixes
+
+- Desktop Play Next no longer gets stuck when clicked during source search or the selected-source countdown; the pending transition completes and opens the next episode.
+- Selecting an episode from a season or multi-episode torrent now opens the requested episode instead of replaying the largest file, with clear errors for ambiguous sources.
+
+## Starlit 1.0.32
+
+### Fixes
+
+- Torrent engine settings now automatically back up and recreate corrupt preferences while preserving downloads, history and valid settings.
+- App-managed torrent settings are flushed to disk before replacement to reduce damage from interrupted saves. Storage failures now show a clear error.
+
+## Starlit 1.0.31
+
+### Improvements
+
+- Desktop Home and Library scrolling now eases and glides smoothly between mouse wheel notches while preserving scroll distance, touchpad handling and Shift+wheel behavior.
+- Desktop Collections cards now show folder covers and pinned badges, with drag handles for reordering.
+- **Settings → Add-ons** uses compact rows with inline install actions, stat tiles and manifest fallback server names.
+- Desktop Library unifies Saved and Cloud behind a shared toolbar with type filters, search, sorting, Rows/Grid views, title counts, a clear No matches state and aligned grid spacing.
+
 ## Starlit 1.0.30
 
 ### Improvements
