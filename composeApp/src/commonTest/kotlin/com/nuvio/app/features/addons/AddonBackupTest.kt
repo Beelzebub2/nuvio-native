@@ -20,6 +20,8 @@ class AddonBackupTest {
         assertEquals(2, restored.imported)
         assertFalse(restored.addons.first().enabled)
         assertEquals(emptyList(), AddonBackupCodec.decode(AddonBackupCodec.encode(emptyList())))
+        // Preserve the serializer's compatible quoted-Boolean handling without changing the state.
+        assertFalse(AddonBackupCodec.decode("""{"format":"starlit-addons","version":1,"addons":[{"manifestUrl":"$configuredUrl","enabled":"false"}]}""").single().enabled)
     }
 
     @Test
@@ -49,6 +51,6 @@ class AddonBackupTest {
         for (url in listOf("file:///tmp/addon", "javascript:alert(1)", "https:///", "https://", "https://:443/", "https://user@/", "https://ex ample.test/", "https://example.test/#fragment", "https://example.test:99999/")) {
             assertEquals(AddonBackupError.Invalid, reason("""{"format":"starlit-addons","version":1,"addons":[{"manifestUrl":"$url"}]}"""), url)
         }
-        assertEquals(AddonBackupError.Invalid, reason("""{"format":"starlit-addons","version":1,"addons":[{"manifestUrl":"https://example.test/","enabled":"false"}]}"""))
+        assertEquals(AddonBackupError.Invalid, reason("""{"format":"starlit-addons","version":1,"addons":[{"manifestUrl":"https://example.test/","enabled":"not-a-boolean"}]}"""))
     }
 }
