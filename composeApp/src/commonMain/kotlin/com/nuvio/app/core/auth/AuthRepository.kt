@@ -34,6 +34,10 @@ object AuthRepository {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Neutral auth messages, such as an account that is waiting for the server owner's approval. */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
     private var initialized = false
     private var sessionStatusJob: Job? = null
     private var validatedRemoteUserId: String? = null
@@ -124,9 +128,14 @@ object AuthRepository {
 
     suspend fun signUpWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        _notice.value = null
         SupabaseProvider.client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
+        }
+        // Servers that confirm or approve new accounts return no session yet.
+        if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
+            _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
         }
         Unit
     }.onFailure { e ->
@@ -137,6 +146,7 @@ object AuthRepository {
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        _notice.value = null
         SupabaseProvider.client.auth.signInWith(Email) {
             this.email = email
             this.password = password
@@ -191,7 +201,12 @@ object AuthRepository {
         _error.value = null
         val anonymousClear = runCatching { AuthStorage.clearAnonymousUserId() }
         validatedRemoteUserId = null
-        val sessionClear = runCatching { SupabaseProvider.client.auth.clearSession() }
+        val server = ServerConfigurationRepository.active.value
+        val sessionClear = if (server.backendUrl.isBlank() || server.publishableKey.isBlank()) {
+            Result.success(Unit)
+        } else {
+            runCatching { SupabaseProvider.client.auth.clearSession() }
+        }
         _state.value = AuthState.Unauthenticated
         val failure = anonymousClear.exceptionOrNull() ?: sessionClear.exceptionOrNull()
         val cancellation = sessionClear.exceptionOrNull() as? CancellationException
@@ -249,6 +264,7 @@ object AuthRepository {
 
     fun clearError() {
         _error.value = null
+        _notice.value = null
     }
 
     private fun isInvalidRemoteSessionError(error: Throwable): Boolean {

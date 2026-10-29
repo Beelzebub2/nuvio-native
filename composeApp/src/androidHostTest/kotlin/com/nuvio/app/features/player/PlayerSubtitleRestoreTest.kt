@@ -64,6 +64,18 @@ class PlayerSubtitleRestoreTest {
     }
 
     @Test
+    fun nextEpisodeNeverRestoresThePreviousSubtitleUrlFromStaleResults() {
+        val runtime = runtime()
+        runtime.persistAddonSubtitlePreference(episodeOneSubtitle)
+        val controller = advanceToEpisodeTwo(runtime)
+        runtime.addonSubtitles = listOf(episodeOneSubtitle, episodeTwoSubtitle)
+
+        runtime.refreshTracks()
+
+        assertEquals(listOf(episodeTwoSubtitle.url), controller.subtitleUrls)
+    }
+
+    @Test
     fun nextEpisodeSelectsCurrentSubtitleWithoutStoredManualSelection() {
         val runtime = runtime()
         val controller = advanceToEpisodeTwo(runtime)

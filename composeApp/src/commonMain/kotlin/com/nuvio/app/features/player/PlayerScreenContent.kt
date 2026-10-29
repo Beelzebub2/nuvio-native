@@ -10,7 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.isBackPressed
+import androidx.compose.ui.input.pointer.isForwardPressed
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -87,15 +88,19 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             .background(Color.Black)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
+                    var backWasPressed = false
+                    var forwardWasPressed = false
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val backPressed = event.buttons.isBackPressed
+                        val forwardPressed = event.buttons.isForwardPressed
                         if (event.type == PointerEventType.Press) {
-                            if (event.button == PointerButton.Back) {
-                                event.changes.forEach { it.consume() }
-                            } else if (event.button == PointerButton.Forward) {
+                            if ((backPressed && !backWasPressed) || (forwardPressed && !forwardWasPressed)) {
                                 event.changes.forEach { it.consume() }
                             }
                         }
+                        backWasPressed = backPressed
+                        forwardWasPressed = forwardPressed
                     }
                 }
             },

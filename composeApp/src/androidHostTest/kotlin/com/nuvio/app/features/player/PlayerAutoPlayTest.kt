@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.nuvio.app.features.details.MetaDetails
@@ -12,14 +13,17 @@ import com.nuvio.app.features.player.skip.SkipInterval
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.watchprogress.WatchProgressStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -39,6 +43,13 @@ class PlayerAutoPlayTest {
     private val nearEnd = PlayerPlaybackSnapshot(
         isLoading = false, isPlaying = false, positionMs = 1_190_000L, durationMs = 1_200_000L,
     )
+
+    @Before
+    fun initializeProgressStorage() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("nuvio_watch_progress", Context.MODE_PRIVATE).edit().clear().commit()
+        WatchProgressStorage.initialize(context)
+    }
 
     @After
     fun cleanup() {
