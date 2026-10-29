@@ -36,7 +36,7 @@ Local and debug builds use the mobile version in `iosApp/Configuration/Version.x
 
 ## Releases
 
-Every `vX.Y.Z` release tag publishes the Windows installer and signed Full APKs together (`Starlit-Android-<abi>-X.Y.Z.apk`; most phones need `arm64-v8a`). The release workflow builds the APKs with the release version (`-Pnuvio.app.versionName` / `-Pnuvio.app.versionCode` from `composeApp/Configuration/DesktopVersion.properties`), so the in-app updater compares the installed APK with the release tag. It signs them with the key in the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`; without them the release stops before publishing anything.
+Every `vX.Y.Z` release tag publishes the Windows installer and signed Full APKs together (`Starlit-Android-<abi>-X.Y.Z.apk`; most phones need `arm64-v8a`). The release workflow builds the APKs with the release version (`-Pnuvio.app.versionName` / `-Pnuvio.app.versionCode` from `composeApp/Configuration/DesktopVersion.properties`), so the in-app updater compares the installed APK with the release tag. The build job has no secrets and produces unsigned APKs (a release build without a configured key is always unsigned). A separate job that runs only GitHub's own actions signs them with the key in the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, so third-party build actions never see it. Without those secrets the release stops before publishing anything.
 
 The Full updater checks this fork's public GitHub releases and picks the APK for the phone's ABI. Play Store builds disable the in-app updater.
 

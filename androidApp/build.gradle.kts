@@ -34,6 +34,9 @@ val releaseStorePassword = envOrLocalProperty("NUVIO_RELEASE_STORE_PASSWORD")
 val releaseKeyAlias = envOrLocalProperty("NUVIO_RELEASE_KEY_ALIAS")
 val releaseKeyPassword = envOrLocalProperty("NUVIO_RELEASE_KEY_PASSWORD")
 val releaseKeystore = releaseStoreFile?.let(rootProject::file)
+// Without a key the release APKs are left unsigned (CI signs them in a separate job).
+val releaseSigningReady = releaseKeystore != null && releaseStorePassword != null &&
+    releaseKeyAlias != null && releaseKeyPassword != null
 
 val sentryAuthToken = envOrLocalProperty("SENTRY_AUTH_TOKEN")
 val sentryOrg = envOrLocalProperty("SENTRY_ORG")
@@ -136,7 +139,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "../composeApp/proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigningReady) signingConfigs.getByName("release") else null
             ndk {
                 debugSymbolLevel = "FULL"
             }
