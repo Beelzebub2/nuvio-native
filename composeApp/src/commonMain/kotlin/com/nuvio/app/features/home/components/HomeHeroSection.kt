@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +54,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -328,13 +330,18 @@ private fun HeroContentLayers(
     )
 
     layerPages.forEach { page ->
+        val visible by remember(pagerState, page) {
+            derivedStateOf { heroPageVisibility(pagerState, page) > 0f }
+        }
         Box(
-            modifier = Modifier.graphicsLayer {
-                val pageOffset = heroPageOffset(pagerState, page)
+            modifier = Modifier
+                .then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
+                .graphicsLayer {
+                    val pageOffset = heroPageOffset(pagerState, page)
 
-                alpha = heroPageVisibility(pageOffset)
-                translationX = -pageOffset * heroWidthPx * HERO_CONTENT_PARALLAX
-            },
+                    alpha = heroPageVisibility(pageOffset)
+                    translationX = -pageOffset * heroWidthPx * HERO_CONTENT_PARALLAX
+                },
         ) {
             HeroContentBlock(
                 item = items[page % items.size],
@@ -394,9 +401,13 @@ private fun HeroDesktopContentLayers(
     )
 
     layerPages.forEach { page ->
+        val visible by remember(pagerState, page) {
+            derivedStateOf { heroPageVisibility(pagerState, page) > 0f }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
                 .graphicsLayer {
                     val pageOffset = heroPageOffset(pagerState, page)
 

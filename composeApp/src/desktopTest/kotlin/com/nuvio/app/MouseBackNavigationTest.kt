@@ -36,13 +36,13 @@ class MouseBackNavigationTest {
         }
         val app = compose.onNodeWithTag("app")
         // The test API names the first three buttons; 3 and 4 are back and forward.
-        app.performMouseInput { click(position = Offset(4f, 4f), button = MouseButton(3)) }
+        app.performMouseInput { click(position = Offset(4f, 300f), button = MouseButton(3)) }
         compose.runOnIdle { assertEquals(1, backs) }
-        app.performMouseInput { click(position = Offset(4f, 4f), button = MouseButton(4)) }
-        app.performMouseInput { click(position = Offset(4f, 4f)) }
+        app.performMouseInput { click(position = Offset(4f, 300f), button = MouseButton(4)) }
+        app.performMouseInput { click(position = Offset(4f, 300f)) }
         compose.runOnIdle { assertEquals(1, backs) }
         app.performMouseInput {
-            moveTo(Offset(4f, 4f))
+            moveTo(Offset(4f, 300f))
             press(MouseButton(3))
             press(MouseButton.Primary)
             release(MouseButton.Primary)
