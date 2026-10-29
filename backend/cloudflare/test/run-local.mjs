@@ -47,7 +47,8 @@ let code = 1;
 try {
   await Promise.all(servers.map(server => waitFor(server.url)));
   const key = 'sb_publishable_starlit_cloudflare';
-  code = await run(['--test', '--test-concurrency=1', join(root, '..', 'test', 'sync.integration.test.mjs'), join(root, 'test', 'cloudflare.test.mjs')], {
+  code = await run(['--test', '--test-concurrency=1', join(root, 'test', 'accounts.test.mjs'),
+    join(root, '..', 'test', 'sync.integration.test.mjs'), join(root, 'test', 'cloudflare.test.mjs')], {
     STARLIT_SUPABASE_URL: servers[0].url,
     STARLIT_SUPABASE_PUBLISHABLE_KEY: key,
     STARLIT_APPROVAL_URL: servers[1].url,

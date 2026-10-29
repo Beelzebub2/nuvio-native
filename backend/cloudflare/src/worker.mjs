@@ -13,6 +13,10 @@ const MIN_PASSWORD = 12;
 const MAX_PASSWORD = 256;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const TABLES = ['addons', 'plugins'];
+// Upstream Nuvio membership and catalog calls. An empty list means "no membership, no catalog" to
+// the clients, which otherwise retry on 404 and spend the free daily request quota.
+const EMPTY_LIST_FUNCTIONS = ['get_my_member_access', 'get_my_membership_overview', 'get_avatar_catalog',
+  'get_member_profile_avatar_catalog', 'get_member_profile_background_catalog'];
 const TABLE_COLUMNS = ['user_id', 'profile_id', 'url', 'name', 'enabled', 'sort_order'];
 
 const jsonResponse = (status, body, headers = {}) => new Response(body === null || body === undefined ? null : JSON.stringify(body), {
@@ -230,6 +234,12 @@ async function handleRest(request, env, url, origin) {
     else if (request.method === 'GET' || request.method === 'HEAD') body = Object.fromEntries(url.searchParams);
     else return pgResponse(405, 'PGRST117', 'Unsupported HTTP method');
     if (!body || typeof body !== 'object' || Array.isArray(body)) return pgResponse(400, 'PGRST102', 'Expected a JSON object of named arguments');
+    if (EMPTY_LIST_FUNCTIONS.includes(rpc[1]) && Object.keys(body).length === 0) {
+      const who = await caller(request, env);
+      if (who.failure) return who.failure;
+      if (who.role !== 'authenticated') return pgResponse(401, '42501', `permission denied for function ${rpc[1]}`);
+      return jsonResponse(200, []);
+    }
     const { args } = resolveArguments(rpc[1], body);
     const who = await caller(request, env);
     if (who.failure) return who.failure;

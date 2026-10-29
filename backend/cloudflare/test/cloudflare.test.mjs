@@ -89,6 +89,14 @@ test('sessions rotate refresh tokens, and logout revokes them', async () => {
   assert.equal((await call(auto, '/rest/v1/rpc/sync_pull_profiles', { token: 'a.b.c', body: {} })).status, 401);
 });
 
+test('upstream membership and catalog calls answer with empty lists instead of retried 404s', async () => {
+  const { data: session } = await call(auto, '/auth/v1/signup', { body: credentials('member') });
+  for (const name of ['get_my_member_access', 'get_my_membership_overview', 'get_avatar_catalog', 'get_member_profile_avatar_catalog', 'get_member_profile_background_catalog']) {
+    assert.deepEqual((await call(auto, `/rest/v1/rpc/${name}`, { token: session.access_token, body: {} })).data, [], name);
+    assert.equal((await call(auto, `/rest/v1/rpc/${name}`, { body: {} })).status, 401, `${name} still needs a signed-in account`);
+  }
+});
+
 test('new accounts need the owner to approve them by email', async () => {
   const user = { ...credentials('friend'), email: `<b>friend</b>-${randomUUID()}@example.test` };
   let logLength = readFileSync(approvalLog, 'utf8').length;

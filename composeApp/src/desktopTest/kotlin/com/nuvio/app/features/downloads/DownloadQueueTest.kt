@@ -44,6 +44,7 @@ class DownloadQueueTest {
         try {
             DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
             DownloadDesktopFeatures.setDirectory(root)
+            DownloadDesktopFeatures.setParallelDownloads(1)
             val url = "http://127.0.0.1:${server.address.port}/fixture.mp4"
             enqueue(1, url); enqueue(2, url); enqueue(3, url)
             waitFor { requests.get() == 1 }
@@ -64,6 +65,52 @@ class DownloadQueueTest {
         } finally {
             gate.countDown(); server.stop(0)
             DownloadsRepository.pauseActiveDownloads(); DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setParallelDownloads(DefaultParallelDownloads)
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original))); root.deleteRecursively()
+        }
+    }
+
+    @Test fun severalEpisodesDownloadAtOnceUpToTheChosenLimit() {
+        val root = Files.createTempDirectory("download-parallel").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val gate = CountDownLatch(1)
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            executor = Executors.newCachedThreadPool { r -> Thread(r).apply { isDaemon = true } }
+            createContext("/") { exchange ->
+                requests.incrementAndGet()
+                gate.await(6, TimeUnit.SECONDS)
+                runCatching {
+                    exchange.responseHeaders.add("Content-Type", "video/mp4")
+                    exchange.responseHeaders.add("ETag", "\"fixture\"")
+                    exchange.sendResponseHeaders(200, media.size.toLong())
+                    exchange.responseBody.use { it.write(media) }
+                }
+            }
+            start()
+        }
+        try {
+            DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(root)
+            assertEquals(DefaultParallelDownloads, DownloadDesktopFeatures.parallelDownloads())
+            DownloadDesktopFeatures.setParallelDownloads(2)
+            val url = "http://127.0.0.1:${server.address.port}/fixture.mp4"
+            (1..4).forEach { enqueue(it, url) }
+            waitFor { requests.get() == 2 }
+            Thread.sleep(150)
+            assertEquals(2, requests.get(), "Only two transfers may run at once")
+            assertEquals(listOf("Queued", "Queued"), DownloadsRepository.uiState.value.items.drop(2).map { it.phase })
+            // Raising the limit starts the next queued episode straight away, in queue order.
+            DownloadDesktopFeatures.setParallelDownloads(3)
+            waitFor { requests.get() == 3 }
+            assertEquals("Queued", DownloadsRepository.uiState.value.items.last().phase)
+            gate.countDown()
+            waitFor { DownloadsRepository.uiState.value.items.all { it.status == DownloadStatus.Completed } }
+            assertEquals(4, requests.get())
+        } finally {
+            gate.countDown(); server.stop(0)
+            DownloadsRepository.pauseActiveDownloads(); DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setParallelDownloads(DefaultParallelDownloads)
             DownloadDesktopFeatures.setDirectory(File(requireNotNull(original))); root.deleteRecursively()
         }
     }
@@ -135,6 +182,7 @@ class DownloadQueueTest {
         try {
             DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
             DownloadDesktopFeatures.setDirectory(root)
+            DownloadDesktopFeatures.setParallelDownloads(1)
             val url = "http://127.0.0.1:${server.address.port}/fixture.mp4"
             assertEquals(DownloadEnqueueResult.Started, enqueue(1,url))
             assertEquals(DownloadEnqueueResult.Started, enqueue(2,url))
@@ -174,6 +222,7 @@ class DownloadQueueTest {
         } finally {
             gate.countDown(); server.stop(0)
             DownloadsRepository.pauseActiveDownloads(); DownloadsRepository.clearLocalState(); DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setParallelDownloads(DefaultParallelDownloads)
             DownloadDesktopFeatures.setDirectory(File(requireNotNull(original))); root.deleteRecursively()
         }
     }
