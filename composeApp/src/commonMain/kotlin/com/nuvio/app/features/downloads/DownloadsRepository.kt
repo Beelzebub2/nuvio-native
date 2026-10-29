@@ -235,8 +235,11 @@ object DownloadsRepository {
         }
         publish(items); persist(); pumpQueue()
     }
+    /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
+    internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
+
     private fun pumpQueue() {
-        val limit = if (isDesktop) 1 else Int.MAX_VALUE
+        val limit = if (isDesktop) DownloadDesktopFeatures.parallelDownloads() else Int.MAX_VALUE
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
             .take((limit - activeHandles.size).coerceAtLeast(0)).forEach { startDownload(it) }
     }
@@ -254,8 +257,7 @@ object DownloadsRepository {
             tokens.remove(item.id); activeHandles.remove(item.id)
             mutateItem(item.id, transform = transform); pumpQueue()
         }
-        var previousBytes = item.downloadedBytes
-        var previousTime = DownloadsClock.nowEpochMs()
+        val rate = DownloadRateMeter()
         var sourceResolved = item.sourceSelection == null
         val handle = DownloadsPlatformDownloader.start(DownloadPlatformRequest(item, onResolved = { resolved -> synchronized(lock) {
             sourceResolved = true
@@ -270,8 +272,7 @@ object DownloadsRepository {
             onProgress = { bytes, total -> synchronized(lock) {
                 if (current()) {
                     val now = DownloadsClock.nowEpochMs()
-                    val speed = ((bytes - previousBytes).coerceAtLeast(0) * 1000 / (now - previousTime).coerceAtLeast(1))
-                    previousBytes = bytes; previousTime = now
+                    val speed = rate.sample(now, bytes)
                     // Progress is transient; the durable .part length is the resume offset.
                     val phase = when {
                         !isDesktop -> null
