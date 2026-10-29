@@ -66,7 +66,9 @@ Use `:androidApp:lintFullDebug` or `:androidApp:lintPlaystoreDebug` for lint. In
 
 On 2026-10-28 the Full debug APK was verified on an Android 16 (API 36, x86_64) emulator: clearing app data and launching creates a usable guest profile and reaches Home; custom-server discovery and email/password signup work; a second account session's library addition appears after restart, and removing it in Android is reflected in that second session. An owned local test add-on also loaded its catalog/details and played a generated H.264/AAC video through ExoPlayer without an app crash.
 
-The broad Windows host suite is not green: download persistence/subtitle, hero pager, episode rating, and subtitle restore cases fail, with additional playback failures sensitive to test ordering. The fresh-guest/server-switch regressions and updated tab/catalog tests pass. Both complete CI suites remain enabled; see [the mobile/backend pull request](https://github.com/Beelzebub2/nuvio-native/pull/14) for the recorded results and current CI status.
+On 2026-10-29 the Full debug APK from CI commit `8928dc37` was clean-installed on the API 36 emulator. A cold launch created a new guest, reached Home with Home/Search/Library/Profile navigation available, and kept the app process stable without an app runtime crash.
+
+Both Android debug APK builds and host suites pass on Linux CI: Full reports 1,611 tests with no failures or skips; Play Store reports 1,591 tests with no failures and six skips. The Windows Android host suite runs 1,611 tests with six failures in download persistence/subtitle fixtures that use Android AtomicFile; those cases pass on Linux CI. The hero pager, episode rating, subtitle restore and playback regressions pass. The desktop Windows suite passes all 1,645 tests. See [the mobile/backend pull request](https://github.com/Beelzebub2/nuvio-native/pull/14) for the recorded results and current CI status.
 
 ## Servers and account sync
 
@@ -84,7 +86,7 @@ Only a public client key belongs in an app. Never embed a Supabase service-role 
 
 In a Full build, open **Profile → Account → Sign Out** and confirm. On the login screen, choose **Server options → Connect to custom server**, enter your discovery address, choose **Check server**, and review/confirm trust. Close the server sheet and choose **Sign Up** to create your own account (or sign into an existing account on that server). For the local emulator setup below, enter `http://127.0.0.1:8787` after forwarding both ports.
 
-Account sync uses Supabase Auth and PostgREST. A guest ID is only a local identifier, not a server user. The app skips backend availability probes when its backend configuration is blank.
+Account sync uses a Supabase-compatible Auth and PostgREST contract, implemented by either the Cloudflare Worker or your own Supabase backend described below. A guest ID is only a local identifier, not a server user. The app skips backend availability probes when its backend configuration is blank.
 
 | Data | Desktop and Android behavior |
 | --- | --- |
