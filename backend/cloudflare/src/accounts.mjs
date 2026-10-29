@@ -150,6 +150,11 @@ export class AccountsDO extends DurableObject {
    * retires the old one); anyone else gets the same pending reply and changes nothing.
    */
   async repeatSignup(existing, { password, now, country, client }) {
+    // A repeat checks the pending password, so it spends the same budget as a wrong sign-in:
+    // guessing through sign-up is never faster than guessing through sign-in.
+    if (this.passwordLocked(existing.email, now)) {
+      return authError(429, 'over_request_rate_limit', 'Too many attempts for this email. Try again in 15 minutes.');
+    }
     const reviewToken = randomToken();
     const reviewHash = await sha256(reviewToken);
     // One password hash either way, like a new request, so timing does not reveal a match.
@@ -157,6 +162,7 @@ export class AccountsDO extends DurableObject {
     // No awaits below: re-read, because the request may have been decided while hashing.
     if (this.isRegistered(existing.email)) return alreadyRegistered();
     const current = this.first('SELECT * FROM signup_requests WHERE email = ?', existing.email);
+    if (!matches) this.recordPasswordFailure(existing.email, now);
     if (!matches || current?.id !== existing.id) return { pending: pendingUserJson(current ?? existing) };
     const notify = this.mayNotify(now, current.notified_at);
     this.sql.exec('UPDATE signup_requests SET requested_at = ?, country = ?, client = ?, review_token_hash = ?, notified_at = ? WHERE email = ?',
@@ -202,10 +208,23 @@ export class AccountsDO extends DurableObject {
     });
   }
 
+  /** Sign-in and repeated sign-ups share one wrong-password budget per email. */
+  passwordLocked(email, now) {
+    const failures = this.first('SELECT count, window_start FROM login_failures WHERE email = ?', email);
+    return !!failures && now - failures.window_start < FAILURE_WINDOW_MS && failures.count >= MAX_FAILURES;
+  }
+
+  recordPasswordFailure(email, now) {
+    const failures = this.first('SELECT window_start FROM login_failures WHERE email = ?', email);
+    const fresh = !failures || now - failures.window_start >= FAILURE_WINDOW_MS;
+    this.sql.exec(`INSERT INTO login_failures (email, count, window_start) VALUES (?, 1, ?)
+      ON CONFLICT (email) DO UPDATE SET count = CASE WHEN ? THEN 1 ELSE count + 1 END, window_start = CASE WHEN ? THEN ? ELSE window_start END`,
+      email, now, fresh ? 1 : 0, fresh ? 1 : 0, now);
+  }
+
   async passwordLogin({ email, password, iterations }) {
     const now = Date.now();
-    const failures = this.first('SELECT count, window_start FROM login_failures WHERE email = ?', email);
-    if (failures && now - failures.window_start < FAILURE_WINDOW_MS && failures.count >= MAX_FAILURES) {
+    if (this.passwordLocked(email, now)) {
       return authError(429, 'over_request_rate_limit', 'Too many failed sign-in attempts. Try again in 15 minutes.');
     }
     const user = this.first('SELECT id, password_hash FROM users WHERE email = ?', email);
@@ -217,10 +236,7 @@ export class AccountsDO extends DurableObject {
       return authError(400, 'email_not_confirmed', PENDING_MESSAGE);
     }
     if (!user || !valid) {
-      const fresh = !failures || now - failures.window_start >= FAILURE_WINDOW_MS;
-      this.sql.exec(`INSERT INTO login_failures (email, count, window_start) VALUES (?, 1, ?)
-        ON CONFLICT (email) DO UPDATE SET count = CASE WHEN ? THEN 1 ELSE count + 1 END, window_start = CASE WHEN ? THEN ? ELSE window_start END`,
-        email, now, fresh ? 1 : 0, fresh ? 1 : 0, now);
+      this.recordPasswordFailure(email, now);
       return authError(400, 'invalid_credentials', 'Invalid login credentials');
     }
     this.sql.exec('DELETE FROM login_failures WHERE email = ?', email);

@@ -12,7 +12,7 @@ Everything runs on the Workers **Free** plan:
 
 The same contract as the Supabase migration, checked by the same HTTP integration test: profiles, add-ons and plugins, library, watch progress and watched history (snapshots, deltas, tombstones, stale-write protection), collections, home catalog settings, per-platform settings blobs, provider credentials and device registration. TV login, profile PINs, password reset by email and account deletion are not available, as with the Supabase backend.
 
-Passwords are hashed with PBKDF2-SHA256 (100,000 iterations, the Workers maximum). Access tokens are HS256 JWTs valid for one hour; refresh tokens rotate on every use and are stored hashed. Ten wrong passwords lock that email for 15 minutes. Provider keys are readable only by their account, but you, as the Cloudflare account owner, can read everything stored here.
+Passwords are hashed with PBKDF2-SHA256 (100,000 iterations, the Workers maximum). Access tokens are HS256 JWTs valid for one hour; refresh tokens rotate on every use and are stored hashed. Ten wrong passwords lock that email for 15 minutes; wrong-password sign-up repeats for a waiting email count toward the same limit, so they cannot be used to guess faster. Provider keys are readable only by their account, but you, as the Cloudflare account owner, can read everything stored here.
 
 ## Sign-up approval
 
@@ -21,7 +21,7 @@ Passwords are hashed with PBKDF2-SHA256 (100,000 iterations, the Workers maximum
 3. Open the link and choose **Approve** or **Deny**. Opening the page alone changes nothing, so mail scanners that preview links cannot approve anyone. Links are single use and expire after 7 days.
 4. After approval they sign in with the password they chose.
 
-A request's password is never replaced, so nobody can swap it before you approve. A repeated sign-up for a waiting email only counts when it has the same password: it keeps the request alive and, at most once an hour, emails you a fresh link that replaces the old one. A repeat with any other password changes nothing. A request that expired unanswered can be made again from scratch, with a new link; the old one never works again. At most 10 approval emails go out per hour and at most 20 requests can wait at once. Set `SIGNUP_MODE` to `closed` to stop new requests entirely.
+A request's password is never replaced, so nobody can swap it before you approve. A repeated sign-up for a waiting email only counts when it has the same password: it keeps the request alive and, at most once an hour, emails you a fresh link that replaces the old one. A repeat with any other password changes nothing (and counts as a wrong password). The approval email is sent after the app gets its reply, so neither its timing nor a failed send reveals anything; after a failed send, the next same-password request emails you again. A request that expired unanswered can be made again from scratch, with a new link; the old one never works again. At most 10 approval emails go out per hour and at most 20 requests can wait at once. Set `SIGNUP_MODE` to `closed` to stop new requests entirely.
 
 ## Deploy
 

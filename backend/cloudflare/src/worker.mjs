@@ -88,7 +88,7 @@ function credentialsFrom(body) {
   return { email, password };
 }
 
-async function handleAuth(request, env, url, origin) {
+async function handleAuth(request, env, ctx, url, origin) {
   const path = url.pathname.replace(/^\/auth\/v1/, '').replace(/\/$/, '') || '/';
   const config = settings(env, url);
   if (request.method === 'GET' && path === '/health') return jsonResponse(200, { version: 'starlit-cloudflare', name: 'GoTrue', description: 'Starlit account service' });
@@ -117,15 +117,12 @@ async function handleAuth(request, env, url, origin) {
     if (result.error) return authResponse(result.error);
     if (!result.pending) return jsonResponse(200, await sessionBody(env, origin, result));
     if (result.reviewToken) {
-      try {
-        await sendApprovalEmail(env, {
-          reviewUrl: `${origin}/admin/signups/review?token=${encodeURIComponent(result.reviewToken)}`,
-          email, requestedAt: Date.now(), country: request.cf?.country, client: request.headers.get('User-Agent'),
-        });
-      } catch {
-        await accounts(env).notificationFailed(email);
-        return authResponse({ status: 503, error_code: 'email_send_failed', msg: 'Your request could not be sent to the server owner. Try again later.' });
-      }
+      // Sent after the response, so neither its duration nor a failure reveals anything about the
+      // request. A failed send lets the next same-password request email the owner again.
+      ctx.waitUntil(sendApprovalEmail(env, {
+        reviewUrl: `${origin}/admin/signups/review?token=${encodeURIComponent(result.reviewToken)}`,
+        email, requestedAt: Date.now(), country: request.cf?.country, client: request.headers.get('User-Agent'),
+      }).catch(() => accounts(env).notificationFailed(email)));
     }
     // GoTrue's "confirmation required" shape: the account exists but has no session yet.
     return jsonResponse(200, result.pending);
@@ -314,7 +311,7 @@ function selectRows(rows, params, table) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const origin = url.origin;
     try {
@@ -336,7 +333,7 @@ export default {
       }
       if (url.pathname === '/' || url.pathname === '/healthz') return jsonResponse(200, { status: 'ok', service: 'starlit-sync' });
       if (url.pathname === '/admin/signups/review') return await handleReview(request, env, url);
-      if (url.pathname.startsWith('/auth/v1/')) return await handleAuth(request, env, url, origin);
+      if (url.pathname.startsWith('/auth/v1/')) return await handleAuth(request, env, ctx, url, origin);
       if (url.pathname === '/rest/v1' || url.pathname.startsWith('/rest/v1/')) return await handleRest(request, env, url, origin);
       if (url.pathname.startsWith('/functions/v1/')) return jsonResponse(404, { code: 'NOT_FOUND', message: 'Requested function was not found' });
       if (url.pathname.startsWith('/storage/v1/')) return jsonResponse(404, { statusCode: '404', error: 'not_found', message: 'File storage is not available on this server' });

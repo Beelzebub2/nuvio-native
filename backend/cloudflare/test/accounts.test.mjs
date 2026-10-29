@@ -123,3 +123,17 @@ test('two simultaneous first requests store one password and email the owner onc
   assert.ok((await login(email, passwords[winner])).sessionId, 'The account has the password of the emailed request');
   assert.equal((await login(email, passwords[1 - winner])).error.error_code, 'invalid_credentials');
 });
+
+test('wrong-password repeats share the sign-in lockout, so they cannot test guesses faster', async t => {
+  const { clock, request, login } = setup(t);
+  const email = 'guessed@example.test';
+  const password = 'Owner-password-1';
+  await request(email, password);
+  for (let guess = 0; guess < 10; guess++) {
+    assert.ok((await request(email, `Wrong-guess-${guess}-pass`)).pending, 'A wrong repeat looks like any other pending reply');
+  }
+  assert.equal((await request(email, password)).error?.error_code, 'over_request_rate_limit', 'Even the right password waits out the lockout');
+  assert.equal((await login(email, password)).error.error_code, 'over_request_rate_limit', 'Sign-in shares the same budget');
+  clock.advance(15 * 60 * 1000);
+  assert.ok((await request(email, password)).pending, 'The lockout ends after 15 minutes');
+});
