@@ -1,3 +1,11 @@
+## Starlit 1.0.37
+
+### Improvements
+
+- **Downloads** can now fetch several episodes at the same time. Choose 1 to 5 under **Downloads at once** on the Downloads page (3 by default); the Queue header shows the combined speed.
+- Episodes from the same torrent, such as a season pack, now share one connection to its peers, so the next episode starts at full speed instead of searching for peers again.
+- Download speed and time left are averaged over a few seconds, so they no longer jump with every burst, and they drop when a transfer stalls instead of freezing.
+
 ## Starlit 1.0.36
 
 ### Improvements
