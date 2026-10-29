@@ -2497,4 +2497,20 @@
     <string name="downloads_remove_selected_message">Remove %1$d selected downloads? Their downloaded files and partial files will be deleted, and any queued or active transfers will be cancelled.</string>
     <string name="settings_licenses_attributions_tvmaze_title">TVmaze</string>
     <string name="settings_licenses_attributions_tvmaze_body">Episode metadata and images from TVmaze (https://www.tvmaze.com), used under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). Artwork matching is adapted to anime episode dates. Starlit is not affiliated with or endorsed by TVmaze.</string>
+    <string name="addons_backup_title">Move add-ons to another device</string>
+    <string name="addons_backup_hint">Export your configured URLs, order and enabled states. Import adds missing add-ons without changing existing ones. Backups may contain private URLs or access keys; share them only with people you trust.</string>
+    <string name="addons_backup_export">Export add-ons</string>
+    <string name="addons_backup_import">Import add-ons</string>
+    <string name="addons_backup_copy">Copy backup</string>
+    <string name="addons_backup_paste">Paste backup</string>
+    <string name="addons_backup_json">Add-on backup JSON</string>
+    <string name="addons_backup_invalid">This is not a valid add-on backup. No add-ons were changed.</string>
+    <string name="addons_backup_version">This backup version is not supported. Update the app and try again.</string>
+    <string name="addons_backup_too_large">The backup is too large. Choose a file smaller than 1 MB.</string>
+    <string name="addons_backup_profile_changed">The profile changed while choosing the backup. Start the import again.</string>
+    <string name="addons_backup_file_error">Could not read or save the backup. Check the file and try again.</string>
+    <string name="addons_backup_imported">Imported %1$d add-ons. Skipped %2$d duplicates. Enabled add-ons will refresh in the background.</string>
+    <string name="addons_backup_saved">Add-on backup saved.</string>
+    <string name="addons_backup_copied">Add-on backup copied. Paste it into a private message or file to move it to another device.</string>
+    <string name="addons_backup_overwrite">Replace the existing backup file?</string>
 </resources>

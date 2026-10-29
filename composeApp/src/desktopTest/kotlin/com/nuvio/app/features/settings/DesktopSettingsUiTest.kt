@@ -99,6 +99,11 @@ class DesktopSettingsUiTest {
 
         open("Source list")
         capture("04-source-list")
+        open("Add-ons")
+        onNodeWithText("Move add-ons to another device").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Export add-ons").assertIsDisplayed()
+        onNodeWithText("Import add-ons").assertIsDisplayed()
+        capture("04-addons-transfer")
         open("Advanced")
         capture("05-advanced")
     }
