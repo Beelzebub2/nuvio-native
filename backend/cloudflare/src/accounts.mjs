@@ -14,6 +14,7 @@ const MAX_PENDING_REQUESTS = 20;
 const MAX_EMAILS_PER_HOUR = 10;
 
 const authError = (status, error_code, msg, extra = {}) => ({ error: { status, error_code, msg, ...extra } });
+const alreadyRegistered = () => authError(422, 'user_already_exists', 'User already registered');
 export const PENDING_MESSAGE = 'Your account is waiting for approval. You can sign in once the server owner approves it.';
 
 async function pbkdf2(password, salt, iterations) {
@@ -112,16 +113,19 @@ export class AccountsDO extends DurableObject {
   async signup({ email, password, metadata, iterations, mode, country, client }) {
     if (mode === 'closed') return authError(422, 'signup_disabled', 'Signups not allowed for this instance');
     const now = Date.now();
+    // An expired request is dropped, so a later one starts over with a new id and review link.
     this.sql.exec('DELETE FROM signup_requests WHERE requested_at < ?', now - REQUEST_LIFETIME_MS);
-    const taken = () => (this.first('SELECT 1 AS taken FROM users WHERE email = ?', email)
-      ? authError(422, 'user_already_exists', 'User already registered') : null);
-    if (taken()) return taken();
+    if (this.isRegistered(email)) return alreadyRegistered();
     const existing = this.first('SELECT * FROM signup_requests WHERE email = ?', email);
-    if (mode === 'approval' && !existing && this.first('SELECT COUNT(*) AS total FROM signup_requests').total >= MAX_PENDING_REQUESTS) {
+    if (mode === 'approval' && existing) return this.repeatSignup(existing, { password, now, country, client });
+    if (mode === 'approval' && this.first('SELECT COUNT(*) AS total FROM signup_requests').total >= MAX_PENDING_REQUESTS) {
       return authError(429, 'over_request_rate_limit', 'Too many sign-up requests are waiting for approval. Try again later.');
     }
+    const reviewToken = randomToken();
+    const reviewHash = await sha256(reviewToken);
     const passwordHash = await hashPassword(password, iterations);
-    if (taken()) return taken(); // Another request may have finished while hashing.
+    // No awaits below, so no other request can interleave between these checks and the insert.
+    if (this.isRegistered(email)) return alreadyRegistered(); // Approved while hashing.
     if (mode === 'auto') {
       const id = crypto.randomUUID();
       const created = nowIso();
@@ -129,21 +133,44 @@ export class AccountsDO extends DurableObject {
         id, email, passwordHash, JSON.stringify(metadata), created, created);
       return this.issueSession(id);
     }
-    // At most one email per request per hour, and a global hourly cap, so nobody can flood the owner.
-    const recentEmails = this.first('SELECT COUNT(*) AS total FROM signup_requests WHERE notified_at > ?', now - RENOTIFY_AFTER_MS).total;
-    const notify = (!existing || now - existing.notified_at >= RENOTIFY_AFTER_MS) && recentEmails < MAX_EMAILS_PER_HOUR;
-    const reviewToken = randomToken();
-    const reviewHash = await sha256(reviewToken);
-    // A repeated request keeps the first password: nobody else can swap it before the owner approves.
+    // A simultaneous request for this email got in first; it keeps its password and its link.
+    const raced = this.first('SELECT * FROM signup_requests WHERE email = ?', email);
+    if (raced) return { pending: pendingUserJson(raced) };
+    const notify = this.mayNotify(now, 0);
     this.sql.exec(`INSERT INTO signup_requests (email, id, password_hash, user_metadata, created_at, requested_at, review_token_hash, notified_at, country, client)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (email) DO UPDATE SET
-        review_token_hash = CASE WHEN ? THEN excluded.review_token_hash ELSE review_token_hash END,
-        notified_at = CASE WHEN ? THEN excluded.notified_at ELSE notified_at END`,
-      email, crypto.randomUUID(), passwordHash, JSON.stringify(metadata), nowIso(), now, reviewHash,
-      notify ? now : 0, country, client, notify ? 1 : 0, notify ? 1 : 0);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      email, crypto.randomUUID(), passwordHash, JSON.stringify(metadata), nowIso(), now, reviewHash, notify ? now : 0, country, client);
     const pending = pendingUserJson(this.first('SELECT * FROM signup_requests WHERE email = ?', email));
     return notify ? { pending, reviewToken } : { pending };
+  }
+
+  /**
+   * A repeated request for an email that is already waiting. The stored password is never replaced.
+   * Only someone who knows it may refresh the request or have the owner emailed a new link (which
+   * retires the old one); anyone else gets the same pending reply and changes nothing.
+   */
+  async repeatSignup(existing, { password, now, country, client }) {
+    const reviewToken = randomToken();
+    const reviewHash = await sha256(reviewToken);
+    // One password hash either way, like a new request, so timing does not reveal a match.
+    const matches = await verifyPassword(password, existing.password_hash);
+    // No awaits below: re-read, because the request may have been decided while hashing.
+    if (this.isRegistered(existing.email)) return alreadyRegistered();
+    const current = this.first('SELECT * FROM signup_requests WHERE email = ?', existing.email);
+    if (!matches || current?.id !== existing.id) return { pending: pendingUserJson(current ?? existing) };
+    const notify = this.mayNotify(now, current.notified_at);
+    this.sql.exec('UPDATE signup_requests SET requested_at = ?, country = ?, client = ?, review_token_hash = ?, notified_at = ? WHERE email = ?',
+      now, country, client, notify ? reviewHash : current.review_token_hash, notify ? now : current.notified_at, current.email);
+    const pending = pendingUserJson(this.first('SELECT * FROM signup_requests WHERE email = ?', current.email));
+    return notify ? { pending, reviewToken } : { pending };
+  }
+
+  isRegistered(email) { return !!this.first('SELECT 1 AS taken FROM users WHERE email = ?', email); }
+
+  /** At most one owner email per request per hour, and a global hourly cap, so nobody can flood the owner. */
+  mayNotify(now, lastNotifiedAt) {
+    if (now - lastNotifiedAt < RENOTIFY_AFTER_MS) return false;
+    return this.first('SELECT COUNT(*) AS total FROM signup_requests WHERE notified_at > ?', now - RENOTIFY_AFTER_MS).total < MAX_EMAILS_PER_HOUR;
   }
 
   /** Lets a later sign-up attempt email the owner again when sending the approval email failed. */

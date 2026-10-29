@@ -21,7 +21,7 @@ Passwords are hashed with PBKDF2-SHA256 (100,000 iterations, the Workers maximum
 3. Open the link and choose **Approve** or **Deny**. Opening the page alone changes nothing, so mail scanners that preview links cannot approve anyone. Links are single use and expire after 7 days.
 4. After approval they sign in with the password they chose.
 
-Repeated sign-ups for the same email send at most one email per hour and keep the first password, so nobody can swap it before you approve. At most 10 approval emails go out per hour and at most 20 requests can wait at once. Set `SIGNUP_MODE` to `closed` to stop new requests entirely.
+A request's password is never replaced, so nobody can swap it before you approve. A repeated sign-up for a waiting email only counts when it has the same password: it keeps the request alive and, at most once an hour, emails you a fresh link that replaces the old one. A repeat with any other password changes nothing. A request that expired unanswered can be made again from scratch, with a new link; the old one never works again. At most 10 approval emails go out per hour and at most 20 requests can wait at once. Set `SIGNUP_MODE` to `closed` to stop new requests entirely.
 
 ## Deploy
 
@@ -77,3 +77,5 @@ npm test
 ```
 
 This starts two disposable local servers with `wrangler dev`, one with instant sign-up and one requiring approval. It runs the shared Supabase-contract integration test plus the Cloudflare tests: auth edge cases, refresh rotation and logout, and the full approval flow using wrangler's simulated email. Nothing is sent and no Cloudflare resources are used.
+
+`npm run test:unit` runs only the sign-up request rules (repeat, expiry and race cases) in plain Node against an in-memory database with a simulated clock. It needs no server and Node.js 22.15 or newer.
