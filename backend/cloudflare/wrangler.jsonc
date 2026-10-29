@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "starlit-sync",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-09-17",
+  "workers_dev": true,
+  "send_metrics": false,
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ACCOUNTS", "class_name": "AccountsDO" },
+      { "name": "USER_DATA", "class_name": "UserDataDO" }
+    ]
+  },
+  "exports": {
+    "AccountsDO": { "type": "durable-object", "storage": "sqlite" },
+    "UserDataDO": { "type": "durable-object", "storage": "sqlite" }
+  },
+  // Email Routing can only deliver to verified destination addresses; this binding is pinned to one.
+  "send_email": [
+    { "name": "APPROVAL_EMAIL", "destination_address": "ricardo.approvals@rrmtools.uk" }
+  ],
+  "vars": {
+    // approval: the owner approves each new account by email. closed: no new accounts.
+    "SIGNUP_MODE": "approval",
+    "APPROVAL_FROM": "starlit-sync@rrmtools.uk",
+    "APPROVAL_TO": "ricardo.approvals@rrmtools.uk",
+    "PASSWORD_HASH_ITERATIONS": "100000"
+  }
+}

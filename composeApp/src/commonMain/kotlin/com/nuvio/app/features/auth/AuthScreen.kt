@@ -769,6 +769,19 @@ private fun AuthForm(
             )
         }
 
+        val authNotice by AuthRepository.notice.collectAsStateWithLifecycle()
+        authNotice?.takeIf { authError == null }?.let { noticeText ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = noticeText,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = (13f * scale).sp,
+                    lineHeight = (18f * scale).sp,
+                ),
+            )
+        }
+
         if (isSignUp) {
             Spacer(modifier = Modifier.height(14.dp * scale))
             AuthTermsAcknowledgement(
