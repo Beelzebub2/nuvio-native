@@ -33,6 +33,15 @@ internal actual object AddonStorage {
         store.putString("installed_addon_urls_$profileId", json.encodeToString(urls))
     }
 
+    actual fun loadAddonNames(profileId: Int): Map<String, String> =
+        store.getString("addon_names_$profileId")
+            ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+            ?: emptyMap()
+
+    actual fun saveAddonNames(profileId: Int, names: Map<String, String>) {
+        store.putString("addon_names_$profileId", json.encodeToString(names))
+    }
+
     actual fun loadAddonEnabledStates(profileId: Int): Map<String, Boolean> =
         store.getString("addon_enabled_states_$profileId")
             ?.let { payload -> runCatching { json.decodeFromString<Map<String, Boolean>>(payload) }.getOrNull() }

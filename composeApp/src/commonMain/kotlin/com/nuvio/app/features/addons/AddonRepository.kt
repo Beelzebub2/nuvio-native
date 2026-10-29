@@ -57,6 +57,8 @@ object AddonRepository {
 
     private var initialized = false
     private var currentProfileId: Int = 1
+    internal var backupProfileRevision: Long = 0
+        private set
     private val activeRefreshJobs = mutableMapOf<String, Job>()
     private val pushJobsByProfile = mutableMapOf<Int, Job>()
 
@@ -69,6 +71,7 @@ object AddonRepository {
 
         val storedUrls = dedupeManifestUrls(AddonStorage.loadInstalledAddonUrls(currentProfileId))
         val enabledByUrl = loadLocalEnabledStates()
+        val namesByUrl = AddonStorage.loadAddonNames(currentProfileId)
         log.d { "initialize() — local addon count: ${storedUrls.size}" }
         if (storedUrls.isEmpty()) return
 
@@ -78,6 +81,7 @@ object AddonRepository {
                 existingByUrl[manifestUrl].toPendingAddon(
                     manifestUrl = manifestUrl,
                     enabled = enabledByUrl[manifestUrl],
+                    userSetName = namesByUrl[manifestUrl],
                 )
             },
         )
@@ -94,6 +98,7 @@ object AddonRepository {
     fun onProfileChanged(profileId: Int) {
         val effectiveProfileId = resolveEffectiveProfileId(profileId)
         if (effectiveProfileId == currentProfileId && initialized) return
+        backupProfileRevision++
         cancelActiveRefreshes()
         currentProfileId = effectiveProfileId
         initialized = false
@@ -101,6 +106,7 @@ object AddonRepository {
     }
 
     fun clearLocalState() {
+        backupProfileRevision++
         cancelActiveRefreshes()
         pushJobsByProfile.values.forEach(Job::cancel)
         pushJobsByProfile.clear()
@@ -222,6 +228,33 @@ object AddonRepository {
         if (!changed) return
         persist()
         pushToServer()
+    }
+
+    internal fun exportBackup(): String {
+        initialize()
+        return AddonBackupCodec.encode(_uiState.value.addons)
+    }
+
+    internal fun importBackup(payload: String, requestedProfileId: Int, requestedRevision: Long): AddonBackupMerge {
+        if (isUsingPrimaryAddonsFromSecondaryProfile()) {
+            throw AddonBackupException(AddonBackupError.PrimaryProfileRequired)
+        }
+        if (requestedRevision != backupProfileRevision || requestedProfileId != ProfileRepository.activeProfileId ||
+            requestedProfileId != currentProfileId
+        ) throw AddonBackupException(AddonBackupError.ProfileChanged)
+        val entries = AddonBackupCodec.decode(payload)
+        initialize()
+        var result = mergeAddonBackup(_uiState.value.addons, entries)
+        _uiState.update { current ->
+            result = mergeAddonBackup(current.addons, entries)
+            current.copy(addons = result.addons)
+        }
+        if (result.imported > 0) {
+            persist()
+            pushToServer()
+            result.addons.takeLast(result.imported).filter { it.enabled }.forEach { refreshAddon(it.manifestUrl) }
+        }
+        return result
     }
 
     fun moveAddon(fromIndex: Int, toIndex: Int) {
@@ -404,6 +437,9 @@ object AddonRepository {
             currentProfileId,
             addons.associate { it.manifestUrl to it.enabled },
         )
+        AddonStorage.saveAddonNames(currentProfileId, addons.mapNotNull { addon ->
+            addon.userSetName?.let { addon.manifestUrl to it }
+        }.toMap())
     }
 
     private fun loadLocalEnabledStates(): Map<String, Boolean> =
@@ -469,7 +505,7 @@ private fun ensureManifestSuffix(url: String): String {
     return manifestUrl.encodeUnsafeHttpUrlCharacters()
 }
 
-private fun normalizeManifestUrl(rawUrl: String): String {
+internal fun normalizeManifestUrl(rawUrl: String): String {
     val trimmed = rawUrl.trim()
     require(trimmed.isNotEmpty()) { runBlocking { getString(Res.string.addons_error_enter_url) } }
 

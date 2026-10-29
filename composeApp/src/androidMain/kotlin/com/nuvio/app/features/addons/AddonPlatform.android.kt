@@ -1,5 +1,8 @@
 package com.nuvio.app.features.addons
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+
 import android.content.Context
 import android.content.SharedPreferences
 import com.nuvio.app.core.diagnostics.SentryNetworkBreadcrumbInterceptor
@@ -52,6 +55,15 @@ actual object AddonStorage {
             ?.edit()
             ?.putString("${addonUrlsKey}_$profileId", urls.joinToString(separator = "\n"))
             ?.apply()
+    }
+
+    actual fun loadAddonNames(profileId: Int): Map<String, String> =
+        preferences?.getString("addon_names_$profileId", null)
+            ?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+            ?: emptyMap()
+
+    actual fun saveAddonNames(profileId: Int, names: Map<String, String>) {
+        preferences?.edit()?.putString("addon_names_$profileId", Json.encodeToString(names))?.apply()
     }
 
     actual fun loadAddonEnabledStates(profileId: Int): Map<String, Boolean> =
