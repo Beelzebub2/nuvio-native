@@ -50,6 +50,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate and extract current release notes
+        shell: pwsh
+        run: |
+          node --test .github/release-notes.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes tests failed.' }
+          node .github/release-notes.mjs extract docs/RELEASE-NOTES.md $env:RELEASE_TAG "$env:RUNNER_TEMP/current-release-notes.md"
+          if ($LASTEXITCODE -ne 0) { throw 'Current release notes are missing, duplicated, or empty.' }
       - name: Install provider gateway test dependencies
         working-directory: gateway
         run: npm ci
@@ -174,6 +181,9 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@v8
         with:
           path: release
@@ -184,13 +194,19 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "::error::This release already exists; do not overwrite published installers."; exit 1
           fi
+          node .github/release-notes.mjs extract docs/RELEASE-NOTES.md "$RELEASE_TAG" "$RUNNER_TEMP/current-release-notes.md"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate --slurp > "$RUNNER_TEMP/published-releases.json"
+          previous=$(node .github/release-notes.mjs previous "$RUNNER_TEMP/published-releases.json" "$RELEASE_TAG")
           cd release
           { tr -d '\r' < SHA256SUMS.txt; cat SHA256SUMS-android.txt; } > SHA256SUMS-all.txt
           mv SHA256SUMS-all.txt SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
-          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Starlit $version" \
-            --generate-notes --notes-file ../docs/RELEASE-NOTES.md \
-            "Starlit-Windows-x64-$version.exe" \
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Starlit $version"
+            --notes-file "$RUNNER_TEMP/current-release-notes.md")
+          # With no published predecessor, publish only the authored notes: automatic tag inference can select failed tags.
+          if [ -n "$previous" ]; then args+=(--generate-notes --notes-start-tag "$previous"); fi
+          # arm64-v8a first: the in-app updater takes the first APK whose name matches the phone's ABI.
+          gh "${args[@]}" "Starlit-Windows-x64-$version.exe" \
             "Starlit-Android-arm64-v8a-$version.apk" "Starlit-Android-armeabi-v7a-$version.apk" \
             "Starlit-Android-x86-$version.apk" "Starlit-Android-x86_64-$version.apk" \
             SHA256SUMS.txt
