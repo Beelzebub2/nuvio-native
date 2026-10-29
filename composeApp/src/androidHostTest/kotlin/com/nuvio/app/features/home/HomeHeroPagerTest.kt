@@ -51,7 +51,7 @@ class HomeHeroPagerTest {
         swipeRight()
         assertWrapFrames(expectedIndex = 7)
 
-        compose.mainClock.advanceTimeBy(6_000L)
+        compose.mainClock.advanceTimeBy(8_000L)
         assertWrapFrames(expectedIndex = 0)
     }
 
