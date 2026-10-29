@@ -77,6 +77,8 @@ open class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge(
+            // The UI is always dark, so keep light status icons even when the phone uses light mode.
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(
                 scrim = 0xFF020404.toInt(),
             ),

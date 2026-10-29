@@ -1,4 +1,4 @@
-name: Release Starlit for Windows
+name: Release Starlit
 
 on:
   push:
@@ -98,14 +98,99 @@ jobs:
           if (Test-Path $key) { throw 'Uninstall left the Apps & Features entry behind.' }
       - uses: actions/upload-artifact@v7
         with:
-          name: Starlit-Windows-x64-${{ env.RELEASE_VERSION }}
+          name: starlit-windows-release
           path: release/*
           if-no-files-found: error
-      - name: Publish private release after successful checks
-        shell: pwsh
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate version tag
         run: |
-          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'This release already exists; do not overwrite published installers.' }
-          $installer = "release/Starlit-Windows-x64-$env:RELEASE_VERSION.exe"
-          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --title "Starlit $env:RELEASE_VERSION" --generate-notes --notes-file docs/RELEASE-NOTES.md $installer release/SHA256SUMS.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
+          version=$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
+          code=$(sed -n 's/^VERSION_CODE=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
+          if [ "$RELEASE_TAG" != "v$version" ]; then echo "::error::Tag does not match DesktopVersion.properties"; exit 1; fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=$code" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Android compilation SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Restore the release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then echo "::error::The ANDROID_KEYSTORE_BASE64 secret is missing"; exit 1; fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/starlit-release.jks"
+          echo "NUVIO_RELEASE_STORE_FILE=$RUNNER_TEMP/starlit-release.jks" >> "$GITHUB_ENV"
+      - name: Build signed release APKs
+        env:
+          NUVIO_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NUVIO_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NUVIO_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # The APK carries the release version so the in-app updater compares it with the release tag.
+        run: >-
+          ./gradlew :androidApp:assembleFullRelease
+          -Pnuvio.android.distribution=full
+          -Pnuvio.app.versionName=${RELEASE_VERSION}
+          -Pnuvio.app.versionCode=${RELEASE_VERSION_CODE}
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --no-configuration-cache --no-daemon --console=plain
+      - name: Verify signatures and name APKs
+        run: |
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          mkdir -p release
+          if ls androidApp/build/outputs/apk/full/release/ | grep -q unsigned; then echo "::error::Release APKs are unsigned"; exit 1; fi
+          # arm64-v8a first: it is the APK almost every phone needs.
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            apk=$(ls androidApp/build/outputs/apk/full/release/*-"$abi"-release.apk)
+            "$apksigner" verify "$apk"
+            cp "$apk" "release/Starlit-Android-$abi-$RELEASE_VERSION.apk"
+          done
+          (cd release && sha256sum *.apk > SHA256SUMS-android.txt)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: starlit-android-release
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+      - name: Publish the release after every build passed
+        run: |
+          version="${RELEASE_TAG#v}"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::This release already exists; do not overwrite published installers."; exit 1
+          fi
+          cd release
+          { tr -d '\r' < SHA256SUMS.txt; cat SHA256SUMS-android.txt; } > SHA256SUMS-all.txt
+          mv SHA256SUMS-all.txt SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Starlit $version" \
+            --generate-notes --notes-file ../docs/RELEASE-NOTES.md \
+            "Starlit-Windows-x64-$version.exe" \
+            "Starlit-Android-arm64-v8a-$version.apk" "Starlit-Android-armeabi-v7a-$version.apk" \
+            "Starlit-Android-x86-$version.apk" "Starlit-Android-x86_64-$version.apk" \
+            SHA256SUMS.txt
