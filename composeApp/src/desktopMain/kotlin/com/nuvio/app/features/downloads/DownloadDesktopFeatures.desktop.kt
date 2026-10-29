@@ -12,6 +12,13 @@ import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +45,10 @@ import javax.swing.JFileChooser
 import javax.swing.SwingUtilities
 import kotlin.coroutines.resume
 
+/** Choices for how many episodes download at once; a few keep the connection busy when one source slows. */
+internal val ParallelDownloadChoices = 1..5
+internal const val DefaultParallelDownloads = 3
+
 internal actual object DownloadDesktopFeatures {
     private val store by lazy { DesktopStorage.store("desktop_download_preferences") }
     actual fun directory(): String? = store.getString("folder") ?: legacyDownloadsDirectory.also { it.mkdirs() }.absolutePath
@@ -46,6 +57,13 @@ internal actual object DownloadDesktopFeatures {
         store.putString("folder", folder.canonicalPath)
     }
     actual fun remove(item: DownloadItem, idle: Boolean) { requestDownloadRemoval(item) }
+
+    actual fun parallelDownloads(): Int = store.getInt("parallel")?.takeIf { it in ParallelDownloadChoices } ?: DefaultParallelDownloads
+    internal fun setParallelDownloads(count: Int) {
+        require(count in ParallelDownloadChoices)
+        store.putInt("parallel", count)
+        DownloadsRepository.onParallelLimitChanged()
+    }
 
     /** The provider, quality and source type chosen last time, so the dialog opens on them. */
     internal fun lastSelection() = DownloadSourceSelection(
@@ -66,6 +84,7 @@ internal actual object DownloadDesktopFeatures {
     val scope = rememberCoroutineScope()
     val state by DownloadsRepository.uiState.collectAsState()
     var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
+    var parallel by remember { mutableStateOf(DownloadDesktopFeatures.parallelDownloads()) }
     var picking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val items = state.items
@@ -146,10 +165,53 @@ internal actual object DownloadDesktopFeatures {
             if (!narrow) folderButtons()
         }
         if (narrow) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { folderButtons() }
+        HorizontalDivider(color = tokens.colors.borderSubtle)
+        val picker: @Composable () -> Unit = {
+            ParallelDownloadsPicker(parallel) { count ->
+                DownloadDesktopFeatures.setParallelDownloads(count)
+                parallel = count
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Speed, null, tint = tokens.colors.textSecondary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Downloads at once", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text("Running a few together keeps your connection busy when one source slows down.",
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
+            }
+            if (!narrow) picker()
+        }
+        if (narrow) picker()
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
     }
     }
 }
+/** A segmented 1–5 choice; lowering it lets transfers already running finish. */
+@Composable
+private fun ParallelDownloadsPicker(value: Int, onSelect: (Int) -> Unit) {
+    val tokens = MaterialTheme.nuvio
+    Row(
+        modifier = Modifier.clip(CircleShape).background(tokens.colors.textPrimary.copy(alpha = 0.08f)).padding(3.dp).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        ParallelDownloadChoices.forEach { count ->
+            val selected = count == value
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 32.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) tokens.colors.accent else Color.Transparent)
+                    .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(count) })
+                    .semantics { contentDescription = "$count at once" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("$count", style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) tokens.colors.onAccent else tokens.colors.textPrimary)
+            }
+        }
+    }
+}
+
 internal suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
     SwingUtilities.invokeLater {
         if (!continuation.isActive) return@invokeLater

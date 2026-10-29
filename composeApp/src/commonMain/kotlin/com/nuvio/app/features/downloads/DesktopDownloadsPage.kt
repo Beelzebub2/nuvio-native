@@ -142,6 +142,9 @@ private fun LazyListScope.rootSections(
                     title = "Queue",
                     detail = listOfNotNull(
                         active.count { it.status == DownloadStatus.Downloading && !it.isQueued }.takeIf { it > 0 }?.let { "$it downloading" },
+                        // Combined speed of every running transfer, since several run at once.
+                        active.filter { it.status == DownloadStatus.Downloading && !it.isQueued }.sumOf { it.bytesPerSecond }
+                            .takeIf { it > 0 }?.let { "${formatDownloadBytes(it)}/s" },
                         queued.size.takeIf { it > 0 }?.let { "$it waiting" },
                         active.count { it.status == DownloadStatus.Paused }.takeIf { it > 0 }?.let { "$it paused" },
                         active.count { it.status == DownloadStatus.Failed }.takeIf { it > 0 }?.let { "$it failed" },
