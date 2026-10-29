@@ -142,13 +142,17 @@ internal fun PlayerScreenRuntime.restorePersistedTrackPreferenceIfNeeded(): Bool
                     playerController?.setSubtitleUri(persistedUrl)
                     preferredSubtitleSelectionApplied = true
                     isUserExplicitSubtitleSelection = true
-                } else if (belongsToCurrentItem) {
+                } else {
                     val fetchKey = addonSubtitleFetchKey.takeUnless {
                         activeSourceUrl.startsWith("file:") && externalSubtitles.isNotEmpty()
                     }
                     if (fetchKey != null && autoFetchedAddonSubtitlesForKey != fetchKey) return false
 
-                    val subtitle = findPersistedAddonSubtitle(addonSubtitles, preference)
+                    // Across episodes retain provider/language, never reopen the previous item's URL.
+                    val candidates = if (belongsToCurrentItem) addonSubtitles else {
+                        addonSubtitles.filterNot { it.url == preference.addonSubtitleUrl }
+                    }
+                    val subtitle = findPersistedAddonSubtitle(candidates, preference)
                     val canRestoreWhileLoading = subtitle != null && (
                         subtitle.url == preference.addonSubtitleUrl ||
                             preference.addonSubtitleAddonName.isNullOrBlank() ||
@@ -167,10 +171,6 @@ internal fun PlayerScreenRuntime.restorePersistedTrackPreferenceIfNeeded(): Bool
                         selectedSubtitleIndex = -1
                         useCustomSubtitles = false
                     }
-                } else {
-                    selectedAddonSubtitleId = null
-                    selectedSubtitleIndex = -1
-                    useCustomSubtitles = false
                 }
             }
         }
