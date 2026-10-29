@@ -29,12 +29,22 @@ private val pathLocks = ConcurrentHashMap<String, Mutex>()
 private val pendingRemovals = ConcurrentHashMap<String, DownloadItem>()
 private val transfers = ConcurrentHashMap<String, Job>()
 private val transferIo = ConcurrentHashMap<String, DownloadIo>()
-private val torrentBackends = ConcurrentHashMap<String, DesktopTorrentBackend>()
+private val torrentEngines = DownloadTorrentEngines(
+    create = { hash ->
+        TorrServerBackend(
+            configurationDirectory = DesktopStorage.rootDir.resolve("download-torrserver/$hash").toFile(),
+            cacheDirectory = torrentDownloadCache(hash))
+    },
+    scope = transferScope,
+    // The engine already deletes its cache on drop; this also clears pieces left by a crash.
+    onRetired = { hash -> torrentDownloadCache(hash).deleteRecursively() },
+)
+private fun torrentDownloadCache(hash: String): File = DesktopStorage.cacheDir.resolve("download-torrents/$hash").toFile()
 private val shutdownHook by lazy {
     Runtime.getRuntime().addShutdownHook(Thread({
         transfers.values.forEach { it.cancel() }
         transferIo.values.forEach { it.close() }
-        runBlocking { withTimeoutOrNull(8_000) { torrentBackends.values.map { backend -> async(Dispatchers.IO) { backend.stop() } }.awaitAll() } }
+        runBlocking { withTimeoutOrNull(8_000) { torrentEngines.backends().map { backend -> async(Dispatchers.IO) { backend.stop() } }.awaitAll() } }
     }, "starlit-download-shutdown"))
     true
 }
@@ -275,11 +285,18 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
             var lastProgress = 0L
             val lastRead = AtomicLong(System.nanoTime())
             val stalled = AtomicBoolean(false)
+            // Reports from the reader and the heartbeat share one lock so progress never goes backwards.
+            val progressLock = Any()
+            val reported = AtomicLong(bytes)
+            fun report(value: Long) = synchronized(progressLock) { reported.set(value); onProgress(value, total) }
             coroutineScope {
                 val watchdog = launch {
                     while (isActive) {
-                        delay(5_000)
-                        if (System.nanoTime() - lastRead.get() > 60_000_000_000L) { stalled.set(true); io.close(); break }
+                        delay(1_000)
+                        val quiet = System.nanoTime() - lastRead.get()
+                        if (quiet > 60_000_000_000L) { stalled.set(true); io.close(); break }
+                        // While no data arrives, keep reporting so the shown speed falls instead of freezing.
+                        if (quiet > 2_000_000_000L) synchronized(progressLock) { onProgress(reported.get(), total) }
                     }
                 }
                 try {
@@ -288,7 +305,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                     reply.body().buffered().use { input ->
                         FileOutputStream(part, offset > 0).use { output ->
                             val buffer = ByteArray(128 * 1024)
-                            onProgress(bytes, total)
+                            report(bytes)
                             if (bytes == 0L) {
                                 val prefix = ByteArrayOutputStream()
                                 while (prefix.size() < 256) {
@@ -304,7 +321,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 validateMediaPrefix(initial, initial.size)
                                 output.write(initial)
                                 bytes += initial.size
-                                onProgress(bytes, total)
+                                report(bytes)
                             }
                             while (true) {
                                 transferContext.ensureActive()
@@ -316,7 +333,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 bytes += count
                                 check(total == null || bytes <= total) { "Source sent more bytes than advertised" }
                                 val now = System.nanoTime()
-                                if (now - lastProgress >= 500_000_000L) { onProgress(bytes, total); lastProgress = now }
+                                if (now - lastProgress >= 500_000_000L) { report(bytes); lastProgress = now }
                             }
                             check(!stalled.get()) { "Source stopped sending data; retry to resume" }
                             check(bytes > 0 && (total == null || bytes == total) && (expectedSize == null || bytes == expectedSize)) { "Incomplete media file: received $bytes of $total bytes" }
@@ -355,34 +372,29 @@ private fun validateMediaPrefix(buffer: ByteArray, count: Int) {
 }
 private fun String.toLocalFileOrNull(): File? = runCatching { if (startsWith("file:")) File(URI(this)) else File(this) }.getOrNull()
 
-internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit): File {
-    val backend = TorrServerBackend(
-        configurationDirectory = DesktopStorage.rootDir.resolve("download-torrserver/${item.id}").toFile(),
-        cacheDirectory = DesktopStorage.cacheDir.resolve("download-torrents/${item.id}").toFile())
-    torrentBackends[item.id] = backend
-    try {
-        return downloadTorrentFile(item, backend, { P2pSettingsRepository.ensureLoaded(); P2pSettingsRepository.uiState.value },
-            { url, size -> copyDesktopDownload(item, url, io, progress, size) })
-    } finally { withContext(NonCancellable) { backend.stop(); torrentBackends.remove(item.id, backend) } }
-}
-internal suspend fun downloadTorrentFile(item: DownloadItem, backend: DesktopTorrentBackend,
+internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit): File =
+    downloadTorrentFile(item, torrentEngines, { P2pSettingsRepository.ensureLoaded(); P2pSettingsRepository.uiState.value },
+        { url, size -> copyDesktopDownload(item, url, io, progress, size) })
+
+/** Reads one file of a torrent through the engine shared by every download of that torrent. */
+internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTorrentEngines,
     settings: () -> P2pSettingsUiState, copy: suspend (String, Long) -> File): File {
     val hash = checkNotNull(item.torrentHash) { "No downloadable media source" }
     require(Regex("[a-fA-F0-9]{40}|[a-zA-Z2-7]{32}").matches(hash)) { "Invalid torrent hash" }
     val magnet = "magnet:?xt=urn:btih:$hash" + item.torrentTrackers.joinToString("") { "&tr=" + URLEncoder.encode(it, Charsets.UTF_8) }
     val selectedSettings = settings()
     check(selectedSettings.p2pEnabled) { "Enable P2P in Settings before downloading torrents, or choose Direct files." }
-    backend.prepare(selectedSettings)
-    val added = backend.addTorrent(magnet)
-    try {
+    return engines.use(hash, selectedSettings) { backend ->
+        // Adding a torrent the engine already has returns the existing one and its peers.
+        val added = backend.addTorrent(magnet)
         val files = withTimeout(90_000) {
             var result: List<TorrServerFile>
             do { result = backend.getTorrentStats(added).files; if (result.isEmpty()) delay(1_000) } while (result.isEmpty())
             result
         }
         val chosen = selectDownloadTorrentFile(files, item.torrentFileIdx, item.torrentFilename)
-        return copy(backend.getStreamUrl(magnet, chosen.id), chosen.length)
-    } finally { withContext(NonCancellable) { runCatching { backend.dropTorrent(added) } } }
+        copy(backend.getStreamUrl(magnet, chosen.id), chosen.length)
+    }
 }
 internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?, filename: String?): TorrServerFile {
     val videos = files.filter { it.path.substringAfterLast('.', "").lowercase() in setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts") && it.length > 0 }
