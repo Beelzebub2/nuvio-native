@@ -1,3 +1,13 @@
+## Starlit 1.0.40
+
+### Improvements
+
+- Desktop Home now asks on first install whether to include the built-in Airing Now anime section. You can hide or restore it anytime under **Settings → Home Layout**; existing installs retain their current layout.
+
+### Fixes
+
+- Turning subtitles **Off** now stays Off even after track refreshes, subtitle language preference updates, and delayed Android playback events. The subtitle menu and desktop keyboard toggle show the correct selection.
+
 ## Starlit 1.0.39
 
 ### Improvements
