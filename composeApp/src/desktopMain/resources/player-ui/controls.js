@@ -3788,7 +3788,9 @@ document.addEventListener("keydown", event => {
   }
   if (event.code === "KeyV") {
     event.preventDefault();
-    const isOff = !normalizeTracks(state.subtitleTracks).some(t => t.selected);
+    // The selected language is authoritative after a manual Off choice; native track
+    // snapshots can still report the previously selected subtitle for a moment.
+    const isOff = (state.selectedSubtitleLanguageKey || subtitleOffKey) === subtitleOffKey;
     if (isOff) {
       if (window.lastActiveSubtitle) {
         if (window.lastActiveSubtitle.kind === "builtIn") send("selectBuiltInSubtitleTrack", window.lastActiveSubtitle.index);

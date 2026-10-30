@@ -1013,15 +1013,7 @@ internal fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: 
             playerControlsLog.d {
                 "selectBuiltInSubtitleTrack index=$index wasCustom=$wasCustom tracks=${subtitleTracks.size} ${playerControlLogContext()}"
             }
-            selectedSubtitleIndex = index
-            selectedAddonSubtitleId = null
-            useCustomSubtitles = false
-            persistInternalSubtitlePreference(subtitleTracks.firstOrNull { it.index == index })
-            if (wasCustom) {
-                playerController?.clearExternalSubtitleAndSelect(index)
-            } else {
-                playerController?.selectSubtitleTrack(index)
-            }
+            selectUserSubtitleTrack(index)
         }
         "selectAudioTrack" -> {
             // The controls webview sends the track id (trackIdValue); map it back
@@ -1044,11 +1036,7 @@ internal fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: 
             playerControlsLog.d {
                 "selectAddonSubtitle index=${value.toInt()} addonId=${addon.id} language=${addon.language} ${playerControlLogContext()}"
             }
-            selectedAddonSubtitleId = addon.id
-            selectedSubtitleIndex = -1
-            useCustomSubtitles = true
-            persistAddonSubtitlePreference(addon)
-            playerController?.setSubtitleUri(addon.url)
+            selectUserAddonSubtitle(addon)
         }
         "subtitleDelayDelta" -> setSubtitleDelay((subtitleDelayMs + value.toInt()).coerceIn(SUBTITLE_DELAY_MIN_MS, SUBTITLE_DELAY_MAX_MS))
         "subtitleDelayReset" -> setSubtitleDelay(0)
@@ -1477,11 +1465,13 @@ private fun PlayerScreenRuntime.buildPlayerControlSubtitleSelection(): PlayerCon
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = selectedAddon,
+        isExplicitlyDisabled = isSubtitleOffSelected,
     )
     val selectedOptionId = selectedSubtitleOptionId(
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = selectedAddon,
+        isExplicitlyDisabled = isSubtitleOffSelected,
     ).orEmpty()
     val languageItems = buildSubtitleLanguageItems(
         subtitleTracks = subtitleTracks,
@@ -1766,6 +1756,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         showSubtitleModal = showSubtitleModal,
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
+        isSubtitleOffSelected = isSubtitleOffSelected,
         addonSubtitles = visibleAddonSubtitles,
         selectedAddonSubtitleId = selectedAddonSubtitleId,
         isLoadingAddonSubtitles = isLoadingAddonSubtitles,
@@ -1774,27 +1765,10 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         selectedAddonSubtitle = selectedAddonSubtitle,
         subtitleAutoSyncState = subtitleAutoSyncState,
         onBuiltInSubtitleTrackSelected = { index ->
-            val wasCustom = useCustomSubtitles
-            isUserExplicitSubtitleSelection = true
-            preferredSubtitleSelectionApplied = true
-            selectedSubtitleIndex = index
-            selectedAddonSubtitleId = null
-            useCustomSubtitles = false
-            persistInternalSubtitlePreference(subtitleTracks.firstOrNull { it.index == index })
-            if (wasCustom) {
-                playerController?.clearExternalSubtitleAndSelect(index)
-            } else {
-                playerController?.selectSubtitleTrack(index)
-            }
+            selectUserSubtitleTrack(index)
         },
         onAddonSubtitleSelected = { addon ->
-            isUserExplicitSubtitleSelection = true
-            selectedAddonSubtitleId = addon.selectionKey
-            selectedSubtitleIndex = -1
-            useCustomSubtitles = true
-            preferredSubtitleSelectionApplied = true
-            persistAddonSubtitlePreference(addon)
-            playerController?.setSubtitleUri(addon.url)
+            selectUserAddonSubtitle(addon)
         },
         onFetchAddonSubtitles = { fetchAddonSubtitlesForActiveItem() },
         onSubtitleStyleChanged = PlayerSettingsRepository::setSubtitleStyle,

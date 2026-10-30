@@ -64,6 +64,7 @@ fun SubtitleModal(
     visible: Boolean,
     subtitleTracks: List<SubtitleTrack>,
     selectedSubtitleIndex: Int,
+    isSubtitleOffSelected: Boolean = false,
     addonSubtitles: List<AddonSubtitle>,
     selectedAddonSubtitleId: String?,
     isLoadingAddonSubtitles: Boolean,
@@ -91,11 +92,13 @@ fun SubtitleModal(
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = effectiveSelectedAddonSubtitle,
+        isExplicitlyDisabled = isSubtitleOffSelected,
     )
     val playbackOptionId = selectedSubtitleOptionId(
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = effectiveSelectedAddonSubtitle,
+        isExplicitlyDisabled = isSubtitleOffSelected,
     )
     val subtitleStructureKey = subtitleTracksStructureKey(subtitleTracks)
     val addonStructureKey = addonSubtitlesStructureKey(addonSubtitles)

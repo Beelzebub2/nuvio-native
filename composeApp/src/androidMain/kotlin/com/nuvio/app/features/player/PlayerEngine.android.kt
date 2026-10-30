@@ -485,7 +485,7 @@ private fun ExoPlayerSurface(
         exoPlayer.prepare()
     }
 
-    val pendingSubtitleTrackIndex = remember { mutableListOf<Int>() }
+    val pendingSubtitleTrackIndex = remember(exoPlayer) { mutableListOf<Int>() }
     val pendingAudioTrackSelection = remember { mutableListOf<TrackSelectionSnapshot>() }
     var subtitleSelectionJob by remember { mutableStateOf<Job?>(null) }
     val isInPip = rememberIsInPictureInPicture()
@@ -655,7 +655,12 @@ private fun ExoPlayerSurface(
                         Log.d(TAG, "onTracksChanged: restored pending audio selection=$restored")
                     }
                 }
-                if (pendingSubtitleTrackIndex.isNotEmpty() && tracks.groups.isNotEmpty()) {
+                val pendingIndex = pendingSubtitleTrackIndex.firstOrNull()
+                if (pendingIndex != null && (
+                        (pendingIndex < 0 && tracks.groups.isNotEmpty()) ||
+                            tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }
+                    )
+                ) {
                     val idx = pendingSubtitleTrackIndex.removeAt(0)
                     Log.d(TAG, "onTracksChanged: applying pending subtitle selection index=$idx")
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
@@ -775,6 +780,8 @@ private fun ExoPlayerSurface(
 
                 override fun selectSubtitleTrack(index: Int) {
                     Log.d(TAG, "selectSubtitleTrack: index=$index")
+                    subtitleSelectionJob?.cancel()
+                    pendingSubtitleTrackIndex.clear()
                     sidecarController.stopSidecarAddonSubtitle(clearView = true)
                     if (index < 0) {
                         Log.d(TAG, "selectSubtitleTrack: disabling text tracks")
@@ -796,6 +803,7 @@ private fun ExoPlayerSurface(
                 override fun setSubtitleUri(url: String) {
                     Log.d(TAG, "setSubtitleUri: url=$url")
                     subtitleSelectionJob?.cancel()
+                    pendingSubtitleTrackIndex.clear()
                     if (sidecarController.canAttachAddonSubtitleViaSidecar(url, useLibass)) {
                         Log.d(TAG, "setSubtitleUri: using buffer-preserving sidecar for url=$url")
                         val headers = externalSubtitles.firstOrNull { it.url == url }?.headers.orEmpty()
@@ -853,6 +861,7 @@ private fun ExoPlayerSurface(
                 override fun clearExternalSubtitle() {
                     Log.d(TAG, "clearExternalSubtitle called")
                     subtitleSelectionJob?.cancel()
+                    pendingSubtitleTrackIndex.clear()
                     sidecarController.stopSidecarAddonSubtitle(clearView = true)
                     selectedExternalSubtitleMimeType = null
                     val currentPosition = exoPlayer.currentPosition
@@ -1563,6 +1572,10 @@ private class NuvioLibmpvView(
                 hasActiveSubtitle: Boolean,
                 useCustomSubtitles: Boolean,
             ) {
+                if (autoSelectionApplied && !hasActiveSubtitle && !useCustomSubtitles) {
+                    executeMpv { mpv.setPropertyString("sid", "no") }
+                    return
+                }
                 if ((hasActiveSubtitle || useCustomSubtitles) && autoSelectionApplied) {
                     return
                 }
@@ -2013,7 +2026,9 @@ private fun ExoPlayer.applySubtitleTrackPreferences(
     } else {
         val userDisabledSubtitles = autoSelectionApplied && !hasActiveSubtitle
         val shouldSuppressExoAutoSelect = useForcedSubtitles && !autoSelectionApplied
-        if (!userDisabledSubtitles && !shouldSuppressExoAutoSelect) {
+        if (userDisabledSubtitles) {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else if (!shouldSuppressExoAutoSelect) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
         }
         if (!shouldSuppressExoAutoSelect) {
