@@ -671,6 +671,10 @@ internal class NativePlayerController(
         NativePlayerBridge.setSpeed(current, next)
     }
 
+    override fun getChapterStarts(): List<Double> = handle.takeIf { it != 0L }?.let { current ->
+        runCatching { NativePlayerBridge.chapterStarts(current).toList() }.getOrDefault(emptyList())
+    }.orEmpty()
+
     fun snapshot(): PlayerPlaybackSnapshot {
         val current = handle
         if (current == 0L) return PlayerPlaybackSnapshot(isLoading = true)
