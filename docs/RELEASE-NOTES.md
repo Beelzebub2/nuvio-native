@@ -1,3 +1,10 @@
+## Starlit 1.0.39
+
+### Improvements
+
+- Settings → Add-ons can export a JSON backup on desktop and Android and import it on another device.
+- Backups preserve configured URLs, order, custom names and enabled state; imports append missing entries, skip duplicates and keep offline endpoints.
+
 ## Starlit 1.0.38
 
 ### New
