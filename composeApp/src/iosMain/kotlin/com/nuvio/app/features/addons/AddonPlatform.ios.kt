@@ -7,6 +7,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -93,10 +94,11 @@ private val addonHttpClient = HttpClient(Darwin) {
     expectSuccess = false
 }
 
-actual suspend fun httpGetText(url: String): String =
+actual suspend fun httpGetText(url: String, timeoutMillis: Long?): String =
     addonHttpClient
         .get(url) {
             accept(ContentType.Application.Json)
+            timeoutMillis?.let { timeout { requestTimeoutMillis = it } }
         }
         .let { response ->
             val payload = response.bodyAsText()
