@@ -1,5 +1,8 @@
 package com.nuvio.app.features.addons
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.darwin.Darwin
@@ -41,6 +44,15 @@ actual object AddonStorage {
             urls.joinToString(separator = "\n"),
             forKey = "${addonUrlsKey}_$profileId",
         )
+    }
+
+    actual fun loadAddonNames(profileId: Int): Map<String, String> =
+        NSUserDefaults.standardUserDefaults.stringForKey("addon_names_$profileId")
+            ?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+            ?: emptyMap()
+
+    actual fun saveAddonNames(profileId: Int, names: Map<String, String>) {
+        NSUserDefaults.standardUserDefaults.setObject(Json.encodeToString(names), forKey = "addon_names_$profileId")
     }
 
     actual fun loadAddonEnabledStates(profileId: Int): Map<String, Boolean> =

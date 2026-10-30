@@ -72,6 +72,10 @@ Both Android debug APK builds and host suites pass on Linux CI: Full reports 1,6
 
 ## Servers and account sync
 
+To move locally configured add-ons without an account, open **Settings → Add-ons → Move add-ons to another device**. On Android or desktop, choose **Export add-ons**, transfer the JSON file privately, then choose **Import add-ons** on the other device. On iOS, use **Copy backup** / **Paste backup** to transfer the same JSON as text (save that text as a `.json` file when importing on Android or desktop).
+
+Backups include configured URLs, add-on order, enabled states and custom names for the current profile. Imports append missing add-ons in backup order and skip duplicates, preserving existing entries. Unreachable add-ons remain installed and can be refreshed later. Profiles using the primary profile's add-ons must import from the primary profile. Backups can contain access keys inside configured URLs; keep them private. They do not include JavaScript plugins or account/provider settings.
+
 Without `NUVIO_SUPABASE_URL` and `NUVIO_SUPABASE_ANON_KEY`, startup creates a local guest. Browsing and locally configured add-ons do not need an upstream account. Guest libraries, profiles and watch progress remain on that installation; they are not a cloud account and do not sync to another device.
 
 To build against a compatible account backend, set these environment variables or entries in ignored `local.properties` before building:

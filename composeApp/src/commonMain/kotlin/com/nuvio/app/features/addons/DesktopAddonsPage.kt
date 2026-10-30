@@ -107,6 +107,9 @@ internal fun DesktopAddonsContent(
         }
 
         Spacer(Modifier.height(10.dp))
+        AddonBackupCard()
+
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             NuvioSectionLabel(stringResource(Res.string.addons_desktop_installed_title).uppercase())
             Spacer(Modifier.weight(1f))
