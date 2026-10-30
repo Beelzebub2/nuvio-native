@@ -824,6 +824,14 @@ internal fun settingsSearchEntries(
         PlaybackSearchRow("home-hide-unreleased", stringResource(Res.string.layout_hide_unreleased), stringResource(Res.string.layout_hide_unreleased_sub)),
         PlaybackSearchRow("home-hero-sources", stringResource(Res.string.settings_homescreen_section_hero_sources)),
         PlaybackSearchRow("home-catalogs", stringResource(Res.string.settings_homescreen_section_catalogs)),
+    ).plus(
+        if (isDesktop) listOf(
+            PlaybackSearchRow(
+                "home-built-in-airing",
+                stringResource(Res.string.settings_homescreen_show_built_in_airing),
+                stringResource(Res.string.settings_homescreen_show_built_in_airing_description),
+            ),
+        ) else emptyList()
     ).forEach { row ->
         addRow(
             page = SettingsPage.Homescreen,

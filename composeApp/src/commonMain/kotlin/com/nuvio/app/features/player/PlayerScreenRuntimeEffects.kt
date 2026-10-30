@@ -228,7 +228,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
             useCustomSubtitles = useCustomSubtitles,
         )
 
-        if (preferenceChanged) {
+        if (preferenceChanged && !isUserExplicitSubtitleSelection) {
             preferredSubtitleSelectionApplied = false
             refreshTracks()
         }

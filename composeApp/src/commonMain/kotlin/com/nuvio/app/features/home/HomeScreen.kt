@@ -31,6 +31,7 @@ import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.LocalNuvioNavBarScrollState
+import com.nuvio.app.core.ui.LocalScreenActive
 import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
@@ -934,6 +935,10 @@ fun HomeScreen(
         homeCatalogLoading = homeUiState.isLoading,
     )
 
+    if (isDesktop && LocalScreenActive.current && homeSettingsUiState.askToShowBuiltInAiring) {
+        BuiltInAiringChoiceDialog(onChoose = HomeCatalogSettingsRepository::setShowBuiltInAiring)
+    }
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val homeSectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
         val posterCardStyle = rememberPosterCardStyleUiState()
@@ -1034,7 +1039,11 @@ fun HomeScreen(
                 }
             }
 
-            if (isDesktop) {
+            if (isDesktop &&
+                homeSettingsUiState.builtInAiringPreferenceLoaded &&
+                homeSettingsUiState.showBuiltInAiring &&
+                !homeSettingsUiState.askToShowBuiltInAiring
+            ) {
                 item(key = "native_airing", contentType = "native_airing") {
                     BuiltInAiringSection(Modifier.padding(horizontal = homeSectionPadding), onPosterClick, onCatalogClick, onPosterLongClick)
                 }

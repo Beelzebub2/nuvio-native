@@ -35,6 +35,10 @@ internal val PlayerScreenRuntime.selectedAddonSubtitle: AddonSubtitle?
             ?: visibleAddonSubtitles.findSelectedAddon(selectedId)
     }
 
+internal val PlayerScreenRuntime.isSubtitleOffSelected: Boolean
+    get() = preferredSubtitleSelectionApplied &&
+        selectedSubtitleIndex < 0 && selectedAddonSubtitleId == null && !useCustomSubtitles
+
 internal fun PlayerScreenRuntime.updateTrackPreference(
     update: (PersistedPlayerTrackPreference) -> PersistedPlayerTrackPreference,
 ) {
@@ -75,6 +79,31 @@ internal fun PlayerScreenRuntime.persistInternalSubtitlePreference(track: Subtit
     }
 }
 
+internal fun PlayerScreenRuntime.selectUserSubtitleTrack(index: Int) {
+    val wasCustom = useCustomSubtitles
+    isUserExplicitSubtitleSelection = true
+    preferredSubtitleSelectionApplied = true
+    selectedSubtitleIndex = index
+    selectedAddonSubtitleId = null
+    useCustomSubtitles = false
+    persistInternalSubtitlePreference(subtitleTracks.firstOrNull { it.index == index })
+    if (wasCustom) {
+        playerController?.clearExternalSubtitleAndSelect(index)
+    } else {
+        playerController?.selectSubtitleTrack(index)
+    }
+}
+
+internal fun PlayerScreenRuntime.selectUserAddonSubtitle(subtitle: AddonSubtitle) {
+    isUserExplicitSubtitleSelection = true
+    preferredSubtitleSelectionApplied = true
+    selectedAddonSubtitleId = subtitle.selectionKey
+    selectedSubtitleIndex = -1
+    useCustomSubtitles = true
+    persistAddonSubtitlePreference(subtitle)
+    playerController?.setSubtitleUri(subtitle.url)
+}
+
 internal fun PlayerScreenRuntime.persistAddonSubtitlePreference(subtitle: AddonSubtitle) {
     updateTrackPreference { current ->
         current.copy(
@@ -101,9 +130,14 @@ internal fun PlayerScreenRuntime.restorePersistedTrackPreferenceIfNeeded(): Bool
 
     restorePersistedAudioPreference(preference)
 
-    when (preference.subtitleType) {
+    // A late preference restore must never replace a selection made during this playback.
+    when (preference.subtitleType.takeUnless { isUserExplicitSubtitleSelection }) {
         PersistedSubtitleSelectionType.DISABLED -> {
-            playerController?.selectSubtitleTrack(-1)
+            if (useCustomSubtitles) {
+                playerController?.clearExternalSubtitleAndSelect(-1)
+            } else {
+                playerController?.selectSubtitleTrack(-1)
+            }
             selectedSubtitleIndex = -1
             selectedAddonSubtitleId = null
             useCustomSubtitles = false
@@ -190,7 +224,14 @@ internal fun PlayerScreenRuntime.refreshTracks() {
     val selectedAudio = audioTracks.firstOrNull { it.isSelected }
     if (selectedAudio != null) selectedAudioIndex = selectedAudio.index
     val selectedSub = subtitleTracks.firstOrNull { it.isSelected }
-    if (selectedSub != null && !useCustomSubtitles) selectedSubtitleIndex = selectedSub.index
+    if (selectedSub != null && !useCustomSubtitles) {
+        if (isSubtitleOffSelected) {
+            // Native track events can report an old selection after Off was requested.
+            ctrl.selectSubtitleTrack(-1)
+        } else {
+            selectedSubtitleIndex = selectedSub.index
+        }
+    }
     if (!playbackSnapshot.isLoading) {
         hasScannedTextTracksOnce = true
     }

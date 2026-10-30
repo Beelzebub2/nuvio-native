@@ -189,6 +189,65 @@ class PlayerSubtitleRestoreTest {
         assertTrue(runtime.isUserExplicitSubtitleSelection)
     }
 
+    @Test
+    fun nativeSubtitleOffSurvivesStaleSelectedTracksAndPersists() {
+        val runtime = runtime()
+        val controller = runtime.playerController as RecordingController
+        controller.subtitles = listOf(SubtitleTrack(0, "english", "English", "en", isSelected = true))
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false)
+
+        assertTrue(runtime.handlePlayerControlsEvent("selectBuiltInSubtitleTrack", -1.0))
+        assertTrue(runtime.isUserExplicitSubtitleSelection)
+        assertTrue(runtime.preferredSubtitleSelectionApplied)
+        assertTrue(runtime.isSubtitleOffSelected)
+        assertEquals(PersistedSubtitleSelectionType.DISABLED, PlayerTrackPreferenceStorage.load("tt2026")?.subtitleType)
+
+        runtime.refreshTracks()
+
+        assertEquals(-1, runtime.selectedSubtitleIndex)
+        assertEquals(null, runtime.selectedAddonSubtitleId)
+        assertEquals(listOf(-1, -1), controller.subtitleSelections)
+        assertTrue(runtime.isSubtitleOffSelected)
+    }
+
+    @Test
+    fun choosingOffAfterAddonSubtitleRemovesTheExternalSubtitle() {
+        val runtime = runtime()
+        val controller = runtime.playerController as RecordingController
+
+        runtime.selectUserAddonSubtitle(episodeOneSubtitle)
+        runtime.selectUserSubtitleTrack(-1)
+
+        assertEquals(listOf(episodeOneSubtitle.url), controller.subtitleUrls)
+        assertEquals(listOf(-1), controller.clearedExternalAndSelected)
+        assertTrue(runtime.isSubtitleOffSelected)
+        assertEquals(PersistedSubtitleSelectionType.DISABLED, PlayerTrackPreferenceStorage.load("tt2026")?.subtitleType)
+    }
+
+    @Test
+    fun delayedTrackPreferenceRestoreCannotOverrideManualOff() {
+        val runtime = runtime()
+        val controller = runtime.playerController as RecordingController
+        PlayerTrackPreferenceStorage.save(
+            "tt2026",
+            PersistedPlayerTrackPreference(
+                subtitleType = PersistedSubtitleSelectionType.INTERNAL,
+                subtitleTrackId = "english",
+                subtitleLanguage = "en",
+            ),
+        )
+        runtime.subtitleTracks = listOf(SubtitleTrack(0, "english", "English", "en", isSelected = false))
+        runtime.isUserExplicitSubtitleSelection = true
+        runtime.preferredSubtitleSelectionApplied = true
+        runtime.selectedSubtitleIndex = -1
+
+        runtime.restorePersistedTrackPreferenceIfNeeded()
+
+        assertTrue(runtime.isSubtitleOffSelected)
+        assertEquals(-1, runtime.selectedSubtitleIndex)
+        assertTrue(controller.subtitleSelections.isEmpty())
+    }
+
     private fun advanceToEpisodeTwo(runtime: PlayerScreenRuntime): RecordingController {
         runtime.switchToEpisodeStream(
             StreamItem(url = "https://example.com/episode-2.mp4", addonName = "Test", addonId = "test"),
@@ -259,6 +318,8 @@ class PlayerSubtitleRestoreTest {
     private class RecordingController : PlayerEngineController {
         val subtitleUrls = mutableListOf<String>()
         val subtitleSelections = mutableListOf<Int>()
+        val clearedExternalAndSelected = mutableListOf<Int>()
+        var subtitles = emptyList<SubtitleTrack>()
 
         override fun setSubtitleUri(url: String) {
             subtitleUrls += url
@@ -269,7 +330,7 @@ class PlayerSubtitleRestoreTest {
         }
 
         override fun getAudioTracks() = emptyList<AudioTrack>()
-        override fun getSubtitleTracks() = emptyList<SubtitleTrack>()
+        override fun getSubtitleTracks() = subtitles
         override fun play() = Unit
         override fun pause() = Unit
         override fun seekTo(positionMs: Long) = Unit
@@ -279,6 +340,8 @@ class PlayerSubtitleRestoreTest {
         override fun applyAudioLanguagePreferences(languages: List<String>) = Unit
         override fun selectAudioTrack(index: Int) = Unit
         override fun clearExternalSubtitle() = Unit
-        override fun clearExternalSubtitleAndSelect(trackIndex: Int) = Unit
+        override fun clearExternalSubtitleAndSelect(trackIndex: Int) {
+            clearedExternalAndSelected += trackIndex
+        }
     }
 }
