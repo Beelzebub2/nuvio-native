@@ -575,6 +575,12 @@
     <string name="settings_homescreen_selected_count">%1$d de %2$d selecionados</string>
     <string name="settings_homescreen_show_hero">Mostrar secção de destaques</string>
     <string name="settings_homescreen_show_hero_description">Apresenta o carrossel de destaques no topo da página inicial.</string>
+    <string name="settings_homescreen_show_built_in_airing">Mostrar anime do Airing Now integrado</string>
+    <string name="settings_homescreen_show_built_in_airing_description">Inclui anime lançado recentemente e estreias futuras na página inicial.</string>
+    <string name="home_airing_first_run_title">Mostrar o Airing Now na página inicial?</string>
+    <string name="home_airing_first_run_description">Queres ver anime lançado recentemente e estreias futuras na página inicial? Podes alterar esta opção quando quiseres nas definições do esquema da página inicial.</string>
+    <string name="home_airing_first_run_hide">Não mostrar</string>
+    <string name="home_airing_first_run_show">Mostrar Airing Now</string>
     <string name="layout_hide_unreleased">Ocultar conteúdo não lançado</string>
     <string name="layout_hide_unreleased_sub">Ocultar filmes e séries que ainda não foram lançados.</string>
     <string name="settings_homescreen_summary">%1$d de %2$d catálogos visíveis • %3$d fontes de destaque selecionadas</string>

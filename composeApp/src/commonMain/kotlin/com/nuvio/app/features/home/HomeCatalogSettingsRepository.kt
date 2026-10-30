@@ -7,6 +7,8 @@ import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionRepository
 import kotlinx.atomicfu.atomic
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +44,9 @@ data class HomeCatalogSettingsUiState(
     val heroEnabled: Boolean = true,
     val showCatalogType: Boolean = true,
     val hideUnreleasedContent: Boolean = false,
+    val showBuiltInAiring: Boolean = true,
+    val builtInAiringPreferenceLoaded: Boolean = false,
+    val askToShowBuiltInAiring: Boolean = false,
     val items: List<HomeCatalogSettingsItem> = emptyList(),
 ) {
     val signature: String
@@ -51,6 +56,8 @@ data class HomeCatalogSettingsUiState(
             append(showCatalogType)
             append('|')
             append(hideUnreleasedContent)
+            append('|')
+            append(showBuiltInAiring)
             append('|')
             append(
                 items.joinToString(separator = "|") { item ->
@@ -88,6 +95,9 @@ private data class StoredHomeCatalogSettingsPayload(
     val heroEnabled: Boolean = true,
     val showCatalogType: Boolean = true,
     val hideUnreleasedContent: Boolean = false,
+    val showBuiltInAiring: Boolean = true,
+    // Existing installs have no choice field; keep their existing Home layout without prompting.
+    val builtInAiringChoiceMade: Boolean = true,
     val items: List<StoredHomeCatalogPreference> = emptyList(),
 )
 
@@ -110,6 +120,7 @@ object HomeCatalogSettingsRepository {
     )
     private val snapshotRef = atomic(emptySnapshot)
     private val syncMutex = Mutex()
+    private val loadLock = SynchronizedObject()
     private var hasLoaded = false
     private var lastPersistedPayload: String? = null
     private var definitions: List<HomeCatalogDefinition> = emptyList()
@@ -125,13 +136,17 @@ object HomeCatalogSettingsRepository {
     private var heroEnabled = true
     private var showCatalogType = true
     private var hideUnreleasedContent = false
+    private var showBuiltInAiring = true
+    private var builtInAiringChoiceMade = false
 
-    fun onProfileChanged() {
+    fun onProfileChanged() = synchronized(loadLock) {
         hasLoaded = false
         preferences = emptyMap()
         heroEnabled = true
         showCatalogType = true
         hideUnreleasedContent = false
+        showBuiltInAiring = true
+        builtInAiringChoiceMade = false
         definitions = emptyList()
         collectionDefinitions = emptyList()
         snapshotRef.value = emptySnapshot
@@ -141,7 +156,7 @@ object HomeCatalogSettingsRepository {
         _uiState.value = HomeCatalogSettingsUiState()
     }
 
-    fun clearLocalState() {
+    fun clearLocalState() = synchronized(loadLock) {
         hasLoaded = false
         definitions = emptyList()
         collectionDefinitions = emptyList()
@@ -151,6 +166,8 @@ object HomeCatalogSettingsRepository {
         heroEnabled = true
         showCatalogType = true
         hideUnreleasedContent = false
+        showBuiltInAiring = true
+        builtInAiringChoiceMade = false
         snapshotRef.value = emptySnapshot
         lastPersistedPayload = null
         _uiState.value = HomeCatalogSettingsUiState()
@@ -162,11 +179,11 @@ object HomeCatalogSettingsRepository {
         }
     }
 
-    private fun syncCatalogsInternal(addons: List<ManagedAddon>) {
-        ensureLoaded()
+    private fun syncCatalogsInternal(addons: List<ManagedAddon>) = synchronized(loadLock) {
+        ensureLoadedLocked()
         val collections = CollectionRepository.collections.value
         val syncInput = Triple(addons, collections, Locale.current.toLanguageTag())
-        if (lastCatalogSync == syncInput) return
+        if (lastCatalogSync == syncInput) return@synchronized
         definitions = buildHomeCatalogDefinitions(addons)
         collectionDefinitions = buildCollectionDefinitions(collections)
         lastCatalogSync = syncInput
@@ -175,7 +192,7 @@ object HomeCatalogSettingsRepository {
         }
         if (definitions.isEmpty() && collectionDefinitions.isEmpty()) {
             publish()
-            return
+            return@synchronized
         }
         normalizePreferences()
         enforcePinnedCollectionsAtTop()
@@ -196,20 +213,23 @@ object HomeCatalogSettingsRepository {
         collections: List<Collection>,
         addons: List<ManagedAddon>,
     ) {
-        ensureLoaded()
-        val syncInput = collections to Locale.current.toLanguageTag()
-        if (lastCollectionSync == syncInput) return
-        if (definitions.isEmpty()) definitions = buildHomeCatalogDefinitions(addons)
-        collectionDefinitions = buildCollectionDefinitions(collections)
-        lastCatalogSync = lastCatalogSync?.takeIf {
-            it.second == collections && it.third == syncInput.second
+        val changed = synchronized(loadLock) {
+            ensureLoadedLocked()
+            val syncInput = collections to Locale.current.toLanguageTag()
+            if (lastCollectionSync == syncInput) return@synchronized false
+            if (definitions.isEmpty()) definitions = buildHomeCatalogDefinitions(addons)
+            collectionDefinitions = buildCollectionDefinitions(collections)
+            lastCatalogSync = lastCatalogSync?.takeIf {
+                it.second == collections && it.third == syncInput.second
+            }
+            lastCollectionSync = syncInput
+            normalizePreferences()
+            enforcePinnedCollectionsAtTop()
+            publish()
+            persist()
+            true
         }
-        lastCollectionSync = syncInput
-        normalizePreferences()
-        enforcePinnedCollectionsAtTop()
-        publish()
-        persist()
-        HomeRepository.applyCurrentSettings()
+        if (changed) HomeRepository.applyCurrentSettings()
     }
 
     internal fun snapshot(): HomeCatalogSettingsSnapshot {
@@ -246,6 +266,20 @@ object HomeCatalogSettingsRepository {
         HomeCatalogSettingsSyncService.triggerPush()
     }
 
+    fun setShowBuiltInAiring(enabled: Boolean) = synchronized(loadLock) {
+        ensureLoadedLocked()
+        if (showBuiltInAiring == enabled && builtInAiringChoiceMade) return@synchronized
+        val wasFirstChoice = !builtInAiringChoiceMade
+        showBuiltInAiring = enabled
+        builtInAiringChoiceMade = true
+        // The installation-wide answer seeds new profiles; later layout edits stay profile-specific.
+        if (wasFirstChoice && HomeCatalogSettingsStorage.loadBuiltInAiringChoice() == null) {
+            HomeCatalogSettingsStorage.saveBuiltInAiringChoice(enabled)
+        }
+        publish()
+        persist()
+    }
+
     fun setHeroSourceEnabled(key: String, enabled: Boolean) {
         updatePreference(key, pushRemote = false) { preference ->
             if (!enabled) {
@@ -275,6 +309,11 @@ object HomeCatalogSettingsRepository {
         heroEnabled = true
         showCatalogType = true
         hideUnreleasedContent = false
+        showBuiltInAiring = true
+        builtInAiringChoiceMade = true
+        if (HomeCatalogSettingsStorage.loadBuiltInAiringChoice() == null) {
+            HomeCatalogSettingsStorage.saveBuiltInAiringChoice(true)
+        }
         preferences = emptyMap()
         normalizePreferences()
         publish()
@@ -311,12 +350,22 @@ object HomeCatalogSettingsRepository {
         HomeCatalogSettingsSyncService.triggerPush()
     }
 
-    private fun ensureLoaded() {
+    private fun ensureLoaded() = synchronized(loadLock) { ensureLoadedLocked() }
+
+    private fun ensureLoadedLocked() {
         if (hasLoaded) return
         hasLoaded = true
 
         val payload = HomeCatalogSettingsStorage.loadPayload().orEmpty().trim()
-        if (payload.isEmpty()) return
+        val installationChoice = HomeCatalogSettingsStorage.loadBuiltInAiringChoice()
+        if (payload.isEmpty()) {
+            if (installationChoice != null) {
+                showBuiltInAiring = installationChoice
+                builtInAiringChoiceMade = true
+            }
+            publish()
+            return
+        }
 
         val parsedPayload = runCatching {
             json.decodeFromString<StoredHomeCatalogSettingsPayload>(payload)
@@ -327,6 +376,14 @@ object HomeCatalogSettingsRepository {
             heroEnabled = parsedPayload.heroEnabled
             showCatalogType = parsedPayload.showCatalogType
             hideUnreleasedContent = parsedPayload.hideUnreleasedContent
+            showBuiltInAiring = parsedPayload.showBuiltInAiring
+            builtInAiringChoiceMade = parsedPayload.builtInAiringChoiceMade
+            if (!builtInAiringChoiceMade && installationChoice != null) {
+                showBuiltInAiring = installationChoice
+                builtInAiringChoiceMade = true
+            } else if (builtInAiringChoiceMade && installationChoice == null) {
+                HomeCatalogSettingsStorage.saveBuiltInAiringChoice(showBuiltInAiring)
+            }
             preferences = parsedPayload.items.associateBy { it.key }
             publish()
             return
@@ -337,6 +394,8 @@ object HomeCatalogSettingsRepository {
         }.getOrDefault(emptyList())
 
         preferences = legacyItems.associateBy { it.key }
+        builtInAiringChoiceMade = true
+        if (installationChoice == null) HomeCatalogSettingsStorage.saveBuiltInAiringChoice(showBuiltInAiring)
         publish()
     }
 
@@ -439,6 +498,9 @@ object HomeCatalogSettingsRepository {
             heroEnabled = heroEnabled,
             showCatalogType = showCatalogType,
             hideUnreleasedContent = hideUnreleasedContent,
+            showBuiltInAiring = showBuiltInAiring,
+            builtInAiringPreferenceLoaded = hasLoaded,
+            askToShowBuiltInAiring = hasLoaded && !builtInAiringChoiceMade,
             items = items,
         )
         if (_uiState.value != nextState) _uiState.value = nextState
@@ -450,6 +512,8 @@ object HomeCatalogSettingsRepository {
                 heroEnabled = heroEnabled,
                 showCatalogType = showCatalogType,
                 hideUnreleasedContent = hideUnreleasedContent,
+                showBuiltInAiring = showBuiltInAiring,
+                builtInAiringChoiceMade = builtInAiringChoiceMade,
                 items = preferences.values.sortedBy { it.order },
             ),
         )
