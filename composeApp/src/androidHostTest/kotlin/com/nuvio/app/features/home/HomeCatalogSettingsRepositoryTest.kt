@@ -31,6 +31,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -47,9 +48,13 @@ class HomeCatalogSettingsRepositoryTest {
         val context = RuntimeEnvironment.getApplication()
         val stored = context.getSharedPreferences("nuvio_home_catalog_settings", Context.MODE_PRIVATE)
         stored.edit().clear().commit()
+        context.getSharedPreferences("nuvio_install_preferences", Context.MODE_PRIVATE)
+            .edit().clear().commit()
         preferences = RecordingPreferences(stored)
         HomeCatalogSettingsStorage.initialize(object : ContextWrapper(context) {
-            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = preferences
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
+                if (name == "nuvio_home_catalog_settings") preferences
+                else super.getSharedPreferences(name, mode)
         })
         CollectionRepository.clearLocalState()
         HomeRepository.clear()
@@ -226,6 +231,63 @@ class HomeCatalogSettingsRepositoryTest {
         HomeCatalogSettingsRepository.syncCollections(collections)
 
         assertEquals(settings, HomeCatalogSettingsRepository.uiState.value)
+    }
+
+    @Test
+    fun firstRunAsksAboutAiringNowAndRemembersTheAnswer() {
+        RuntimeEnvironment.getApplication()
+            .getSharedPreferences("nuvio_home_catalog_settings", Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        HomeCatalogSettingsRepository.clearLocalState()
+
+        HomeCatalogSettingsRepository.snapshot()
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.builtInAiringPreferenceLoaded)
+
+        HomeCatalogSettingsRepository.setShowBuiltInAiring(false)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+
+        HomeCatalogSettingsRepository.onProfileChanged()
+        HomeCatalogSettingsRepository.snapshot()
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+
+        // Editing the layout of an existing profile must not change the first-install answer.
+        HomeCatalogSettingsRepository.setShowBuiltInAiring(true)
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+
+        // Sign-out can clear all account settings without clearing the installation choice.
+        RuntimeEnvironment.getApplication()
+            .getSharedPreferences("nuvio_home_catalog_settings", Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        HomeCatalogSettingsRepository.clearLocalState()
+        HomeCatalogSettingsRepository.snapshot()
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+
+        HomeCatalogSettingsRepository.resetToDefaults()
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+        assertEquals(false, HomeCatalogSettingsStorage.loadBuiltInAiringChoice())
+    }
+
+    @Test
+    fun legacyHomeSettingsKeepAiringNowEnabledWithoutPrompting() {
+        HomeCatalogSettingsRepository.clearLocalState()
+        HomeCatalogSettingsStorage.savePayload(
+            """{"heroEnabled":false,"showCatalogType":true,"items":[]}""",
+        )
+
+        HomeCatalogSettingsRepository.snapshot()
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
+
+        HomeCatalogSettingsRepository.setShowBuiltInAiring(false)
+        HomeCatalogSettingsRepository.onProfileChanged()
+        HomeCatalogSettingsRepository.snapshot()
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.askToShowBuiltInAiring)
     }
 
     private fun addon() = ManagedAddon(
