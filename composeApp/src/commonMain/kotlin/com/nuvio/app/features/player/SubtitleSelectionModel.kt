@@ -130,7 +130,9 @@ internal fun selectedSubtitleLanguageKey(
     subtitleTracks: List<SubtitleTrack>,
     selectedSubtitleIndex: Int,
     selectedAddonSubtitle: AddonSubtitle?,
+    isExplicitlyDisabled: Boolean = false,
 ): String {
+    if (isExplicitlyDisabled) return SubtitleOffLanguageKey
     selectedAddonSubtitle?.let { return subtitleLanguageKey(it.language) }
     return subtitleTracks
         .firstOrNull { it.index == selectedSubtitleIndex }
@@ -143,7 +145,9 @@ internal fun selectedSubtitleOptionId(
     subtitleTracks: List<SubtitleTrack>,
     selectedSubtitleIndex: Int,
     selectedAddonSubtitle: AddonSubtitle?,
+    isExplicitlyDisabled: Boolean = false,
 ): String? {
+    if (isExplicitlyDisabled) return null
     selectedAddonSubtitle?.let { subtitle -> return SubtitleSelectionOption.Addon(subtitle).id }
     return subtitleTracks
         .firstOrNull { it.index == selectedSubtitleIndex }
