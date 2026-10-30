@@ -122,6 +122,21 @@ class SubtitleSelectionModelTest {
     }
 
     @Test
+    fun explicitOffWinsOverStaleNativeSubtitleSelection() {
+        val tracks = listOf(subtitleTrack(index = 0, language = "en").copy(isSelected = true))
+
+        assertEquals("en", selectedSubtitleLanguageKey(tracks, -1, null))
+        assertEquals(
+            SubtitleOffLanguageKey,
+            selectedSubtitleLanguageKey(tracks, -1, null, isExplicitlyDisabled = true),
+        )
+        assertEquals(
+            null,
+            selectedSubtitleOptionId(tracks, -1, null, isExplicitlyDisabled = true),
+        )
+    }
+
+    @Test
     fun emptySubtitleRailShowsFetchActionWhenNoLanguagesAreAvailable() {
         assertEquals(
             SubtitleOptionsRailEmptyContent.FETCH,

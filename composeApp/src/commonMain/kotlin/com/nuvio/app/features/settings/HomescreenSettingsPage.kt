@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioActionLabel
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsItem
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
@@ -63,6 +64,8 @@ import nuvio.composeapp.generated.resources.settings_homescreen_section_hero_sou
 import nuvio.composeapp.generated.resources.settings_homescreen_selected_count
 import nuvio.composeapp.generated.resources.settings_homescreen_show_hero
 import nuvio.composeapp.generated.resources.settings_homescreen_show_hero_description
+import nuvio.composeapp.generated.resources.settings_homescreen_show_built_in_airing
+import nuvio.composeapp.generated.resources.settings_homescreen_show_built_in_airing_description
 import nuvio.composeapp.generated.resources.settings_homescreen_summary
 import nuvio.composeapp.generated.resources.settings_homescreen_summary_hint
 import org.jetbrains.compose.resources.stringResource
@@ -75,6 +78,7 @@ internal fun LazyListScope.homescreenSettingsContent(
     heroEnabled: Boolean,
     showCatalogType: Boolean,
     hideUnreleasedContent: Boolean,
+    showBuiltInAiring: Boolean,
     items: List<HomeCatalogSettingsItem>,
     isCatalogLoading: Boolean,
     catalogErrorMessage: String?,
@@ -102,6 +106,16 @@ internal fun LazyListScope.homescreenSettingsContent(
                     isTablet = isTablet,
                     onCheckedChange = HomeCatalogSettingsRepository::setHeroEnabled,
                 )
+                if (isDesktop) {
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_homescreen_show_built_in_airing),
+                        description = stringResource(Res.string.settings_homescreen_show_built_in_airing_description),
+                        checked = showBuiltInAiring,
+                        isTablet = isTablet,
+                        onCheckedChange = HomeCatalogSettingsRepository::setShowBuiltInAiring,
+                    )
+                }
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
                     title = stringResource(Res.string.layout_catalog_type),
