@@ -5,7 +5,9 @@ import com.nuvio.engine.NuvioTorrentProfile
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class P2pStreamingEngineAndroidTest {
     @Test
@@ -137,5 +139,36 @@ class P2pStreamingEngineAndroidTest {
                 fallbackMessage = "unknown",
             )
         )
+    }
+
+    @Test
+    fun staleStreamFailureCannotTerminateAReplacementOnTheSameTorrent() {
+        assertNull(unexpectedTorrentError(
+            requestId = 0L,
+            eventTorrentId = "same-hash",
+            currentTorrentId = "same-hash",
+            eventStreamId = "previous-route",
+            currentStreamId = "replacement-route",
+            message = "previous route failed",
+            fallbackMessage = "unknown",
+        ))
+        assertEquals(P2pStreamingState.Error("current route failed"), unexpectedTorrentError(
+            requestId = 0L,
+            eventTorrentId = "same-hash",
+            currentTorrentId = "same-hash",
+            eventStreamId = "replacement-route",
+            currentStreamId = "replacement-route",
+            message = "current route failed",
+            fallbackMessage = "unknown",
+        ))
+    }
+
+    @Test
+    fun newTrackersAreAppliedOnlyWhenNoHealthyPeerIsConnected() {
+        val applied = setOf("udp://first.example:80/announce")
+        val withNewSource = applied + "udp://second.example:80/announce"
+        assertFalse(shouldRefreshTorrentTrackers(applied, applied, connectedPeers = 0))
+        assertFalse(shouldRefreshTorrentTrackers(applied, withNewSource, connectedPeers = 3))
+        assertTrue(shouldRefreshTorrentTrackers(applied, withNewSource, connectedPeers = 0))
     }
 }

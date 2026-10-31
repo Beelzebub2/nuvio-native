@@ -8,6 +8,7 @@ import kotlinx.coroutines.*
 import org.junit.Test
 import java.io.File
 import java.net.InetSocketAddress
+import java.net.URI
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -27,12 +28,16 @@ class DesktopDownloadsTest {
             createContext("/", block); start()
         }
     private fun HttpServer.url() = "http://127.0.0.1:${address.port}/fixture.mp4"
-    private fun partial(item: DownloadItem, body: ByteArray, validator: String = "\"fixture\"") {
+    private fun partial(item: DownloadItem, body: ByteArray, validator: String = "\"fixture\"", complete: Boolean = false) {
         val file = downloadPath(item)
         file.parentFile.mkdirs()
         File(file.parentFile, ".starlit-owner").writeText(item.id)
-        File(file.path + ".part").writeBytes(body)
-        File(file.path + ".validator").writeText("$validator\n${media.size}")
+        val part = File(file.path + ".part")
+        part.writeBytes(body)
+        writeDesktopDownloadProof(file, DesktopDownloadProof(item.id, item.fileName,
+            downloadSourceFingerprint(item, item.sourceUrl),
+            downloadEndpointFingerprint(URI.create(item.sourceUrl.ifBlank { "http://offline.invalid" })),
+            validator, media.size.toLong(), if (complete) downloadSha256File(part) else null))
     }
     private suspend fun copy(item: DownloadItem): File {
         val io = DownloadIo()
@@ -92,13 +97,135 @@ class DesktopDownloadsTest {
         } finally { http.stop(0); root.deleteRecursively() }
     }
 
+    @Test fun differentSourceWithTheSameEtagCannotAppendOldSourceBytes() = runBlocking {
+        val root = Files.createTempDirectory("download-cross-source").toFile()
+        val received = media.copyOf().apply { this[5] = 88 }
+        val http = server { exchange ->
+            assertNull(exchange.requestHeaders.getFirst("Range"), "A different URL may reuse an ETag")
+            exchange.responseHeaders.add("Content-Type", "video/mp4")
+            exchange.responseHeaders.add("ETag", "\"fixture\"")
+            exchange.sendResponseHeaders(200, received.size.toLong())
+            exchange.responseBody.use { it.write(received) }
+        }
+        try {
+            val source = item(root, url = "http://old.example/episode.mp4")
+            partial(source, byteArrayOf(9, 9, 9, 9))
+            val chosen = source.copy(sourceUrl = http.url())
+            val result = copy(chosen)
+            assertContentEquals(received, result.readBytes())
+            assertEquals(downloadSourceFingerprint(chosen, chosen.sourceUrl),
+                readDesktopDownloadProof(result)?.sourceFingerprint)
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
+    @Test fun rangeIgnoredCrashAfterDurableResetCannotPublishMixedPayload() = runBlocking {
+        val root = Files.createTempDirectory("download-crash-range-200").toFile()
+        val requestedRanges = java.util.Collections.synchronizedList(mutableListOf<String?>())
+        val http = server { exchange ->
+            requestedRanges += exchange.requestHeaders.getFirst("Range")
+            exchange.responseHeaders.add("ETag", "\"fixture\"")
+            exchange.responseHeaders.add("Content-Type", "video/mp4")
+            exchange.sendResponseHeaders(200, media.size.toLong())
+            exchange.responseBody.use { it.write(media) }
+        }
+        try {
+            val download = item(root, url = http.url())
+            partial(download, byteArrayOf(9, 9, 9, 9))
+            val io = DownloadIo()
+            try {
+                assertFailsWith<IllegalStateException> {
+                    copyDesktopDownload(download, download.sourceUrl, io, { _, _ -> },
+                        onAfterPartReset = { error("simulated crash after fsynced truncate") })
+                }
+            } finally { io.close() }
+            assertEquals(0L, File(downloadPath(download).path + ".part").length())
+            assertContentEquals(media, copy(download).readBytes())
+            assertEquals(listOf("bytes=4-", null), requestedRanges)
+            val proof = assertNotNull(readDesktopDownloadProof(downloadPath(download)))
+            assertEquals(downloadSha256File(downloadPath(download)), proof.completedSha256)
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
+    @Test fun legacyPartialAlwaysRestartsButLegacyCompletedFileMigratesWithoutDeletingBytes() = runBlocking {
+        val root = Files.createTempDirectory("download-legacy-proof").toFile()
+        val http = server { exchange ->
+            assertNull(exchange.requestHeaders.getFirst("Range"), "Legacy proofs do not authorize resume")
+            exchange.responseHeaders.add("ETag", "\"fixture\"")
+            exchange.responseHeaders.add("Content-Type", "video/mp4")
+            exchange.sendResponseHeaders(200, media.size.toLong())
+            exchange.responseBody.use { it.write(media) }
+        }
+        try {
+            val download = item(root, id = "legacy-part", url = http.url())
+            val partialFile = downloadPath(download)
+            partialFile.parentFile.mkdirs()
+            File(partialFile.parentFile, ".starlit-owner").writeText(download.id)
+            File(partialFile.path + ".part").writeBytes(byteArrayOf(8, 8, 8, 8))
+            downloadProofFile(partialFile).writeText("\"fixture\"\n${media.size}")
+            assertContentEquals(media, copy(download).readBytes())
+
+            val completed = item(root, id = "legacy-done", url = "")
+            val finalFile = downloadPath(completed)
+            finalFile.parentFile.mkdirs()
+            File(finalFile.parentFile, ".starlit-owner").writeText(completed.id)
+            finalFile.writeBytes(media)
+            downloadProofFile(finalFile).writeText("\"fixture\"\n${media.size}")
+            assertEquals(finalFile, recoverFinalDownload(completed))
+            val migrated = assertNotNull(readDesktopDownloadProof(finalFile))
+            assertEquals(downloadSha256File(finalFile), migrated.completedSha256)
+            assertEquals(finalFile.toURI().toString(),
+                DownloadsPlatformDownloader.resolveLocalFileUri(finalFile.toURI().toString(), finalFile.name))
+            finalFile.writeBytes(media.copyOf().apply { this[lastIndex] = 77 })
+            Files.setLastModifiedTime(finalFile.toPath(),
+                java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 3_000L))
+            assertFailsWith<IllegalStateException> { recoverFinalDownload(completed) }
+            assertNull(DownloadsPlatformDownloader.resolveLocalFileUri(finalFile.toURI().toString(), finalFile.name))
+            assertTrue(finalFile.isFile, "Corrupt user data must be preserved for inspection")
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
+    @Test fun aCompletedPartialWithDurableDigestFinishesWithoutNetworkAfterCrash() = runBlocking {
+        val root = Files.createTempDirectory("download-complete-part").toFile()
+        try {
+            val download = item(root, url = "http://offline.invalid/episode.mp4")
+            partial(download, media, complete = true)
+            val file = copy(download)
+            assertContentEquals(media, file.readBytes())
+            assertFalse(File(file.path + ".part").exists())
+            assertEquals(downloadSha256File(file), readDesktopDownloadProof(file)?.completedSha256)
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun emptyOrTornOwnerMarkerIsRecoverableButForeignContentNeverIs() = runBlocking {
+        val root = Files.createTempDirectory("download-owner-recovery").toFile()
+        val http = server { exchange ->
+            exchange.responseHeaders.add("ETag", "\"fixture\"")
+            exchange.sendResponseHeaders(200, media.size.toLong())
+            exchange.responseBody.use { it.write(media) }
+        }
+        try {
+            for ((id, torn) in listOf("empty-owner" to false, "torn-owner" to true)) {
+                val download = item(root, id, http.url())
+                downloadPath(download).parentFile.mkdirs()
+                if (torn) File(downloadPath(download).parentFile, ".starlit-owner").writeText("torn-")
+                assertContentEquals(media, copy(download).readBytes())
+                assertEquals(id, File(downloadPath(download).parentFile, ".starlit-owner").readText())
+            }
+            val foreign = item(root, id = "foreign-owner", url = http.url())
+            val unrelated = File(downloadPath(foreign).parentFile.apply { mkdirs() }, "readme.txt")
+            unrelated.writeText("Unrelated content")
+            assertFailsWith<IllegalStateException> { copy(foreign) }
+            assertEquals("Unrelated content", unrelated.readText())
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
     @Test fun provenFinalFileRecoversOfflineBeforeAnySourceLookup() {
         val root = Files.createTempDirectory("download-final-recovery").toFile()
         val done = CountDownLatch(1)
         var failure: String? = null
         try {
             val download = item(root).copy(sourceUrl = "", sourceSelection = DownloadSourceSelection(providerId = "missing-provider"))
-            partial(download, media)
+            partial(download, media, complete = true)
             val path = downloadPath(download)
             Files.move(File(path.path + ".part").toPath(), path.toPath())
             DownloadsPlatformDownloader.start(DownloadPlatformRequest(download, onResolved = { error("Recovered file must not resolve sources") }),
@@ -388,12 +515,13 @@ class DesktopDownloadsTest {
         try {
             val download = item(root).copy(videoId = "show:1:6", episodeNumber = 6, sourceUrl = "",
                 torrentHash = "a".repeat(40), torrentFileIdx = 0, torrentFilename = "Season 1/E06.mp4")
-            val copied = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
-                assertEquals(16L, size)
-                copyDesktopDownload(download, url, io, { _, _ -> }, size)
+            val copied = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, selected ->
+                assertEquals(16L, selected.length)
+                copyDesktopDownload(download, url, io, { _, _ -> }, selected.length, selected)
             }
             assertContentEquals(media, copied.readBytes())
-            assertEquals("16", File(copied.path + ".validator").readLines()[1])
+            assertEquals(16L, readDesktopDownloadProof(copied)?.totalBytes)
+            assertEquals(downloadSha256File(copied), readDesktopDownloadProof(copied)?.completedSha256)
             assertEquals(listOf("prepare", "file:7"), calls)
             calls.clear()
             assertFails {
@@ -452,7 +580,7 @@ class DesktopDownloadsTest {
             // Using a retired engine starts its process again.
             engines.use(pack, settings) { }
             assertEquals(2, calls.count { it == "prepare:$key" })
-            assertEquals(2, created.get())
+            assertEquals(3, created.get())
         } finally { scope.cancel() }
     }
 
@@ -473,7 +601,7 @@ class DesktopDownloadsTest {
 
     @Test fun torrentsRequireAnExactMediaFileAndUseOnlyTheirOwnBackend() = runBlocking {
         val files = listOf(TorrServerFile(1, "Show/E01.mkv", 100), TorrServerFile(2, "Show/E02.mkv", 200), TorrServerFile(3, "readme.txt", 20))
-        assertEquals(2, selectDownloadTorrentFile(files, 1, null).id)
+        assertFails { selectDownloadTorrentFile(files, 1, null) }
         assertEquals(1, selectDownloadTorrentFile(files, null, "E01.mkv").id)
         assertFails { selectDownloadTorrentFile(files, null, null) }
         assertFails { selectDownloadTorrentFile(files, 2, null) }
@@ -496,16 +624,137 @@ class DesktopDownloadsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 50)
         try {
-            val download = item(root).copy(sourceUrl = "", torrentHash = "a".repeat(40), torrentFileIdx = 1)
+            val download = item(root).copy(sourceUrl = "", torrentHash = "a".repeat(40), torrentFileIdx = 1,
+                torrentFilename = "E02.mkv")
             assertFails { downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = false) }) { _, _ -> error("P2P disabled") } }
             assertTrue(calls.isEmpty())
-            val result = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, size ->
-                assertEquals(200L, size)
+            val result = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, selected ->
+                assertEquals(200L, selected.length)
                 assertEquals("http://127.0.0.1/own-stream", url); File(root, "copied.mkv").also { it.writeBytes(media) }
             }
             assertContentEquals(media, result.readBytes())
             withTimeout(3_000) { while ("stop" !in calls) delay(10) }
             assertEquals(listOf("prepare", "add", "file:2", "drop:${"a".repeat(40)}", "stop"), calls)
         } finally { scope.cancel(); root.deleteRecursively() }
+    }
+
+    @Test fun shuffledTorrentFilesRequireAUniqueNameForMultiEpisodeDownloads() {
+        val files = listOf(
+            TorrServerFile(9, "Pack/Season 2/E02.mkv", 200),
+            TorrServerFile(3, "Pack/Season 1/E02.mkv", 100),
+            TorrServerFile(1, "Pack/readme.txt", 10),
+        )
+        assertFailsWith<IllegalStateException> { selectDownloadTorrentFile(files, 0, null) }
+        assertFailsWith<IllegalStateException> { selectDownloadTorrentFile(files.reversed(), 1, null) }
+        assertEquals(3, selectDownloadTorrentFile(files, 0, "Season 1/E02.mkv").id)
+        assertFailsWith<IllegalStateException> { selectDownloadTorrentFile(files, 0, "E02.mkv") }
+        assertEquals(9, selectDownloadTorrentFile(listOf(files.first(), files.last()), 0, null).id,
+            "A single playable video is unambiguous regardless of original index")
+    }
+
+    @Test fun torrentMagnetBuilderSupportsV1V2Base32AndEncodesTrackerNames(): Unit = runBlocking {
+        val tracker = "https://track.example/announce?q=two words&d=1"
+        val magnetCalls = mutableListOf<String>()
+        val files = listOf(TorrServerFile(7, "Movie.mp4", 16))
+        val backend = object : DesktopTorrentBackend {
+            override suspend fun isHealthy() = true
+            override suspend fun prepare(settings: P2pSettingsUiState) {}
+            override suspend fun restart(settings: P2pSettingsUiState) = error("Unexpected restart")
+            override suspend fun stop() {}
+            override suspend fun dropTorrent(hash: String) {}
+            override suspend fun addTorrent(magnetLink: String): String { magnetCalls += magnetLink; return "fixture" }
+            override suspend fun getTorrentStats(hash: String) = TorrServerStats(0, 0, 0, 0, 0, 0, 16, files)
+            override fun getStreamUrl(magnetLink: String, fileIdx: Int) = "http://127.0.0.1/stream?index=$fileIdx"
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 60_000)
+        val root = Files.createTempDirectory("torrent-magnets").toFile()
+        try {
+            val samples = listOf("a".repeat(40), "b".repeat(64), "A".repeat(32))
+            for ((index, hash) in samples.withIndex()) {
+                val download = item(root, id = "magnet-$index").copy(sourceUrl = "", torrentHash = hash,
+                    torrentTrackers = listOf(tracker, "", tracker))
+                val output = downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { url, selected ->
+                    assertEquals(7, selected.id)
+                    assertTrue(url.contains("index=7"))
+                    File(root, "output-$index").apply { writeBytes(media) }
+                }
+                assertContentEquals(media, output.readBytes())
+                assertEquals(buildP2pMagnetUri(canonicalDownloadTorrentHash(hash), listOf(tracker)), magnetCalls.last())
+            }
+            assertTrue(magnetCalls[0].contains("xt=urn:btih:"))
+            assertTrue(magnetCalls[1].contains("xt=urn:btmh:1220"))
+            assertTrue(magnetCalls[2].contains("xt=urn:btih:${"0".repeat(40)}"))
+            assertTrue(magnetCalls.all { it.contains("%20") && !it.contains("two+words") })
+            assertFailsWith<IllegalArgumentException> { canonicalDownloadTorrentHash("invalid") }
+            assertFailsWith<IllegalArgumentException> { canonicalDownloadTorrentHash("0".repeat(32)) }
+            // JUnit 4 requires @Test methods to return void; assertFailsWith returns the exception.
+            Unit
+        } finally { scope.cancel(); root.deleteRecursively() }
+    }
+
+    @Test fun torrentV2BackendRejectionReportsUnsupportedSourceClearly(): Unit = runBlocking {
+        val backend = object : DesktopTorrentBackend {
+            override suspend fun isHealthy() = true
+            override suspend fun prepare(settings: P2pSettingsUiState) {}
+            override suspend fun restart(settings: P2pSettingsUiState) = error("Unexpected restart")
+            override suspend fun stop() {}
+            override suspend fun dropTorrent(hash: String) {}
+            override suspend fun addTorrent(magnetLink: String): String =
+                throw DesktopTorrentEngineUnavailable("Bad request", httpStatusCode = 400)
+            override suspend fun getTorrentStats(hash: String) = error("Metadata must not be read")
+            override fun getStreamUrl(magnetLink: String, fileIdx: Int) = error("Must not serve rejected torrent")
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 60_000)
+            val download = item(Files.createTempDirectory("torrent-v2-rejection").toFile())
+                .copy(sourceUrl = "", torrentHash = "b".repeat(64))
+            val failure = assertFailsWith<DesktopTorrentEngineUnavailable> {
+                downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = true) }) { _, _ -> error("Unexpected copy") }
+            }
+            assertTrue(failure.message.orEmpty().contains("Torrent v2"))
+            assertEquals(400, failure.httpStatusCode)
+            File(download.destinationDirectory!!).deleteRecursively()
+            Unit
+        } finally { scope.cancel() }
+    }
+
+    @Test fun transientTorrentMetadataFailuresRecoverWithoutRestartButMissingTorrentFailsPromptly(): Unit = runBlocking {
+        val calls = AtomicInteger()
+        val backend = object : DesktopTorrentBackend {
+            override suspend fun isHealthy() = true
+            override suspend fun prepare(settings: P2pSettingsUiState) = error("No restart or prepare is needed")
+            override suspend fun restart(settings: P2pSettingsUiState) = error("No restart is needed")
+            override suspend fun stop() {}
+            override suspend fun dropTorrent(hash: String) {}
+            override suspend fun addTorrent(magnetLink: String) = "fixture"
+            override suspend fun getTorrentStats(hash: String): TorrServerStats {
+                val count = calls.incrementAndGet()
+                if (count == 1) throw DesktopTorrentEngineUnavailable("Temporary outage", httpStatusCode = 503)
+                val files = if (count == 2) emptyList() else listOf(TorrServerFile(4, "Movie.mp4", 16))
+                return TorrServerStats(0, 0, 0, 0, 0, 0, 16, files)
+            }
+            override fun getStreamUrl(magnetLink: String, fileIdx: Int) = error("Unused")
+        }
+        val files = awaitDownloadTorrentMetadata(backend, "fixture", timeoutMs = 1_000, pollMs = 5)
+        assertEquals(3, calls.get())
+        assertEquals(listOf(4), files.map { it.id })
+
+        val missing = object : DesktopTorrentBackend by backend {
+            override suspend fun getTorrentStats(hash: String): TorrServerStats =
+                throw DesktopTorrentEngineUnavailable("Missing", httpStatusCode = 404)
+        }
+        val failure = assertFailsWith<DesktopTorrentEngineUnavailable> {
+            awaitDownloadTorrentMetadata(missing, "missing", timeoutMs = 100, pollMs = 5)
+        }
+        assertEquals(404, failure.httpStatusCode)
+        val neverReady = object : DesktopTorrentBackend by backend {
+            override suspend fun getTorrentStats(hash: String) = TorrServerStats(0, 0, 0, 0, 0, 0, 16, emptyList())
+        }
+        assertFailsWith<TimeoutCancellationException> {
+            awaitDownloadTorrentMetadata(neverReady, "offline", timeoutMs = 50, pollMs = 5)
+        }
+        Unit
     }
 }
