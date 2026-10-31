@@ -111,6 +111,7 @@ internal fun PlayerControlsShell(
     onEpisodesClick: (() -> Unit)? = null,
     onOpenInExternalPlayer: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    controlToggles: List<PlayerControlToggle> = emptyList(),
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
     onParentalGuideAnimationComplete: () -> Unit = {},
@@ -308,6 +309,7 @@ internal fun PlayerControlsShell(
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onSubmitIntroClick = onSubmitIntroClick,
                         onInteraction = onInteraction,
+                        toggles = controlToggles,
                     )
                 }
             }

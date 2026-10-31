@@ -12,6 +12,7 @@ internal actual object PlatformLocalAccountDataCleaner {
         "profile_payload",
         "avatar_catalog_payload",
         "anonymous_user_id",
+        "imported_settings_scope",
         "member_access_payload",
     )
     private val profilePinCachePrefixes = listOf("profile_pin_cache_")
@@ -92,6 +93,8 @@ internal actual object PlatformLocalAccountDataCleaner {
         for (key in defaults.dictionaryRepresentation().keys) {
             val keyString = key as? String ?: continue
             if (
+                keyString.matches(Regex(".+_[1-$MAX_PROFILES]")) ||
+                keyString.startsWith("settings_") ||
                 keyString.startsWith("stream_link_") ||
                 keyString.startsWith("cw_enrichment_cache_")
             ) {
@@ -101,11 +104,15 @@ internal actual object PlatformLocalAccountDataCleaner {
 
         val scraperCodePath = "${NSHomeDirectory()}/Library/Application Support/nuvio_plugin_scrapers"
         if (NSFileManager.defaultManager.fileExistsAtPath(scraperCodePath)) {
-            NSFileManager.defaultManager.removeItemAtPath(scraperCodePath, null)
+            check(NSFileManager.defaultManager.removeItemAtPath(scraperCodePath, null)) {
+                "Could not clear account plugin code"
+            }
         }
         val membershipPath = "${NSHomeDirectory()}/Library/Application Support/NuvioMembership"
         if (NSFileManager.defaultManager.fileExistsAtPath(membershipPath)) {
-            NSFileManager.defaultManager.removeItemAtPath(membershipPath, null)
+            check(NSFileManager.defaultManager.removeItemAtPath(membershipPath, null)) {
+                "Could not clear local account membership files"
+            }
         }
     }
 }

@@ -5,6 +5,9 @@ import com.nuvio.app.core.storage.DesktopStorage
 internal actual object AuthStorage {
     private val store = DesktopStorage.store("nuvio_auth")
 
+    actual fun loadImportedSettingsScope(): String? = store.getString("imported_settings_scope")
+    actual fun saveImportedSettingsScope(scope: String?) = store.putString("imported_settings_scope", scope)
+
     actual fun loadAnonymousUserId(): String? =
         store.getString("anonymous_user_id")
 

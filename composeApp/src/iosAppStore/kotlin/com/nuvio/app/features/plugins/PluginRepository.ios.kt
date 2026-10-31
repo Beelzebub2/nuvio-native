@@ -16,7 +16,13 @@ actual object PluginRepository {
 
     actual fun onProfileChanged(profileId: Int) = Unit
 
+    actual fun exportLocalSnapshot(): String = ""
+
+    actual fun importLocalSnapshot(payload: String) = Unit
+
     actual fun clearLocalState() = Unit
+
+    actual suspend fun awaitPendingCloudPushes() = Unit
 
     actual suspend fun pullFromServer(profileId: Int) = Unit
 

@@ -28,7 +28,9 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.time.Duration
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -201,12 +203,15 @@ private class TorrServerBinary(
 
     suspend fun isRunning(): Boolean =
         try {
-            val request = HttpRequest.newBuilder(URI.create("$baseUrl/echo"))
-                .timeout(Duration.ofSeconds(2))
-                .GET()
-                .build()
-            val response = runInterruptible(Dispatchers.IO) { healthClient.send(request, HttpResponse.BodyHandlers.discarding()) }
-            response.statusCode() in 200..299
+            // A healthy /echo alone could belong to an unrelated loopback process.
+            if (!isProcessAlive(process)) false else {
+                val request = HttpRequest.newBuilder(URI.create("$baseUrl/echo"))
+                    .timeout(Duration.ofSeconds(2))
+                    .GET()
+                    .build()
+                val response = runInterruptible(Dispatchers.IO) { healthClient.send(request, HttpResponse.BodyHandlers.discarding()) }
+                response.statusCode() in 200..299
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -274,34 +279,59 @@ private class TorrServerBinary(
             File("vendor/TorrServer/dist/${platform.binaryName}"),
         )
 
-    private fun extractBundledBinary(platform: DesktopTorrServerPlatform): File? {
+    private fun extractBundledBinary(platform: DesktopTorrServerPlatform): File? = synchronized(extractionLock) {
         val resource = "/torrserver/${platform.resourceDir}/${platform.binaryName}"
-        val input = P2pStreamingEngine::class.java.getResourceAsStream(resource) ?: return null
+        val input = P2pStreamingEngine::class.java.getResourceAsStream(resource) ?: return@synchronized null
         val dir = DesktopStorage.rootDir.resolve("torrserver/bin/${platform.resourceDir}").toFile().apply { mkdirs() }
-        val file = File(dir, platform.binaryName)
         val bundled = input.use { it.readBytes() }
-        if (file.isFile && file.length() == bundled.size.toLong() && file.inputStream().use { it.readBytes() }.contentEquals(bundled)) return file
+        // Versioned binary names keep a running previous app release from having
+        // its executable overwritten by another app instance installing an update.
+        val digest = MessageDigest.getInstance("SHA-256").digest(bundled)
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        val suffix = if (platform.binaryName.endsWith(".exe")) ".exe" else ""
+        val file = File(dir, "TorrServer-$digest$suffix")
+        if (file.isFile && file.length() == bundled.size.toLong() && file.inputStream().use { it.readBytes() }.contentEquals(bundled)) return@synchronized file
         val tempFile = Files.createTempFile(dir.toPath(), "torrserver-", ".tmp").toFile()
-        bundled.inputStream().use { source ->
-            tempFile.outputStream().use { target -> source.copyTo(target) }
+        try {
+            bundled.inputStream().use { source ->
+                tempFile.outputStream().use { target -> source.copyTo(target) }
+            }
+            try {
+                Files.move(
+                    tempFile.toPath(),
+                    file.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                try {
+                    Files.move(tempFile.toPath(), file.toPath())
+                } catch (_: FileAlreadyExistsException) {
+                    // Concurrent launches may publish the same immutable binary.
+                }
+            } catch (_: FileAlreadyExistsException) {
+                // Another launch published the exact same bundle first.
+            } catch (error: IOException) {
+                // Windows may refuse to rename over an executable another Nuvio
+                // instance is already running. Reuse it only if bytes agree.
+                if (!file.isFile || file.length() != bundled.size.toLong() ||
+                    !file.inputStream().use { it.readBytes() }.contentEquals(bundled)
+                ) throw error
+            }
+        } finally {
+            Files.deleteIfExists(tempFile.toPath())
         }
-        runCatching {
-            Files.move(
-                tempFile.toPath(),
-                file.toPath(),
-                StandardCopyOption.REPLACE_EXISTING,
-                StandardCopyOption.ATOMIC_MOVE,
-            )
-        }.getOrElse {
-            Files.move(tempFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        check(file.isFile && file.length() == bundled.size.toLong() &&
+            file.inputStream().use { it.readBytes() }.contentEquals(bundled)) {
+            "Bundled TorrServer executable was replaced during extraction"
         }
         file.setExecutable(true)
-        return file
+        file
     }
 
     companion object {
         private const val STARTUP_TIMEOUT_MS = 30_000L
         private const val HEALTH_CHECK_INTERVAL_MS = 200L
+        private val extractionLock = Any()
     }
 }
 

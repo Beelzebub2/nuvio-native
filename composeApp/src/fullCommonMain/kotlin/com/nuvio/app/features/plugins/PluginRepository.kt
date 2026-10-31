@@ -1,5 +1,9 @@
 package com.nuvio.app.features.plugins
 
+import com.nuvio.app.core.auth.LocalSettingsImport
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.features.addons.encodeUnsafeHttpUrlCharacters
@@ -14,6 +18,7 @@ import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
 import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +88,8 @@ actual object PluginRepository {
     private val persistenceRevision = atomic(0L)
     private val persistenceLock = SynchronizedObject()
     private val persistedRevisionByProfile = mutableMapOf<Int, Long>()
+    private val cloudPushLock = SynchronizedObject()
+    private val inFlightCloudPushes = mutableSetOf<Job>()
 
     actual fun initialize() {
         val effectiveProfileId = resolveEffectiveProfileId(ProfileRepository.activeProfileId)
@@ -109,6 +116,34 @@ actual object PluginRepository {
         _uiState.value = PluginsUiState()
     }
 
+    actual fun exportLocalSnapshot(): String {
+        ensureStateLoadedForProfile(resolveEffectiveProfileId(ProfileRepository.activeProfileId))
+        cancelActiveRefreshes()
+        val state = _uiState.value
+        persist(PluginPersistenceSnapshot(currentProfileId, persistenceGeneration.value, persistenceRevision.incrementAndGet(), state))
+        check(state.scrapers.all { PluginStorage.loadScraperCode(currentProfileId, it.id) == it.code }) {
+            "Could not save installed plugin code"
+        }
+        return json.encodeToString(state.toStoredPluginsState().copy(
+            scraperSettings = state.scrapers.mapNotNull { scraper -> PluginStorage.loadScraperSettings(scraper.id)?.let { scraper.id to it } }.toMap(),
+            scrapers = state.scrapers.map { it.toStoredPluginScraper().copy(code = it.code) },
+        ))
+    }
+
+    actual fun importLocalSnapshot(payload: String) {
+        val stored = json.decodeFromString<StoredPluginsState>(payload)
+        clearLocalState()
+        currentProfileId = resolveEffectiveProfileId(ProfileRepository.activeProfileId)
+        stored.scrapers.forEach { scraper ->
+            scraper.code?.let { code ->
+                check(PluginStorage.saveScraperCode(currentProfileId, scraper.id, code, overwrite = true))
+            }
+        }
+        stored.scraperSettings.forEach { (id, settings) -> PluginStorage.saveScraperSettings(id, settings) }
+        PluginStorage.saveState(currentProfileId, json.encodeToString(stored))
+        ensureStateLoadedForProfile(currentProfileId)
+    }
+
     actual fun clearLocalState() {
         cancelActiveRefreshes()
         persistenceGeneration.incrementAndGet()
@@ -117,7 +152,14 @@ actual object PluginRepository {
         _uiState.value = PluginsUiState()
     }
 
+    actual suspend fun awaitPendingCloudPushes() {
+        val jobs = synchronized(cloudPushLock) { inFlightCloudPushes.toList() }
+        jobs.forEach { it.join() }
+    }
+
     actual suspend fun pullFromServer(profileId: Int) {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return
+
         val effectiveProfileId = resolveEffectiveProfileId(profileId)
         ensureStateLoadedForProfile(effectiveProfileId)
         runCatching {
@@ -129,6 +171,7 @@ actual object PluginRepository {
                 }
                 .decodeList<PluginRow>()
 
+            if (LocalSettingsImport.hasPendingImport(profileId)) return
             val urls = dedupeManifestUrls(rows.map { it.url })
             val existingState = _uiState.value
             val existingReposByUrl = existingState.repositories.associateBy { it.manifestUrl }
@@ -505,19 +548,29 @@ actual object PluginRepository {
     }
 
     private fun pushToServer() {
-        scope.launch {
+        val signedIn = AuthRepository.state.value as? AuthState.Authenticated ?: return
+        if (signedIn.isAnonymous || LocalSettingsImport.hasPendingImport()) return
+        val profileId = ProfileRepository.activeProfileId
+        val backend = ServerConfigurationRepository.active.value.backendUrl
+        val generation = persistenceGeneration.value
+        val repos = _uiState.value.repositories.mapIndexed { index, repo ->
+            PluginPushItem(
+                url = repo.manifestUrl,
+                name = repo.name,
+                enabled = true,
+                sortOrder = index,
+            )
+        }
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            if (AuthRepository.state.value != signedIn ||
+                ProfileRepository.activeProfileId != profileId ||
+                ServerConfigurationRepository.active.value.backendUrl != backend ||
+                generation != persistenceGeneration.value ||
+                LocalSettingsImport.hasPendingImport(profileId)
+            ) return@launch
             runCatching {
-                val repos = _uiState.value.repositories.mapIndexed { index, repo ->
-                    PluginPushItem(
-                        url = repo.manifestUrl,
-                        name = repo.name,
-                        enabled = true,
-                        sortOrder = index,
-                    )
-                }
-
                 val params = buildJsonObject {
-                    put("p_profile_id", currentProfileId)
+                    put("p_profile_id", profileId)
                     put("p_plugins", json.encodeToJsonElement(repos))
                 }
                 SupabaseProvider.client.postgrest.rpc("sync_push_plugins", params)
@@ -525,6 +578,9 @@ actual object PluginRepository {
                 log.e(error) { "pushToServer failed" }
             }
         }
+        synchronized(cloudPushLock) { inFlightCloudPushes.add(job) }
+        job.invokeOnCompletion { synchronized(cloudPushLock) { inFlightCloudPushes.remove(job) } }
+        job.start()
     }
 
     private fun persist() {

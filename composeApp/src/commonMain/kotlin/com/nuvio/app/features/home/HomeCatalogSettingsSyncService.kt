@@ -1,5 +1,6 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.core.auth.LocalSettingsImport
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
@@ -91,10 +92,13 @@ object HomeCatalogSettingsSyncService {
     private var cachedSharedSettings: CachedSharedSettings? = null
 
     suspend fun pullFromServer(profileId: Int) {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return
+
         runCatching {
             val pullToken = currentPullToken(profileId) ?: return
             val localPayload = HomeCatalogSettingsRepository.exportToSyncPayload()
             val remoteBlob = fetchRemoteBlob(profileId)
+            if (LocalSettingsImport.hasPendingImport(profileId)) return
             cachedSharedSettings = CachedSharedSettings(
                 token = pullToken,
                 settingsJson = remoteBlob?.settingsJson ?: buildJsonObject { },
@@ -146,24 +150,24 @@ object HomeCatalogSettingsSyncService {
         }
     }
 
-    private suspend fun pushToRemote(token: PullToken) {
-        runCatching {
-            val payload = HomeCatalogSettingsRepository.exportToSyncPayload()
-            val jsonElement = mergedSharedPayloadJson(token, payload)
-
-            val params = buildJsonObject {
-                put("p_profile_id", token.profileId)
-                put("p_platform", HOME_CATALOG_SHARED_SYNC_PLATFORM)
-                put("p_settings_json", jsonElement)
-                putSyncOriginClientId()
-            }
-            SupabaseProvider.client.postgrest.rpc("sync_push_home_catalog_settings", params)
-            cachedSharedSettings = CachedSharedSettings(token = token, settingsJson = jsonElement)
-            log.d { "pushToRemote — success" }
-        }.onFailure { e ->
-            log.e(e) { "pushToRemote — FAILED" }
-        }
+    internal suspend fun pushCurrentProfileToRemote(): Boolean {
+        val token = currentPullToken() ?: return false
+        return pushToRemote(token)
     }
+
+    private suspend fun pushToRemote(token: PullToken): Boolean = runCatching {
+        val payload = HomeCatalogSettingsRepository.exportToSyncPayload()
+        val jsonElement = mergedSharedPayloadJson(token, payload)
+        val params = buildJsonObject {
+            put("p_profile_id", token.profileId)
+            put("p_platform", HOME_CATALOG_SHARED_SYNC_PLATFORM)
+            put("p_settings_json", jsonElement)
+            putSyncOriginClientId()
+        }
+        SupabaseProvider.client.postgrest.rpc("sync_push_home_catalog_settings", params)
+        cachedSharedSettings = CachedSharedSettings(token = token, settingsJson = jsonElement)
+        true
+    }.onFailure { log.e(it) { "pushToRemote failed" } }.getOrDefault(false)
 
     private fun currentPullToken(profileId: Int = ProfileRepository.activeProfileId): PullToken? {
         val authState = AuthRepository.state.value

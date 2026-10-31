@@ -22,7 +22,7 @@ data class RawHttpResponse(
 /** Default safety limit for generic and plugin-provided HTTP responses. */
 internal const val DefaultRawHttpResponseMaxBytes = 1024 * 1024
 
-expect suspend fun httpGetText(url: String): String
+expect suspend fun httpGetText(url: String, timeoutMillis: Long? = null): String
 
 expect suspend fun httpPostJson(url: String, body: String): String
 

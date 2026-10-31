@@ -671,6 +671,10 @@ internal class NativePlayerController(
         NativePlayerBridge.setSpeed(current, next)
     }
 
+    override fun getChapterStarts(): List<Double> = handle.takeIf { it != 0L }?.let { current ->
+        runCatching { NativePlayerBridge.chapterStarts(current).toList() }.getOrDefault(emptyList())
+    }.orEmpty()
+
     fun snapshot(): PlayerPlaybackSnapshot {
         val current = handle
         if (current == 0L) return PlayerPlaybackSnapshot(isLoading = true)
@@ -1539,6 +1543,16 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonField("nextEpisodeActionLabel", nextEpisodeActionLabel)
         append(',')
         appendJsonField("nextEpisodePlayable", nextEpisodePlayable)
+        append(',')
+        appendJsonField("showAutoToggles", showAutoToggles)
+        append(',')
+        appendJsonField("autoSkipIntroEnabled", autoSkipIntroEnabled)
+        append(',')
+        appendJsonField("autoNextEpisodeEnabled", autoNextEpisodeEnabled)
+        append(',')
+        appendJsonField("autoSkipIntroLabel", autoSkipIntroLabel)
+        append(',')
+        appendJsonField("autoNextEpisodeLabel", autoNextEpisodeLabel)
         append(',')
         appendJsonField("showSubmitIntro", showSubmitIntro)
         append(',')

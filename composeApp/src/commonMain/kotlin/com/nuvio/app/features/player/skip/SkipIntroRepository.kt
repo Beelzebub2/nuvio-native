@@ -52,8 +52,12 @@ object SkipIntroRepository {
         // Resolve IMDB -> season-specific MAL/AniList via Simkl full_anime_seasons
         val simklIdsDeferred = async { SimklIdResolver.resolveIdsForImdbEpisode(imdbId, season, episode) }
         val simklIds = simklIdsDeferred.await()
-        val malId = simklIds?.mal
-        val anilistId = simklIds?.anilist
+        // IMDb playback must also work in builds without Simkl credentials.
+        val publicIds = if (simklIds?.mal == null && simklIds?.anilist == null) {
+            AnimeIdResolver.resolveImdbSeason(imdbId, season)
+        } else null
+        val malId = simklIds?.mal ?: publicIds?.mal
+        val anilistId = simklIds?.anilist ?: publicIds?.anilist
 
         // Remap the TVDB episode number to the anime-entry-local episode number.
         val animeEpisode = if (simklIds != null) {
@@ -182,14 +186,24 @@ object SkipIntroRepository {
         return@coroutineScope mergeByPriority(introDb, animeSkip, aniSkipDeferred.await()).also { cache[cacheKey] = it }
     }
 
-    private fun mergeByPriority(vararg providerResults: List<SkipInterval>): List<SkipInterval> {
+    internal fun mergeByPriority(
+        introDb: List<SkipInterval>,
+        animeSkip: List<SkipInterval>,
+        aniSkip: List<SkipInterval>,
+    ): List<SkipInterval> {
         val chosen = LinkedHashMap<String, SkipInterval>()
-        for (result in providerResults) {
+        for (result in listOf(introDb, animeSkip, aniSkip)) {
             for (interval in result) {
+                if (!interval.hasValidSeekTimes()) continue
                 val category = segmentCategory(interval.type) ?: continue
                 if (category !in chosen) chosen[category] = interval
             }
         }
+        // Anime-specific markers describe the opening, whereas generic TV data can
+        // label the preceding cold open as the intro. Preserve other categories' priority.
+        (animeSkip + aniSkip).firstOrNull {
+            segmentCategory(it.type) == "opening" && it.hasValidSeekTimes()
+        }?.let { chosen["opening"] = it }
         return chosen.values.toList()
     }
 
@@ -260,17 +274,7 @@ object SkipIntroRepository {
                         (season == null || ep.season?.toIntOrNull() == season)
                 } ?: continue
 
-                val sorted = (targetEpisode.timestamps ?: continue).sortedBy { it.at }
-                val result = sorted.mapIndexedNotNull { i, ts ->
-                    val endTime = sorted.getOrNull(i + 1)?.at ?: Double.MAX_VALUE
-                    val type = when (ts.type.name.lowercase()) {
-                        "intro", "new intro" -> "op"
-                        "credits" -> "ed"
-                        "recap" -> "recap"
-                        else -> return@mapIndexedNotNull null
-                    }
-                    SkipInterval(startTime = ts.at, endTime = endTime, type = type, provider = "animeskip")
-                }
+                val result = targetEpisode.skipIntervals()
                 if (result.isNotEmpty()) return result
             }
             emptyList()
@@ -328,6 +332,7 @@ object SkipIntroRepository {
         cache.clear()
         animeSkipShowIdCache.clear()
         SimklIdResolver.clearCache()
+        AnimeIdResolver.clearCache()
     }
 }
 

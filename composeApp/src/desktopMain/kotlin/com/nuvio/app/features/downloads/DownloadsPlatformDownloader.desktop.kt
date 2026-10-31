@@ -8,10 +8,10 @@ import kotlinx.coroutines.sync.withLock
 import java.awt.Desktop
 import java.io.*
 import java.net.URI
-import java.net.URLEncoder
 import java.net.http.*
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CompletableFuture
@@ -29,22 +29,30 @@ private val pathLocks = ConcurrentHashMap<String, Mutex>()
 private val pendingRemovals = ConcurrentHashMap<String, DownloadItem>()
 private val transfers = ConcurrentHashMap<String, Job>()
 private val transferIo = ConcurrentHashMap<String, DownloadIo>()
+private val torrentCacheOwnershipDelegate = lazy {
+    DownloadTorrentCacheOwnership(DesktopStorage.cacheDir.resolve("download-torrents")).also { it.scavenge() }
+}
+private val torrentCacheOwnership by torrentCacheOwnershipDelegate
 private val torrentEngines = DownloadTorrentEngines(
     create = { hash ->
+        val pieces = torrentCacheOwnership.claim(hash)
         TorrServerBackend(
-            configurationDirectory = DesktopStorage.rootDir.resolve("download-torrserver/$hash").toFile(),
-            cacheDirectory = torrentDownloadCache(hash))
+            // A separate app instance can use the same hash concurrently. Keep both
+            // the engine's settings and its pieces in that instance's locked session.
+            configurationDirectory = File(pieces.parentFile, "config"),
+            cacheDirectory = pieces)
     },
     scope = transferScope,
-    // The engine already deletes its cache on drop; this also clears pieces left by a crash.
-    onRetired = { hash -> torrentDownloadCache(hash).deleteRecursively() },
+    onRetired = { hash -> torrentCacheOwnership.retire(hash) },
+    onPreparing = { hash -> torrentCacheOwnership.invalidateProcessId(hash) },
+    onPrepared = { hash, backend -> torrentCacheOwnership.recordProcessId(hash, (backend as? TorrServerBackend)?.processId) },
 )
-private fun torrentDownloadCache(hash: String): File = DesktopStorage.cacheDir.resolve("download-torrents/$hash").toFile()
 private val shutdownHook by lazy {
     Runtime.getRuntime().addShutdownHook(Thread({
         transfers.values.forEach { it.cancel() }
         transferIo.values.forEach { it.close() }
         runBlocking { withTimeoutOrNull(8_000) { torrentEngines.backends().map { backend -> async(Dispatchers.IO) { backend.stop() } }.awaitAll() } }
+        if (torrentCacheOwnershipDelegate.isInitialized()) torrentCacheOwnership.close()
     }, "starlit-download-shutdown"))
     true
 }
@@ -128,12 +136,31 @@ internal actual object DownloadsPlatformDownloader {
         return File(legacyDownloadsDirectory, "$destinationFileName.part").let { !it.exists() || it.delete() }
     }
     actual fun resolveLocalFileUri(localFileUri: String?, destinationFileName: String): String? {
-        if (localFileUri != null) return localFileUri.toLocalFileOrNull()?.takeIf { it.isFile && it.length() > 0 }?.toURI()?.toString()
+        if (localFileUri != null) return localFileUri.toLocalFileOrNull()?.let(::verifiedPlayableDownload)?.toURI()?.toString()
         if (!safeDownloadName(destinationFileName)) return null
-        return File(legacyDownloadsDirectory, destinationFileName).takeIf { it.isFile && it.length() > 0 }?.toURI()?.toString()
+        return verifiedPlayableDownload(File(legacyDownloadsDirectory, destinationFileName))?.toURI()?.toString()
     }
     actual fun openDownloadsDirectory(): Boolean = openDownloadDirectory(File(requireNotNull(DownloadDesktopFeatures.directory())))
 }
+
+private fun verifiedPlayableDownload(file: File): File? = runCatching {
+    if (!file.isFile || file.length() <= 0L || Files.isSymbolicLink(file.toPath())) return null
+    val proof = readDesktopDownloadProof(file)
+    if (proof == null) {
+        // Older completed downloads lacked content digests. Keep them available,
+        // while rejecting damaged records that claim to be the new proof format.
+        if (isModernDesktopDownloadProof(file)) return null
+        return file
+    }
+    if (proof.fileName != file.name || proof.totalBytes != file.length() || proof.completedSha256 == null) return null
+    val marker = File(file.parentFile, ".starlit-owner")
+    if (marker.exists()) {
+        if (!marker.isFile || Files.isSymbolicLink(marker.toPath()) || marker.readText() != proof.ownerId ||
+            file.parentFile.toPath().toRealPath() != file.parentFile.parentFile.toPath().toRealPath().resolve(proof.ownerId)) return null
+    } else if (file.parentFile.canonicalFile != legacyDownloadsDirectory.canonicalFile ||
+        !file.name.contains("_${proof.ownerId}.")) return null
+    file.takeIf { verifiedDesktopDownloadContent(it, proof) }
+}.getOrNull()
 
 internal fun openDownloadDirectory(directory: File): Boolean = runCatching {
     if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) Desktop.getDesktop().open(directory)
@@ -162,11 +189,22 @@ private fun prepareDownloadPath(item: DownloadItem): File {
         val root = File(item.destinationDirectory)
         check(root.isDirectory) { "Download drive / folder is unavailable: ${root.absolutePath}" }
         val marker = File(dir, ".starlit-owner")
-        if (!dir.exists()) {
-            check(dir.mkdir()) { "Cannot create download directory. Check disk space and write access." }
-            marker.writeText(item.id)
-        }
+        if (!dir.exists()) check(dir.mkdir()) { "Cannot create download directory. Check disk space and write access." }
         check(dir.toPath().toRealPath() == root.toPath().toRealPath().resolve(item.id)) { "Task directory must not redirect to another folder" }
+        check(!Files.isSymbolicLink(marker.toPath())) { "Destination owner marker must not be a symbolic link" }
+        // A crash can happen after mkdir or during the very first owner write. Only an
+        // otherwise empty task directory can be claimed/repaired; never adopt payloads.
+        val entries = dir.listFiles() ?: error("Cannot inspect the download directory")
+        val recoverable = entries.isEmpty() ||
+            (entries.size == 1 && entries.single() == marker && marker.isFile &&
+                item.id.startsWith(marker.readText()) && marker.readText() != item.id)
+        if (!marker.exists() || (recoverable && marker.readText() != item.id)) {
+            check(recoverable) { "Destination contains unowned content; choose another folder" }
+            FileOutputStream(marker, false).use { output ->
+                output.write(item.id.toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+        }
         check(!Files.isSymbolicLink(marker.toPath()) && marker.isFile && marker.readText() == item.id) { "Destination belongs to another file; choose another folder" }
     } else check(dir.isDirectory || dir.mkdirs()) { "Cannot create download directory" }
     return file
@@ -191,7 +229,7 @@ internal fun removeOwnedDownload(item: DownloadItem): Boolean = runCatching {
     // Never recursively delete a selected folder. Remove only this task's known files and sidecars.
     check(!Files.isSymbolicLink(File(file.path + ".subtitles").toPath()))
     removeDownloadSidecars(File(file.path + ".subtitles"))
-    listOf(file, File(file.path + ".part"), File(file.path + ".validator")).forEach { owned ->
+    listOf(file, File(file.path + ".part"), downloadProofFile(file), downloadProofTempFile(file)).forEach { owned ->
         check(!Files.isSymbolicLink(owned.toPath()))
         if (owned.exists()) check(owned.delete())
     }
@@ -221,14 +259,22 @@ internal class DownloadIo {
     }
 }
 
+/** A restart must durably discard stale bytes before publishing a validator for new bytes. */
+private fun resetDownloadPart(part: File) {
+    check(!Files.isSymbolicLink(part.toPath())) { "Download partial must not be a symbolic link" }
+    FileOutputStream(part, false).use { it.fd.sync() }
+}
+
 /** Writes only a validated continuous byte range; the final path never contains an incomplete file. */
 internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: DownloadIo,
-    onProgress: (Long, Long?) -> Unit, expectedSize: Long? = null): File {
+    onProgress: (Long, Long?) -> Unit, expectedSize: Long? = null,
+    selectedTorrentFile: TorrServerFile? = null,
+    onAfterPartReset: (() -> Unit)? = null): File {
     val file = prepareDownloadPath(item)
     val part = File(file.path + ".part")
-    val validatorFile = File(file.path + ".validator")
-    require(!Files.isSymbolicLink(part.toPath()) && !Files.isSymbolicLink(validatorFile.toPath()))
-    // A completed file from an interrupted final callback is safe to reuse only with its durable size proof.
+    require(!Files.isSymbolicLink(part.toPath()) && !Files.isSymbolicLink(downloadProofFile(file).toPath()))
+    val sourceFingerprint = downloadSourceFingerprint(item, url, selectedTorrentFile)
+    // Completed-file recovery verifies an actual content digest instead of trusting length alone.
     recoverFinalDownload(item)?.let { return it }
     check(!file.exists()) { "Destination file already exists; it was not overwritten" }
     var attempts = 0
@@ -237,23 +283,62 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
         currentCoroutineContext().ensureActive()
         try {
             var offset = part.takeIf { it.isFile }?.length() ?: 0L
-            var validator = validatorFile.takeIf { it.isFile }?.readLines()?.firstOrNull().orEmpty()
-            // Without a stable entity validator a resumed source may be a different rendition.
-            if (offset > 0 && validator.isBlank()) { check(part.delete()); offset = 0 }
+            var previous = readDesktopDownloadProof(file)?.takeIf {
+                it.ownerId == item.id && it.fileName == item.fileName && it.sourceFingerprint == sourceFingerprint
+            }
+            // Legacy two-line records do not bind the URL, selected torrent file or redirect.
+            // They cannot authorize an append, even if their ETag happens to match a new source.
+            if (offset > 0 && (previous == null || previous.validator.isBlank() ||
+                    previous.totalBytes <= 0 || offset > previous.totalBytes ||
+                    (expectedSize != null && previous.totalBytes != expectedSize))) {
+                resetDownloadPart(part)
+                onAfterPartReset?.invoke()
+                offset = 0L
+                previous = null
+            }
+            if (offset > 0 && previous?.completedSha256 != null) {
+                // Power loss between the durable completion record and the final rename.
+                if (offset == previous.totalBytes && downloadSha256File(part) == previous.completedSha256) {
+                    Files.move(part.toPath(), file.toPath())
+                    return file
+                }
+                resetDownloadPart(part)
+                onAfterPartReset?.invoke()
+                offset = 0L
+                previous = null
+            }
+            val digest = MessageDigest.getInstance("SHA-256")
+            if (offset > 0L) withContext(Dispatchers.IO) {
+                FileInputStream(part).buffered().use { input ->
+                    val buffer = ByteArray(128 * 1024)
+                    var seen = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        currentCoroutineContext().ensureActive()
+                        digest.update(buffer, 0, read)
+                        seen += read
+                    }
+                    check(seen == offset) { "Partial file changed during resume" }
+                }
+            }
             suspend fun response(start: Long): HttpResponse<InputStream> {
                 val builder = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(30)).GET()
                 item.sourceHeaders.forEach { (key, value) ->
                     if (key.lowercase() !in setOf("range", "if-range", "accept-encoding", "host", "content-length") && key.isNotBlank()) builder.header(key, value)
                 }
                 builder.header("Accept-Encoding", "identity")
-                if (start > 0) { builder.header("Range", "bytes=$start-"); builder.header("If-Range", validator) }
+                if (start > 0) { builder.header("Range", "bytes=$start-"); builder.header("If-Range", previous!!.validator) }
                 return io.send(builder.build())
             }
             var reply = response(offset)
             if (reply.statusCode() == 416) {
                 io.close()
-                if (part.exists()) check(part.delete())
-                offset = 0
+                resetDownloadPart(part)
+                onAfterPartReset?.invoke()
+                offset = 0L
+                previous = null
+                digest.reset()
                 reply = response(0)
             }
             check(reply.statusCode() == 200 || reply.statusCode() == 206) { "Download HTTP ${reply.statusCode()}; retry later or choose another source" }
@@ -269,18 +354,32 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 check(parsed.first == offset && parsed.second >= offset && parsed.third > parsed.second) { "Unexpected Content-Range offset; file was not appended" }
                 check(length < 0 || length == parsed.second - parsed.first + 1) { "Content-Range length mismatch" }
                 total = parsed.third
-            } else { offset = 0; total = length.takeIf { it >= 0 } }
+            } else {
+                // A server ignoring Range is a new transfer, regardless of a matching ETag.
+                val hadPriorBytes = part.exists() && part.length() > 0L
+                resetDownloadPart(part)
+                if (hadPriorBytes) onAfterPartReset?.invoke()
+                offset = 0L
+                digest.reset()
+                previous = null
+                total = length.takeIf { it >= 0 }
+            }
             check(expectedSize == null || total == null || expectedSize == total) { "Torrent file length does not match the selected media" }
             val entity = reply.headers().firstValue("ETag").orElse("").takeIf { !it.startsWith("W/") && it.isNotBlank() }
                 ?: reply.headers().firstValue("Last-Modified").orElse("")
-            if (offset > 0L && reply.statusCode() == 206 && entity != validator) {
+            val endpointFingerprint = downloadEndpointFingerprint(reply.uri(), selectedTorrentFile)
+            if (offset > 0L && reply.statusCode() == 206 &&
+                (previous?.validator != entity || previous?.totalBytes != total ||
+                    previous?.endpointFingerprint != endpointFingerprint)) {
                 io.close()
-                check(part.delete()) { "Cannot restart changed source: partial file is not writable" }
-                validatorFile.delete()
+                resetDownloadPart(part)
+                onAfterPartReset?.invoke()
                 check(++entityRestarts <= 1) { "Source keeps changing; choose another file" }
                 continue
             }
-            validatorFile.writeText("$entity\n${total ?: -1}")
+            val proof = DesktopDownloadProof(item.id, item.fileName, sourceFingerprint,
+                endpointFingerprint, entity, total ?: -1)
+            writeDesktopDownloadProof(file, proof)
             var bytes = offset
             var lastProgress = 0L
             val lastRead = AtomicLong(System.nanoTime())
@@ -320,6 +419,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 val initial = prefix.toByteArray()
                                 validateMediaPrefix(initial, initial.size)
                                 output.write(initial)
+                                digest.update(initial)
                                 bytes += initial.size
                                 report(bytes)
                             }
@@ -330,13 +430,16 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 lastRead.set(System.nanoTime())
 
                                 output.write(buffer, 0, count)
+                                digest.update(buffer, 0, count)
                                 bytes += count
                                 check(total == null || bytes <= total) { "Source sent more bytes than advertised" }
                                 val now = System.nanoTime()
                                 if (now - lastProgress >= 500_000_000L) { report(bytes); lastProgress = now }
                             }
-                            check(!stalled.get()) { "Source stopped sending data; retry to resume" }
-                            check(bytes > 0 && (total == null || bytes == total) && (expectedSize == null || bytes == expectedSize)) { "Incomplete media file: received $bytes of $total bytes" }
+                            if (stalled.get()) throw IOException("Source stopped sending data; retry to resume")
+                            if (bytes <= 0 || (total != null && bytes != total) ||
+                                (expectedSize != null && bytes != expectedSize)
+                            ) throw IOException("Incomplete media file: received $bytes of $total bytes")
                             output.fd.sync()
                         }
                     }
@@ -344,8 +447,10 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 } finally { watchdog.cancel(); io.close() }
             }
             currentCoroutineContext().ensureActive()
-            // Known final size is also the recovery proof if the app exits before metadata is committed.
-            validatorFile.writeText("$entity\n$bytes")
+            // The partial bytes were synced above. Persist their digest BEFORE renaming,
+            // so a crash either leaves a resumable partial or a verifiable complete file.
+            writeDesktopDownloadProof(file, proof.copy(totalBytes = bytes,
+                completedSha256 = digest.digest().downloadHex()))
             Files.move(part.toPath(), file.toPath()) // same-directory rename; no REPLACE_EXISTING: never overwrite another file
             onProgress(bytes, bytes)
             return file
@@ -374,26 +479,74 @@ private fun String.toLocalFileOrNull(): File? = runCatching { if (startsWith("fi
 
 internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit): File =
     downloadTorrentFile(item, torrentEngines, { P2pSettingsRepository.ensureLoaded(); P2pSettingsRepository.uiState.value },
-        { url, size -> copyDesktopDownload(item, url, io, progress, size) })
+        { url, selected -> copyDesktopDownload(item, url, io, progress, selected.length, selected) })
+
+/** TorrServer accepts hexadecimal BTIH; normalize legacy 32-character base32 BTIH first. */
+internal fun canonicalDownloadTorrentHash(infoHash: String): String {
+    val value = infoHash.trim()
+    if (value.length != 32) return canonicalP2pInfoHash(value)
+    val base32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    val bytes = ByteArray(20)
+    var bits = 0
+    var buffer = 0
+    var output = 0
+    for (char in value.uppercase()) {
+        val digit = base32.indexOf(char)
+        require(digit >= 0) { "Torrent info hash is not valid base32" }
+        buffer = (buffer shl 5) or digit
+        bits += 5
+        if (bits >= 8) {
+            bits -= 8
+            bytes[output++] = (buffer ushr bits).toByte()
+            buffer = buffer and ((1 shl bits) - 1)
+        }
+    }
+    check(output == bytes.size && bits == 0) { "Invalid torrent base32 hash length" }
+    return bytes.downloadHex()
+}
+
+/** Metadata may be delayed or temporarily unavailable while a healthy engine connects to peers. */
+internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend, hash: String,
+    timeoutMs: Long = 90_000L, pollMs: Long = 1_000L): List<TorrServerFile> = withTimeout(timeoutMs) {
+    var files: List<TorrServerFile> = emptyList()
+    while (files.isEmpty()) {
+        try {
+            files = backend.getTorrentStats(hash).files
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: DesktopTorrentEngineUnavailable) {
+            if (e.httpStatusCode == 404) {
+                throw DesktopTorrentEngineUnavailable("Torrent disappeared from the local engine; retry this source", e, 404)
+            }
+            if (e.httpStatusCode != null && e.httpStatusCode !in 500..599 &&
+                e.httpStatusCode !in listOf(408, 425, 429)) throw e
+            if (!backend.isHealthy()) throw DesktopTorrentEngineUnavailable("Torrent engine stopped while fetching metadata", e)
+        } catch (e: IOException) {
+            if (!backend.isHealthy()) throw DesktopTorrentEngineUnavailable("Torrent engine stopped while fetching metadata", e)
+        }
+        if (files.isEmpty()) delay(pollMs)
+    }
+    files
+}
 
 /** Reads one file of a torrent through the engine shared by every download of that torrent. */
 internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTorrentEngines,
-    settings: () -> P2pSettingsUiState, copy: suspend (String, Long) -> File): File {
-    val hash = checkNotNull(item.torrentHash) { "No downloadable media source" }
-    require(Regex("[a-fA-F0-9]{40}|[a-zA-Z2-7]{32}").matches(hash)) { "Invalid torrent hash" }
-    val magnet = "magnet:?xt=urn:btih:$hash" + item.torrentTrackers.joinToString("") { "&tr=" + URLEncoder.encode(it, Charsets.UTF_8) }
+    settings: () -> P2pSettingsUiState, copy: suspend (String, TorrServerFile) -> File): File {
+    val hash = canonicalDownloadTorrentHash(checkNotNull(item.torrentHash) { "No downloadable media source" })
+    val magnet = buildP2pMagnetUri(hash, item.torrentTrackers)
     val selectedSettings = settings()
     check(selectedSettings.p2pEnabled) { "Enable P2P in Settings before downloading torrents, or choose Direct files." }
     return engines.use(hash, selectedSettings) { backend ->
         // Adding a torrent the engine already has returns the existing one and its peers.
-        val added = backend.addTorrent(magnet)
-        val files = withTimeout(90_000) {
-            var result: List<TorrServerFile>
-            do { result = backend.getTorrentStats(added).files; if (result.isEmpty()) delay(1_000) } while (result.isEmpty())
-            result
+        val added = try { backend.addTorrent(magnet) } catch (e: DesktopTorrentEngineUnavailable) {
+            if (hash.length == 64) throw DesktopTorrentEngineUnavailable(
+                "This Torrent v2 source could not be added by the installed engine. Try a v1 source or update TorrServer.",
+                e, e.httpStatusCode)
+            throw e
         }
+        val files = awaitDownloadTorrentMetadata(backend, added)
         val chosen = selectDownloadTorrentFile(files, item.torrentFileIdx, item.torrentFilename)
-        copy(backend.getStreamUrl(magnet, chosen.id), chosen.length)
+        copy(backend.getStreamUrl(magnet, chosen.id), chosen)
     }
 }
 internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?, filename: String?): TorrServerFile {
@@ -411,24 +564,46 @@ internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?,
         }
         check(matches.size == 1) { "The requested torrent filename is missing or ambiguous. Choose another episode source." }
         matches.single()
-    } else if (index != null) files.singleOrNull { index >= 0 && index < Int.MAX_VALUE && it.id == index + 1 }
-        else videos.singleOrNull()
-    check(selected != null && selected in videos) { "Multi-file torrent needs an exact file index / filename. Choose the episode's source manually." }
+    } else videos.singleOrNull()
+    // File indices supplied by add-ons are in original torrent order, while TorrServer
+    // assigns IDs after sorting paths. An index alone cannot disambiguate a season pack.
+    check(selected != null && selected in videos) {
+        "Multi-video torrent needs an exact filename. Choose the episode's source manually."
+    }
     return selected
 }
 
 internal fun recoverFinalDownload(item: DownloadItem): File? {
     val file = downloadPath(item)
     if (!file.exists()) return null
+    // Inspect the owner even on offline recovery. A file cannot create ownership for itself.
+    prepareDownloadPath(item)
     if (item.destinationDirectory != null) {
         val marker = File(file.parentFile, ".starlit-owner")
         check(file.parentFile.toPath().toRealPath() == File(item.destinationDirectory).toPath().toRealPath().resolve(item.id))
         check(!Files.isSymbolicLink(file.parentFile.toPath()) && !Files.isSymbolicLink(marker.toPath()) && marker.readText() == item.id)
     }
-    val proof = File(file.path + ".validator")
-    check(!Files.isSymbolicLink(file.toPath()) && !Files.isSymbolicLink(proof.toPath()))
-    val expected = proof.takeIf { it.isFile }?.readLines()?.getOrNull(1)?.toLongOrNull()
-    check(expected != null && file.isFile && file.length() == expected && expected > 0) { "Destination file already exists; it was not overwritten" }
+    check(!Files.isSymbolicLink(file.toPath()) && !Files.isSymbolicLink(downloadProofFile(file).toPath()))
+    var proof = readDesktopDownloadProof(file)
+    if (proof == null && file.isFile && (item.destinationDirectory != null || file.name.contains("_${item.id}."))) {
+        // One-time compatibility for downloads finished by older versions. Their existing
+        // owner and durable length proof establish the legacy baseline; later accesses
+        // can detect same-size changes using the newly saved digest. No legacy .part
+        // file is ever resumed, and migration never changes the payload.
+        val legacySize = readLegacyCompletedSize(file)
+        if (legacySize != null && file.length() == legacySize) {
+            val migrated = DesktopDownloadProof(item.id, item.fileName,
+                downloadSha256Text("legacy-completed\u0000${item.id}\u0000${item.fileName}"),
+                "-", "", legacySize, downloadSha256File(file))
+            writeDesktopDownloadProof(file, migrated)
+            proof = migrated
+        }
+    }
+    check(proof != null && proof.ownerId == item.id && proof.fileName == item.fileName &&
+        proof.completedSha256 != null && file.isFile && file.length() == proof.totalBytes &&
+        proof.totalBytes > 0 && verifiedDesktopDownloadContent(file, proof)) {
+        "Existing destination is missing its verified content proof or its bytes changed; file was preserved"
+    }
     return file
 }
 private fun removeDownloadSidecars(directory: File) {

@@ -63,11 +63,12 @@ private val desktopHttpClient = OkHttpClient.Builder()
 
 private const val truncationSuffix = "\n...[truncated]"
 
-actual suspend fun httpGetText(url: String): String =
+actual suspend fun httpGetText(url: String, timeoutMillis: Long?): String =
     executeTextRequest(
         method = "GET",
         url = url,
         headers = mapOf("Accept" to "application/json"),
+        timeoutMillis = timeoutMillis,
     )
 
 actual suspend fun httpPostJson(url: String, body: String): String =
@@ -145,9 +146,12 @@ private suspend fun executeTextRequest(
     url: String,
     headers: Map<String, String> = emptyMap(),
     body: String = "",
+    timeoutMillis: Long? = null,
 ): String = withContext(Dispatchers.IO) {
     val request = buildDesktopRequest(method, url, headers, body)
-    desktopHttpClient.newCall(request).execute().use { response ->
+    val call = desktopHttpClient.newCall(request)
+    timeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
+    call.execute().use { response ->
         val payload = readResponseBody(response.body)
         if (!response.isSuccessful) {
             error(runBlocking { getString(Res.string.network_request_failed_http, response.code) })

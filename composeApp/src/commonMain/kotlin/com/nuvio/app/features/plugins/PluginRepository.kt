@@ -9,7 +9,13 @@ expect object PluginRepository {
 
     fun onProfileChanged(profileId: Int)
 
+    fun exportLocalSnapshot(): String
+
+    fun importLocalSnapshot(payload: String)
+
     fun clearLocalState()
+
+    suspend fun awaitPendingCloudPushes()
 
     suspend fun pullFromServer(profileId: Int)
 

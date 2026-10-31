@@ -101,6 +101,8 @@ internal class DesktopP2pSession(
     private var monitorJob: Job? = null
     private var readinessMonitorJob: Job? = null
     @Volatile private var warmupJob: Job? = null
+    private var warmRetentionJob: Job? = null
+    private var warmRetentionGeneration = 0L
     private var activeHash: String? = null
     private var preparedSignals: DesktopP2pRecoverySignals? = null
     @Volatile private var closing = false
@@ -112,14 +114,19 @@ internal class DesktopP2pSession(
                 if (closing || _state.value !is P2pStreamingState.Idle) return@withLock
                 synchronized(intentLock) { intent += 1 }
                 try {
-                    if (needsNetworkRecovery()) backend.restart(settings()) else backend.prepare(settings())
+                    if (needsNetworkRecovery()) {
+                        backend.restart(settings())
+                        activeHash = null
+                    } else backend.prepare(settings())
                     preparedSignals = DesktopP2pRecoverySignals(environment())
                     startReadinessMonitoring()
                 } catch (e: CancellationException) {
                     withContext(NonCancellable) { backend.stop() }
+                    activeHash = null
                     throw e
                 } catch (e: Exception) {
                     backend.stop()
+                    activeHash = null
                     log.w(e) { "Background torrent engine preparation failed; playback will retry" }
                 }
             }
@@ -147,12 +154,15 @@ internal class DesktopP2pSession(
             backendLock.withLock {
                 ensureCurrent(currentIntent)
                 try {
-                    releaseTorrent()
+                    cancelWarmRetention()
+                    // Preserve piece cache and peer connections on a same-hash episode switch.
+                    if (!activeHash.equals(request.infoHash, ignoreCase = true)) releaseTorrent()
                     val session = connectWithRetry(request, currentIntent)
                     startMonitoring(session, currentIntent)
                     session.url
                 } catch (e: CancellationException) {
                     withContext(NonCancellable) { backend.stop() }
+                    activeHash = null
                     publish(currentIntent, P2pStreamingState.Idle)
                     throw e
                 } catch (e: Exception) {
@@ -181,12 +191,15 @@ internal class DesktopP2pSession(
             backendLock.withLock {
                 // A delayed stop must never kill the process belonging to a newer source.
                 if (isCurrent(stopIntent)) {
+                    cancelWarmRetention()
                     if (closeEngine || !settings().p2pEnabled) {
                         readinessMonitorJob?.cancel()
                         backend.stop()
                         activeHash = null
                         preparedSignals = null
-                    } else releaseTorrent()
+                    } else if (activeHash != null) {
+                        retainTorrentBriefly()
+                    }
                 }
             }
         }
@@ -200,7 +213,10 @@ internal class DesktopP2pSession(
             _cacheState.value = _cacheState.value.copy(isClearing = true)
         }
         try {
+            cancelWarmRetention()
             backend.stop()
+            activeHash = null
+            preparedSignals = null
             action()
         } finally {
             _cacheState.value = P2pCacheUiState(hasMeasurement = true)
@@ -221,14 +237,35 @@ internal class DesktopP2pSession(
         catch (e: Exception) { backend.stop(); log.w(e) { "Stopping an unresponsive torrent engine" } }
     }
 
+    /** Keep peers warm for the next episode, then release them after inactivity. */
+    private fun retainTorrentBriefly() {
+        val generation = ++warmRetentionGeneration
+        warmRetentionJob = scope.launch {
+            delay(WARM_TORRENT_RETENTION_MS)
+            backendLock.withLock {
+                if (warmRetentionGeneration == generation && _state.value is P2pStreamingState.Idle && !closing) {
+                    releaseTorrent()
+                }
+            }
+        }
+    }
+
+    private fun cancelWarmRetention() {
+        warmRetentionGeneration += 1
+        warmRetentionJob?.cancel()
+        warmRetentionJob = null
+    }
+
     private suspend fun connectWithRetry(request: P2pStreamRequest, currentIntent: Long, recovering: Boolean = false): Session {
         repeat(2) { attempt ->
             ensureCurrent(currentIntent)
             try {
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "starting_engine", request = request))
                 val stale = needsNetworkRecovery()
-                if (recovering || attempt > 0 || stale) backend.restart(settings()) else backend.prepare(settings())
-                activeHash = null
+                if (recovering || attempt > 0 || stale) {
+                    backend.restart(settings())
+                    activeHash = null
+                } else backend.prepare(settings())
                 val signals = DesktopP2pRecoverySignals(environment())
                 preparedSignals = signals
                 startReadinessMonitoring()
@@ -248,6 +285,7 @@ internal class DesktopP2pSession(
                 if (attempt == 1) throw e
                 log.w(e) { "Rebuilding the unresponsive torrent engine" }
                 backend.stop()
+                activeHash = null
                 delay(1_000L)
             }
         }
@@ -268,6 +306,7 @@ internal class DesktopP2pSession(
                     val reason = preparedSignals?.observe(environment()) ?: return@withLock
                     try {
                         backend.restart(settings())
+                        activeHash = null
                         preparedSignals = DesktopP2pRecoverySignals(environment())
                         log.i { "Prepared torrent engine after $reason" }
                     } catch (e: CancellationException) {
@@ -275,6 +314,7 @@ internal class DesktopP2pSession(
                         throw e
                     } catch (e: Exception) {
                         backend.stop()
+                        activeHash = null
                         preparedSignals = null
                         log.w(e) { "Idle torrent engine recovery failed; playback will retry" }
                     }
@@ -389,16 +429,24 @@ internal class DesktopP2pSession(
 
         while (true) {
             ensureCurrent(intent)
+            if (System.nanoTime() >= deadline) break
             if (signals.observe(environment()) != null) {
                 throw DesktopTorrentEngineUnavailable("Network changed while fetching torrent metadata")
             }
             if (signals.recoveryPending) {
-                publish(intent, P2pStreamingState.Connecting(phase = "waiting_for_network"))
+                publish(intent, P2pStreamingState.Connecting(phase = "waiting_for_network", request = request))
                 delay(1_000L)
                 continue
             }
-            if (System.nanoTime() >= deadline) break
-            files = backend.getTorrentStats(hash).files
+            files = try {
+                backend.getTorrentStats(hash).files
+            } catch (e: DesktopTorrentEngineUnavailable) {
+                // Retain peer discovery across intermittent local status failures.
+                if (e.httpStatusCode == 404 || !backend.isHealthy()) throw e
+                log.w(e) { "Transient torrent metadata status failure; retrying" }
+                delay(1_000L)
+                continue
+            }
             if (files.isNotEmpty()) break
             log.d { "Waiting for torrent metadata..." }
             delay(1_000L)
@@ -408,56 +456,46 @@ internal class DesktopP2pSession(
             throw P2pStreamingException("Torrent metadata timed out after 90 seconds. Check peers or choose another source.")
         }
 
-        if (!filename.isNullOrBlank()) {
-            val name = filename.trim()
-            val exact = files.singleOrNull { file ->
-                file.path.substringAfterLast('/').equals(name, ignoreCase = true)
+        val videos = files.filter {
+            it.length > 0L && it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS
+        }
+        val hint = filename?.trim()?.replace('\\', '/')?.takeIf { it.isNotBlank() }
+        val matchingName = if (hint != null) {
+            require(hint.split('/').none { it.isBlank() || it == "." || it == ".." }) {
+                "Invalid torrent filename hint"
             }
-            if (exact != null) {
-                log.d { "File resolved by exact filename match: ${exact.path} -> id=${exact.id}" }
-                return exact.id
+            videos.filter { file ->
+                val path = file.path.replace('\\', '/')
+                if ('/' in hint) path.equals(hint, ignoreCase = true) || path.endsWith("/$hint", ignoreCase = true)
+                else path.substringAfterLast('/').equals(hint, ignoreCase = true)
             }
-
-            val contains = files.singleOrNull { file ->
-                file.path.contains(name, ignoreCase = true)
-            }
-            if (contains != null) {
-                log.d { "File resolved by filename contains match: ${contains.path} -> id=${contains.id}" }
-                return contains.id
-            }
+        } else emptyList()
+        if (matchingName.size == 1) return matchingName.single().id
+        if (hint != null && matchingName.isEmpty() &&
+            hint.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS
+        ) {
+            throw P2pStreamingException("The requested filename is missing in this torrent. Choose another source.")
         }
 
-        if (requestedIdx != null) {
-            val torrServerIndex = requestedIdx + 1
-            if (files.any { it.id == torrServerIndex }) {
-                log.d { "File resolved by ID offset: id=$torrServerIndex" }
-                return torrServerIndex
-            }
-        }
-
-        if (requestedIdx != null && requestedIdx in files.indices) {
-            val positionalFile = files[requestedIdx]
-            log.d { "File resolved by positional index: [$requestedIdx] -> ${positionalFile.path} (id=${positionalFile.id})" }
-            return positionalFile.id
-        }
-
-        if (requestedIdx != null) {
-            throw P2pStreamingException("The requested torrent file is missing. Choose another source.")
-        }
-
-        val videos = files.filter { it.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
         if (request.season != null && request.episode != null) {
-            val candidates = videos.map { it to matchesEpisodeFile(it.path, request.season, request.episode) }
+            val candidates = (matchingName.ifEmpty { videos }).map {
+                it to matchesEpisodeFile(it.path, request.season, request.episode)
+            }
             val matching = candidates.filter { it.second == true }
             if (matching.size == 1) return matching.single().first.id
-            if (!(candidates.size == 1 && candidates.single().second == null)) {
-                throw P2pStreamingException("The requested episode is missing or ambiguous in this torrent. Choose another source.")
-            }
+            if (candidates.size == 1 && candidates.single().second == null) return candidates.single().first.id
+            throw P2pStreamingException("The requested episode is missing or ambiguous in this torrent. Choose another source.")
         }
 
-        val result = videos.maxByOrNull { it.length }?.id ?: files.maxByOrNull { it.length }?.id ?: 1
-        log.d { "File resolved by largest video fallback: id=$result" }
-        return result
+        if (hint != null) throw P2pStreamingException("The requested filename is missing or ambiguous in this torrent. Choose another source.")
+        if (videos.size == 1) return videos.single().id
+        if (requestedIdx != null || videos.size > 1) {
+            // The provider's index refers to raw torrent metadata order. TorrServer sorts
+            // paths before assigning IDs; index+1 or files[index] may select another episode.
+            throw P2pStreamingException("This torrent has multiple files. Choose a source with an exact filename or episode hint.")
+        }
+        if (files.size == 1 && files.single().length > 0L) return files.single().id
+        throw P2pStreamingException("No unambiguous playable file was found in the torrent.")
     }
 
 
@@ -465,6 +503,7 @@ internal class DesktopP2pSession(
         if (total > 0L) (toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f) else 0f
 
     private companion object {
+        const val WARM_TORRENT_RETENTION_MS = 90_000L
         val DEFAULT_TRACKERS = listOf(
             "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.stealth.si:80/announce",

@@ -221,6 +221,7 @@ internal class PlayerScreenRuntime(
     var episodeStreamsPanelState by mutableStateOf(EpisodeStreamsPanelState())
     var playerMetaVideos by mutableStateOf<List<MetaVideo>>(emptyList())
     var playerMeta by mutableStateOf<MetaDetails?>(null)
+    var providerSkipIntervals by mutableStateOf<List<SkipInterval>>(emptyList())
     var skipIntervals by mutableStateOf<List<SkipInterval>>(emptyList())
     val autoSkippedIntervals = mutableSetOf<SkipInterval>()
     var lastManualSkipSeekPositions by mutableStateOf<Pair<Long, Long>?>(null)
