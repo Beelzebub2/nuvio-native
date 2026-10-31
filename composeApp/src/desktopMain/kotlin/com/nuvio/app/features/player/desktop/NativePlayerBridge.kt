@@ -77,6 +77,7 @@ internal object NativePlayerBridge {
     external fun speed(handle: Long): Float
     external fun audioTracksJson(handle: Long): String
     external fun subtitleTracksJson(handle: Long): String
+    external fun chapterStarts(handle: Long): DoubleArray
     external fun selectAudioTrack(handle: Long, trackId: Int)
     external fun selectSubtitleTrack(handle: Long, trackId: Int)
     external fun addSubtitleUrl(handle: Long, url: String)

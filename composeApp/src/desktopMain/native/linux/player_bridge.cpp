@@ -1872,6 +1872,19 @@ JNIEXPORT jstring JNICALL NP(audioTracksJson)(JNIEnv *env, jobject, jlong handle
     return utf8ToJstring(env, buildTracksJson(p->mpv, "audio"));
 }
 
+JNIEXPORT jdoubleArray JNICALL NP(chapterStarts)(JNIEnv *env, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    std::vector<double> starts;
+    int64_t count = p && p->mpv ? mpvGetInt(p->mpv, "chapter-list/count") : 0;
+    for (int64_t index = 0; index < count; ++index) {
+        std::string key = "chapter-list/" + std::to_string(index) + "/time";
+        starts.push_back(mpvGetDouble(p->mpv, key.c_str()));
+    }
+    jdoubleArray result = env->NewDoubleArray((jsize)starts.size());
+    if (result && !starts.empty()) env->SetDoubleArrayRegion(result, 0, (jsize)starts.size(), starts.data());
+    return result;
+}
+
 JNIEXPORT jstring JNICALL NP(subtitleTracksJson)(JNIEnv *env, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return utf8ToJstring(env, "[]");

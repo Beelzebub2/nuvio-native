@@ -36,6 +36,6 @@ internal fun SkipInterval.internalSkipAction(
 
 private const val POST_CREDITS_GAP_MS = 5_000L
 
-private fun SkipInterval.hasValidSeekTimes(): Boolean =
+internal fun SkipInterval.hasValidSeekTimes(): Boolean =
     startTime.isFinite() && endTime.isFinite() && startTime >= 0 && endTime > startTime &&
         endTime * 1000.0 < Long.MAX_VALUE.toDouble()

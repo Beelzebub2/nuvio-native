@@ -130,6 +130,21 @@ data class AnimeSkipEpisode(
     @SerialName("timestamps") val timestamps: List<AnimeSkipTimestamp>? = null,
 )
 
+internal fun AnimeSkipEpisode.skipIntervals(): List<SkipInterval> {
+    val sorted = timestamps.orEmpty().filter { it.at.isFinite() && it.at >= 0 }.sortedBy { it.at }
+    return sorted.zipWithNext().mapNotNull { (start, end) ->
+        if (end.at <= start.at) return@mapNotNull null
+        val type = when (start.type.name.lowercase()) {
+            "intro", "new intro" -> "op"
+            "credits" -> "ed"
+            "recap" -> "recap"
+            else -> return@mapNotNull null
+        }
+        // An isolated Intro marker is not permission to skip the rest of the file.
+        SkipInterval(start.at, end.at, type, "animeskip")
+    }
+}
+
 @Serializable
 data class AnimeSkipTimestamp(
     @SerialName("at") val at: Double,
