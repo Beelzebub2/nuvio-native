@@ -1,6 +1,7 @@
 package com.nuvio.app.features.p2p
 
 import co.touchlab.kermit.Logger
+import com.nuvio.app.features.downloads.isManagedDownloadTorrentCache
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -18,6 +19,33 @@ import java.util.UUID
 
 private const val SETTINGS_STORAGE_ERROR =
     "Torrent engine settings could not be read or repaired. Check app storage permissions and retry."
+
+/** Five independent download processes share one download cache/connection allowance. */
+internal const val MAX_DOWNLOAD_TORRENT_ENGINES = 5
+
+internal data class DownloadTorrentResourceBudget(val cacheBytes: Long, val connectionLimit: Int)
+
+/** Reserved per-process slice; playback continues to receive its normal user-selected settings. */
+internal fun downloadTorrentResourceBudget(settings: P2pSettingsUiState): DownloadTorrentResourceBudget {
+    val cacheBytes = if (settings.cacheSize != P2pCacheSize.NONE) {
+        settings.cacheSize.bytes / MAX_DOWNLOAD_TORRENT_ENGINES
+    } else {
+        // Memory-only cache is independent of the disk allowance. Keep a usable >=128 MiB
+        // buffer for soft mode, while limiting five processes to 640 MiB/1 GiB/1.5 GiB.
+        val totalMiB = when (settings.torrentProfile) {
+            P2pTorrentProfile.SOFT -> 640L
+            P2pTorrentProfile.BALANCED -> 1_024L
+            P2pTorrentProfile.FAST -> 1_536L
+        }
+        totalMiB * 1024L * 1024L / MAX_DOWNLOAD_TORRENT_ENGINES
+    }
+    val connections = when (settings.torrentProfile) {
+        P2pTorrentProfile.SOFT -> 25
+        P2pTorrentProfile.BALANCED -> 50
+        P2pTorrentProfile.FAST -> 80
+    }
+    return DownloadTorrentResourceBudget(cacheBytes, connections)
+}
 
 /** Update existing JSON settings only while our process is stopped; retain other engine preferences. */
 internal fun prepareTorrServerSettingsFile(directory: File, cache: File, settings: P2pSettingsUiState) {
@@ -85,19 +113,20 @@ internal fun desktopTorrentSettings(
 ): JsonObject = buildJsonObject {
     current.forEach { (key, value) -> put(key, value) }
     val diskCache = settings.cacheSize != P2pCacheSize.NONE
+    val downloadBudget = if (isManagedDownloadTorrentCache(File(cachePath))) downloadTorrentResourceBudget(settings) else null
     val memoryBytes = when (settings.torrentProfile) {
         P2pTorrentProfile.SOFT -> 128L * 1024 * 1024
         P2pTorrentProfile.BALANCED -> 256L * 1024 * 1024
         P2pTorrentProfile.FAST -> 512L * 1024 * 1024
     }
-    put("CacheSize", if (diskCache) settings.cacheSize.bytes else memoryBytes)
+    put("CacheSize", downloadBudget?.cacheBytes ?: if (diskCache) settings.cacheSize.bytes else memoryBytes)
     put("UseDisk", diskCache)
     put("TorrentsSavePath", if (diskCache) cachePath else "")
     put("RemoveCacheOnDrop", true)
     put("PreloadCache", if (diskCache) 1 else 10)
     put("ReaderReadAHead", 95)
     put("DisableUpload", !settings.enableUpload)
-    put("ConnectionsLimit", when (settings.torrentProfile) {
+    put("ConnectionsLimit", downloadBudget?.connectionLimit ?: when (settings.torrentProfile) {
         P2pTorrentProfile.SOFT -> 40
         P2pTorrentProfile.BALANCED -> 100
         P2pTorrentProfile.FAST -> 200

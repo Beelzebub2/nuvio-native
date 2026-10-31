@@ -2,6 +2,8 @@ package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.ProfileScopedKey
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
@@ -21,6 +23,49 @@ class DownloadQueueTest {
         StreamItem(name = "1080p", url = url, addonName = "Local fixture", addonId = "fixture"))
     private fun waitFor(predicate: () -> Boolean) = runBlocking {
         withTimeout(8_000) { while (!predicate()) delay(20) }
+    }
+
+    @Test fun damagedDownloadsPayloadRecoversPreviousGoodVersionOrFailsWithoutOverwritingIt() {
+        val key = ProfileScopedKey.of("downloads")
+        val store = DesktopStorage.store("nuvio_downloads")
+        val original = store.getString(key)
+        try {
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("""{"items":[]}""")
+            assertFailsWith<IllegalArgumentException> { DownloadsStorage.savePayload("{damaged-current") }
+            assertEquals("""{"items":[]}""", store.getString(key))
+            // Simulate a malformed payload introduced by an older build or
+            // external modification; normal writes now reject this content.
+            store.putString(key, "{damaged-current")
+            // The backup contains the last valid per-profile queue.
+            assertEquals("""{"items":[]}""", DownloadsStorage.loadPayload())
+            DownloadsRepository.ensureLoaded()
+            assertTrue(DownloadsRepository.uiState.value.items.isEmpty())
+
+            DownloadsRepository.clearLocalState()
+            val queued = DownloadItem(
+                id = "preserved", contentType = "series", parentMetaId = "fixture",
+                parentMetaType = "series", videoId = "fixture:1", title = "Fixture",
+                streamTitle = "1080p", providerName = "fixture",
+                sourceUrl = "https://example.invalid/media.mp4", fileName = "fixture.mp4",
+                status = DownloadStatus.Paused, createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
+            )
+            DownloadsStorage.savePayload("""{"items":${Json.encodeToString(listOf(queued))}}""")
+            DownloadsRepository.ensureLoaded()
+            assertEquals(listOf("preserved"), DownloadsRepository.uiState.value.items.map { it.id })
+
+            store.putString(key, "{damaged-previous")
+            store.putString(key, "{damaged-current-again")
+            val damaged = store.getString(key)
+            assertFailsWith<IllegalStateException> { DownloadsRepository.onProfileChanged() }
+            assertFailsWith<IllegalStateException> { DownloadsRepository.ensureLoaded() }
+            assertEquals(damaged, store.getString(key), "No failed load may persist an empty queue")
+            assertEquals(listOf("preserved"), DownloadsRepository.uiState.value.items.map { it.id },
+                "Corrupt data must not emit a fabricated empty list into the UI")
+        } finally {
+            DownloadsRepository.clearLocalState()
+            store.putString(key, original)
+        }
     }
 
     @Test fun removingActiveAndQueuedDownloadsNeverStartsTheRemovedQueueOrRestoresLateResults() {

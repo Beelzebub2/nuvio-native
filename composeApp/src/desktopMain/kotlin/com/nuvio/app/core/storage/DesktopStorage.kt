@@ -2,9 +2,18 @@ package com.nuvio.app.core.storage
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.channels.FileChannel
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
 import java.util.Comparator
 import java.util.Locale
 import java.util.Properties
@@ -96,9 +105,14 @@ internal object DesktopStorage {
     internal class Store(
         private val file: Path,
     ) {
+        private data class Snapshot(val properties: Properties, val bytes: ByteArray)
+        private class InvalidSnapshot(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+        private val backup = file.resolveSibling(file.fileName.toString() + ".bak")
         private val lock = Any()
         private val properties = Properties()
         private var loaded = false
+        private var committed: ByteArray? = null
 
         fun contains(key: String): Boolean = synchronized(lock) {
             ensureLoaded()
@@ -110,14 +124,34 @@ internal object DesktopStorage {
             properties.getProperty(key)
         }
 
+        /**
+         * Restore a damaged value from the preceding committed generation.
+         * Repair just this key so newer values for other profiles are retained.
+         */
+        fun getStringValidated(key: String, valid: (String) -> Boolean): String? = synchronized(lock) {
+            ensureLoaded()
+            val current = properties.getProperty(key) ?: return null
+            if (valid(current)) return current
+            val previous = runCatching { readSnapshot(backup) }.getOrNull()
+                ?.properties?.getProperty(key)?.takeIf(valid)
+                ?: throw IOException("Saved preference is damaged and no valid backup exists: " + file)
+            // Keep the valid backup until the repaired primary is fully committed.
+            mutate(preserveBackup = true) {
+                properties.setProperty(key, previous)
+                true
+            }
+            previous
+        }
+
         fun putString(key: String, value: String?) = synchronized(lock) {
             ensureLoaded()
-            val changed = if (value == null) {
-                properties.remove(key) != null
-            } else {
-                properties.setProperty(key, value) != value
+            mutate {
+                if (value == null) {
+                    properties.remove(key) != null
+                } else {
+                    properties.setProperty(key, value) != value
+                }
             }
-            if (changed) persist()
         }
 
         fun getBoolean(key: String): Boolean? =
@@ -152,40 +186,207 @@ internal object DesktopStorage {
 
         fun remove(key: String) = synchronized(lock) {
             ensureLoaded()
-            if (properties.remove(key) != null) persist()
+            mutate { properties.remove(key) != null }
         }
 
         fun removeAll(keys: Iterable<String>) = synchronized(lock) {
             ensureLoaded()
-            var changed = false
-            keys.forEach { key ->
-                if (properties.remove(key) != null) changed = true
+            mutate {
+                var changed = false
+                keys.forEach { key ->
+                    if (properties.remove(key) != null) changed = true
+                }
+                changed
             }
-            if (changed) persist()
         }
 
         fun clearInMemory() = synchronized(lock) {
             properties.clear()
             loaded = false
+            committed = null
         }
 
         private fun ensureLoaded() {
             if (loaded) return
-            loaded = true
+            val primary = runCatching {
+                readSnapshot(file)?.also { current ->
+                    // Before the first upgrade, the only valid legacy + backup
+                    // pair is the identical snapshot copied before replacement.
+                    // Never treat a damaged sealed primary as an empty legacy one.
+                    if (!hasIntegrityHeader(current.bytes)) {
+                        val previous = runCatching { readSnapshot(backup) }.getOrNull()
+                        if (previous != null && !current.bytes.contentEquals(previous.bytes)) {
+                            throw InvalidSnapshot("Unsealed preference file differs from recovery backup: " + file)
+                        }
+                    }
+                }
+            }
+            // A transient read/permission failure is not evidence of corruption.
+            // Replacing that primary with an older backup could lose newer data.
+            primary.exceptionOrNull()?.let { if (it !is InvalidSnapshot) throw it }
+            val snapshot = primary.getOrNull() ?: run {
+                val fallback = runCatching { readSnapshot(backup) }
+                val previous = fallback.getOrNull()
+                if (previous == null) {
+                    if (primary.isSuccess && fallback.isSuccess) {
+                        loaded = true // New store; neither generation exists.
+                        return
+                    }
+                    throw IOException(
+                        "Saved preferences are unreadable and no valid backup exists: " + file,
+                        primary.exceptionOrNull() ?: fallback.exceptionOrNull(),
+                    )
+                }
+                // A complete, verified previous generation can recover a missing,
+                // truncated or otherwise unreadable primary without losing data.
+                replaceSynced(file, previous.bytes)
+                previous
+            }
             properties.clear()
-            if (!file.exists()) return
-            runCatching {
-                Files.newInputStream(file).use { input ->
-                    properties.load(input)
+            properties.putAll(snapshot.properties)
+            committed = snapshot.bytes
+            loaded = true
+        }
+
+        private fun mutate(preserveBackup: Boolean = false, change: () -> Boolean) {
+            val before = Properties().also { it.putAll(properties) }
+            if (!change()) return
+            try {
+                persist(preserveBackup)
+            } catch (error: Exception) {
+                // A failed save must not make a subsequent identical update a no-op.
+                properties.clear()
+                properties.putAll(before)
+                throw error
+            }
+        }
+
+        private fun persist(preserveBackup: Boolean) {
+            val next = sealedRecord(properties)
+            Files.createDirectories(file.parent)
+            val temporary = writeSyncedTemp(next)
+            try {
+                // Publish the old verified generation before replacing the primary.
+                // A crash at any point leaves either the primary or backup readable.
+                if (!preserveBackup) committed?.let { replaceSynced(backup, it) }
+                moveReplacing(temporary, file)
+                syncParentDirectory()
+                committed = next
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
+        }
+
+        private fun sealedRecord(values: Properties): ByteArray {
+            val body = ByteArrayOutputStream().also {
+                values.store(it, "Nuvio desktop preferences")
+            }.toByteArray()
+            // This is a Properties-compatible comment. The checksum detects
+            // truncated/partially written files, which Properties.load accepts.
+            val header = (RECORD_PREFIX + sha256(body) + "\n").toByteArray(Charsets.US_ASCII)
+            return header + body
+        }
+
+        private fun readSnapshot(path: Path): Snapshot? {
+            if (Files.notExists(path)) return null
+            val bytes = Files.readAllBytes(path)
+            if (bytes.isEmpty()) throw InvalidSnapshot("Saved preference file is empty: " + path)
+            val newline = bytes.indexOf('\n'.code.toByte())
+            val firstLine = String(
+                bytes, 0, if (newline < 0) bytes.size else newline, Charsets.US_ASCII,
+            ).trimEnd('\r')
+            val body = if (firstLine.startsWith("# NuvioStore")) {
+                val expected = firstLine.removePrefix(RECORD_PREFIX)
+                if (!firstLine.startsWith(RECORD_PREFIX) || newline < 0 ||
+                    expected.length != 64 || expected.any { it !in '0'..'9' && it !in 'a'..'f' }
+                ) {
+                    throw InvalidSnapshot("Invalid saved preference checksum: " + path)
+                }
+                bytes.copyOfRange(newline + 1, bytes.size).also {
+                    if (sha256(it) != expected) {
+                        throw InvalidSnapshot("Saved preferences failed checksum validation: " + path)
+                    }
+                }
+            } else {
+                // Existing .properties files have no integrity header. They are
+                // still readable and will be upgraded on their first mutation.
+                bytes
+            }
+            val parsed = Properties()
+            try {
+                ByteArrayInputStream(body).use { parsed.load(it) }
+            } catch (error: IllegalArgumentException) {
+                throw InvalidSnapshot("Malformed saved preferences: " + path, error)
+            }
+            return Snapshot(parsed, bytes)
+        }
+
+        private fun hasIntegrityHeader(bytes: ByteArray): Boolean =
+            String(bytes, 0, bytes.indexOf('\n'.code.toByte()).let { if (it < 0) bytes.size else it },
+                Charsets.US_ASCII).startsWith(RECORD_PREFIX)
+
+        private fun replaceSynced(target: Path, bytes: ByteArray) {
+            Files.createDirectories(target.parent)
+            val temporary = writeSyncedTemp(bytes)
+            try {
+                moveReplacing(temporary, target)
+                syncParentDirectory()
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
+        }
+
+        private fun writeSyncedTemp(bytes: ByteArray): Path {
+            val temporary = Files.createTempFile(file.parent, file.fileName.toString() + "-", ".tmp")
+            try {
+                FileOutputStream(temporary.toFile()).use { output ->
+                    output.write(bytes)
+                    output.fd.sync()
+                }
+            } catch (error: Exception) {
+                Files.deleteIfExists(temporary)
+                throw error
+            }
+            return temporary
+        }
+
+        private fun moveReplacing(source: Path, target: Path) {
+            try {
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: AtomicMoveNotSupportedException) {
+                // The previous verified backup still exists if a filesystem
+                // does not support an atomic rename-over-existing.
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+
+        private fun syncParentDirectory() {
+            // Directory fsync is supported on common Unix filesystems, but a
+            // Windows directory cannot be opened as a normal FileChannel.
+            if (System.getProperty("os.name").orEmpty().startsWith("Windows")) return
+            try {
+                FileChannel.open(file.parent, StandardOpenOption.READ).use { it.force(true) }
+            } catch (_: IOException) {
+                // Some filesystems cannot force directories. Both files are
+                // independently synced and the previous generation is retained.
+            } catch (_: UnsupportedOperationException) {
+                // Directory forcing is unavailable on this filesystem.
+            }
+        }
+
+        private fun sha256(bytes: ByteArray): String {
+            val digits = "0123456789abcdef"
+            return buildString(64) {
+                MessageDigest.getInstance("SHA-256").digest(bytes).forEach { byte ->
+                    val value = byte.toInt() and 0xff
+                    append(digits[value shr 4])
+                    append(digits[value and 15])
                 }
             }
         }
 
-        private fun persist() {
-            Files.createDirectories(file.parent)
-            Files.newOutputStream(file).use { output ->
-                properties.store(output, "Nuvio desktop preferences")
-            }
+        private companion object {
+            const val RECORD_PREFIX = "# NuvioStore sha256="
         }
     }
 }
