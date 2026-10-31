@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.*
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.file.Files
@@ -308,8 +309,12 @@ class DesktopDownloadsTest {
         }
         try {
             val download = item(root, url = http.url())
-            assertFails { withTimeout(15_000) { copy(download) } }
-            assertEquals(3, calls.get())
+            val error = assertFails { withTimeout(15_000) { copy(download) } }
+            // Gives up with its own error after the bounded retries instead of hitting the timeout.
+            // The request count is not exact: the JDK client may add or lose one on a cut-off connection.
+            assertIs<IOException>(error)
+            assertTrue(error.message.orEmpty().startsWith("Transfer interrupted"), error.message)
+            assertTrue(calls.get() in 2..4, "requests: ${calls.get()}")
             assertFalse(downloadPath(download).exists())
         } finally { http.stop(0); root.deleteRecursively() }
     }
