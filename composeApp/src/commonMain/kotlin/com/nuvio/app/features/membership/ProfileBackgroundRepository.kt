@@ -45,6 +45,11 @@ object ProfileBackgroundRepository {
     private var remoteLoaded = false
 
     fun ensureLoaded() {
+        if (!com.nuvio.app.core.network.ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) {
+            _catalog.value = emptyList()
+            remoteCatalog = emptyList()
+            return
+        }
         hydrateFromCacheIfNeeded()
         if (remoteLoaded || loadJob?.isActive == true) return
         loadJob = scope.launch {

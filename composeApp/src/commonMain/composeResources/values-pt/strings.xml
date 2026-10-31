@@ -1,4 +1,5 @@
 <resources>
+    <string name="auth_owner_created_accounts">As contas são criadas pelo proprietário do servidor.</string>
     <string name="about_licenses_attributions_subtitle">Fontes de dados, agradecimentos e licenças da plataforma</string>
     <string name="about_supporters_contributors_subtitle">Reconhecimento público e créditos do projeto</string>
     <string name="action_back">Voltar</string>

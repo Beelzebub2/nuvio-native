@@ -23,6 +23,14 @@ data class ServerConfiguration(
 
     val isPublicHost: Boolean
         get() = isPublicServerHost(backendUrl)
+
+    // The built-in Starlit server implements sync, not Nuvio's membership,
+    // remote cosmetic catalogs, profile PINs or account-management functions.
+    val supportsNuvioAccountFeatures: Boolean
+        get() = !isStarlitBackend(backendUrl)
+
+    val isSelfHosted: Boolean
+        get() = isCustom || !supportsNuvioAccountFeatures
 }
 
 object ServerConfigurationRepository {
@@ -53,11 +61,14 @@ internal fun officialConfiguration() = ServerConfiguration(
     publishableKey = SupabaseConfig.ANON_KEY.trim(),
     capabilities = ServerCapabilities(
         emailPasswordAuth = true,
-        tvLogin = true,
+        tvLogin = !isStarlitBackend(SupabaseConfig.URL),
     ),
     isCustom = false,
     fallbackBackendUrl = SupabaseConfig.FALLBACK_URL.trim().trimEnd('/').takeIf { it.isNotBlank() },
 )
+
+private fun isStarlitBackend(url: String): Boolean =
+    url.trim().trimEnd('/').equals(SupabaseConfig.STARLIT_URL, ignoreCase = true)
 
 internal fun isPublicServerHost(url: String): Boolean {
     val host = runCatching { io.ktor.http.Url(url).host.lowercase() }.getOrNull() ?: return true

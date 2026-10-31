@@ -18,7 +18,7 @@ docker run --rm -i --network host --env-file /etc/starlit/runtime.env \
   node create-user.mjs < /private/account.json
 ```
 
-Delete the temporary account input securely according to the host's normal secret handling. The user selects `https://starlit-api.rrmtools.uk` as the **custom server** in a Starlit Full build, then signs in with the same approved credentials on desktop and mobile. Existing source accounts retain their password hashes, user IDs and sync data after import. No app release is required to select a custom server.
+Delete the temporary account input securely according to the host's normal secret handling. Starlit 1.0.42 and later select `https://starlit-api.rrmtools.uk` automatically on desktop and mobile; sign in with the same approved credentials on both. Earlier Full builds can select it as a **custom server**. Existing source accounts retain their password hashes, user IDs and sync data after import.
 
 ## Initial setup
 

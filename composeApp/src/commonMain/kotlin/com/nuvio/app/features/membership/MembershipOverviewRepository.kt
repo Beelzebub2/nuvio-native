@@ -3,6 +3,7 @@ package com.nuvio.app.features.membership
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +45,7 @@ object MembershipOverviewRepository {
         }
 
         val account = auth as? AuthState.Authenticated
-        if (account == null || account.isAnonymous) {
+        if (account == null || account.isAnonymous || !ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) {
             currentUserId = null
             _state.value = MembershipOverviewState(
                 overview = MembershipOverview(),
