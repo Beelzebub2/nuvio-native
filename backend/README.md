@@ -76,6 +76,8 @@ CI runs the same commands after `npm ci`, `npx supabase start`, and `npx supabas
 
 ## Deploy your own project
 
+For the shared native PostgreSQL deployment on Ricardo's VPS, use [the VPS deployment guide](vps/README.md). It runs only Auth, PostgREST, discovery and a private gateway, and includes the existing account/data import workflow. It does not use the local Supabase CLI stack in production.
+
 Create an independent Starlit Supabase project or operate Supabase's production self-hosting stack. Apply this migration to **that** database with the Supabase CLI (`supabase link --project-ref YOUR_PROJECT_REF`, then review and run `supabase db push`). Do not point this backend or client at upstream Nuvio services. Do not use `db reset` on production data.
 
 Configure Supabase Auth separately for production: email/password enabled, anonymous sign-in disabled, 12+ character passwords, verified email confirmation, working SMTP, and the correct site/redirect URLs. The checked-in `config.toml` is the local development configuration and does not provision a production SMTP service or automatically configure a hosted project's Auth settings. Set up backups/recovery and restrict database/admin access.

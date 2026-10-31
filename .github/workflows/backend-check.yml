@@ -30,6 +30,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm test
+      - run: sh test/vps-shell.test.sh
       - name: Start disposable local Supabase
         run: npx supabase start
       - name: Configure local public client settings

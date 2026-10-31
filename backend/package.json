@@ -6,7 +6,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node --env-file=.env discovery.mjs",
-    "test": "node --test test/discovery.test.mjs",
+    "test": "node --test test/discovery.test.mjs test/vps.test.mjs",
     "test:integration": "node --env-file=.env --test test/sync.integration.test.mjs"
   },
   "devDependencies": { "supabase": "2.122.0" }
