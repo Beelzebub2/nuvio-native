@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+@kotlinx.serialization.Serializable
 data class P2pSettingsUiState(
     val p2pEnabled: Boolean = false,
     val enableUpload: Boolean = true,

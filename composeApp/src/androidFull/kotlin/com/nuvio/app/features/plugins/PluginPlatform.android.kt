@@ -40,12 +40,13 @@ internal object PluginStorage {
     ): Boolean = scraperCodeStore?.save(profileId, scraperId, code, overwrite) == true
 
     fun loadScraperSettings(scraperId: String): String? =
-        preferences?.getString("settings_${scraperId}", null)
+        preferences?.getString("settings_${activePluginSettingsProfileId()}_${scraperId}", null)
+            ?: preferences?.getString("settings_${scraperId}", null)
 
     fun saveScraperSettings(scraperId: String, payload: String) {
         preferences
             ?.edit()
-            ?.putString("settings_${scraperId}", payload)
+            ?.putString("settings_${activePluginSettingsProfileId()}_${scraperId}", payload)
             ?.apply()
     }
 }

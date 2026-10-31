@@ -17,6 +17,7 @@ interface PlayerEngineController {
     fun setMuted(muted: Boolean) {}
     fun getAudioTracks(): List<AudioTrack>
     fun getSubtitleTracks(): List<SubtitleTrack>
+    fun getChapterStarts(): List<Double> = emptyList()
     fun applyAudioLanguagePreferences(languages: List<String>)
     fun selectAudioTrack(index: Int)
     fun selectSubtitleTrack(index: Int)
@@ -219,6 +220,11 @@ data class PlayerControlsState(
     val nextEpisodeStatus: String = "",
     val nextEpisodeActionLabel: String = "Play",
     val nextEpisodePlayable: Boolean = false,
+    val showAutoToggles: Boolean = false,
+    val autoSkipIntroEnabled: Boolean = false,
+    val autoNextEpisodeEnabled: Boolean = false,
+    val autoSkipIntroLabel: String = "Auto Skip Intro",
+    val autoNextEpisodeLabel: String = "Auto Next Episode",
     val showSubmitIntro: Boolean = false,
     val showVideoSettings: Boolean = false,
     val showSources: Boolean = false,

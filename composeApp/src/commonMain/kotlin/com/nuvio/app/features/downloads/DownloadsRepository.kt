@@ -223,16 +223,27 @@ object DownloadsRepository {
     }
     private fun loadFromDisk() {
         invalidateTransfers()
-        hasLoaded = true
-        loadedProfile = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId
-        _hasUnseenCompleted.value = false
-        val items = DownloadsCodec.decodeItems(DownloadsStorage.loadPayload().orEmpty()).map { item ->
-            val restored = DownloadsPlatformDownloader.restoreItem(item)
-            // Retry re-adopts a proven file in place once a desktop drive is reconnected.
-            if (isDesktop && restored.status == DownloadStatus.Completed && !restored.hasPlayableLocalFile()) {
-                restored.copy(status = DownloadStatus.Failed, errorMessage = "Downloaded file is missing or its drive is unavailable")
-            } else restored
+        hasLoaded = false
+        loadedProfile = null
+        val profile = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId
+        val items = try {
+            DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { item ->
+                val restored = DownloadsPlatformDownloader.restoreItem(item)
+                // Retry re-adopts a proven file in place once a desktop drive is reconnected.
+                if (isDesktop && restored.status == DownloadStatus.Completed && !restored.hasPlayableLocalFile()) {
+                    restored.copy(status = DownloadStatus.Failed, errorMessage = "Downloaded file is missing or its drive is unavailable")
+                } else restored
+            }
+        } catch (error: Exception) {
+            // A damaged queue must never be decoded as empty and saved over the
+            // original. Keep the last displayed snapshot without publishing a
+            // fake empty list; this profile stays unloaded and commands fail
+            // closed until the saved data is repaired or a backup is recovered.
+            throw IllegalStateException("Saved downloads cannot be read. The download list was preserved; check app storage and retry.", error)
         }
+        hasLoaded = true
+        loadedProfile = profile
+        _hasUnseenCompleted.value = false
         publish(items); persist(); pumpQueue()
     }
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
@@ -325,16 +336,18 @@ private data class StoredDownloadsPayload(
     val items: List<DownloadItem> = emptyList(),
 )
 
-private object DownloadsCodec {
+internal object DownloadsCodec {
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    fun decodeItems(payload: String): List<DownloadItem> =
-        runCatching {
-            json.decodeFromString<StoredDownloadsPayload>(payload).items
-        }.getOrDefault(emptyList())
+    // Only a missing payload means a new/empty queue. An existing but malformed
+    // payload must stop loading before anything can replace it on disk.
+    fun decodeItems(payload: String?): List<DownloadItem> =
+        if (payload == null) emptyList() else json.decodeFromString<StoredDownloadsPayload>(payload).items
+
+    fun isValid(payload: String): Boolean = runCatching { decodeItems(payload) }.isSuccess
 
     fun encodeItems(items: Collection<DownloadItem>): String =
         json.encodeToString(

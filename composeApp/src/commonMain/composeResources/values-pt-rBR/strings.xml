@@ -943,6 +943,8 @@
     <string name="player_next_episode_unaired">Não exibido</string>
     <string name="player_skip">Pular</string>
     <string name="player_skip_intro">Pular Intro</string>
+    <string name="player_auto_skip_intro_toggle">Pular Intro Automaticamente</string>
+    <string name="player_auto_next_episode_toggle">Próximo Episódio Automático</string>
     <string name="player_skip_outro">Pular Outro</string>
     <string name="player_skip_recap">Pular Recapitulação</string>
     <string name="compose_player_no_subtitles_found">Nenhuma legenda encontrada</string>

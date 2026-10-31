@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,6 +21,7 @@ import co.touchlab.kermit.Logger
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.AppPresenceState
+import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.PresenceSnapshot
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.themePalette
@@ -465,6 +469,11 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             stringResource(Res.string.player_next_episode_unaired)
         },
         nextEpisodePlayable = nextEpisodeInfo?.hasAired == true,
+        showAutoToggles = isSeries,
+        autoSkipIntroEnabled = playerSettingsUiState.autoSkipIntroActive,
+        autoNextEpisodeEnabled = playerSettingsUiState.streamAutoPlayNextEpisodeEnabled,
+        autoSkipIntroLabel = stringResource(Res.string.player_auto_skip_intro_toggle),
+        autoNextEpisodeLabel = stringResource(Res.string.player_auto_next_episode_toggle),
     )
     val gestureCallbacks = rememberSurfaceGestureCallbacks()
     val playbackGesturesEnabled = !isDesktop && !isInPip && initialLoadCompleted && errorMessage == null
@@ -640,8 +649,41 @@ private fun PlayerScreenRuntime.currentInitialPositionRequestKey(): String? {
 }
 
 @Composable
+private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle> {
+    if (!isSeries) return emptyList()
+    val autoSkipIntroLabel = stringResource(Res.string.player_auto_skip_intro_toggle)
+    val autoNextEpisodeLabel = stringResource(Res.string.player_auto_next_episode_toggle)
+    val onLabel = stringResource(Res.string.compose_action_on)
+    val offLabel = stringResource(Res.string.compose_action_off)
+    fun showToggleToast(label: String, enabled: Boolean) {
+        NuvioToastController.show("$label: ${if (enabled) onLabel else offLabel}")
+    }
+    return listOf(
+        PlayerControlToggle(
+            label = autoSkipIntroLabel,
+            checked = playerSettingsUiState.autoSkipIntroActive,
+            icon = Icons.Rounded.FastForward,
+            onCheckedChange = { enabled ->
+                setAutoSkipIntroFromPlayer(enabled)
+                showToggleToast(autoSkipIntroLabel, enabled)
+            },
+        ),
+        PlayerControlToggle(
+            label = autoNextEpisodeLabel,
+            checked = playerSettingsUiState.streamAutoPlayNextEpisodeEnabled,
+            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            onCheckedChange = { enabled ->
+                setAutoNextEpisodeFromPlayer(enabled)
+                showToggleToast(autoNextEpisodeLabel, enabled)
+            },
+        ),
+    )
+}
+
+@Composable
 private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
     val isInPip = rememberIsInPictureInPicture()
+    val controlToggles = playerControlToggles()
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -739,6 +781,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
             onParentalGuideAnimationComplete = { showParentalGuide = false },
@@ -996,6 +1039,9 @@ internal fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: 
                 playNextEpisode()
             }
         }
+        // The controls send the wanted state (1 = on, 0 = off) so repeated clicks can't drift.
+        "setAutoSkipIntro" -> setAutoSkipIntroFromPlayer(value != 0.0)
+        "setAutoNextEpisode" -> setAutoNextEpisodeFromPlayer(value != 0.0)
         "enableP2pForPlayerControls" -> enableP2pForPlayerControls()
         "cancelP2pForPlayerControls" -> {
             playerControlsPendingP2pSwitch = null

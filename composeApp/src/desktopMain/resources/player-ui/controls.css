@@ -1787,6 +1787,34 @@ button:disabled {
   background: var(--theme-accent-strong);
 }
 
+/* On/off buttons: dimmed icon when off, accent bar under the icon when on. */
+.action.toggle-action {
+  position: relative;
+}
+
+.action.toggle-action[aria-pressed="false"] svg {
+  opacity: .45;
+}
+
+.action.toggle-action::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 14px;
+  height: 3px;
+  margin-left: -7px;
+  border-radius: 2px;
+  background: var(--theme-accent);
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events: none;
+}
+
+.action.toggle-action[aria-pressed="true"]::after {
+  opacity: 1;
+}
+
 @media (min-width: 761px) {
   .action-row {
     justify-content: space-between;

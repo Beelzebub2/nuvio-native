@@ -84,12 +84,13 @@ internal object PluginStorage {
     }
 
     fun loadScraperSettings(scraperId: String): String? =
-        NSUserDefaults.standardUserDefaults.stringForKey("settings_${scraperId}")
+        NSUserDefaults.standardUserDefaults.stringForKey("settings_${activePluginSettingsProfileId()}_${scraperId}")
+            ?: NSUserDefaults.standardUserDefaults.stringForKey("settings_${scraperId}")
 
     fun saveScraperSettings(scraperId: String, payload: String) {
         NSUserDefaults.standardUserDefaults.setObject(
             payload,
-            forKey = "settings_${scraperId}",
+            forKey = "settings_${activePluginSettingsProfileId()}_${scraperId}",
         )
     }
 

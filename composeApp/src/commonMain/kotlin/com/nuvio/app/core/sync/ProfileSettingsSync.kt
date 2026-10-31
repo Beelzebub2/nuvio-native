@@ -1,5 +1,6 @@
 package com.nuvio.app.core.sync
 
+import com.nuvio.app.core.auth.LocalSettingsImport
 import co.touchlab.kermit.Logger
 import com.nuvio.app.isDesktop
 import com.nuvio.app.core.auth.AuthRepository
@@ -108,6 +109,8 @@ object ProfileSettingsSync {
     }
 
     suspend fun pull(profileId: Int): Boolean {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return false
+
         ensureRepositoriesLoaded()
         return syncMutex.withLock {
             if (ProfileRepository.activeProfileId != profileId) {
@@ -149,6 +152,7 @@ object ProfileSettingsSync {
                     }
 
                     if (ProfileRepository.activeProfileId != profileId) return@withLock false
+                    if (LocalSettingsImport.hasPendingImport(profileId)) return@withLock false
                     applyRemoteBlob(remoteBlob)
                     skipNextPushSignature = currentObservedStateSignature()
                 } finally {
@@ -238,8 +242,20 @@ object ProfileSettingsSync {
         log.d { "pushToRemoteLocked(profileId=$profileId) — success" }
     }
 
-    private fun exportSettingsBlob(): MobileProfileSettingsBlob {
+    internal fun exportLocalSettings(): String = json.encodeToString(exportSettingsBlob(includeCredentials = true))
+
+    internal fun validateLocalSettings(payload: String) {
+        json.decodeFromString<MobileProfileSettingsBlob>(payload)
+    }
+
+    internal fun applyLocalSettings(payload: String) {
+        applyRemoteBlob(json.decodeFromString<MobileProfileSettingsBlob>(payload), preserveCredentials = false)
+    }
+
+    private fun exportSettingsBlob(includeCredentials: Boolean = false): MobileProfileSettingsBlob {
         ensureRepositoriesLoaded()
+        fun credentials(feature: String, payload: JsonObject): JsonObject =
+            if (includeCredentials) payload else withoutProfileCredentials(feature, payload)
         return MobileProfileSettingsBlob(
             features = MobileProfileSettingsFeatures(
                 themeSettings = ThemeSettingsStorage.exportToSyncPayload(),
@@ -248,20 +264,20 @@ object ProfileSettingsSync {
                 customPosterEnabledScreens = CustomPosterUrlStorage.loadEnabledScreens()
                     ?.joinToString(",").orEmpty(),
                 cardDepthStyleSettingsPayload = CardDepthStyleStorage.loadPayload().orEmpty().trim(),
-                playerSettings = withoutProfileCredentials(
+                playerSettings = credentials(
                     PROFILE_PLAYER_SETTINGS_FEATURE,
                     PlayerSettingsStorage.exportToSyncPayload(),
                 ),
                 streamBadgeSettings = StreamBadgeSettingsStorage.exportToSyncPayload(),
-                debridSettings = withoutProfileCredentials(
+                debridSettings = credentials(
                     PROFILE_DEBRID_SETTINGS_FEATURE,
                     DebridSettingsStorage.exportToSyncPayload(),
                 ),
-                tmdbSettings = withoutProfileCredentials(
+                tmdbSettings = credentials(
                     PROFILE_TMDB_SETTINGS_FEATURE,
                     TmdbSettingsStorage.exportToSyncPayload(),
                 ),
-                mdbListSettings = withoutProfileCredentials(
+                mdbListSettings = credentials(
                     PROFILE_MDBLIST_SETTINGS_FEATURE,
                     MdbListSettingsStorage.exportToSyncPayload(),
                 ),
@@ -277,7 +293,9 @@ object ProfileSettingsSync {
         )
     }
 
-    private fun applyRemoteBlob(blob: MobileProfileSettingsBlob) {
+    private fun applyRemoteBlob(blob: MobileProfileSettingsBlob, preserveCredentials: Boolean = true) {
+        fun credentials(feature: String, incoming: JsonObject, local: JsonObject): JsonObject =
+            if (preserveCredentials) preservingLocalProfileCredentials(feature, incoming, local) else incoming
         ThemeSettingsStorage.replaceFromSyncPayload(blob.features.themeSettings)
         ThemeSettingsRepository.onProfileChanged()
 
@@ -299,20 +317,20 @@ object ProfileSettingsSync {
         val localPlayerSettings = PlayerSettingsStorage.exportToSyncPayload()
         val localIntroDbApiKey = PlayerSettingsStorage.loadIntroDbApiKey()
         PlayerSettingsStorage.replaceFromSyncPayload(
-            preservingLocalProfileCredentials(
+            credentials(
                 PROFILE_PLAYER_SETTINGS_FEATURE,
                 blob.features.playerSettings,
                 localPlayerSettings,
             ),
         )
-        localIntroDbApiKey?.let(PlayerSettingsStorage::saveIntroDbApiKey)
+        if (preserveCredentials) localIntroDbApiKey?.let(PlayerSettingsStorage::saveIntroDbApiKey)
         PlayerSettingsRepository.onProfileChanged()
 
         StreamBadgeSettingsStorage.replaceFromSyncPayload(blob.features.streamBadgeSettings)
         StreamBadgeSettingsRepository.onProfileChanged()
 
         DebridSettingsStorage.replaceFromSyncPayload(
-            preservingLocalProfileCredentials(
+            credentials(
                 PROFILE_DEBRID_SETTINGS_FEATURE,
                 blob.features.debridSettings,
                 DebridSettingsStorage.exportToSyncPayload(),
@@ -321,7 +339,7 @@ object ProfileSettingsSync {
         DebridSettingsRepository.onProfileChanged()
 
         TmdbSettingsStorage.replaceFromSyncPayload(
-            preservingLocalProfileCredentials(
+            credentials(
                 PROFILE_TMDB_SETTINGS_FEATURE,
                 blob.features.tmdbSettings,
                 TmdbSettingsStorage.exportToSyncPayload(),
@@ -330,7 +348,7 @@ object ProfileSettingsSync {
         TmdbSettingsRepository.onProfileChanged()
 
         MdbListSettingsStorage.replaceFromSyncPayload(
-            preservingLocalProfileCredentials(
+            credentials(
                 PROFILE_MDBLIST_SETTINGS_FEATURE,
                 blob.features.mdbListSettings,
                 MdbListSettingsStorage.exportToSyncPayload(),

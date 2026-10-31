@@ -1487,6 +1487,8 @@
     <string name="player_auto_skip_recap_notification">Recap skipped to %1$s</string>
     <string name="player_auto_skip_outro_notification">Outro skipped to %1$s</string>
     <string name="player_auto_skip_movie_credits_notification">Credits skipped to %1$s</string>
+    <string name="player_auto_skip_intro_toggle">Auto Skip Intro</string>
+    <string name="player_auto_next_episode_toggle">Auto Next Episode</string>
     <string name="compose_player_no_subtitles_found">No subtitles found</string>
     <string name="lang_afrikaans">Afrikaans</string>
     <string name="lang_albanian">Albanian</string>
@@ -2519,4 +2521,11 @@
     <string name="addons_backup_saved">Add-on backup saved.</string>
     <string name="addons_backup_copied">Add-on backup copied. Paste it into a private message or file to move it to another device.</string>
     <string name="addons_backup_overwrite">Replace the existing backup file?</string>
+    <string name="settings_account_anonymous_sign_out_message">Your anonymous profiles, settings, addons and plugins will stay on this device for your next anonymous session.</string>
+    <string name="settings_account_import_local">Import anonymous settings</string>
+    <string name="settings_account_import_description">Replace this account profile’s preferences, addons and plugins with the last active anonymous profile saved on this device, including local API keys. Account profiles, watch history and linked tracking accounts are kept. Your anonymous workspace stays available separately.</string>
+    <string name="settings_account_import_success">Settings imported and synced.</string>
+    <string name="settings_account_import_pending">Imported settings are saved locally. Cloud sync is pending; retry when connected. Cloud downloads are paused for this profile to protect your changes.</string>
+    <string name="settings_account_import_retry">Retry import sync</string>
+    <string name="settings_account_import_failed">Unable to import local settings.</string>
 </resources>

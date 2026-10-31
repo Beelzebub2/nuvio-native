@@ -1,9 +1,17 @@
 package com.nuvio.app.features.plugins
 
+import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 internal const val PLUGIN_REPOSITORY_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000L
+
+/** Plugin settings follow the active profile, including profiles configured to share primary plugins. */
+internal fun activePluginSettingsProfileId(): Int {
+    val profile = ProfileRepository.state.value.activeProfile
+    return if (profile != null && profile.id.isNotBlank() && profile.usesPrimaryPlugins) 1
+    else ProfileRepository.activeProfileId
+}
 
 internal fun isPluginRepositoryRefreshDue(
     lastUpdatedEpochMs: Long,
@@ -111,6 +119,7 @@ sealed interface AddPluginRepositoryResult {
 
 @Serializable
 internal data class StoredPluginsState(
+    val scraperSettings: Map<String, String> = emptyMap(),
     val pluginsEnabled: Boolean = true,
     val groupStreamsByRepository: Boolean = false,
     val repositories: List<StoredPluginRepository> = emptyList(),

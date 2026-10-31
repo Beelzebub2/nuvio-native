@@ -215,14 +215,17 @@ class DesktopP2pSessionTest {
         val target = request.copy(filename = null, season = 1, episode = 2)
         for ((selected, index) in listOf(
             target.copy(filename = "Series.S01E01.mkv") to 1,
-            target.copy(fileIdx = 0) to 1,
-            request.copy(filename = null) to 1,
+            target.copy(fileIdx = 0) to 2,
         )) {
             val backend = Backend().apply { this.files = files }
             val engine = engine(backend)
             try { assertTrue(engine.startStream(selected).endsWith("index=$index")) }
             finally { engine.stopStream().join() }
         }
+        val ambiguous = engine(Backend().apply { this.files = files })
+        try {
+            assertFailsWith<P2pStreamingException> { ambiguous.startStream(request.copy(filename = null)) }
+        } finally { ambiguous.stopStream().join() }
         for (path in listOf("sample.mp4", "Series.1920x1080.mkv")) {
             val engine = engine(Backend().apply { this.files = listOf(TorrServerFile(1, path, 100)) })
             try { assertTrue(engine.startStream(target).endsWith("index=1"), path) }
@@ -230,7 +233,7 @@ class DesktopP2pSessionTest {
         }
     }
 
-    @Test fun ambiguousFilenameHintsUseTheRequestedIndexOrEpisode() = runTest {
+    @Test fun ambiguousFilenameHintsRequireAnIdentifiableEpisode() = runTest {
         val pack = listOf(
             TorrServerFile(1, "Series/Series.S02E01.mkv", 900),
             TorrServerFile(2, "Series/Series.S02E02.mkv", 500),
@@ -242,12 +245,35 @@ class DesktopP2pSessionTest {
         for ((files, selected) in listOf(
             pack to request.copy(filename = "Series", season = 2, episode = 2),
             duplicateNames to request.copy(filename = "Episode02.mkv", season = 2, episode = 2),
-            pack to request.copy(filename = "Series", fileIdx = 1),
         )) {
             val engine = engine(Backend().apply { this.files = files })
             try { assertTrue(engine.startStream(selected).endsWith("index=2"), selected.toString()) }
             finally { engine.stopStream().join() }
         }
+        val ambiguous = engine(Backend().apply { files = pack })
+        try {
+            assertFailsWith<P2pStreamingException> {
+                ambiguous.startStream(request.copy(filename = "Series", fileIdx = 1))
+            }
+        } finally { ambiguous.stopStream().join() }
+    }
+
+    @Test fun providerFileIndexDoesNotSilentlySelectAPathSortedTorrentFile() = runTest {
+        val backend = Backend().apply {
+            files = listOf(
+                TorrServerFile(1, "Show.S01E10.mkv", 400),
+                TorrServerFile(2, "Show.S01E02.mkv", 500),
+            )
+        }
+        val engine = engine(backend)
+        try {
+            assertFailsWith<P2pStreamingException> {
+                engine.startStream(request.copy(filename = null, fileIdx = 1))
+            }
+            assertTrue(engine.startStream(request.copy(
+                filename = null, fileIdx = 1, season = 1, episode = 2,
+            )).endsWith("index=2"))
+        } finally { engine.stopStream().join() }
     }
 
     @Test fun startupPreparationAndSourceChangesReuseTheReadyEngine() = runTest {
@@ -259,11 +285,41 @@ class DesktopP2pSessionTest {
         engine.startStream(request)
         engine.stopStream().join()
         assertTrue(backend.running)
-        assertEquals(listOf(request.infoHash), backend.dropped)
+        assertTrue(backend.dropped.isEmpty(), "Quick episode switches should retain peers")
         engine.startStream(request.copy(infoHash = "b".repeat(40)))
         assertEquals(1, backend.starts)
+        assertEquals(listOf(request.infoHash), backend.dropped)
         engine.shutdown().join()
         assertFalse(backend.running)
+    }
+
+    @Test fun repeatedEpisodeUsesWarmTorrentAndInactiveTorrentIsEventuallyDropped() = runTest {
+        val backend = Backend().apply {
+            files = listOf(TorrServerFile(1, "Show.S01E01.mkv", 400), TorrServerFile(2, "Show.S01E02.mkv", 500))
+        }
+        val engine = engine(backend)
+        val episode1 = request.copy(filename = "Show.S01E01.mkv")
+        val episode2 = request.copy(filename = "Show.S01E02.mkv")
+        engine.startStream(episode1)
+        engine.stopStream().join()
+        advanceTimeBy(30_000L)
+        engine.startStream(episode2)
+        assertEquals(1, backend.starts)
+        assertTrue(backend.dropped.isEmpty())
+        assertEquals(2, backend.requests.size)
+        engine.stopStream().join()
+        advanceTimeBy(90_001L)
+        assertEquals(listOf(request.infoHash), backend.dropped)
+        engine.shutdown().join()
+    }
+
+    @Test fun aTemporaryMetadataStatusFailureDoesNotDropPeerDiscovery() = runTest {
+        val backend = Backend().apply { failures = 1 }
+        val engine = engine(backend)
+        assertTrue(engine.startStream(request).endsWith("index=1"))
+        assertEquals(1, backend.starts)
+        assertTrue(backend.dropped.isEmpty())
+        engine.shutdown().join()
     }
 
     @Test fun networkChangeWhileIdleRebuildsTheWarmedEngine() = runTest {

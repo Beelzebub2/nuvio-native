@@ -23,6 +23,7 @@ import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.PlayerNextEpisodeRules
 import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.player.skip.SkipIntervalLookup
+import com.nuvio.app.features.player.skip.alignOpeningsToChapters
 import com.nuvio.app.features.player.skip.autoSkipKey
 import com.nuvio.app.features.player.skip.autoSkipKeysCompletedBy
 import com.nuvio.app.features.player.skip.resolveSkipIntervalLookup
@@ -493,6 +494,7 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         contentType,
         playerSettingsUiState.skipIntroEnabled,
     ) {
+        providerSkipIntervals = emptyList()
         skipIntervals = emptyList()
         autoSkippedIntervals.clear()
         lastManualSkipSeekPositions = null
@@ -507,7 +509,7 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         if (!playerSettingsUiState.skipIntroEnabled) return@LaunchedEffect
 
         if ((contentType ?: parentMetaType).equals("movie", ignoreCase = true)) {
-            skipIntervals = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, activeVideoId)
+            providerSkipIntervals = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, activeVideoId)
             return@LaunchedEffect
         }
 
@@ -544,8 +546,27 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
                     imdbEpisode = activeEpisodeNumber ?: lookup.episode,
                 )
             }
-            skipIntervals = intervals
+            providerSkipIntervals = intervals
         }
+    }
+
+    LaunchedEffect(
+        providerSkipIntervals,
+        playerController,
+        playerControllerSourceUrl,
+        activeSourceUrl,
+        playbackSnapshot.durationMs,
+        playbackSnapshot.isLoading,
+    ) {
+        if (playerControllerSourceUrl != activeSourceUrl || playbackSnapshot.durationMs <= 0) {
+            skipIntervals = emptyList()
+            return@LaunchedEffect
+        }
+        // Keep the current file's alignment and button dismissal during buffering.
+        if (playbackSnapshot.isLoading) return@LaunchedEffect
+        val chapters = playerController?.getChapterStarts().orEmpty()
+        // Keep provider data unchanged so switching sources always uses that file's chapters.
+        skipIntervals = providerSkipIntervals.alignOpeningsToChapters(chapters)
     }
 
     LaunchedEffect(
