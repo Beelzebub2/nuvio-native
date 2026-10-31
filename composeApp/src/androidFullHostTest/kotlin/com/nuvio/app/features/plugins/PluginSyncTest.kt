@@ -1,5 +1,7 @@
 package com.nuvio.app.features.plugins
 
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.AuthStorage
 import com.nuvio.app.core.network.ServerCapabilities
 import com.nuvio.app.core.network.ServerConfiguration
 import com.nuvio.app.core.network.ServerConfigurationRepository
@@ -41,6 +43,7 @@ class PluginSyncTest {
         PluginStorage.initialize(context)
         AddonStorage.initialize(context)
         ServerConfigurationStorage.initialize(context)
+        AuthStorage.initialize(context)
         PluginRepository.clearLocalState()
         AddonRepository.clearLocalState()
         server.start()
@@ -59,6 +62,7 @@ class PluginSyncTest {
 
     @After
     fun tearDown(): Unit = runBlocking {
+        AuthRepository.prepareForServerSwitch()
         PluginRepository.clearLocalState()
         AddonRepository.clearLocalState()
         SupabaseProvider.reset()
@@ -139,6 +143,8 @@ class PluginSyncTest {
     fun explicitRemovalStillUploadsTheUpdatedPlugins(): Unit = runBlocking {
         seedPlugins()
         respond("{}")
+        // Plugins only sync for a signed-in, non-anonymous account.
+        AuthRepository.acceptRemoteSession("plugin-sync-user", "plugin-sync@example.com")
 
         PluginRepository.removeRepository(manifestUrl)
 
