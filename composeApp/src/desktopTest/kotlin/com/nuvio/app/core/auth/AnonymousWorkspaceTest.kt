@@ -24,7 +24,10 @@ import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.util.Collections
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -32,6 +35,26 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AnonymousWorkspaceTest {
+    // Importing a workspace applies its app language to the whole JVM; put it back so
+    // later tests keep the default language.
+    private val themeStore = DesktopStorage.store("nuvio_theme_settings")
+    private var originalLocale: Locale = Locale.getDefault()
+    private var originalAppLanguage: String? = null
+
+    @BeforeTest
+    fun rememberAppLanguage() {
+        originalLocale = Locale.getDefault()
+        originalAppLanguage = themeStore.getString("selected_app_language")
+    }
+
+    @AfterTest
+    fun restoreAppLanguage() {
+        val language = originalAppLanguage
+        if (language == null) themeStore.remove("selected_app_language")
+        else themeStore.putString("selected_app_language", language)
+        Locale.setDefault(originalLocale)
+    }
+
     @Test
     fun pendingImportClearsOnlyAfterEveryCloudWriteAndRetriesALateFailure() = runBlocking {
         val originalServer = ServerConfigurationRepository.active.value
