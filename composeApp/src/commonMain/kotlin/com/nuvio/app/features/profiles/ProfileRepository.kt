@@ -168,6 +168,7 @@ object ProfileRepository {
     }
 
     private fun selectProfile(profileIndex: Int) {
+        com.nuvio.app.core.auth.LocalSettingsImport.savePendingBeforeSignOut()
         DownloadsRepository.clearLocalState()
         activeProfileIndex = profileIndex
         CustomPosterUrlRepository.onProfileChanged()
@@ -203,6 +204,7 @@ object ProfileRepository {
         ContinueWatchingPreferencesRepository.onProfileChanged()
         com.nuvio.app.features.watchprogress.ContinueWatchingEnrichmentCache.onProfileChanged()
         EpisodeReleaseNotificationsRepository.onProfileChanged()
+        com.nuvio.app.features.debrid.DebridSettingsRepository.onProfileChanged()
         TmdbSettingsRepository.onProfileChanged()
         MdbListSettingsRepository.onProfileChanged()
         SearchHistoryRepository.onProfileChanged()

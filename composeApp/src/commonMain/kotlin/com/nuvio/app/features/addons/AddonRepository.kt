@@ -1,14 +1,21 @@
 package com.nuvio.app.features.addons
 
+import com.nuvio.app.core.auth.LocalSettingsImport
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.AuthState
 import co.touchlab.kermit.Logger
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.features.profiles.ProfileRepository
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -61,6 +68,13 @@ object AddonRepository {
         private set
     private val activeRefreshJobs = mutableMapOf<String, Job>()
     private val pushJobsByProfile = mutableMapOf<Int, Job>()
+    private val cloudPushLock = SynchronizedObject()
+    private val inFlightCloudPushes = mutableSetOf<Job>()
+
+    internal suspend fun awaitPendingCloudPushes() {
+        val jobs = synchronized(cloudPushLock) { inFlightCloudPushes.toList() }
+        jobs.forEach { it.join() }
+    }
 
     fun initialize() {
         val effectiveProfileId = resolveEffectiveProfileId(ProfileRepository.activeProfileId)
@@ -116,6 +130,8 @@ object AddonRepository {
     }
 
     suspend fun pullFromServer(profileId: Int) {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return
+
         currentProfileId = resolveEffectiveProfileId(profileId)
         log.i { "pullFromServer() — profileId=$profileId, initialized=$initialized" }
         runCatching {
@@ -127,6 +143,7 @@ object AddonRepository {
                 }
                 .decodeList<AddonRow>()
 
+            if (LocalSettingsImport.hasPendingImport(profileId)) return
             val rowsByUrl = linkedMapOf<String, AddonRow>()
             rows.forEach { row ->
                 val manifestUrl = ensureManifestSuffix(row.url)
@@ -228,6 +245,17 @@ object AddonRepository {
         if (!changed) return
         persist()
         pushToServer()
+    }
+
+    internal fun replaceLocalBackup(payload: String) {
+        val entries = AddonBackupCodec.decode(payload)
+        clearLocalState()
+        currentProfileId = resolveEffectiveProfileId(ProfileRepository.activeProfileId)
+        initialized = true
+        _uiState.value = AddonsUiState(addons = entries.map {
+            ManagedAddon(manifestUrl = it.manifestUrl, userSetName = it.name, enabled = it.enabled)
+        })
+        persist()
     }
 
     internal fun exportBackup(): String {
@@ -373,6 +401,9 @@ object AddonRepository {
 
     private fun pushToServer() {
         if (isUsingPrimaryAddonsFromSecondaryProfile()) return
+        val signedIn = AuthRepository.state.value as? AuthState.Authenticated ?: return
+        if (signedIn.isAnonymous || LocalSettingsImport.hasPendingImport()) return
+        val backend = ServerConfigurationRepository.active.value.backendUrl
         val profileId = currentProfileId
         val addons = _uiState.value.addons
             .distinctBy { it.manifestUrl }
@@ -386,9 +417,14 @@ object AddonRepository {
             }
         pushJobsByProfile[profileId]?.cancel()
         var pushJob: Job? = null
-        pushJob = scope.launch {
+        pushJob = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 delay(ADDON_PUSH_DEBOUNCE_MS)
+                if (AuthRepository.state.value != signedIn ||
+                    ProfileRepository.activeProfileId != profileId ||
+                    ServerConfigurationRepository.active.value.backendUrl != backend ||
+                    LocalSettingsImport.hasPendingImport(profileId)
+                ) return@launch
                 log.d { "pushToServer() — profileId=$profileId, pushing ${addons.size} addons" }
                 val params = buildJsonObject {
                     put("p_profile_id", profileId)
@@ -408,6 +444,11 @@ object AddonRepository {
             }
         }
         pushJobsByProfile[profileId] = pushJob
+        pushJob?.let { job ->
+            synchronized(cloudPushLock) { inFlightCloudPushes.add(job) }
+            job.invokeOnCompletion { synchronized(cloudPushLock) { inFlightCloudPushes.remove(job) } }
+            job.start()
+        }
     }
 
     private fun markRefreshing(manifestUrl: String) {

@@ -10,7 +10,13 @@ actual object AuthStorage {
     private var preferences: SharedPreferences? = null
 
     fun initialize(context: Context) {
+        com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner.initialize(context)
         preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    actual fun loadImportedSettingsScope(): String? = preferences?.getString("imported_settings_scope", null)
+    actual fun saveImportedSettingsScope(scope: String?) {
+        check(preferences?.edit()?.putString("imported_settings_scope", scope)?.commit() == true)
     }
 
     actual fun loadAnonymousUserId(): String? =

@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.isDesktop
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.auth.LocalSettingsImport
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.NuvioStatusModal
@@ -35,6 +36,7 @@ import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import kotlinx.coroutines.launch
+import nuvio.composeapp.generated.resources.*
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_cancel
 import nuvio.composeapp.generated.resources.compose_settings_page_account
@@ -68,6 +70,8 @@ private fun AccountSettingsBody(
     val authState by AuthRepository.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    var signOutErrorMessage by remember { mutableStateOf<String?>(null) }
+    val signOutFallbackMessage = stringResource(Res.string.auth_sign_out_failed)
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
     var deleteErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -76,7 +80,9 @@ private fun AccountSettingsBody(
 
     if (isDesktop) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DesktopAccountCard(authState = authState, onSignOutClick = { showSignOutConfirm = true })
+            DesktopAccountCard(authState = authState, onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true })
+            signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            LocalSettingsImportCard(authState)
             if (canDeleteAccount) {
                 DesktopDeleteAccountRow(
                     errorMessage = deleteErrorMessage,
@@ -128,9 +134,11 @@ private fun AccountSettingsBody(
 
         NuvioPrimaryButton(
             text = stringResource(Res.string.settings_account_sign_out),
-            onClick = { showSignOutConfirm = true },
+            onClick = { signOutErrorMessage = null; showSignOutConfirm = true },
         )
 
+        signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        LocalSettingsImportCard(authState)
         if (canDeleteAccount) {
             DeleteAccountCard(
                 errorMessage = deleteErrorMessage,
@@ -144,13 +152,17 @@ private fun AccountSettingsBody(
 
     NuvioStatusModal(
         title = stringResource(Res.string.settings_account_sign_out_confirm_title),
-        message = stringResource(Res.string.settings_account_sign_out_confirm_message),
+        message = stringResource(if ((authState as? AuthState.Authenticated)?.isAnonymous == true)
+            Res.string.settings_account_anonymous_sign_out_message else Res.string.settings_account_sign_out_confirm_message),
         isVisible = showSignOutConfirm,
         confirmText = stringResource(Res.string.settings_account_sign_out),
         dismissText = stringResource(Res.string.action_cancel),
         onConfirm = {
             showSignOutConfirm = false
-            scope.launch { AuthRepository.signOut() }
+            scope.launch {
+                val result = AuthRepository.signOut()
+                signOutErrorMessage = if (result.isSuccess) null else AuthRepository.error.value ?: signOutFallbackMessage
+            }
         },
         onDismiss = { showSignOutConfirm = false },
     )
@@ -263,4 +275,70 @@ private fun AccountInfoRow(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun LocalSettingsImportCard(authState: AuthState) {
+    val signedIn = authState as? AuthState.Authenticated ?: return
+    if (signedIn.isAnonymous || !LocalSettingsImport.isAvailable) return
+    val profileState by com.nuvio.app.features.profiles.ProfileRepository.state.collectAsStateWithLifecycle()
+    val profileId = profileState.activeProfile?.profileIndex
+    val scope = rememberCoroutineScope()
+    var confirming by remember(signedIn.userId, profileId) { mutableStateOf(false) }
+    var busy by remember(signedIn.userId, profileId) { mutableStateOf(false) }
+    var status by remember(signedIn.userId, profileId) { mutableStateOf<String?>(null) }
+    var pending by remember(signedIn.userId, profileId) { mutableStateOf(LocalSettingsImport.hasPendingImport()) }
+    var damaged by remember(signedIn.userId, profileId) { mutableStateOf(LocalSettingsImport.hasDamagedPendingImport()) }
+    val success = stringResource(Res.string.settings_account_import_success)
+    val pendingMessage = stringResource(Res.string.settings_account_import_pending)
+    val failed = stringResource(Res.string.settings_account_import_failed)
+    NuvioSurfaceCard {
+        Text(stringResource(Res.string.settings_account_import_local), style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        Text(stringResource(Res.string.settings_account_import_description), style = MaterialTheme.typography.bodyMedium)
+        (status ?: if (pending) pendingMessage else if (damaged) failed else null)?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.height(14.dp))
+        NuvioPrimaryButton(
+            text = stringResource(if (pending) Res.string.settings_account_import_retry else Res.string.settings_account_import_local),
+            enabled = !busy,
+            onClick = {
+                if (!pending) confirming = true else {
+                    busy = true
+                    scope.launch {
+                        status = runCatching { LocalSettingsImport.retryPendingImport(com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) }
+                            .fold({ if (it && !LocalSettingsImport.hasDamagedPendingImport()) success else if (it) failed else pendingMessage }, { failed })
+                        pending = LocalSettingsImport.hasPendingImport()
+                        damaged = LocalSettingsImport.hasDamagedPendingImport()
+                        busy = false
+                    }
+                }
+            },
+        )
+    }
+    NuvioStatusModal(
+        title = stringResource(Res.string.settings_account_import_local),
+        message = stringResource(Res.string.settings_account_import_description),
+        isVisible = confirming,
+        isBusy = busy,
+        confirmText = stringResource(Res.string.settings_account_import_local),
+        dismissText = stringResource(Res.string.action_cancel),
+        onConfirm = {
+            if (!busy) {
+                busy = true
+                scope.launch {
+                    status = LocalSettingsImport.importIntoCurrentProfile().fold(
+                        { if (it) success else pendingMessage }, { it.message ?: failed },
+                    )
+                    pending = LocalSettingsImport.hasPendingImport()
+                    damaged = LocalSettingsImport.hasDamagedPendingImport()
+                    busy = false
+                    confirming = false
+                }
+            }
+        },
+        onDismiss = { if (!busy) confirming = false },
+    )
 }

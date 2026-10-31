@@ -1,5 +1,6 @@
 package com.nuvio.app.core.sync
 
+import com.nuvio.app.core.auth.LocalSettingsImport
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
@@ -88,11 +89,14 @@ object ProviderCredentialSync {
     }
 
     suspend fun syncFromRemote(profileId: Int): Boolean = syncMutex.withLock {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return@withLock false
+
         ensureRepositoriesLoaded()
         val credentialScope = currentScope(profileId) ?: return@withLock false
         try {
             val localSnapshot = currentSnapshot(profileId)
             val rows = pullRows(profileId)
+            if (LocalSettingsImport.hasPendingImport(profileId)) return@withLock false
             requireCurrentScope(credentialScope)
             val remoteSnapshot = localSnapshot.mergeRemote(rows)
             val applied = remoteSnapshot != localSnapshot
@@ -117,6 +121,13 @@ object ProviderCredentialSync {
             AuthRepository.signOutIfSessionInvalid(error, "Provider credential sync")
             log.e(error) { "Provider credential sync failed for profile $profileId" }
             throw error
+        }
+    }
+
+    internal suspend fun pushCurrentProfileToRemote() {
+        syncMutex.withLock {
+            ensureRepositoriesLoaded()
+            pushSnapshot(currentSnapshot(ProfileRepository.activeProfileId))
         }
     }
 

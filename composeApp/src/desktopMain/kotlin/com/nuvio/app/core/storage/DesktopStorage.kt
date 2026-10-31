@@ -46,15 +46,19 @@ internal object DesktopStorage {
     fun wipe() {
         synchronized(stores) {
             stores.values.forEach(Store::clearInMemory)
-            stores.clear()
         }
         if (!rootDir.exists()) return
         Files.walk(rootDir).use { stream ->
             stream
                 .sorted(Comparator.reverseOrder())
-                .filter { it != rootDir }
+                .filter { it != rootDir && !it.startsWith(rootDir.resolve("anonymous-workspace")) }
+                .filter { it.fileName.toString() !in setOf("server_configuration.properties", "nuvio_sync_client_identity.properties") }
                 .forEach { path -> runCatching { Files.deleteIfExists(path) } }
         }
+    }
+
+    internal fun reloadStores() = synchronized(stores) {
+        stores.values.forEach(Store::clearInMemory)
     }
 
     private fun resolveAppDataDir(): Path {

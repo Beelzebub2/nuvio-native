@@ -1,5 +1,6 @@
 package com.nuvio.app.core.sync
 
+import com.nuvio.app.core.auth.LocalSettingsImport
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
@@ -402,6 +403,7 @@ object SyncManager {
             if (currentAuthState !is AuthState.Authenticated || currentAuthState.isAnonymous) return@launch
             if (ProfileRepository.activeProfileId != profileId) return@launch
 
+            if (!LocalSettingsImport.retryPendingImport(profileId)) return@launch
             log.i { "Full profile sync started profile=$profileId reason=$reason" }
             WatchProgressSourceCoordinator.pauseAutomaticTransitions()
             val syncResult = try {
