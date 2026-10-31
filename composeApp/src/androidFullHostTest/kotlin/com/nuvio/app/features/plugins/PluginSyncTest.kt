@@ -15,8 +15,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.runner.RunWith
@@ -141,16 +143,25 @@ class PluginSyncTest {
 
     @Test
     fun explicitRemovalStillUploadsTheUpdatedPlugins(): Unit = runBlocking {
-        seedPlugins()
-        respond("{}")
-        // Plugins only sync for a signed-in, non-anonymous account.
+        // Plugins only sync for a signed-in, non-anonymous account. Drop any session an
+        // earlier test left behind first, then seed after signing in, because switching
+        // accounts can clean up local data and make requests of its own.
+        AuthRepository.prepareForServerSwitch()
         AuthRepository.acceptRemoteSession("plugin-sync-user", "plugin-sync@example.com")
+        seedPlugins()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) =
+                MockResponse().setHeader("Content-Type", "application/json").setBody("{}")
+        }
 
         PluginRepository.removeRepository(manifestUrl)
 
-        val request = assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
-        assertEquals("POST", request.method)
-        assertEquals("/rest/v1/rpc/sync_push_plugins", request.requestUrl?.encodedPath)
+        val request = assertNotNull(
+            generateSequence { server.takeRequest(5, TimeUnit.SECONDS) }.take(5).firstOrNull {
+                it.method == "POST" && it.requestUrl?.encodedPath == "/rest/v1/rpc/sync_push_plugins"
+            },
+            "No plugin upload was sent",
+        )
         assertTrue(request.body.readUtf8().contains("\"p_plugins\":[]"))
         assertTrue(PluginRepository.uiState.value.repositories.isEmpty())
     }
