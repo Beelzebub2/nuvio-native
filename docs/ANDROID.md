@@ -76,9 +76,9 @@ To move locally configured add-ons without an account, open **Settings → Add-o
 
 Backups include configured URLs, add-on order, enabled states and custom names for the current profile. Imports append missing add-ons in backup order and skip duplicates, preserving existing entries. Unreachable add-ons remain installed and can be refreshed later. Profiles using the primary profile's add-ons must import from the primary profile. Backups can contain access keys inside configured URLs; keep them private. They do not include JavaScript plugins or account/provider settings.
 
-Without `NUVIO_SUPABASE_URL` and `NUVIO_SUPABASE_ANON_KEY`, startup creates a local guest. Browsing and locally configured add-ons do not need an upstream account. Guest libraries, profiles and watch progress remain on that installation; they are not a cloud account and do not sync to another device.
+Starlit 1.0.42 and later use `https://starlit-api.rrmtools.uk` for accounts automatically on desktop and Android. Sign in with the same owner-created account and profile on each device; public registration is disabled. No custom-server setup is needed. Guest mode remains available, and existing guest data and saved custom-server choices are preserved. Guest libraries, profiles and watch progress remain on that installation until explicitly imported into an account.
 
-To build against a compatible account backend, set these environment variables or entries in ignored `local.properties` before building:
+The checked-in `composeApp/Configuration/AccountServer.properties` contains only the public Starlit URL and anon client key. To build against another compatible backend, override both values using these environment variables or entries in ignored `local.properties` before building (`local.properties` takes precedence):
 
 ```properties
 NUVIO_SUPABASE_URL=https://your-backend.example
@@ -86,9 +86,9 @@ NUVIO_SUPABASE_ANON_KEY=your-public-anon-or-publishable-key
 NUVIO_SUPABASE_FALLBACK_URL=
 ```
 
-Only a public client key belongs in an app. Never embed a Supabase service-role key. Desktop and mobile must point to the same compatible backend and use the same signed-in account and profile for shared data. Play Store builds require the backend configuration at build time because custom-server selection is disabled.
+Only a public client key belongs in an app. Never embed a Supabase service-role key or private JWT signing secret. A different build-time URL without its own key deliberately gets no Starlit key. Desktop and mobile must use the same server, account and profile for shared data. Play Store builds use the same default because custom-server selection is disabled. Unsupported TV-code login, profile PINs, account deletion and Nuvio membership/catalog features stay disabled on the Starlit server.
 
-In a Full build, open **Profile → Account → Sign Out** and confirm. On the login screen, choose **Server options → Connect to custom server**, enter your discovery address, choose **Check server**, and review/confirm trust. Close the server sheet and choose **Sign Up** to create your own account (or sign into an existing account on that server). For the local emulator setup below, enter `http://127.0.0.1:8787` after forwarding both ports.
+To choose another server in a Full build, open **Profile → Account → Sign Out** and confirm. On the login screen, choose **Server options → Connect to custom server**, enter its discovery address, choose **Check server**, and review/confirm trust. Close the server sheet and sign into an account on that server (registration depends on its policy). For the local emulator setup below, enter `http://127.0.0.1:8787` after forwarding both ports.
 
 Account sync uses a Supabase-compatible Auth and PostgREST contract, implemented by either the Cloudflare Worker or your own Supabase backend described below. A guest ID is only a local identifier, not a server user. The app skips backend availability probes when its backend configuration is blank.
 

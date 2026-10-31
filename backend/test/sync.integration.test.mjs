@@ -3,12 +3,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const base = process.env.STARLIT_SUPABASE_URL?.replace(/\/$/, '');
 const key = process.env.STARLIT_SUPABASE_PUBLISHABLE_KEY;
 if (!base || !key) throw new Error('Set STARLIT_SUPABASE_URL and STARLIT_SUPABASE_PUBLISHABLE_KEY in .env');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname)) {
   throw new Error('Integration tests create accounts; use a disposable localhost stack');
+}
+// Optional fresh, owner-created fixtures exercise the closed-signup VPS policy.
+// The private JSON file is [{email,password},{email,password}]; never log it.
+const accounts = process.env.STARLIT_TEST_ACCOUNTS_FILE
+  ? JSON.parse(readFileSync(process.env.STARLIT_TEST_ACCOUNTS_FILE, 'utf8')) : null;
+if (process.env.STARLIT_TEST_ACCOUNTS_FILE && (!Array.isArray(accounts) || accounts.length !== 2 || accounts.some(a => !a || typeof a.email !== 'string' || typeof a.password !== 'string' || a.password.length < 12) || accounts[0].email === accounts[1].email)) {
+  throw new Error('Provide two distinct fresh owner-created accounts in the private test accounts file');
 }
 
 async function request(path, { token, body, method = body === undefined ? 'GET' : 'POST', headers = {} } = {}) {
@@ -27,10 +35,11 @@ async function rpc(token, name, body = {}, expectFailure = false) {
   return response.data;
 }
 async function signup(label) {
-  const credentials = { email: `starlit-test-${label}-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!` };
-  const response = await request('/auth/v1/signup', { body: credentials });
+  const credentials = accounts ? accounts[label === 'a' ? 0 : 1]
+    : { email: `starlit-test-${label}-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!` };
+  const response = await request(accounts ? '/auth/v1/token?grant_type=password' : '/auth/v1/signup', { body: credentials });
   assert.equal(response.ok, true, `signup: ${JSON.stringify(response.data)}`);
-  assert.ok(response.data.access_token, 'Local confirmations must be disabled for the disposable test stack');
+  assert.ok(response.data.access_token, 'Use confirmed operator fixtures or disable confirmations only for the disposable test stack');
   const login = await request('/auth/v1/token?grant_type=password', { body: credentials });
   assert.equal(login.ok, true, 'Supabase email/password login works');
   assert.equal(login.data.user.id, response.data.user.id);

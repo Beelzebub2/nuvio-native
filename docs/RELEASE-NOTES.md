@@ -1,3 +1,10 @@
+## Starlit 1.0.42
+
+### Improvements
+
+- Desktop and Android now connect to Starlit's account server automatically. Sign in with an owner-approved account to share profiles, add-ons, library, viewing progress and supported settings across devices. Public registration is closed; ask the server owner for an account.
+- Guest mode remains available, and existing guest data and custom-server choices are kept. Unsupported TV-code login, profile PINs and Nuvio membership controls are hidden for the Starlit server.
+
 ## Starlit 1.0.41
 
 ### Improvements
