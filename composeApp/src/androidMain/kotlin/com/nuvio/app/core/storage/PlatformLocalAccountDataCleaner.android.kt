@@ -3,7 +3,16 @@ package com.nuvio.app.core.storage
 import android.content.Context
 
 internal actual object PlatformLocalAccountDataCleaner {
-    private val preferenceNames = listOf(
+    internal val preferenceNames = listOf(
+        "nuvio_card_depth_style",
+        "nuvio_custom_poster_url",
+        "nuvio_tmdb_settings",
+        "nuvio_meta_screen_settings",
+        "nuvio_trakt_comments",
+        "nuvio_resume_prompt",
+        "nuvio_player_track_preferences",
+        "nuvio_season_view_mode",
+        "nuvio_search_history",
         "episode_shuffle",
         "nuvio_addons",
         "nuvio_library",
@@ -41,7 +50,8 @@ internal actual object PlatformLocalAccountDataCleaner {
         "nuvio_member_access",
     )
 
-    private var appContext: Context? = null
+    internal var appContext: Context? = null
+        private set
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
@@ -50,11 +60,13 @@ internal actual object PlatformLocalAccountDataCleaner {
     actual fun wipe() {
         val context = appContext ?: return
         preferenceNames.forEach { name ->
-            context.getSharedPreferences(name, Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .apply()
+            check(context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()) {
+                "Could not clear account preferences: $name"
+            }
         }
-        context.filesDir.resolve("nuvio_plugin_scrapers").deleteRecursively()
+        val scraperCode = context.filesDir.resolve("nuvio_plugin_scrapers")
+        check(!scraperCode.exists() || scraperCode.deleteRecursively()) {
+            "Could not clear account plugin code"
+        }
     }
 }

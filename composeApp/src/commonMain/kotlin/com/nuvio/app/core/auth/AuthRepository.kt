@@ -3,6 +3,7 @@ package com.nuvio.app.core.auth
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.core.network.ServerConfigurationRepository
+import com.nuvio.app.core.storage.AnonymousWorkspaceStorage
 import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
@@ -25,6 +26,7 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 
 object AuthRepository {
+    private const val pendingAccountCleanupKey = "account_cleanup_required"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val log = Logger.withTag("AuthRepository")
 
@@ -38,6 +40,9 @@ object AuthRepository {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private var detachedWorkspace: AuthState.Authenticated? = null
+    private var remoteSignInRequested = false
+    private var changingSession = false
     private var initialized = false
     private var sessionStatusJob: Job? = null
     private var validatedRemoteUserId: String? = null
@@ -45,6 +50,19 @@ object AuthRepository {
     fun initialize() {
         if (initialized) return
         initialized = true
+
+        val cleanupRecovery = runCatching {
+            if (AnonymousWorkspaceStorage.loadValue(pendingAccountCleanupKey) != null) {
+                wipeAccountDataRecoverably()
+            }
+        }
+        if (cleanupRecovery.isFailure) {
+            val error = checkNotNull(cleanupRecovery.exceptionOrNull())
+            log.e(error) { "Previous account cleanup is incomplete; refusing to expose cached settings" }
+            _error.value = error.message
+            _state.value = AuthState.Unauthenticated
+            return
+        }
 
         // Personal builds need no upstream service secrets to browse or play local addons.
         val server = ServerConfigurationRepository.active.value
@@ -67,17 +85,15 @@ object AuthRepository {
 
         sessionStatusJob = scope.launch {
             SupabaseProvider.client.auth.sessionStatus.collect { status ->
-                if (AuthStorage.loadAnonymousUserId() != null) return@collect
+                if (changingSession) return@collect
+                if (AuthStorage.loadAnonymousUserId() != null &&
+                    (!remoteSignInRequested || status !is SessionStatus.Authenticated)) return@collect
                 when (status) {
                     is SessionStatus.Authenticated -> {
                         val user = status.session.user
                         val userId = user?.id.orEmpty()
                         if (!validateRemoteSession(userId)) return@collect
-                        _state.value = AuthState.Authenticated(
-                            userId = userId,
-                            email = user?.email,
-                            isAnonymous = false,
-                        )
+                        acceptRemoteSession(userId, user?.email)
                     }
                     is SessionStatus.NotAuthenticated -> {
                         _state.value = AuthState.Unauthenticated
@@ -93,6 +109,53 @@ object AuthRepository {
                 }
             }
         }
+    }
+
+    internal fun expectRemoteSession() { remoteSignInRequested = true }
+    internal fun cancelRemoteSessionRequest() { remoteSignInRequested = false }
+
+    internal suspend fun acceptRemoteSession(userId: String, email: String?) {
+        val previous = (_state.value as? AuthState.Authenticated) ?: detachedWorkspace
+        val accountChanged = previous != null && (previous.isAnonymous || previous.userId != userId)
+        if (accountChanged) {
+            val backup = runCatching {
+                val old = checkNotNull(previous)
+                if (old.isAnonymous) LocalSettingsImport.saveAnonymousWorkspace(old.userId)
+                else LocalSettingsImport.savePendingBeforeSignOut()
+            }
+            if (backup.isFailure) {
+                val failure = checkNotNull(backup.exceptionOrNull())
+                log.e(failure) { "Could not preserve the previous account before accepting another session" }
+                _error.value = failure.message ?: "Could not save local settings before switching accounts"
+                remoteSignInRequested = false
+                validatedRemoteUserId = null
+                runCatching { SupabaseProvider.client.auth.clearSession() }
+                    .onFailure { error -> log.w(error) { "Failed to discard the new remote session after backup failure" } }
+                return
+            }
+        }
+        if (accountChanged || AnonymousWorkspaceStorage.loadValue(pendingAccountCleanupKey) != null) {
+            val cleaned = runCatching {
+                _state.value = AuthState.Loading
+                AuthStorage.clearAnonymousUserId()
+                wipeAccountDataRecoverably()
+            }
+            if (cleaned.isFailure) {
+                val failure = checkNotNull(cleaned.exceptionOrNull())
+                log.e(failure) { "Could not clean previous account data before accepting a new session" }
+                _error.value = failure.message ?: "Could not switch accounts safely"
+                remoteSignInRequested = false
+                validatedRemoteUserId = null
+                detachedWorkspace = null
+                _state.value = AuthState.Unauthenticated
+                runCatching { SupabaseProvider.client.auth.clearSession() }
+                    .onFailure { error -> log.w(error) { "Failed to discard new session after account cleanup failure" } }
+                return
+            }
+        }
+        detachedWorkspace = null
+        remoteSignInRequested = false
+        _state.value = AuthState.Authenticated(userId = userId, email = email, isAnonymous = false)
     }
 
     private suspend fun validateRemoteSession(userId: String): Boolean {
@@ -117,28 +180,39 @@ object AuthRepository {
     @OptIn(ExperimentalUuidApi::class)
     fun signInAnonymously() {
         _error.value = null
-        val userId = Uuid.random().toString()
-        AuthStorage.saveAnonymousUserId(userId)
-        _state.value = AuthState.Authenticated(
-            userId = userId,
-            email = null,
-            isAnonymous = true,
-        )
+        remoteSignInRequested = false
+        if ((_state.value as? AuthState.Authenticated)?.isAnonymous == true) return
+        runCatching {
+            check(_state.value !is AuthState.Authenticated) { "Sign out before changing accounts" }
+            if (detachedWorkspace?.isAnonymous == false ||
+                AnonymousWorkspaceStorage.loadValue(pendingAccountCleanupKey) != null
+            ) wipeAccountDataRecoverably()
+            detachedWorkspace = null
+            val userId = AnonymousWorkspaceStorage.restore() ?: Uuid.random().toString()
+            AuthStorage.saveAnonymousUserId(userId)
+            _state.value = AuthState.Authenticated(userId = userId, email = null, isAnonymous = true)
+        }.onFailure {
+            _error.value = it.message
+            if (_state.value is AuthState.Loading) _state.value = AuthState.Unauthenticated
+        }
     }
 
     suspend fun signUpWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
         _notice.value = null
+        expectRemoteSession()
         SupabaseProvider.client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
         }
         // Servers that confirm or approve new accounts return no session yet.
         if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
+            cancelRemoteSessionRequest()
             _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
         }
         Unit
     }.onFailure { e ->
+        cancelRemoteSessionRequest()
         log.e(e) { "Email sign-up failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_up_failed)
@@ -147,11 +221,13 @@ object AuthRepository {
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
         _notice.value = null
+        expectRemoteSession()
         SupabaseProvider.client.auth.signInWith(Email) {
             this.email = email
             this.password = password
         }
     }.onFailure { e ->
+        cancelRemoteSessionRequest()
         log.e(e) { "Email sign-in failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_in_failed)
@@ -161,6 +237,23 @@ object AuthRepository {
         _error.value = null
         val anonymousRead = runCatching { AuthStorage.loadAnonymousUserId() }
         val wasAnonymous = anonymousRead.getOrNull() != null
+        if (wasAnonymous) {
+            val saved = runCatching { LocalSettingsImport.saveAnonymousWorkspace(anonymousRead.getOrThrow()!!) }
+            if (saved.isFailure) {
+                _error.value = saved.exceptionOrNull()?.message
+                return saved
+            }
+        }
+        if (!wasAnonymous) {
+            val saved = runCatching { LocalSettingsImport.savePendingBeforeSignOut() }
+            if (saved.isFailure) {
+                _error.value = saved.exceptionOrNull()?.message
+                return saved
+            }
+        }
+        changingSession = true
+        remoteSignInRequested = false
+        _state.value = AuthState.Loading
         val anonymousClear = runCatching { AuthStorage.clearAnonymousUserId() }
         validatedRemoteUserId = null
         val remoteSignOut = if (wasAnonymous) {
@@ -175,8 +268,9 @@ object AuthRepository {
         } else {
             Result.success(Unit)
         }
-        val localCleanup = runCatching { LocalAccountDataCleaner.wipe() }
+        val localCleanup = runCatching { wipeAccountDataRecoverably() }
         _state.value = AuthState.Unauthenticated
+        changingSession = false
 
         val failure = anonymousRead.exceptionOrNull()
             ?: anonymousClear.exceptionOrNull()
@@ -199,6 +293,12 @@ object AuthRepository {
 
     suspend fun prepareForServerSwitch(): Result<Unit> {
         _error.value = null
+        val current = _state.value as? AuthState.Authenticated
+        detachedWorkspace = current
+        if (current?.isAnonymous == true) {
+            val saved = runCatching { LocalSettingsImport.saveAnonymousWorkspace(current.userId) }
+            if (saved.isFailure) return saved
+        } else LocalSettingsImport.savePendingBeforeSignOut()
         val anonymousClear = runCatching { AuthStorage.clearAnonymousUserId() }
         validatedRemoteUserId = null
         val server = ServerConfigurationRepository.active.value
@@ -233,6 +333,15 @@ object AuthRepository {
 
     private suspend fun clearLocalSessionAfterRemoteInvalidation() {
         _error.value = null
+        val current = _state.value as? AuthState.Authenticated
+        val saved = runCatching {
+            if (current?.isAnonymous == true) LocalSettingsImport.saveAnonymousWorkspace(current.userId)
+            else LocalSettingsImport.savePendingBeforeSignOut()
+        }
+        saved.onFailure { error ->
+            log.e(error) { "Could not save local settings before invalidating the session; continuing auth cleanup" }
+            _error.value = error.message
+        }
         AuthStorage.clearAnonymousUserId()
         validatedRemoteUserId = null
         runCatching {
@@ -240,7 +349,7 @@ object AuthRepository {
         }.onFailure { e ->
             log.w(e) { "Failed to clear Supabase session after remote invalidation; continuing local reset" }
         }
-        val localCleanup = runCatching { LocalAccountDataCleaner.wipe() }
+        val localCleanup = runCatching { wipeAccountDataRecoverably() }
         _state.value = AuthState.Unauthenticated
         localCleanup.onFailure { error ->
             log.e(error) { "Local account cleanup failed after remote session invalidation" }
@@ -253,7 +362,7 @@ object AuthRepository {
         SupabaseProvider.client.auth.signOut()
         validatedRemoteUserId = null
         try {
-            LocalAccountDataCleaner.wipe()
+            wipeAccountDataRecoverably()
         } finally {
             _state.value = AuthState.Unauthenticated
         }
@@ -265,6 +374,13 @@ object AuthRepository {
     fun clearError() {
         _error.value = null
         _notice.value = null
+    }
+
+    private fun wipeAccountDataRecoverably() {
+        // Survives a failed file removal and app restart, so no later login trusts partial data.
+        AnonymousWorkspaceStorage.saveValue(pendingAccountCleanupKey, "true")
+        LocalAccountDataCleaner.wipe()
+        AnonymousWorkspaceStorage.saveValue(pendingAccountCleanupKey, null)
     }
 
     private fun isInvalidRemoteSessionError(error: Throwable): Boolean {

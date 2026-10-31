@@ -32,10 +32,11 @@ internal object PluginStorage {
     }
 
     fun loadScraperSettings(scraperId: String): String? =
-        store.getString("settings_${scraperId}")
+        store.getString("settings_${activePluginSettingsProfileId()}_${scraperId}")
+            ?: store.getString("settings_${scraperId}") // Old shared setting remains the migration default.
 
     fun saveScraperSettings(scraperId: String, payload: String) {
-        store.putString("settings_${scraperId}", payload)
+        store.putString("settings_${activePluginSettingsProfileId()}_${scraperId}", payload)
     }
 
     private fun scraperCodeKey(profileId: Int, scraperId: String): String =
