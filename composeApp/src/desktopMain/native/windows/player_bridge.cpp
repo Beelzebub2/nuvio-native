@@ -1191,6 +1191,16 @@ public:
         return tracksJsonForType("sub");
     }
 
+    std::vector<double> chapterStarts() {
+        std::vector<double> starts;
+        long long count = int64Property("chapter-list/count", 0);
+        for (long long index = 0; index < count; ++index) {
+            std::string key = "chapter-list/" + std::to_string(index) + "/time";
+            starts.push_back(doubleProperty(key.c_str(), -1.0));
+        }
+        return starts;
+    }
+
     void selectAudioTrackId(int trackId) {
         std::lock_guard<std::mutex> lock(mpvMutex);
         if (!mpv) return;
@@ -2822,6 +2832,15 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_audioTracksJson(JNIEnv *env, jobject, jlong handle) {
     auto player = playerFromHandle(handle);
     return newJavaStringUtf8(env, player ? player->audioTracksJson() : "[]");
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_chapterStarts(JNIEnv *env, jobject, jlong handle) {
+    auto player = playerFromHandle(handle);
+    auto starts = player ? player->chapterStarts() : std::vector<double>{};
+    jdoubleArray result = env->NewDoubleArray((jsize)starts.size());
+    if (result && !starts.empty()) env->SetDoubleArrayRegion(result, 0, (jsize)starts.size(), starts.data());
+    return result;
 }
 
 extern "C" JNIEXPORT jstring JNICALL

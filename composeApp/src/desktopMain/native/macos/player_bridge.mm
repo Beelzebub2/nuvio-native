@@ -115,6 +115,7 @@ static constexpr double kMaxVolumePercent = 200.0;
 - (BOOL)isEnded;
 - (NSString *)audioTracksJson;
 - (NSString *)subtitleTracksJson;
+- (std::vector<double>)chapterStarts;
 - (void)selectAudioTrackId:(int)trackId;
 - (void)selectSubtitleTrackId:(int)trackId;
 - (void)addSubtitleUrl:(NSString *)url;
@@ -2190,6 +2191,16 @@ static void nuvioMpvWakeup(void *ctx) {
     return [self tracksJsonForType:@"sub"];
 }
 
+- (std::vector<double>)chapterStarts {
+    std::vector<double> starts;
+    long long count = [self int64Property:"chapter-list/count" fallback:0];
+    for (long long index = 0; index < count; ++index) {
+        NSString *key = [NSString stringWithFormat:@"chapter-list/%lld/time", index];
+        starts.push_back([self doubleProperty:key.UTF8String fallback:-1.0]);
+    }
+    return starts;
+}
+
 - (void)selectAudioTrackId:(int)trackId {
     if (!_mpv) return;
     int64_t id = trackId;
@@ -3302,6 +3313,15 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_subtitleTracksJson
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     NSString *json = [player subtitleTracksJson] ?: @"[]";
     return env->NewStringUTF(json.UTF8String);
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_chapterStarts(JNIEnv *env, jobject, jlong handle) {
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
+    auto starts = player ? [player chapterStarts] : std::vector<double>{};
+    jdoubleArray result = env->NewDoubleArray((jsize)starts.size());
+    if (result && !starts.empty()) env->SetDoubleArrayRegion(result, 0, (jsize)starts.size(), starts.data());
+    return result;
 }
 
 extern "C" JNIEXPORT void JNICALL
