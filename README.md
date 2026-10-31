@@ -83,7 +83,7 @@ The installer is written to `composeApp/build/compose/binaries/main-release/inst
 
 ### Android mobile
 
-The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account-sync requirements. Android builds can run as a local guest without Nuvio's backend configuration. For cross-device accounts, run the independent [Starlit sync backend](private-server-setup) and sign into the same server on desktop and Android. iOS sources are also present, but require macOS and Xcode to build and test.
+The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account sync. Desktop and Android use Starlit's account server automatically: sign into the same owner-created account and profile on each device to sync. Public registration is closed; guest mode and custom servers remain available. The independent [Starlit backend](private-server-setup) is also included for self-hosting. iOS sources are present, but require macOS and Xcode to build and test.
 
 ### Releasing
 

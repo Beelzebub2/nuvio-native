@@ -16,7 +16,7 @@ Private update access uses your existing GitHub CLI login. On a new computer, in
 
 An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credential. Use a fine-grained token restricted to this repository with Contents: read. Never put a token in source, build settings, release assets, command arguments, or logs. GitHub CLI manages its credential; the app reads it only into memory. HTTP redirects are followed without forwarding the credential. Every private installer must have GitHub's SHA-256 digest and pass verification before installation.
 
-Personal builds work as a local guest with playback addons. Official account credentials are not available in this clone; configure your own compatible server if you need account sync.
+Starlit 1.0.42 and later use `https://accounts.example.invalid` automatically. Sign in with an owner-created account to sync with Android; public registration is closed. Guest mode and saved custom servers remain available. Build-time overrides are described in [the account-server guide](ANDROID.md#servers-and-account-sync).
 
 ## Built-in Airing Now
 
@@ -42,7 +42,7 @@ Provider calls first use `https://nuvio-native-gateway.cloudflaredomainrrm.worke
 
 ## Local data
 
-On the first Windows launch, local addons, profiles, watch history, and display/player/torrent preferences are copied from `%APPDATA%/Nuvio` into `%APPDATA%/NuvioNative`. The original files remain intact. Cloud and integration credentials are not imported; the build starts as a local guest unless you configure a compatible server. Subsequent runs keep the private build's own data.
+On the first Windows launch, local addons, profiles, watch history, and display/player/torrent preferences are copied from `%APPDATA%/Nuvio` into `%APPDATA%/NuvioNative`. The original files remain intact. Cloud and integration credentials are not imported; choose guest mode or sign into an owner-created Starlit account. Subsequent runs keep the private build's own data, including existing guest settings.
 
 ## Release a new version
 

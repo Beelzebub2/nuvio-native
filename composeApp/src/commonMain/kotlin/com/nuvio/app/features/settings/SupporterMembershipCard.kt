@@ -67,6 +67,7 @@ internal fun SupporterMembershipCard(
     onAction: () -> Unit,
     onRefresh: () -> Unit,
 ) {
+    if (!com.nuvio.app.core.network.ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) return
     Column(
         modifier = Modifier
             .fillMaxWidth()
