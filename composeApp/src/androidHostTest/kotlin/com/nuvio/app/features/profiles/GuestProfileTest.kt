@@ -50,7 +50,7 @@ class GuestProfileTest {
         } finally {
             ProfileRepository.clearInMemory()
             context.getSharedPreferences("nuvio_profile_cache", Context.MODE_PRIVATE).edit().clear().commit()
-            AuthRepository.prepareForServerSwitch().getOrThrow()
+            AuthRepository.signOut().getOrThrow()
         }
     }
 }
