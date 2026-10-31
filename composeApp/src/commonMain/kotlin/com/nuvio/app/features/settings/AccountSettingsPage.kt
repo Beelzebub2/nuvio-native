@@ -30,6 +30,7 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.LocalSettingsImport
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
@@ -76,7 +77,8 @@ private fun AccountSettingsBody(
     var isDeletingAccount by remember { mutableStateOf(false) }
     var deleteErrorMessage by remember { mutableStateOf<String?>(null) }
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
-    val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled && authState is AuthState.Authenticated
+    val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled &&
+        ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures && authState is AuthState.Authenticated
 
     if (isDesktop) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

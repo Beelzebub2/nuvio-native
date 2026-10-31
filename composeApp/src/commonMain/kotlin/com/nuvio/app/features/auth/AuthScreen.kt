@@ -94,6 +94,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.auth_owner_created_accounts
 import nuvio.composeapp.generated.resources.compose_auth_already_have_account
 import nuvio.composeapp.generated.resources.compose_auth_continue_without_account
 import nuvio.composeapp.generated.resources.compose_auth_create_account
@@ -232,6 +233,7 @@ fun AuthScreen(
 
     LaunchedEffect(serverConnectionState.activeServer.backendUrl) {
         DeviceLinkAuthRepository.cancel()
+        if (!serverConnectionState.activeServer.supportsNuvioAccountFeatures) isSignUp = false
         if (!serverConnectionState.activeServer.isCustom) {
             showOfficialServerDialog = false
         }
@@ -804,11 +806,19 @@ private fun AuthForm(
 
         Spacer(modifier = Modifier.height(metrics.toggleTop))
 
-        AuthModeToggle(
-            isSignUp = isSignUp,
-            scale = scale,
-            onToggleAuthMode = onToggleAuthMode,
-        )
+        if (ServerConnectionController.state.value.activeServer.supportsNuvioAccountFeatures) {
+            AuthModeToggle(
+                isSignUp = isSignUp,
+                scale = scale,
+                onToggleAuthMode = onToggleAuthMode,
+            )
+        } else {
+            Text(
+                text = stringResource(Res.string.auth_owner_created_accounts),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         Spacer(modifier = Modifier.height(metrics.dividerTop))
 

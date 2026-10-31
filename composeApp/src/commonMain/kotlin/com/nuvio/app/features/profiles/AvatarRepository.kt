@@ -76,6 +76,10 @@ object AvatarRepository {
     private var lastMemberRefresh: TimeMark? = null
 
     suspend fun fetchAvatars() {
+        if (!com.nuvio.app.core.network.ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) {
+            _avatars.value = emptyList()
+            return
+        }
         hydrateFromCacheIfNeeded()
         ensureMemberAccessObserver()
         if (standardLoaded && standardCatalog.isNotEmpty()) {
@@ -86,6 +90,10 @@ object AvatarRepository {
     }
 
     suspend fun refreshAvatars(force: Boolean = false) {
+        if (!com.nuvio.app.core.network.ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) {
+            _avatars.value = emptyList()
+            return
+        }
         hydrateFromCacheIfNeeded()
         ensureMemberAccessObserver()
         if (force || isRefreshDue(lastStandardRefresh)) {

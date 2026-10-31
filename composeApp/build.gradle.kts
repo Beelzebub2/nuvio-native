@@ -54,6 +54,9 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     abstract val supabaseFallbackUrl: Property<String>
 
     @get:Input
+    abstract val starlitServerUrl: Property<String>
+
+    @get:Input
     abstract val sentryDsn: Property<String>
 
     @get:Input
@@ -78,6 +81,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.core.network
                 |
                 |object SupabaseConfig {
+                |    const val STARLIT_URL = "${starlitServerUrl.get()}"
                 |    const val URL = "${supabaseUrl.get()}"
                 |    const val ANON_KEY = "${supabaseAnonKey.get()}"
                 |    const val FALLBACK_URL = "${supabaseFallbackUrl.get()}"
@@ -610,6 +614,17 @@ fun runtimeConfigBoolean(key: String, default: Boolean): Boolean =
         else -> default
     }
 
+val accountServerDefaults = Properties().apply {
+    rootProject.file("composeApp/Configuration/AccountServer.properties").inputStream().use(::load)
+}
+val defaultAccountServerUrl = accountServerDefaults.getProperty("URL")
+val configuredAccountServerUrl = runtimeConfigValue("NUVIO_SUPABASE_URL", defaultAccountServerUrl)
+// A different backend must provide its own key; never pair it with Starlit's key.
+val configuredAccountServerKey = runtimeConfigValue(
+    "NUVIO_SUPABASE_ANON_KEY",
+    if (configuredAccountServerUrl.trimEnd('/').equals(defaultAccountServerUrl, ignoreCase = true)) accountServerDefaults.getProperty("ANON_KEY") else "",
+)
+
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
     if (rootProject.file("local.properties").exists()) {
@@ -619,8 +634,9 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     appVersionCode.set(releaseAppVersionCode)
     desktopAppVersionName.set(desktopReleaseVersionName)
     desktopAppVersionCode.set(desktopReleaseVersionCode)
-    supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL"))
-    supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
+    starlitServerUrl.set(defaultAccountServerUrl)
+    supabaseUrl.set(configuredAccountServerUrl)
+    supabaseAnonKey.set(configuredAccountServerKey)
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL"))
     sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
     sentryDesktopDsn.set(runtimeConfigValue("SENTRY_DESKTOP_DSN"))

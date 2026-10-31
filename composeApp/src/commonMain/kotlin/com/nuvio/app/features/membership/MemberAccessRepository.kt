@@ -3,6 +3,7 @@ package com.nuvio.app.features.membership
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.time.EpisodeReleaseDatePlatform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +71,10 @@ object MemberAccessRepository {
     }
 
     private suspend fun loadAccess(auth: AuthState) {
+        if (!ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) {
+            _access.value = MemberAccess.None
+            return
+        }
         when (auth) {
             AuthState.Loading -> return
             AuthState.Unauthenticated -> {
@@ -119,6 +124,7 @@ object MemberAccessRepository {
     }
 
     private fun hydrateCachedAccess() {
+        if (!ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures) return
         val cached = loadStoredAccess()?.toMemberAccess() ?: return
         _access.value = cached
         warmMemberAssets(cached)
