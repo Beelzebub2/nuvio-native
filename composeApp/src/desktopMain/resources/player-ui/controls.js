@@ -25,6 +25,8 @@ const toggleIcon = document.getElementById("toggleIcon");
 const toggleLabel = document.getElementById("toggleLabel");
 const nextEpisodeButton = document.getElementById("nextEpisodeButton");
 const nextEpisodeButtonLabel = document.getElementById("nextEpisodeButtonLabel");
+const autoSkipIntroButton = document.getElementById("autoSkipIntroButton");
+const autoNextEpisodeButton = document.getElementById("autoNextEpisodeButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const pipButton = document.getElementById("pipButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
@@ -374,6 +376,9 @@ let state = {
   submitIntroContentKey: "",
   notificationMessage: "",
   notificationToken: 0,
+  showAutoToggles: false,
+  autoSkipIntroEnabled: false,
+  autoNextEpisodeEnabled: false,
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
@@ -833,6 +838,54 @@ const setText = (element, text) => {
 
 const setVisible = (element, visible) => {
   element.hidden = !visible;
+};
+
+const autoToggles = [
+  {
+    button: autoSkipIntroButton,
+    command: "setAutoSkipIntro",
+    stateKey: "autoSkipIntroEnabled",
+    labelKey: "autoSkipIntroLabel",
+    fallbackLabel: "Auto Skip Intro",
+    icon: "icon-auto-skip-intro",
+  },
+  {
+    button: autoNextEpisodeButton,
+    command: "setAutoNextEpisode",
+    stateKey: "autoNextEpisodeEnabled",
+    labelKey: "autoNextEpisodeLabel",
+    fallbackLabel: "Auto Next Episode",
+    icon: "icon-auto-next-episode",
+  },
+];
+
+const autoToggleLabel = toggle => String(state[toggle.labelKey] || toggle.fallbackLabel);
+const autoToggleStateLabel = enabled => (enabled ? state.onLabel || "On" : state.offLabel || "Off");
+
+const syncAutoToggleButtons = () => {
+  autoToggles.forEach(toggle => {
+    if (!toggle.button) return;
+    const enabled = Boolean(state[toggle.stateKey]);
+    const label = autoToggleLabel(toggle);
+    setVisible(toggle.button, Boolean(state.showAutoToggles));
+    toggle.button.setAttribute("aria-pressed", enabled ? "true" : "false");
+    toggle.button.setAttribute("aria-label", label);
+    toggle.button.setAttribute("title", `${label}: ${autoToggleStateLabel(enabled)}`);
+    const text = toggle.button.querySelector("span");
+    if (text) text.textContent = label;
+  });
+};
+
+// Flips the button right away, then tells the app the wanted state (1 = on, 0 = off).
+const toggleAutoSetting = command => {
+  const toggle = autoToggles.find(item => item.command === command);
+  if (!toggle) return false;
+  const enabled = !state[toggle.stateKey];
+  state = { ...state, [toggle.stateKey]: enabled };
+  syncAutoToggleButtons();
+  showPlayerToast(`${autoToggleLabel(toggle)}: ${autoToggleStateLabel(enabled)}`, { icon: toggle.icon });
+  send(command, enabled ? 1 : 0);
+  return true;
 };
 
 const setActionButtonLabel = (command, label) => {
@@ -2440,6 +2493,7 @@ const renderChrome = () => {
   setVisible(videoSettingsButton, Boolean(state.showVideoSettings));
   setVisible(sourcesButton, Boolean(state.showSources));
   setVisible(episodesButton, Boolean(state.showEpisodes));
+  syncAutoToggleButtons();
   syncActionFocusState();
 
   const playPauseLabel = isPlaying ? state.pauseLabel : state.playLabel;
@@ -2839,6 +2893,7 @@ document.querySelectorAll("[data-command]").forEach(button => {
       togglePlayerFullscreen();
       return;
     }
+    if (toggleAutoSetting(command)) return;
     showCommandToast(command);
     send(command, 0);
   });

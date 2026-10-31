@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -36,19 +40,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.accentBrush
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.themePalette
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -98,6 +108,7 @@ internal fun PlayerControlActions(
     onOpenInExternalPlayer: (() -> Unit)?,
     onSubmitIntroClick: (() -> Unit)?,
     onInteraction: () -> Unit,
+    toggles: List<PlayerControlToggle> = emptyList(),
 ) {
     val actions = listOfNotNull(
         onNextEpisodeClick?.let {
@@ -195,6 +206,15 @@ internal fun PlayerControlActions(
                     )
                 }
             }
+            // Toggles sit outside the scrolling actions so they stay visible instead of
+            // being pushed into the "more" overflow.
+            if (toggles.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    toggles.forEach { toggle ->
+                        PlayerToggleAction(toggle = toggle, onInteraction = onInteraction)
+                    }
+                }
+            }
             Box(
                 modifier = Modifier.height(48.dp).widthIn(min = 48.dp).clickable(
                     role = Role.Button,
@@ -236,10 +256,62 @@ private fun PlayerAction(
     }
 }
 
+@Composable
+private fun PlayerToggleAction(
+    toggle: PlayerControlToggle,
+    onInteraction: () -> Unit,
+) {
+    val stateLabel = stringResource(if (toggle.checked) Res.string.compose_action_on else Res.string.compose_action_off)
+    val accentBrush = MaterialTheme.themePalette.accentBrush()
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .toggleable(
+                value = toggle.checked,
+                role = Role.Switch,
+                onValueChange = { checked ->
+                    onInteraction()
+                    toggle.onCheckedChange(checked)
+                },
+            )
+            .semantics {
+                contentDescription = toggle.label
+                stateDescription = stateLabel
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = toggle.icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = if (toggle.checked) 1f else 0.45f),
+            modifier = Modifier.size(24.dp),
+        )
+        if (toggle.checked) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 7.dp)
+                    .size(width = 14.dp, height = 3.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(accentBrush),
+            )
+        }
+    }
+}
+
 private data class PlayerControlAction(
     val description: String,
     val onClick: () -> Unit,
     val icon: ImageVector? = null,
     val painter: Painter? = null,
     val iconSize: Dp = 24.dp,
+)
+
+/** An on/off button in the player's bottom bar, such as auto skip intro. */
+internal data class PlayerControlToggle(
+    val label: String,
+    val checked: Boolean,
+    val icon: ImageVector,
+    val onCheckedChange: (Boolean) -> Unit,
 )

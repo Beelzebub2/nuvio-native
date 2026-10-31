@@ -1065,6 +1065,8 @@
     <string name="player_next_episode_unaired">Não emitido</string>
     <string name="player_skip">Saltar</string>
     <string name="player_skip_intro">Saltar introdução</string>
+    <string name="player_auto_skip_intro_toggle">Saltar introdução automaticamente</string>
+    <string name="player_auto_next_episode_toggle">Próximo episódio automático</string>
     <string name="player_skip_outro">Saltar encerramento</string>
     <string name="player_skip_recap">Saltar resumo</string>
     <string name="compose_player_no_subtitles_found">Nenhuma legenda encontrada</string>
