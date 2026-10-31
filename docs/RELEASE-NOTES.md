@@ -1,3 +1,15 @@
+## Starlit 1.0.41
+
+### Improvements
+
+- The player's bottom bar has two new buttons for series: **Auto skip intro** and **Auto next episode**. Click or tap one to turn it on or off. The choice is saved and matches the same options in **Settings → Playback**.
+- Signed-out (anonymous) profiles, settings, add-ons and plugins now stay on the device for your next anonymous session. After signing in, **Import anonymous settings** in account settings copies them into the current account profile; account profiles, watch history and linked tracking accounts are kept.
+- Torrent streaming and downloads are steadier: the same torrent stays ready between episodes, the right file is chosen by name and episode, downloads resume only from the same source, and finished downloads are verified.
+
+### Fixes
+
+- Anime opening skips now land at the right time for downloaded episodes, using each file's own timing.
+
 ## Starlit 1.0.40
 
 ### Improvements
