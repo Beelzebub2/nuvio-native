@@ -302,7 +302,12 @@ object AuthRepository {
         val anonymousClear = runCatching { AuthStorage.clearAnonymousUserId() }
         validatedRemoteUserId = null
         val server = ServerConfigurationRepository.active.value
-        val sessionClear = if (server.backendUrl.isBlank() || server.publishableKey.isBlank()) {
+        // Anonymous workspaces have no remote session to clear.
+        val sessionClear = if (
+            current?.isAnonymous == true ||
+            server.backendUrl.isBlank() ||
+            server.publishableKey.isBlank()
+        ) {
             Result.success(Unit)
         } else {
             runCatching { SupabaseProvider.client.auth.clearSession() }
