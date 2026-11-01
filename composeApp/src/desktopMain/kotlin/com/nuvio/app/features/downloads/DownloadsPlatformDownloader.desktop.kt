@@ -59,6 +59,7 @@ private val shutdownHook by lazy {
 internal val legacyDownloadsDirectory: File get() = DesktopStorage.rootDir.resolve("downloads").toFile()
 
 internal actual object DownloadsPlatformDownloader {
+    actual fun pauseForAccountCleanup() {}
     actual fun restoreItem(item: DownloadItem): DownloadItem = item.copy(bytesPerSecond = 0,
         phase = if (item.status == DownloadStatus.Downloading) "Queued" else null)
 
@@ -75,6 +76,7 @@ internal actual object DownloadsPlatformDownloader {
                     onProgress(0, null)
                     val recovered = recoverFinalDownload(item)
                     if (recovered != null) {
+                        recordDesktopDownloadIdentity(item)
                         onSuccess(recovered.toURI().toString(), recovered.length())
                         return@withLock
                     }
@@ -97,6 +99,7 @@ internal actual object DownloadsPlatformDownloader {
                     // Save sidecars while the source is still available, before reporting offline-ready.
                     withTimeoutOrNull(60_000L) { DownloadSubtitles.prepare(source, local.toURI().toString()) }
                     currentCoroutineContext().ensureActive()
+                    recordDesktopDownloadIdentity(source)
                     onSuccess(local.toURI().toString(), local.length())
                 }
             } catch (e: TimeoutCancellationException) { onFailure("Source lookup timed out. Retry or choose another provider.") }
@@ -234,6 +237,7 @@ internal fun removeOwnedDownload(item: DownloadItem): Boolean = runCatching {
         if (owned.exists()) check(owned.delete())
     }
     if (item.destinationDirectory != null) {
+        removeRecordedDesktopIdentity(item)
         File(dir, ".starlit-owner").delete()
         dir.delete() // succeeds only when empty
     }

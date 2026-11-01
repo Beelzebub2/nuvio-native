@@ -26,6 +26,8 @@ internal expect object DownloadsPlatformDownloader {
     ): DownloadsTaskHandle
 
     fun restoreItem(item: DownloadItem): DownloadItem
+    /** Account identity is changing: stop device schedulers before account-local metadata is cleared. */
+    fun pauseForAccountCleanup()
 
     fun removeFile(localFileUri: String?): Boolean
 

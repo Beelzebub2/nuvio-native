@@ -390,7 +390,12 @@ object AuthRepository {
 
     suspend fun deleteAccount(): Result<Unit> = runCatching {
         _error.value = null
+        val account = _state.value as? AuthState.Authenticated
+        val backendUrl = ServerConfigurationRepository.active.value.backendUrl
         SupabaseProvider.client.functions.invoke("delete-account")
+        if (account != null && !account.isAnonymous) {
+            LocalSettingsImport.forgetAccountDownloadBackups(backendUrl, account.userId)
+        }
         SupabaseProvider.client.auth.signOut()
         validatedRemoteUserId = null
         try {

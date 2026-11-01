@@ -34,6 +34,113 @@ object DownloadsRepository {
 
     fun ensureLoaded() = synchronized(lock) { if (!hasLoaded) loadFromDisk() }
     fun onProfileChanged() = synchronized(lock) { loadFromDisk() }
+    /** Called before an account wipe. Unlike a profile change, durable background jobs must stop. */
+    fun prepareForAccountCleanup(): Unit = synchronized(lock) {
+        DownloadsPlatformDownloader.pauseForAccountCleanup()
+        if (hasLoaded && loadedProfile == com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) {
+            val paused = _uiState.value.items.map { item ->
+                if (item.status == DownloadStatus.Downloading) item.copy(
+                    status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
+                ) else item
+            }
+            publish(paused)
+            persist()
+        }
+        invalidateTransfers()
+        hasLoaded = false
+        loadedProfile = null
+        _uiState.value = DownloadsUiState()
+        _hasUnseenCompleted.value = false
+        notifyLiveStatusPlatform()
+    }
+    /** Captured before an anonymous session is replaced; records are device-local. */
+    fun exportLocalImportSnapshot(): String? = synchronized(lock) {
+        if (hasLoaded && loadedProfile == com.nuvio.app.features.profiles.ProfileRepository.activeProfileId)
+            DownloadsCodec.encodeItems(_uiState.value.items)
+        else DownloadsStorage.loadPayload()
+    }
+
+    /** Explicit anonymous-settings import: retain the account's existing records and files. */
+    fun mergeAnonymousDownloadRecords(savedPayload: String?, savedFolder: String?): Unit = synchronized(lock) {
+        if (savedPayload == null && savedFolder.isNullOrBlank()) return@synchronized
+        val guestItems = DownloadsCodec.decodeItems(savedPayload)
+        ensureLoaded()
+        if (isDesktop) DownloadDesktopFeatures.useImportedDirectory(savedFolder)
+        val current = _uiState.value.items
+        val keys = current.mapTo(mutableSetOf()) { it.logicalContentKey }
+        val ids = current.mapTo(mutableSetOf()) { it.id }
+        val candidates = guestItems.mapNotNull { guest ->
+            if (guest.id.isBlank() || guest.parentMetaId.isBlank() || guest.parentMetaType.isBlank()) return@mapNotNull null
+            if (guest.logicalContentKey in keys && current.none { it.logicalContentKey == guest.logicalContentKey &&
+                    it.status != DownloadStatus.Completed && it.id !in activeHandles }) return@mapNotNull null
+            if (guest.id in ids) return@mapNotNull null
+            val restored = DownloadsPlatformDownloader.restoreItem(guest)
+            if (restored.status == DownloadStatus.Downloading)
+                restored.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L) else restored
+        }
+        val folder = if (isDesktop) DownloadDesktopFeatures.directory() else null
+        val recovered = if (isDesktop) DownloadDesktopFeatures.reconcileKnownDownloads(
+            candidates, folder, includeDiscovered = false,
+        ) else candidates
+        val imported = recovered.map { paused ->
+            if (paused.status == DownloadStatus.Completed &&
+                DownloadsPlatformDownloader.resolveLocalFileUri(paused.localFileUri, paused.fileName) == null)
+                paused.copy(status = DownloadStatus.Failed, phase = null, bytesPerSecond = 0L,
+                    errorMessage = "Downloaded file is missing; choose the original download folder to recover it")
+            else paused
+        }
+        val byKey = imported.associateBy { it.logicalContentKey }
+        val replacements = current.map { accountItem ->
+            val guest = byKey[accountItem.logicalContentKey]
+            if (guest != null && guest.status == DownloadStatus.Completed &&
+                accountItem.status != DownloadStatus.Completed &&
+                accountItem.id !in activeHandles &&
+                DownloadsPlatformDownloader.resolveLocalFileUri(guest.localFileUri, guest.fileName) != null
+            ) guest else accountItem
+        }
+        val occupiedKeys = replacements.mapTo(mutableSetOf()) { it.logicalContentKey }
+        val occupiedIds = replacements.mapTo(mutableSetOf()) { it.id }
+        val additions = imported.filter { guest ->
+            if (guest.logicalContentKey in occupiedKeys || guest.id in occupiedIds) false
+            else { occupiedKeys.add(guest.logicalContentKey); occupiedIds.add(guest.id); true }
+        }
+        val merged = replacements + additions
+        if (merged != current) {
+            publish(merged)
+            persist()
+        }
+    }
+    /** Called only when the user chooses a folder; scans verified Starlit task metadata. */
+    fun recoverFromSelectedFolder(): Int = synchronized(lock) {
+        if (!isDesktop) return@synchronized 0
+        ensureLoaded()
+        val before = _uiState.value.items
+        val activeIds = activeHandles.keys.toSet()
+        val activeKeys = before.filter { it.id in activeIds }.mapTo(mutableSetOf()) { it.logicalContentKey }
+        val available = DownloadDesktopFeatures.reconcileKnownDownloads(
+            before.filterNot { it.id in activeIds },
+            DownloadDesktopFeatures.directory(),
+            includeDiscovered = true,
+        ).filterNot { it.logicalContentKey in activeKeys || it.id in activeIds }
+        val recoveredByKey = available.associateBy { it.logicalContentKey }
+        val previousKeys = before.mapTo(mutableSetOf()) { it.logicalContentKey }
+        val previousIds = before.mapTo(mutableSetOf()) { it.id }
+        val after = before.map { old ->
+            if (old.id in activeIds) old
+            else recoveredByKey[old.logicalContentKey]?.takeIf {
+                it.id == old.id || it.id !in previousIds
+            } ?: old
+        } + available.filter { it.logicalContentKey !in previousKeys && it.id !in previousIds }
+        val newReady = after.count { candidate ->
+            candidate.status == DownloadStatus.Completed && before.none {
+                it.logicalContentKey == candidate.logicalContentKey &&
+                    it.status == DownloadStatus.Completed &&
+                    it.localFileUri == candidate.localFileUri
+            }
+        }
+        if (after != before) { publish(after); persist() }
+        newReady
+    }
     fun markCompletedSeen() { _hasUnseenCompleted.value = false }
     fun clearLocalState() = synchronized(lock) {
         invalidateTransfers()
@@ -226,9 +333,18 @@ object DownloadsRepository {
         hasLoaded = false
         loadedProfile = null
         val profile = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId
+        var hadStoredPayload = false
         val items = try {
-            DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { item ->
-                val restored = DownloadsPlatformDownloader.restoreItem(item)
+            val payload = DownloadsStorage.loadPayload()
+            hadStoredPayload = payload != null
+            val stored = DownloadsCodec.decodeItems(payload)
+                .map(DownloadsPlatformDownloader::restoreItem)
+            // A profile can only regain downloads from its own saved task IDs on load.
+            // Importing other identities from a shared folder requires an explicit picker/import.
+            val verified = if (isDesktop) DownloadDesktopFeatures.reconcileKnownDownloads(
+                stored, DownloadDesktopFeatures.directory(), includeDiscovered = false,
+            ) else stored
+            verified.map { restored ->
                 // Retry re-adopts a proven file in place once a desktop drive is reconnected.
                 if (isDesktop && restored.status == DownloadStatus.Completed && !restored.hasPlayableLocalFile()) {
                     restored.copy(status = DownloadStatus.Failed, errorMessage = "Downloaded file is missing or its drive is unavailable")
@@ -244,7 +360,11 @@ object DownloadsRepository {
         hasLoaded = true
         loadedProfile = profile
         _hasUnseenCompleted.value = false
-        publish(items); persist(); pumpQueue()
+        publish(items)
+        // An absent profile key must stay absent: account backup restoration uses
+        // that distinction to decide whether to repopulate locally saved downloads.
+        if (hadStoredPayload) persist()
+        pumpQueue()
     }
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }

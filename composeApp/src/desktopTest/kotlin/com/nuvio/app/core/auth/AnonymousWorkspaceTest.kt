@@ -10,6 +10,12 @@ import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import com.nuvio.app.core.sync.ProfileSettingsSync
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.AddonStorage
+import com.nuvio.app.features.downloads.DownloadDesktopFeatures
+import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.DownloadsCodec
+import com.nuvio.app.features.downloads.DownloadsRepository
+import com.nuvio.app.features.downloads.DownloadsStorage
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsStorage
 import com.nuvio.app.features.plugins.PluginRepository
@@ -23,6 +29,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,6 +38,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -53,6 +61,127 @@ class AnonymousWorkspaceTest {
         if (language == null) themeStore.remove("selected_app_language")
         else themeStore.putString("selected_app_language", language)
         Locale.setDefault(originalLocale)
+    }
+
+    @Test
+    fun unopenedAccountProfileDownloadsSurviveTwoAccountWipesAndDoNotResurrectExplicitlyClearedQueue() = runBlocking {
+        val originalServer = ServerConfigurationRepository.active.value
+        ServerConfigurationRepository.saveCustom(ServerConfiguration("", "", ServerCapabilities(true, false), true))
+        SupabaseProvider.reset()
+        LocalAccountDataCleaner.wipe()
+        try {
+            val accountId = "multi-profile-account-backup"
+            val backendUrl = ServerConfigurationRepository.active.value.backendUrl
+            LocalSettingsImport.forgetAccountDownloadBackups(backendUrl, accountId)
+            val profilePayload = """{"userId":"$accountId","profiles":[{"profile_index":1,"name":"First"},{"profile_index":2,"name":"Second"}]}"""
+            AuthRepository.acceptRemoteSession(accountId, "multi@example.com")
+            ProfileStorage.savePayload(profilePayload)
+            ProfileRepository.ensureLoaded(accountId)
+            ProfileRepository.switchToProfile(2)
+            val item = DownloadItem(
+                id = "saved-on-profile-two", contentType = "movie", parentMetaId = "saved-film",
+                parentMetaType = "movie", videoId = "saved-film", title = "Saved film",
+                streamTitle = "Offline", providerName = "Account", sourceUrl = "",
+                fileName = "saved-film.mp4", status = DownloadStatus.Paused,
+                createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
+            )
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(item)))
+            DownloadsRepository.clearLocalState()
+            AuthRepository.signOut()
+
+            // Only reopen profile 1: the saved profile 2 record must remain in the
+            // account-scoped backup even though the live profile 2 store is absent.
+            AuthRepository.acceptRemoteSession(accountId, "multi@example.com")
+            ProfileStorage.savePayload(profilePayload)
+            ProfileRepository.ensureLoaded(accountId)
+            ProfileRepository.switchToProfile(1)
+            assertTrue(DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).isEmpty())
+            AuthRepository.signOut()
+
+            AuthRepository.acceptRemoteSession(accountId, "multi@example.com")
+            ProfileStorage.savePayload(profilePayload)
+            ProfileRepository.ensureLoaded(accountId)
+            ProfileRepository.switchToProfile(2)
+            assertEquals(listOf(item.id), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id })
+
+            // Explicit empty JSON is a deliberate deletion and supersedes older backups.
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(emptyList()))
+            DownloadsRepository.clearLocalState()
+            AuthRepository.signOut()
+            AuthRepository.acceptRemoteSession(accountId, "multi@example.com")
+            ProfileStorage.savePayload(profilePayload)
+            ProfileRepository.ensureLoaded(accountId)
+            ProfileRepository.switchToProfile(2)
+            assertTrue(DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).isEmpty())
+        } finally {
+            AuthRepository.signOut()
+            LocalSettingsImport.forgetAccountDownloadBackups(
+                ServerConfigurationRepository.active.value.backendUrl, "multi-profile-account-backup",
+            )
+            if (originalServer.isCustom) ServerConfigurationRepository.saveCustom(originalServer)
+            else ServerConfigurationRepository.useOfficial()
+            SupabaseProvider.reset()
+        }
+    }
+
+    @Test
+    fun legacyGuestDownloadsFromProfileTwoImportIntoAccountProfileOneWithoutReplacingItsQueue() = runBlocking {
+        val originalServer = ServerConfigurationRepository.active.value
+        ServerConfigurationRepository.saveCustom(ServerConfiguration("", "", ServerCapabilities(true, false), true))
+        SupabaseProvider.reset()
+        LocalAccountDataCleaner.wipe()
+        AnonymousWorkspaceStorage.saveValue("userId", null)
+        AnonymousWorkspaceStorage.saveValue("import", null)
+        try {
+            AuthRepository.signInAnonymously()
+            val guestId = (AuthRepository.state.value as AuthState.Authenticated).userId
+            ProfileRepository.ensureLoaded(guestId)
+            ProfileRepository.pushProfiles(listOf(
+                ProfilePushPayload(1, "Primary guest", "#123456"),
+                ProfilePushPayload(2, "Guest with downloads", "#654321"),
+            ))
+            ProfileRepository.switchToProfile(2)
+            val guestItem = DownloadItem(
+                id = "guest-profile-two", contentType = "series", parentMetaId = "guest-series",
+                parentMetaType = "series", videoId = "guest-episode", title = "Guest episode",
+                streamTitle = "Guest", providerName = "Guest", sourceUrl = "",
+                fileName = "guest-episode.mp4", status = DownloadStatus.Paused,
+                createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
+            )
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(guestItem)))
+            DownloadsRepository.clearLocalState()
+            DownloadsRepository.ensureLoaded()
+            AddonRepository.replaceLocalBackup(addonBackup)
+            PluginRepository.importLocalSnapshot(pluginSnapshot)
+
+            AuthRepository.acceptRemoteSession("account-with-own-downloads", "existing@example.com")
+            loadAccountProfile("account-with-own-downloads") // Destination uses profile 1.
+            val saved = Json.decodeFromString<LocalSettingsSnapshot>(AnonymousWorkspaceStorage.loadValue("import")!!)
+            // Simulate a snapshot saved by the previous release, with no download fields.
+            AnonymousWorkspaceStorage.saveValue("import", Json.encodeToString(saved.copy(
+                downloads = null, downloadFolder = null, downloadProfileId = null,
+            )))
+
+            val accountItem = guestItem.copy(
+                id = "account-original", parentMetaId = "account-series", videoId = "account-episode",
+                title = "Account episode", fileName = "account-episode.mp4",
+            )
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(accountItem)))
+            DownloadsRepository.clearLocalState()
+            assertFalse(LocalSettingsImport.importIntoCurrentProfile().getOrThrow())
+            val pendingKey = "pending:${ServerConfigurationRepository.active.value.backendUrl}:account-with-own-downloads:1"
+            val pending = Json.decodeFromString<LocalSettingsSnapshot>(assertNotNull(AnonymousWorkspaceStorage.loadValue(pendingKey)))
+            assertEquals(2, pending.downloadProfileId)
+            assertEquals(listOf("guest-profile-two"), DownloadsCodec.decodeItems(pending.downloads).map { it.id })
+            assertEquals(setOf("account-original", "guest-profile-two"), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id }.toSet())
+        } finally {
+            AuthRepository.signOut()
+            AnonymousWorkspaceStorage.saveValue("userId", null)
+            AnonymousWorkspaceStorage.saveValue("import", null)
+            if (originalServer.isCustom) ServerConfigurationRepository.saveCustom(originalServer)
+            else ServerConfigurationRepository.useOfficial()
+            SupabaseProvider.reset()
+        }
     }
 
     @Test
@@ -139,6 +268,7 @@ class AnonymousWorkspaceTest {
     @Test
     fun anonymousWorkspaceSurvivesLogoutAndExplicitImportStaysSeparateFromSignedAccounts() = runBlocking {
         val originalServer = ServerConfigurationRepository.active.value
+        val guestDownloadFolder = Files.createTempDirectory("guest-download-folder").toFile()
         ServerConfigurationRepository.saveCustom(ServerConfiguration("", "", ServerCapabilities(true, false), true))
         SupabaseProvider.reset()
         LocalAccountDataCleaner.wipe()
@@ -160,6 +290,8 @@ class AnonymousWorkspaceTest {
             AddonRepository.replaceLocalBackup(addonBackup)
             PluginRepository.importLocalSnapshot(pluginSnapshot)
             DesktopStorage.store("nuvio_player_settings").putString("removed-setting", "old")
+            DesktopStorage.store("desktop_download_preferences").putString("folder", guestDownloadFolder.canonicalPath)
+            DesktopStorage.store("nuvio_downloads").putString("downloads_1", """{"items":[]}""")
 
             AuthRepository.signOut().getOrThrow()
             assertEquals(AuthState.Unauthenticated, AuthRepository.state.value)
@@ -184,9 +316,26 @@ class AnonymousWorkspaceTest {
             assertTrue(AddonRepository.uiState.value.addons.isEmpty())
             assertTrue(PluginRepository.uiState.value.repositories.isEmpty())
             assertTrue(LocalSettingsImport.isAvailable)
+            // Guest data is available for explicit import after account cleanup, without
+            // first restoring it over the signed-in account's own preferences.
+            assertEquals(guestDownloadFolder.canonicalPath, AnonymousWorkspaceStorage.loadSavedPreference("desktop_download_preferences", "folder"))
+            assertEquals("""{"items":[]}""", AnonymousWorkspaceStorage.loadSavedPreference("nuvio_downloads", "downloads_1"))
+            assertNull(DesktopStorage.store("desktop_download_preferences").getString("folder"))
 
+            // Emulate an earlier release's import JSON, which omitted download metadata.
+            // The original guest properties remain saved in the anonymous backup slot.
+            val earlierSnapshot = Json.decodeFromString<LocalSettingsSnapshot>(AnonymousWorkspaceStorage.loadValue("import")!!)
+            AnonymousWorkspaceStorage.saveValue("import", Json.encodeToString(earlierSnapshot.copy(
+                downloads = null, downloadFolder = null, downloadProfileId = null,
+            )))
             assertFalse(LocalSettingsImport.importIntoCurrentProfile().getOrThrow()) // Offline cloud upload.
             assertTrue(LocalSettingsImport.hasPendingImport())
+            val importKey = "pending:${ServerConfigurationRepository.active.value.backendUrl}:account-a:1"
+            val restored = Json.decodeFromString<LocalSettingsSnapshot>(AnonymousWorkspaceStorage.loadValue(importKey)!!)
+            assertEquals("""{"items":[]}""", restored.downloads)
+            assertEquals(guestDownloadFolder.canonicalPath, restored.downloadFolder)
+            assertEquals(1, restored.downloadProfileId)
+            assertEquals(guestDownloadFolder.canonicalPath, DownloadDesktopFeatures.directory())
             assertEquals("pt", PlayerSettingsStorage.loadPreferredAudioLanguage())
             assertEquals("guest-api-key", PlayerSettingsStorage.loadIntroDbApiKey())
             assertEquals("pt", ThemeSettingsStorage.loadSelectedAppLanguage())
@@ -201,6 +350,15 @@ class AnonymousWorkspaceTest {
 
             PlayerSettingsStorage.savePreferredAudioLanguage("de")
             PlayerSettingsRepository.onProfileChanged()
+            val accountDownload = DownloadItem(
+                id = "account-a-local", contentType = "movie", parentMetaId = "account-movie",
+                parentMetaType = "movie", videoId = "account-film", title = "Account-owned download",
+                streamTitle = "Account", providerName = "Account", sourceUrl = "",
+                fileName = "account-film.mp4", status = DownloadStatus.Paused,
+                createdAtEpochMs = 2L, updatedAtEpochMs = 2L,
+            )
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(accountDownload)))
+            DownloadsRepository.clearLocalState()
             AuthRepository.signOut() // Remote is unavailable; active local data must still be cleaned.
             assertEquals(AuthState.Unauthenticated, AuthRepository.state.value)
             assertNull(AuthStorage.loadImportedSettingsScope())
@@ -208,10 +366,14 @@ class AnonymousWorkspaceTest {
             loadAccountProfile("account-b")
             assertFalse(LocalSettingsImport.hasPendingImport())
             assertNull(PlayerSettingsStorage.loadPreferredAudioLanguage())
+            assertTrue(DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).isEmpty())
+            assertNull(DesktopStorage.store("desktop_download_preferences").getString("folder"))
 
             AuthRepository.signOut()
             AuthRepository.acceptRemoteSession("account-a", "a@example.com")
             loadAccountProfile("account-a")
+            assertEquals(listOf(accountDownload.id), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id })
+            assertEquals(guestDownloadFolder.canonicalPath, DownloadDesktopFeatures.directory())
             assertTrue(LocalSettingsImport.hasPendingImport())
             assertFalse(LocalSettingsImport.retryPendingImport(1))
             assertEquals("de", PlayerSettingsStorage.loadPreferredAudioLanguage())
@@ -259,6 +421,7 @@ class AnonymousWorkspaceTest {
             if (originalServer.isCustom) ServerConfigurationRepository.saveCustom(originalServer)
             else ServerConfigurationRepository.useOfficial()
             SupabaseProvider.reset()
+            guestDownloadFolder.delete()
         }
     }
 

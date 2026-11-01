@@ -18,6 +18,18 @@ internal actual object AnonymousWorkspaceStorage {
         else defaults.setObject(value, forKey = "anonymous_workspace_$key")
     }
 
+    actual fun loadSavedPreference(storeName: String, key: String): String? {
+        val userId = loadValue("userId") ?: return null
+        val files = NSFileManager.defaultManager
+        val slot = listOfNotNull(loadValue("slot"), "a", "b").distinct().firstOrNull { candidate ->
+            val code = loadValue("code:$candidate")
+            loadValue("ready:$candidate") == userId &&
+                defaults.dictionaryForKey("${backupKey}_$candidate") != null &&
+                (code == "false" || (code == "true" && files.fileExistsAtPath(backupPath(candidate))))
+        } ?: error("Saved anonymous preferences are missing or incomplete")
+        return defaults.dictionaryForKey("${backupKey}_$slot")?.get(key) as? String
+    }
+
     actual fun save(userId: String) {
         val slot = if (loadValue("slot") == "a") "b" else "a"
         saveValue("ready:$slot", null)

@@ -15,6 +15,7 @@ internal actual object PlatformLocalAccountDataCleaner {
         "nuvio_search_history",
         "episode_shuffle",
         "nuvio_addons",
+        "nuvio_downloads",
         "nuvio_library",
         "nuvio_library_display_settings",
         "nuvio_home_catalog_settings",
