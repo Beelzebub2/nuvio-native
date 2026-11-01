@@ -1,5 +1,13 @@
 <resources>
-    <string name="auth_owner_created_accounts">As contas são criadas pelo proprietário do servidor.</string>
+    <string name="auth_request_account">Pedir conta</string>
+    <string name="auth_request_account_subtitle">Escolhe uma palavra-passe para pedires uma conta. O proprietário do servidor tem de aprovar o pedido antes de poderes iniciar sessão.</string>
+    <string name="auth_request_password_minimum">A palavra-passe tem de ter, pelo menos, 12 caracteres.</string>
+    <string name="auth_request_submitted_title">Pedido enviado</string>
+    <string name="auth_request_submitted_subtitle">O teu pedido de conta está a aguardar aprovação do proprietário do servidor.</string>
+    <string name="auth_request_submitted_detail">Depois de aprovado, inicia sessão com o e-mail e a palavra-passe que escolheste.</string>
+    <string name="auth_request_return_to_sign_in">Voltar a iniciar sessão</string>
+    <string name="auth_request_unexpected_session">O servidor devolveu uma sessão antes da aprovação. Tenta novamente.</string>
+    <string name="auth_request_notification_failed">O pedido foi guardado, mas a notificação ao proprietário falhou. Tenta pedir novamente daqui a 30 segundos com o mesmo e-mail e a mesma palavra-passe.</string>
     <string name="about_licenses_attributions_subtitle">Fontes de dados, agradecimentos e licenças da plataforma</string>
     <string name="about_supporters_contributors_subtitle">Reconhecimento público e créditos do projeto</string>
     <string name="action_back">Voltar</string>

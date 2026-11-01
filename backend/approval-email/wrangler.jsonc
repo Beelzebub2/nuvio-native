@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "starlit-approval-email",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-17",
+  "workers_dev": true,
+  "send_metrics": false,
+  "send_email": [
+    { "name": "APPROVAL_EMAIL", "destination_address": "ricardo.approvals@rrmtools.uk" }
+  ],
+  "vars": {
+    "APPROVAL_TO": "ricardo.approvals@rrmtools.uk",
+    "APPROVAL_FROM": "starlit-sync@rrmtools.uk",
+    "SIGNUP_SERVICE_ORIGIN": "https://starlit-api.rrmtools.uk"
+  }
+}

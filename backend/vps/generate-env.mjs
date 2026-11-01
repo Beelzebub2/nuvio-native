@@ -14,6 +14,8 @@ export function generateEnv(origin, now = Math.floor(Date.now() / 1000)) {
   const secret = randomBytes(48).toString('hex');
   const authPassword = randomBytes(32).toString('hex');
   const restPassword = randomBytes(32).toString('hex');
+  const signupEncryptionKey = randomBytes(32).toString('base64url');
+  const signupNotifyToken = randomBytes(32).toString('base64url');
   const anon = signJwt(secret, { role: 'anon', iss: 'starlit', aud: 'authenticated', iat: now, exp: now + 10 * 365 * 86400 });
   return `# Private: keep root-owned mode 0600 and include in encrypted/restricted backups.
 STARLIT_SUPABASE_URL=${origin}
@@ -26,6 +28,13 @@ REST_DATABASE_URL=postgres://starlit_authenticator:${restPassword}@127.0.0.1:543
 # Closed registration until the account policy and email delivery are configured.
 AUTH_DISABLE_SIGNUP=true
 AUTH_EMAIL_AUTOCONFIRM=false
+# Pending-account passwords use an independent AES-256-GCM key. Back this up;
+# never rotate it while requests are pending without a reviewed migration.
+SIGNUP_ENCRYPTION_KEY=${signupEncryptionKey}
+SIGNUP_STATE_DIR=/var/lib/starlit/signup
+# HTTPS /notify endpoint and matching independent Worker bearer secret.
+SIGNUP_NOTIFY_URL=
+SIGNUP_NOTIFY_TOKEN=${signupNotifyToken}
 AUTH_REDIRECT_URLS=
 SMTP_HOST=
 SMTP_PORT=587

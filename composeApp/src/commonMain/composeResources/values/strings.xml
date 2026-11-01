@@ -384,7 +384,15 @@
     <string name="compose_auth_terms_link">Terms</string>
     <string name="compose_auth_welcome_back">Welcome Back</string>
     <string name="server_menu_content_description">Server options</string>
-    <string name="auth_owner_created_accounts">Accounts are created by the server owner.</string>
+    <string name="auth_request_account">Request account</string>
+    <string name="auth_request_account_subtitle">Choose a password to request an account. The server owner must approve it before you can sign in.</string>
+    <string name="auth_request_password_minimum">Password must be at least 12 characters.</string>
+    <string name="auth_request_submitted_title">Request submitted</string>
+    <string name="auth_request_submitted_subtitle">Your account request is waiting for the server owner’s approval.</string>
+    <string name="auth_request_submitted_detail">Once approved, sign in with the email and password you chose.</string>
+    <string name="auth_request_return_to_sign_in">Back to sign in</string>
+    <string name="auth_request_unexpected_session">The server returned a session before approval. Please try again.</string>
+    <string name="auth_request_notification_failed">Request saved, but owner notification failed. Try requesting again in 30 seconds with the same email and password.</string>
     <string name="server_menu_official">Use default server</string>
     <string name="server_menu_custom">Connect to custom server</string>
     <string name="server_menu_change_custom">Connect to another server</string>

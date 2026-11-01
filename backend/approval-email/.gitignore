@@ -1,0 +1,2 @@
+# Local encrypted copy of the deployment token, recoverable only by this Windows user.
+*.dpapi

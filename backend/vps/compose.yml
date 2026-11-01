@@ -22,7 +22,9 @@ services:
       DB_NAMESPACE: auth
       GOTRUE_SITE_URL: ${STARLIT_SUPABASE_URL}
       GOTRUE_URI_ALLOW_LIST: ${AUTH_REDIRECT_URLS:-}
-      GOTRUE_DISABLE_SIGNUP: ${AUTH_DISABLE_SIGNUP:-true}
+      # All account creation must pass an explicit owner approval. The public GoTrue
+      # signup endpoint stays disabled even if the operator misconfigures runtime.env.
+      GOTRUE_DISABLE_SIGNUP: "true"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
       GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
@@ -33,7 +35,7 @@ services:
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_ISSUER: ${STARLIT_SUPABASE_URL}/auth/v1
       GOTRUE_PASSWORD_MIN_LENGTH: "12"
-      GOTRUE_MAILER_AUTOCONFIRM: ${AUTH_EMAIL_AUTOCONFIRM:-false}
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "true"
       GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
       GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
@@ -95,6 +97,36 @@ services:
       timeout: 5s
       retries: 3
 
+  signup:
+    <<: *service
+    image: node:22.23.4-alpine3.23
+    user: node
+    working_dir: /app
+    command: [node, signup-service.mjs]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./signup-service.mjs:/app/signup-service.mjs:ro
+      - ${SIGNUP_STATE_DIR:-/var/lib/starlit/signup}:/data
+    environment:
+      SIGNUP_PORT: "8789"
+      SIGNUP_DB_PATH: /data/requests.sqlite
+      STARLIT_SUPABASE_URL: ${STARLIT_SUPABASE_URL:?Set the public HTTPS root}
+      AUTH_DISABLE_SIGNUP: "true"
+      AUTH_EMAIL_AUTOCONFIRM: "false"
+      JWT_SECRET: ${JWT_SECRET:?Generate a private JWT secret}
+      SIGNUP_ENCRYPTION_KEY: ${SIGNUP_ENCRYPTION_KEY:?Set the independent signup encryption key}
+      SIGNUP_NOTIFY_URL: ${SIGNUP_NOTIFY_URL:?Configure the notification Worker URL}
+      SIGNUP_NOTIFY_TOKEN: ${SIGNUP_NOTIFY_TOKEN:?Configure the notification Worker token}
+    depends_on:
+      auth: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   gateway:
     <<: *service
     image: nginx:1.30.6-alpine
@@ -104,6 +136,7 @@ services:
       auth: { condition: service_healthy }
       rest: { condition: service_healthy }
       discovery: { condition: service_healthy }
+      signup: { condition: service_healthy }
     healthcheck:
       test: [CMD, wget, --no-verbose, --tries=1, --spider, http://127.0.0.1:8788/healthz]
       interval: 10s
