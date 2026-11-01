@@ -4,7 +4,6 @@ import com.nuvio.app.features.player.addonSubtitleRequests
 import com.nuvio.app.features.streams.StreamItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
@@ -39,7 +38,7 @@ object DownloadsRepository {
     private var ordinal = 0L
     private var hasLoaded = false
     private var loadedProfile: Int? = null
-    private val desktopVerificationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val desktopVerificationScope = CoroutineScope(SupervisorJob() + DownloadDesktopFeatures.verificationDispatcher())
     private var desktopVerificationJob: Job? = null
 
     fun ensureLoaded() = synchronized(lock) { if (!hasLoaded) loadFromDisk() }

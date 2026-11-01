@@ -26,8 +26,11 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.details.MetaDetails
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 internal actual object DownloadDesktopFeatures {
+    actual fun verificationDispatcher(): CoroutineDispatcher = Dispatchers.IO
     private const val preferenceName = "nuvio_android_download_preferences"
     private const val parallelKey = "parallel_downloads"
     actual fun useImportedDirectory(path: String?) = Unit // Android owns its private media directory.

@@ -48,6 +48,7 @@ internal val ParallelDownloadChoices = 1..5
 internal const val DefaultParallelDownloads = 3
 
 internal actual object DownloadDesktopFeatures {
+    actual fun verificationDispatcher(): CoroutineDispatcher = Dispatchers.IO
     private val store by lazy { DesktopStorage.store("desktop_download_preferences") }
     actual fun directory(): String? = store.getString("folder") ?: legacyDownloadsDirectory.also { it.mkdirs() }.absolutePath
     internal fun setDirectory(folder: File) {

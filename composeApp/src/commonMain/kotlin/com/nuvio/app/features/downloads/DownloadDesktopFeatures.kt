@@ -2,8 +2,11 @@ package com.nuvio.app.features.downloads
 
 import androidx.compose.runtime.Composable
 import com.nuvio.app.features.details.MetaDetails
+import kotlinx.coroutines.CoroutineDispatcher
 
 internal expect object DownloadDesktopFeatures {
+    /** Platform-supported pool for slow integrity scans outside the profile lock. */
+    fun verificationDispatcher(): CoroutineDispatcher
     fun directory(): String?
     /** Apply the previous anonymous download folder only during an explicit settings import. */
     fun useImportedDirectory(path: String?)
