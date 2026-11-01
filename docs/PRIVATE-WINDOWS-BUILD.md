@@ -16,7 +16,7 @@ Private update access uses your existing GitHub CLI login. On a new computer, in
 
 An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credential. Use a fine-grained token restricted to this repository with Contents: read. Never put a token in source, build settings, release assets, command arguments, or logs. GitHub CLI manages its credential; the app reads it only into memory. HTTP redirects are followed without forwarding the credential. Every private installer must have GitHub's SHA-256 digest and pass verification before installation.
 
-Starlit 1.0.42 and later use `https://accounts.example.invalid` automatically. Sign in with an owner-created account to sync with Android; public registration is closed. Guest mode and saved custom servers remain available. Build-time overrides are described in [the account-server guide](ANDROID.md#servers-and-account-sync).
+Starlit 1.0.42 and later use `https://accounts.example.invalid` automatically. With a build that offers **Request account**, you can submit an account request from the sign-in screen and wait for explicit owner approval before signing in and syncing with Android. Previously approved accounts continue working, and public direct registration stays closed. Guest mode and saved custom servers remain available. Build-time overrides are described in [the account-server guide](ANDROID.md#servers-and-account-sync).
 
 ## Built-in Airing Now
 
