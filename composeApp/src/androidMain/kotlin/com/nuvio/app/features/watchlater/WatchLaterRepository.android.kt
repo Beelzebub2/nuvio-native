@@ -61,6 +61,11 @@ internal actual object WatchLaterRepository {
 
     actual fun remove(item: LibraryItem) = list.remove(item)
     actual fun removeCompletedEpisode(session: WatchProgressPlaybackSession) = list.removeCompletedEpisode(session)
+    actual fun exportLocalImportSnapshot(): String? {
+        list.ensureLoaded()
+        return Json.encodeToString(list.items.value)
+    }
+    actual fun importAnonymousItems(payload: String) = list.importMissing(payload)
     actual fun resolveEpisodes() {
         val profile = ProfileRepository.activeProfileId
         scope.launch {
@@ -178,6 +183,15 @@ internal class WatchLaterList(
         ensureLoaded()
         persist(state.value.map { if (it.watchLaterKey() == old.watchLaterKey()) replacement else it }
             .distinctBy { it.watchLaterKey() })
+    }
+
+    @Synchronized fun importMissing(payload: String) {
+        val guest = json.decodeFromString<List<LibraryItem>>(payload)
+        ensureLoaded()
+        val account = state.value
+        val keys = account.mapTo(mutableSetOf()) { it.watchLaterKey() }
+        val additions = guest.filter { it.id.isNotBlank() && keys.add(it.watchLaterKey()) }
+        if (additions.isNotEmpty()) persist((account + additions).sortedByDescending { it.savedAtEpochMs })
     }
 
     private fun persist(updated: List<LibraryItem>) {

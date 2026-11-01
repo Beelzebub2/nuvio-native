@@ -16,11 +16,29 @@ import com.nuvio.app.features.downloads.DownloadDesktopFeatures
 import com.nuvio.app.features.downloads.DownloadsCodec
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.downloads.DownloadsStorage
+import com.nuvio.app.features.collection.CollectionRepository
+import com.nuvio.app.features.collection.CollectionStorage
+import com.nuvio.app.features.collection.CollectionSyncService
+import com.nuvio.app.features.collection.Collection
+import com.nuvio.app.features.collection.validateImportModel
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsStorage
 import com.nuvio.app.features.home.HomeCatalogSettingsSyncService
+import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.LibraryStorage
+import com.nuvio.app.features.library.LibraryStoragePayloadCodec
 import com.nuvio.app.features.library.LibraryDisplaySettingsRepository
 import com.nuvio.app.features.library.LibraryDisplaySettingsStorage
+import com.nuvio.app.features.watched.StoredWatchedPayload
+import com.nuvio.app.features.watched.WatchedRepository
+import com.nuvio.app.features.watched.WatchedStorage
+import com.nuvio.app.features.watchprogress.StoredWatchProgressPayload
+import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.watchprogress.WatchProgressStorage
+import com.nuvio.app.features.watchlater.WatchLaterRepository
+import com.nuvio.app.features.watchlater.PersonalMediaRepository
+import com.nuvio.app.features.watchlater.PersonalMediaEntry
+import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pSettingsUiState
 import com.nuvio.app.features.player.PlayerSettingsStorage
@@ -30,12 +48,15 @@ import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.plugins.StoredPluginsState
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.MAX_PROFILES
+import com.nuvio.app.features.search.SearchHistoryRepository
+import com.nuvio.app.features.search.SearchHistoryStorage
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
@@ -60,6 +81,16 @@ internal data class LocalSettingsSnapshot(
     val downloads: String? = null,
     val downloadFolder: String? = null,
     val downloadProfileId: Int? = null,
+    // Data from the selected guest profile; older exports can recover it from the
+    // preserved anonymous preference backup instead.
+    val library: String? = null,
+    val watchedHistory: String? = null,
+    val watchProgress: String? = null,
+    val collections: String? = null,
+    val searchHistory: String? = null,
+    val searchHistoryEnabled: Boolean? = null,
+    val watchLater: String? = null,
+    val personalMedia: String? = null,
 )
 
 @Serializable
@@ -156,6 +187,14 @@ object LocalSettingsImport {
             downloads = DownloadsRepository.exportLocalImportSnapshot(),
             downloadFolder = if (isDesktop) DownloadDesktopFeatures.directory() else null,
             downloadProfileId = ProfileRepository.activeProfileId,
+            library = LibraryStorage.loadPayload(ProfileRepository.activeProfileId),
+            watchedHistory = WatchedStorage.loadPayload(ProfileRepository.activeProfileId),
+            watchProgress = WatchProgressStorage.loadPayload(ProfileRepository.activeProfileId),
+            collections = CollectionStorage.loadPayload(),
+            searchHistory = SearchHistoryStorage.loadPayload(),
+            searchHistoryEnabled = SearchHistoryStorage.loadEnabled(),
+            watchLater = WatchLaterRepository.exportLocalImportSnapshot(),
+            personalMedia = PersonalMediaRepository.exportLocalImportSnapshot(),
         )
     }
 
@@ -168,12 +207,48 @@ object LocalSettingsImport {
                 ?: AnonymousWorkspaceStorage.loadSavedPreference("nuvio_downloads", "downloads_payload_$sourceProfileId")
             )
         require(downloads == null || DownloadsCodec.isValid(downloads)) { "Saved anonymous downloads are damaged" }
+        val guestLibrary = snapshot.library ?: savedGuestPreference(
+            "nuvio_library", "library_$sourceProfileId", "library_payload_$sourceProfileId",
+        )
+        val guestWatched = snapshot.watchedHistory ?: savedGuestPreference(
+            "nuvio_watched", "watched_$sourceProfileId", "watched_payload_$sourceProfileId",
+        )
+        val guestProgress = snapshot.watchProgress ?: savedGuestPreference(
+            "nuvio_watch_progress", "watch_progress_$sourceProfileId", "watch_progress_payload_$sourceProfileId",
+        )
+        val guestCollections = snapshot.collections ?: savedGuestPreference(
+            "nuvio_collections", "collections_$sourceProfileId", "collections_payload_$sourceProfileId",
+        )
+        val guestSearches = snapshot.searchHistory ?: savedGuestPreference(
+            "nuvio_search_history", "search_history_$sourceProfileId", "search_history_payload_$sourceProfileId",
+        )
+        val guestWatchLater = snapshot.watchLater ?: savedGuestPreference(
+            "nuvio_watch_later", "items_$sourceProfileId",
+        )
+        val guestPersonalMedia = snapshot.personalMedia ?: savedGuestPreference(
+            "nuvio_personal_media", "items_$sourceProfileId",
+        )
         return json.encodeToString(snapshot.copy(
             downloads = downloads,
             downloadFolder = snapshot.downloadFolder
                 ?: AnonymousWorkspaceStorage.loadSavedPreference("desktop_download_preferences", "folder"),
             downloadProfileId = sourceProfileId,
+            library = guestLibrary,
+            watchedHistory = guestWatched,
+            watchProgress = guestProgress,
+            collections = guestCollections,
+            searchHistory = guestSearches,
+            watchLater = guestWatchLater,
+            personalMedia = guestPersonalMedia,
         ))
+    }
+
+    private fun savedGuestPreference(store: String, vararg keys: String): String? {
+        keys.forEach { key ->
+            val value = AnonymousWorkspaceStorage.loadSavedPreference(store, key)
+            if (value != null) return value
+        }
+        return null
     }
 
     private fun savedGuestProfileId(): Int? {
@@ -206,6 +281,27 @@ object LocalSettingsImport {
             AddonBackupCodec.decode(snapshot.addons)
             if (snapshot.plugins.isNotEmpty()) json.decodeFromString<StoredPluginsState>(snapshot.plugins)
             snapshot.downloads?.let { require(DownloadsCodec.isValid(it)) { "Saved downloads metadata is damaged" } }
+            snapshot.library?.takeIf(String::isNotBlank)?.let(LibraryStoragePayloadCodec::decodeStrict)
+            snapshot.watchedHistory?.takeIf(String::isNotBlank)?.let { payload ->
+                json.decodeFromString<StoredWatchedPayload>(payload)
+            }
+            snapshot.watchProgress?.takeIf(String::isNotBlank)?.let { payload ->
+                json.decodeFromString<StoredWatchProgressPayload>(payload)
+            }
+            snapshot.collections?.takeIf(String::isNotBlank)?.let { payload ->
+                require(validateImportModel(json.decodeFromString<List<Collection>>(payload)) == null) {
+                    "Saved anonymous collections are invalid"
+                }
+            }
+            snapshot.searchHistory?.takeIf(String::isNotBlank)?.let { payload ->
+                json.decodeFromString<List<String>>(payload)
+            }
+            snapshot.watchLater?.takeIf(String::isNotBlank)?.let { payload ->
+                json.decodeFromString<List<LibraryItem>>(payload)
+            }
+            snapshot.personalMedia?.takeIf(String::isNotBlank)?.let { payload ->
+                json.decodeFromString<List<PersonalMediaEntry>>(payload)
+            }
         }
 
     /** Replaces the current profile's preferences, addons and plugins; leaves the guest backup intact. */
@@ -231,13 +327,20 @@ object LocalSettingsImport {
         if (ProfileRepository.activeProfileId != profileId) return@withLock false
         val key = pendingKey(profileId) ?: return@withLock true
         val payload = AnonymousWorkspaceStorage.loadValue(key) ?: return@withLock true
-        val valid = runCatching { decodeValidatedSnapshot(payload) }.isSuccess
+        // Old pending imports predate watch/library fields; the durable guest backup
+        // still contains those values, even after an interrupted sign-in/import.
+        val completePayload = runCatching { withSavedGuestDownloads(payload) }.getOrDefault(payload)
+        val valid = runCatching { decodeValidatedSnapshot(completePayload) }.isSuccess
         if (!valid) {
             // Preserve the damaged record for recovery, but let normal account sync resume.
             AnonymousWorkspaceStorage.saveValue("damaged:$key", payload)
             AnonymousWorkspaceStorage.saveValue(key, null)
             markApplied(key, false)
             return@withLock true
+        }
+        if (completePayload != payload) {
+            AnonymousWorkspaceStorage.saveValue(key, completePayload)
+            markApplied(key, false)
         }
         applyPending(key)
         uploadPending(key)
@@ -285,6 +388,14 @@ object LocalSettingsImport {
         if (snapshot.downloads != null || snapshot.downloadFolder != null) {
             DownloadsRepository.mergeAnonymousDownloadRecords(snapshot.downloads, snapshot.downloadFolder)
         }
+        snapshot.library?.takeIf(String::isNotBlank)?.let(LibraryRepository::importAnonymousLibrary)
+        snapshot.watchedHistory?.takeIf(String::isNotBlank)?.let(WatchedRepository::importAnonymousHistory)
+        snapshot.watchProgress?.takeIf(String::isNotBlank)?.let(WatchProgressRepository::importAnonymousProgress)
+        snapshot.collections?.takeIf(String::isNotBlank)?.let(CollectionRepository::importAnonymousCollections)
+        snapshot.searchHistory?.takeIf(String::isNotBlank)?.let(SearchHistoryRepository::importAnonymousHistory)
+        snapshot.searchHistoryEnabled?.let(SearchHistoryRepository::setEnabled)
+        snapshot.watchLater?.takeIf(String::isNotBlank)?.let(WatchLaterRepository::importAnonymousItems)
+        snapshot.personalMedia?.takeIf(String::isNotBlank)?.let(PersonalMediaRepository::importAnonymousItems)
         markApplied(key, true)
     }
 
@@ -328,6 +439,29 @@ object LocalSettingsImport {
             })
             check(pendingKey() == key)
             check(HomeCatalogSettingsSyncService.pushCurrentProfileToRemote())
+            check(pendingKey() == key)
+            val snapshot = decodeValidatedSnapshot(checkNotNull(AnonymousWorkspaceStorage.loadValue(key)))
+            snapshot.library?.takeIf(String::isNotBlank)?.let { guest ->
+                check(LibraryRepository.reconcileGuestImportWithServer(profileId, guest))
+            }
+            check(pendingKey() == key)
+            check(LibraryRepository.flushPendingToServer(profileId))
+            check(pendingKey() == key)
+            snapshot.watchedHistory?.takeIf(String::isNotBlank)?.let { guest ->
+                check(WatchedRepository.reconcileAnonymousHistoryWithServer(profileId, guest))
+            }
+            check(pendingKey() == key)
+            check(WatchedRepository.flushPendingToServer(profileId))
+            check(pendingKey() == key)
+            snapshot.watchProgress?.takeIf(String::isNotBlank)?.let { guest ->
+                check(WatchProgressRepository.reconcileAnonymousProgressWithServer(profileId, guest))
+            }
+            check(pendingKey() == key)
+            check(WatchProgressRepository.flushPendingToServer(profileId))
+            check(pendingKey() == key)
+            snapshot.collections?.takeIf(String::isNotBlank)?.let { guest ->
+                check(CollectionSyncService.mergeGuestCollectionsToRemote(profileId, guest))
+            }
             check(pendingKey() == key)
             AnonymousWorkspaceStorage.saveValue(key, null)
             markApplied(key, false)

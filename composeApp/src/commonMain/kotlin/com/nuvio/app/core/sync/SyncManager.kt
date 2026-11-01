@@ -11,6 +11,8 @@ import com.nuvio.app.features.collection.CollectionSyncService
 import com.nuvio.app.features.home.HomeCatalogSettingsSyncService
 import com.nuvio.app.features.library.LibrarySourceMode
 import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.watched.WatchedRepository
+import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.tracking.TrackingProviderRegistry
@@ -282,25 +284,37 @@ object SyncManager {
         pullPlugins = { profileId -> PluginRepository.pullFromServer(profileId) },
         pullProfileSettings = { profileId -> ProfileSettingsSync.pull(profileId) },
         syncProviderCredentials = { profileId -> ProviderCredentialSync.syncFromRemote(profileId) },
-        pullLibrary = { profileId -> LibraryRepository.pullFromServer(profileId) },
+        pullLibrary = { profileId ->
+            check(LibraryRepository.flushPendingToServer(profileId))
+            LibraryRepository.pullFromServer(profileId)
+        },
         refreshActiveWatchSource = { profileId ->
             val result = WatchProgressSourceCoordinator.refreshActiveSource(profileId = profileId, force = true)
             check(result.succeeded) {
                 "Active watch source refresh was incomplete: " +
                     "progress=${result.progressRefreshed} watched=${result.watchedHistoryRefreshed}"
             }
+            // Retry durable offline edits on every full synchronization, even when an
+            // external tracking provider is the currently selected display source.
+            check(WatchedRepository.flushPendingToServer(profileId))
+            check(WatchProgressRepository.flushPendingToServer(profileId))
         },
         pullCollections = { profileId -> CollectionSyncService.pullFromServer(profileId) },
         pullHomeCatalogSettings = { profileId -> HomeCatalogSettingsSyncService.pullFromServer(profileId) },
     )
     private val profileActivitySyncOperations = ProfileActivitySyncOperations(
-        pullLibrary = { profileId -> LibraryRepository.pullFromServer(profileId) },
+        pullLibrary = { profileId ->
+            check(LibraryRepository.flushPendingToServer(profileId))
+            LibraryRepository.pullFromServer(profileId)
+        },
         pullWatchActivity = { profileId ->
             val result = WatchProgressSourceCoordinator.refreshActiveSource(profileId = profileId, force = false)
             check(result.succeeded) {
                 "Active watch source refresh was incomplete: " +
                     "progress=${result.progressRefreshed} watched=${result.watchedHistoryRefreshed}"
             }
+            check(WatchedRepository.flushPendingToServer(profileId))
+            check(WatchProgressRepository.flushPendingToServer(profileId))
         },
     )
 

@@ -6,6 +6,8 @@ internal actual object PersonalMediaRepository {
     actual val items: StateFlow<List<PersonalMediaEntry>> = MutableStateFlow(emptyList())
     actual fun ensureLoaded() = Unit
     actual fun clearLocalState() = Unit
+    actual fun exportLocalImportSnapshot(): String? = null
+    actual fun importAnonymousItems(payload: String) = Unit
     actual fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = Unit
     actual fun setRating(item: MetaPreview, rating: Int?) = Unit
 }

@@ -298,6 +298,108 @@ object WatchProgressRepository {
         }
     }
 
+    /** Preserve the newer playback position for each episode across guest/account histories. */
+    internal fun importAnonymousProgress(payload: String) {
+        val guestEntries = WatchProgressCodec.decodePayload(payload).entries
+        ensureLoaded()
+        check(currentProfileId == ProfileRepository.activeProfileId) { "Playback profile changed during import" }
+        var changed = false
+        guestEntries.forEach { entry ->
+            if (entry.parentMetaId.isBlank() || entry.videoId.isBlank()) return@forEach
+            val candidate = entry.normalizedCompletion().withResolvedProgressKey()
+            val key = candidate.resolvedProgressKey()
+            val current = localEntry(key)
+            if (current == null || candidate.isFresherThan(current)) {
+                upsertLocalEntry(candidate)
+                markProgressDirty(candidate)
+                changed = true
+            }
+        }
+        if (changed) {
+            persist()
+            publish()
+            resolveRemoteMetadata()
+        }
+    }
+
+    /** Resolve guest/remote resume conflicts before uploading imported local progress. */
+    internal suspend fun reconcileAnonymousProgressWithServer(profileId: Int, payload: String): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        val guest = WatchProgressCodec.decodePayload(payload).entries
+        return nuvioPullMutex.withLock {
+            val generation = activeOperationGeneration(profileId) ?: return@withLock false
+            try {
+                val server = syncAdapter.pull(profileId)
+                if (!sameAccountForProgressUpload(profileId, generation, auth.userId)) return@withLock false
+                val remoteByKey = server.map { record ->
+                    record.toWatchProgressEntry(cached = null)
+                }.associateBy(WatchProgressEntry::resolvedProgressKey)
+                var changed = false
+                guest.forEach { raw ->
+                    val item = raw.normalizedCompletion().withResolvedProgressKey()
+                    val key = item.resolvedProgressKey()
+                    val current = localEntry(key)
+                    val remote = remoteByKey[key] ?: return@forEach
+                    if (current != item || key !in dirtyProgressKeysSnapshot()) return@forEach
+                    if (remote.lastUpdatedEpochMs >= item.lastUpdatedEpochMs) {
+                        upsertLocalEntry(remote.copy(
+                            title = current.title,
+                            logo = current.logo,
+                            poster = current.poster,
+                            background = current.background,
+                            episodeTitle = current.episodeTitle,
+                            episodeThumbnail = current.episodeThumbnail,
+                        ))
+                        clearProgressDirty(key)
+                        changed = true
+                    }
+                }
+                if (changed) {
+                    persist()
+                    publish()
+                }
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.e(error) { "Could not reconcile anonymous watch progress with account" }
+                false
+            }
+        }
+    }
+
+    /** Push durable local progress accumulated while offline, including imported episodes. */
+    internal suspend fun flushPendingToServer(profileId: Int): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        return nuvioPullMutex.withLock {
+            val generation = activeOperationGeneration(profileId) ?: return@withLock false
+            val dirtyKeys = dirtyProgressKeysSnapshot()
+            val pending = localEntriesSnapshot().filter { it.resolvedProgressKey() in dirtyKeys }
+            try {
+                pending.chunked(200).forEach { batch ->
+                    if (!sameAccountForProgressUpload(profileId, generation, auth.userId)) return@withLock false
+                    syncAdapter.push(profileId = profileId, entries = batch)
+                    if (!sameAccountForProgressUpload(profileId, generation, auth.userId)) return@withLock false
+                    recordSuccessfulPush(profileId, generation, batch)
+                }
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.e(error) { "Could not deliver pending playback progress; keeping local changes" }
+                false
+            }
+        }
+    }
+
+    private fun sameAccountForProgressUpload(profileId: Int, generation: Long, userId: String): Boolean =
+        isActiveOperation(profileId, generation) &&
+            (AuthRepository.state.value as? AuthState.Authenticated)?.let {
+                !it.isAnonymous && it.userId == userId
+            } == true
+
     fun onProfileChanged(profileId: Int) {
         if (profileId == currentProfileId && hasLoaded) return
         updateActiveSource(

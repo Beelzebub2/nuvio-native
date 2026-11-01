@@ -27,6 +27,11 @@ internal actual object PersonalMediaRepository {
     actual fun clearLocalState() = list.clearLocalState()
     actual fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = list.setStatus(item, status)
     actual fun setRating(item: MetaPreview, rating: Int?) = list.setRating(item, rating)
+    actual fun exportLocalImportSnapshot(): String? {
+        list.ensureLoaded()
+        return Json.encodeToString(list.items.value)
+    }
+    actual fun importAnonymousItems(payload: String) = list.importMissing(payload)
 }
 
 internal class PersonalMediaList(
@@ -45,6 +50,20 @@ internal class PersonalMediaList(
         profile = current
     }
     @Synchronized fun clearLocalState() { profile = null; state.value = emptyList() }
+    @Synchronized fun importMissing(payload: String) {
+        val guest = json.decodeFromString<List<PersonalMediaEntry>>(payload)
+        require(guest.all { it.item.id.isNotBlank() && (it.rating == null || it.rating in 1..10) }) {
+            "Saved personal media entries are invalid"
+        }
+        ensureLoaded()
+        val original = state.value
+        val keys = original.mapTo(mutableSetOf()) { it.item.type to it.item.id }
+        val additions = guest.filter { keys.add(it.item.type to it.item.id) }
+        if (additions.isEmpty()) return
+        val merged = original + additions
+        save(requireNotNull(profile), json.encodeToString(merged))
+        state.value = merged
+    }
     @Synchronized fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = update(item) { it.copy(status = status) }
     @Synchronized fun setRating(item: MetaPreview, rating: Int?) {
         require(rating == null || rating in 1..10) { "Rating must be between 1 and 10" }

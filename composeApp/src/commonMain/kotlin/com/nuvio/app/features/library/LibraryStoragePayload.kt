@@ -26,6 +26,10 @@ internal object LibraryStoragePayloadCodec {
             json.decodeFromString<StoredLibraryPayload>(payload)
         }.getOrDefault(StoredLibraryPayload())
 
+    /** Guest imports must fail closed rather than silently interpreting damaged data as empty. */
+    fun decodeStrict(payload: String): StoredLibraryPayload =
+        json.decodeFromString<StoredLibraryPayload>(payload)
+
     fun encode(snapshot: LibraryLocalSnapshot): String =
         json.encodeToString(
             StoredLibraryPayload(

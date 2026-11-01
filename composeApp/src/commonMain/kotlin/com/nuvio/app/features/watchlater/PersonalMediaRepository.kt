@@ -19,4 +19,6 @@ internal expect object PersonalMediaRepository {
     fun clearLocalState()
     fun setStatus(item: MetaPreview, status: PersonalMediaStatus?)
     fun setRating(item: MetaPreview, rating: Int?)
+    fun exportLocalImportSnapshot(): String?
+    fun importAnonymousItems(payload: String)
 }

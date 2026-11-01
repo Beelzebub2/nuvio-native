@@ -14,4 +14,6 @@ internal actual object WatchLaterRepository {
     actual fun remove(item: LibraryItem) = Unit
     actual fun removeCompletedEpisode(session: WatchProgressPlaybackSession) = Unit
     actual fun resolveEpisodes() = Unit
+    actual fun exportLocalImportSnapshot(): String? = null
+    actual fun importAnonymousItems(payload: String) = Unit
 }
