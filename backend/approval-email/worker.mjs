@@ -1,7 +1,7 @@
 // This Worker can send mail only to the single verified owner address configured in Wrangler.
-// The VPS calls it with the private SIGNUP_NOTIFY_TOKEN; public callers cannot choose a recipient.
+// The VPS signs each request with its private Ed25519 key; Cloudflare holds only the public key.
 import { sendApprovalEmail } from '../cloudflare/src/approval.mjs';
-import { validateNotification } from './validate.mjs';
+import { validateNotification, verifyNotificationSignature } from './validate.mjs';
 
 const response = (status, body) => new Response(JSON.stringify(body), {
   status,
@@ -12,15 +12,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname !== '/notify' || request.method !== 'POST') return response(404, { error: 'not_found' });
-    const expectedToken = typeof env.SIGNUP_NOTIFY_TOKEN === 'string' ? env.SIGNUP_NOTIFY_TOKEN.trim() : '';
-    if (!expectedToken || request.headers.get('Authorization') !== `Bearer ${expectedToken}`) {
-      return response(401, { error: 'unauthorized' });
-    }
     if (Number(request.headers.get('Content-Length') || 0) > 4096) return response(413, { error: 'too_large' });
     let payload;
     try {
       const raw = await request.text();
-      if (raw.length > 4096) return response(413, { error: 'too_large' });
+      if (new TextEncoder().encode(raw).length > 4096) return response(413, { error: 'too_large' });
+      const authorized = await verifyNotificationSignature(
+        raw,
+        request.headers.get('X-Starlit-Time'),
+        request.headers.get('X-Starlit-Signature'),
+        env.SIGNUP_VERIFY_KEY,
+      );
+      if (!authorized) return response(401, { error: 'unauthorized' });
       payload = validateNotification(JSON.parse(raw), env.SIGNUP_SERVICE_ORIGIN);
     } catch {
       return response(400, { error: 'invalid_request' });

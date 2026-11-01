@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { generateEnv, signJwt } from '../vps/generate-env.mjs';
+import { importSigningPrivateKey, publicSigningKey } from '../vps/signing-key.mjs';
 // Keep the backend's existing npm test command covering the VPS approval flow.
 import './vps-approval.test.mjs';
 
@@ -12,9 +13,11 @@ test('production configuration creates distinct private passwords and a signed p
   }));
   assert.equal(env.AUTH_DISABLE_SIGNUP, 'true');
   assert.equal(env.AUTH_EMAIL_AUTOCONFIRM, 'false');
-  assert.equal(new Set([env.JWT_SECRET, env.STARLIT_AUTH_DB_PASSWORD, env.STARLIT_REST_DB_PASSWORD, env.SIGNUP_ENCRYPTION_KEY, env.SIGNUP_NOTIFY_TOKEN]).size, 5);
+  assert.equal(new Set([env.JWT_SECRET, env.STARLIT_AUTH_DB_PASSWORD, env.STARLIT_REST_DB_PASSWORD, env.SIGNUP_ENCRYPTION_KEY, env.SIGNUP_SIGNING_KEY]).size, 5);
   assert.match(env.SIGNUP_ENCRYPTION_KEY, /^[A-Za-z0-9_-]{43}$/);
-  assert.match(env.SIGNUP_NOTIFY_TOKEN, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(env.SIGNUP_NOTIFY_TOKEN, undefined);
+  assert.equal(importSigningPrivateKey(env.SIGNUP_SIGNING_KEY).asymmetricKeyType, 'ed25519');
+  assert.match(publicSigningKey(env.SIGNUP_SIGNING_KEY), /^[A-Za-z0-9_-]+$/);
   assert.ok(env.JWT_SECRET.length >= 64);
   for (const [field, role] of [['AUTH_DATABASE_URL', 'starlit_auth_admin'], ['REST_DATABASE_URL', 'starlit_authenticator']]) {
     const uri = new URL(env[field]);

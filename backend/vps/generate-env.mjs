@@ -2,6 +2,7 @@
 import { randomBytes, createHmac } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { generateSigningPrivateKey } from './signing-key.mjs';
 
 export function signJwt(secret, claims) {
   const data = [ { alg: 'HS256', typ: 'JWT' }, claims ].map(v => Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
@@ -15,7 +16,7 @@ export function generateEnv(origin, now = Math.floor(Date.now() / 1000)) {
   const authPassword = randomBytes(32).toString('hex');
   const restPassword = randomBytes(32).toString('hex');
   const signupEncryptionKey = randomBytes(32).toString('base64url');
-  const signupNotifyToken = randomBytes(32).toString('base64url');
+  const signupSigningKey = generateSigningPrivateKey();
   const anon = signJwt(secret, { role: 'anon', iss: 'starlit', aud: 'authenticated', iat: now, exp: now + 10 * 365 * 86400 });
   return `# Private: keep root-owned mode 0600 and include in encrypted/restricted backups.
 STARLIT_SUPABASE_URL=${origin}
@@ -32,9 +33,9 @@ AUTH_EMAIL_AUTOCONFIRM=false
 # never rotate it while requests are pending without a reviewed migration.
 SIGNUP_ENCRYPTION_KEY=${signupEncryptionKey}
 SIGNUP_STATE_DIR=/var/lib/starlit/signup
-# HTTPS /notify endpoint and matching independent Worker bearer secret.
-SIGNUP_NOTIFY_URL=
-SIGNUP_NOTIFY_TOKEN=${signupNotifyToken}
+# Ed25519 PKCS8 private key is local-only. Publish ONLY its derived SPKI key to the Worker.
+SIGNUP_SIGNING_KEY=${signupSigningKey}
+SIGNUP_NOTIFY_URL=https://starlit-approval-email.cloudflaredomainrrm.workers.dev/notify
 AUTH_REDIRECT_URLS=
 SMTP_HOST=
 SMTP_PORT=587

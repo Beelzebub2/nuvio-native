@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateNotification } from '../validate.mjs';
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { validateNotification, verifyNotificationSignature } from '../validate.mjs';
 
 const origin = 'https://starlit-api.rrmtools.uk';
 const good = () => ({
@@ -28,4 +29,19 @@ test('rejects invalid signup metadata and stale webhook deliveries', () => {
   assert.equal(validateNotification({ ...good(), requestedAt: Date.now() - 8 * 86400e3 }, origin), null);
   assert.equal(validateNotification({ ...good(), email: 'invalid\nfoo@example.com' }, origin), null);
   assert.equal(validateNotification({ ...good(), email: 'invalid' }, origin), null);
+});
+
+test('accepts only VPS Ed25519 signatures for the exact fresh JSON payload', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  const verifyKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
+  const timestamp = String(Date.now());
+  const raw = JSON.stringify(good());
+  const signature = sign(null, Buffer.from(`${timestamp}.${raw}`), privateKey).toString('base64url');
+  assert.equal(await verifyNotificationSignature(raw, timestamp, signature, verifyKey), true);
+  assert.equal(await verifyNotificationSignature(raw + ' ', timestamp, signature, verifyKey), false);
+  assert.equal(await verifyNotificationSignature(raw, String(Number(timestamp) - 6 * 60 * 1000), signature, verifyKey), false);
+  assert.equal(await verifyNotificationSignature(raw, timestamp, signature, 'invalid'), false);
+  assert.equal(await verifyNotificationSignature(raw, timestamp, '', verifyKey), false);
+  const other = generateKeyPairSync('ed25519').publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
+  assert.equal(await verifyNotificationSignature(raw, timestamp, signature, other), false);
 });

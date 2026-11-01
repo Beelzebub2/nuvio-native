@@ -108,6 +108,7 @@ services:
     security_opt: [no-new-privileges:true]
     volumes:
       - ./signup-service.mjs:/app/signup-service.mjs:ro
+      - ./signing-key.mjs:/app/signing-key.mjs:ro
       - ${SIGNUP_STATE_DIR:-/var/lib/starlit/signup}:/data
     environment:
       SIGNUP_PORT: "8789"
@@ -118,7 +119,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Generate a private JWT secret}
       SIGNUP_ENCRYPTION_KEY: ${SIGNUP_ENCRYPTION_KEY:?Set the independent signup encryption key}
       SIGNUP_NOTIFY_URL: ${SIGNUP_NOTIFY_URL:?Configure the notification Worker URL}
-      SIGNUP_NOTIFY_TOKEN: ${SIGNUP_NOTIFY_TOKEN:?Configure the notification Worker token}
+      SIGNUP_SIGNING_KEY: ${SIGNUP_SIGNING_KEY:?Generate a private Ed25519 signing key}
     depends_on:
       auth: { condition: service_healthy }
     healthcheck:

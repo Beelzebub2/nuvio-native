@@ -2,7 +2,7 @@
 // privileged admin API and the independent email notifier. No live secrets or mail.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,8 +10,12 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createSignupServer, loadSignupConfig } from '../vps/signup-service.mjs';
 import { generateEnv } from '../vps/generate-env.mjs';
-import { NOTIFIER_URL, notificationAppend } from '../vps/configure-notifier.mjs';
-import { validateNotification } from '../approval-email/validate.mjs';
+import { SIGNUP_NOTIFY_URL, notifierUrlAppend } from '../vps/add-notify-url.mjs';
+import {
+  generateSigningPrivateKey, importSigningPrivateKey, publicSigningKey,
+  signNotification, signingKeyAppend, signingKeyFromEnvironmentFile,
+} from '../vps/signing-key.mjs';
+import { validateNotification, verifyNotificationSignature } from '../approval-email/validate.mjs';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -28,6 +32,8 @@ async function bodyOf(req) {
 
 async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'starlit-approval-test-'));
+  const signingPrivate = generateSigningPrivateKey();
+  const signingPublic = createPublicKey(importSigningPrivateKey(signingPrivate));
   const fakeAdmin = { calls: [], status: 201, delayMs: 0 };
   const fakeNotifier = { calls: [], status: 202, holdNext: false, resume: null, pauseReached: null };
   const auth = createServer(async (req, res) => {
@@ -40,8 +46,18 @@ async function fixture() {
     res.end(JSON.stringify(fakeAdmin.status === 201 ? { id: randomUUID(), email: body.email } : { msg: 'fake admin failure' }));
   });
   const notifier = createServer(async (req, res) => {
-    const body = JSON.parse(await bodyOf(req));
-    fakeNotifier.calls.push({ url: req.url, method: req.method, auth: req.headers.authorization, body });
+    const rawBody = await bodyOf(req);
+    let body;
+    try { body = JSON.parse(rawBody); } catch { body = null; }
+    const time = req.headers['x-starlit-time'];
+    const encodedSignature = req.headers['x-starlit-signature'];
+    const signature = typeof encodedSignature === 'string' && /^[A-Za-z0-9_-]{86}$/.test(encodedSignature)
+      ? Buffer.from(encodedSignature, 'base64url') : null;
+    const validSignature = typeof time === 'string' && /^\d{13}$/.test(time) &&
+      Math.abs(Date.now() - Number(time)) <= 5 * 60_000 && signature?.length === 64 &&
+      verify(null, Buffer.from(`${time}.${rawBody}`, 'utf8'), signingPublic, signature);
+    fakeNotifier.calls.push({ url: req.url, method: req.method, auth: req.headers.authorization, body,
+      rawBody, time, encodedSignature, validSignature });
     if (fakeNotifier.holdNext) {
       fakeNotifier.holdNext = false;
       await new Promise(resolve => {
@@ -50,7 +66,7 @@ async function fixture() {
       });
     }
     const valid = validateNotification(body, 'https://starlit-api.rrmtools.uk');
-    const status = valid ? fakeNotifier.status : 400;
+    const status = valid && validSignature && !req.headers.authorization ? fakeNotifier.status : 401;
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ accepted: status === 202 }));
   });
@@ -63,7 +79,7 @@ async function fixture() {
     JWT_SECRET: randomBytes(48).toString('base64url'),
     SIGNUP_ENCRYPTION_KEY: key,
     SIGNUP_NOTIFY_URL: `http://127.0.0.1:${notifier.address().port}/notify`,
-    SIGNUP_NOTIFY_TOKEN: randomBytes(48).toString('base64url'),
+    SIGNUP_SIGNING_KEY: signingPrivate,
     STARLIT_SUPABASE_URL: 'https://starlit-api.rrmtools.uk',
     SIGNUP_ADMIN_URL: `http://127.0.0.1:${auth.address().port}`,
     SIGNUP_DB_PATH: join(directory, 'requests.sqlite'),
@@ -78,6 +94,7 @@ async function fixture() {
   let app = await startApp();
   return {
     env, config, directory, fakeAdmin, fakeNotifier, startedAt,
+    notifierUrl: `http://127.0.0.1:${notifier.address().port}/notify`,
     base: () => app.base,
     advance: amount => { milliseconds += amount; },
     db: () => new DatabaseSync(env.SIGNUP_DB_PATH),
@@ -119,7 +136,7 @@ test('startup requires independent encryption, notifier and closed GoTrue regist
   const raw = {
     SIGNUP_ENCRYPTION_KEY: randomBytes(32).toString('base64url'),
     SIGNUP_NOTIFY_URL: 'https://notify.example.test/notify',
-    SIGNUP_NOTIFY_TOKEN: randomBytes(32).toString('base64url'),
+    SIGNUP_SIGNING_KEY: generateSigningPrivateKey(),
     STARLIT_SUPABASE_URL: 'https://starlit-api.rrmtools.uk',
     JWT_SECRET: randomBytes(48).toString('base64url'),
     AUTH_DISABLE_SIGNUP: 'true', AUTH_EMAIL_AUTOCONFIRM: 'false',
@@ -129,22 +146,85 @@ test('startup requires independent encryption, notifier and closed GoTrue regist
   assert.throws(() => loadSignupConfig({ ...raw, AUTH_DISABLE_SIGNUP: 'false' }), /public signup/);
   assert.throws(() => loadSignupConfig({ ...raw, AUTH_EMAIL_AUTOCONFIRM: 'true' }), /autoconfirm/);
   assert.throws(() => loadSignupConfig({ ...raw, SIGNUP_ENCRYPTION_KEY: raw.JWT_SECRET }), /SIGNUP_ENCRYPTION_KEY/);
-  assert.throws(() => loadSignupConfig({ ...raw, SIGNUP_NOTIFY_TOKEN: '' }), /SIGNUP_NOTIFY_TOKEN/);
+  assert.throws(() => loadSignupConfig({ ...raw, SIGNUP_SIGNING_KEY: '' }), /SIGNUP_SIGNING_KEY/);
+  assert.throws(() => loadSignupConfig({ ...raw, SIGNUP_SIGNING_KEY: randomBytes(32).toString('base64url') }), /PKCS8/);
+  assert.equal(loadSignupConfig(raw).signingKey.asymmetricKeyType, 'ed25519');
   assert.throws(() => loadSignupConfig({ ...raw, SIGNUP_ADMIN_URL: 'https://admin.example.test' }), /loopback/);
   assert.match(generateEnv('https://starlit-api.rrmtools.uk'), /^SIGNUP_ENCRYPTION_KEY=[A-Za-z0-9_-]{43}$/m);
 });
 
-test('VPS notifier helper appends exactly two keys and refuses secrets replacement', () => {
+test('Ed25519 signing-key helper appends only private key, never replaces existing secrets', async () => {
   const prior = 'JWT_SECRET=existing-secret\nAUTH_DISABLE_SIGNUP=true\n';
-  const token = 'A'.repeat(43);
-  const lines = notificationAppend(prior, token);
-  assert.equal(lines, `SIGNUP_NOTIFY_URL=${NOTIFIER_URL}\nSIGNUP_NOTIFY_TOKEN=${token}\n`);
+  const privateKey = generateSigningPrivateKey();
+  const lines = signingKeyAppend(prior, privateKey);
+  assert.equal(lines, `SIGNUP_SIGNING_KEY=${privateKey}\n`);
   assert.equal(prior + lines, `JWT_SECRET=existing-secret\nAUTH_DISABLE_SIGNUP=true\n${lines}`);
-  assert.equal(notificationAppend('JWT_SECRET=old', token).startsWith('\nSIGNUP_NOTIFY_URL='), true);
-  assert.throws(() => notificationAppend(`${prior}SIGNUP_NOTIFY_URL=\n`, token), /already exists/);
-  assert.throws(() => notificationAppend(`${prior}SIGNUP_NOTIFY_TOKEN=old\n`, token), /already exists/);
-  assert.throws(() => notificationAppend(prior, 'too-short'), /43\+/);
-  assert.throws(() => notificationAppend(prior, token + '\nINJECT=1'), /URL-safe/);
+  assert.equal(signingKeyFromEnvironmentFile(prior + lines), privateKey);
+  assert.equal(signingKeyAppend('JWT_SECRET=old', privateKey).startsWith('\nSIGNUP_SIGNING_KEY='), true);
+  assert.throws(() => signingKeyAppend(`${prior}SIGNUP_SIGNING_KEY=\n`, privateKey), /already exists/);
+  assert.throws(() => signingKeyAppend(`${prior}export SIGNUP_SIGNING_KEY=old\n`, privateKey), /already exists/);
+  assert.throws(() => signingKeyAppend(prior, 'too-short'), /SIGNUP_SIGNING_KEY/);
+  assert.throws(() => signingKeyAppend(prior, privateKey + '\nINJECT=1'), /SIGNUP_SIGNING_KEY/);
+  assert.throws(() => signingKeyFromEnvironmentFile('SIGNUP_SIGNING_KEY=bad\nSIGNUP_SIGNING_KEY=bad2\n'), /exactly one/);
+  const publicKey = publicSigningKey(privateKey);
+  assert.ok(!publicKey.includes(privateKey));
+  assert.equal(createPublicKey(importSigningPrivateKey(privateKey)).export({ format: 'der', type: 'spki' }).toString('base64url'), publicKey);
+  const publicObjectFromSpki = createPublicKey({ key: Buffer.from(publicKey, 'base64url'), format: 'der', type: 'spki' });
+  assert.equal(publicObjectFromSpki.asymmetricKeyType, 'ed25519');
+  assert.notEqual(publicSigningKey(generateSigningPrivateKey()), publicKey);
+  const payload = JSON.stringify({ email: EMAIL, reviewUrl: 'https://starlit-api.rrmtools.uk/admin/signups/review?token=abc', requestedAt: Date.now() });
+  const timestamp = Date.now().toString();
+  const signature = signNotification(importSigningPrivateKey(privateKey), timestamp, payload);
+  assert.match(signature, /^[A-Za-z0-9_-]{86}$/);
+  const publicObject = createPublicKey(importSigningPrivateKey(privateKey));
+  assert.ok(verify(null, Buffer.from(`${timestamp}.${payload}`, 'utf8'), publicObject, Buffer.from(signature, 'base64url')));
+  assert.ok(verify(null, Buffer.from(`${timestamp}.${payload}`, 'utf8'), publicObjectFromSpki, Buffer.from(signature, 'base64url')));
+  assert.equal(await verifyNotificationSignature(payload, timestamp, signature, publicKey), true,
+    'Cloudflare Worker verifier accepts the exact Node Ed25519 signature');
+  assert.equal(await verifyNotificationSignature(`${payload} `, timestamp, signature, publicKey), false,
+    'Cloudflare Worker rejects a changed raw body');
+  assert.equal(verify(null, Buffer.from(`${timestamp}.${payload} `, 'utf8'), publicObject, Buffer.from(signature, 'base64url')), false);
+  assert.equal(verify(null, Buffer.from(`${Number(timestamp) - 1000}.${payload}`, 'utf8'), publicObject, Buffer.from(signature, 'base64url')), false);
+});
+
+test('notifier URL upgrade helper is idempotent and never overwrites a conflicting value', () => {
+  const privateFile = 'JWT_SECRET=do-not-change\nSIGNUP_SIGNING_KEY=do-not-change\nSIGNUP_ENCRYPTION_KEY=do-not-change\n';
+  const addition = notifierUrlAppend(privateFile);
+  assert.equal(addition, `SIGNUP_NOTIFY_URL=${SIGNUP_NOTIFY_URL}\n`);
+  assert.equal(notifierUrlAppend(privateFile + addition), '');
+  assert.equal(notifierUrlAppend('JWT_SECRET=keep-this').startsWith('\nSIGNUP_NOTIFY_URL='), true);
+  assert.throws(() => notifierUrlAppend(privateFile + 'SIGNUP_NOTIFY_URL=https://example.test/notify\n'), /refusing to replace/);
+  assert.throws(() => notifierUrlAppend(privateFile + addition + addition), /Duplicate/);
+  assert.ok((privateFile + addition).startsWith(privateFile), 'previous secrets remain byte-identical');
+});
+
+test('fake notifier accepts only fresh Ed25519 signatures of exact transmitted JSON with no bearer', async () => {
+  const f = await fixture();
+  try {
+    const reviewUrl = `https://starlit-api.rrmtools.uk/admin/signups/review?token=${randomBytes(32).toString('base64url')}`;
+    const rawBody = JSON.stringify({ email: EMAIL, reviewUrl, requestedAt: Date.now() });
+    const timestamp = Date.now().toString();
+    const key = importSigningPrivateKey(f.env.SIGNUP_SIGNING_KEY);
+    const signature = signNotification(key, timestamp, rawBody);
+    async function send(headers, body = rawBody) {
+      const response = await fetch(f.notifierUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body,
+      });
+      return response.status;
+    }
+    const signedHeaders = { 'X-Starlit-Time': timestamp, 'X-Starlit-Signature': signature };
+    assert.equal(await send({}), 401, 'unsigned messages fail');
+    assert.equal(await send({ Authorization: 'Bearer obsolete-shared-token' }), 401, 'bearer is never sufficient');
+    assert.equal(await send(signedHeaders, `${rawBody} `), 401, 'a valid JSON whitespace change must invalidate signature');
+    assert.equal(await send({ ...signedHeaders, 'X-Starlit-Time': String(Number(timestamp) + 1) }), 401, 'altered timestamp fails');
+    assert.equal(await send({ ...signedHeaders, 'X-Starlit-Signature': signNotification(importSigningPrivateKey(generateSigningPrivateKey()), timestamp, rawBody) }), 401, 'wrong Ed25519 key fails');
+    const oldTimestamp = String(Number(timestamp) - 6 * 60_000);
+    assert.equal(await send({ 'X-Starlit-Time': oldTimestamp,
+      'X-Starlit-Signature': signNotification(key, oldTimestamp, rawBody) }), 401, 'an otherwise valid signature older than 5 minutes fails');
+    assert.equal(await send({ ...signedHeaders, Authorization: 'Bearer obsolete-shared-token' }), 401, 'bearer is not accepted even alongside signature');
+    assert.equal(await send(signedHeaders), 202, 'fresh signed exact body accepted');
+    assert.equal(f.fakeNotifier.calls.at(-1).validSignature, true);
+  } finally { await f.stop(); }
 });
 
 test('request stays encrypted and pending until one-use explicit owner approval', async () => {
@@ -161,7 +241,10 @@ test('request stays encrypted and pending until one-use explicit owner approval'
     const sent = f.fakeNotifier.calls[0];
     assert.equal(sent.method, 'POST');
     assert.equal(sent.url, '/notify');
-    assert.equal(sent.auth, `Bearer ${f.env.SIGNUP_NOTIFY_TOKEN}`);
+    assert.equal(sent.auth, undefined, 'no shared bearer token must be transmitted');
+    assert.equal(sent.validSignature, true, 'fake Worker verifies Ed25519 over exact UTF-8 raw body');
+    assert.match(sent.time, /^\d{13}$/);
+    assert.match(sent.encodedSignature, /^[A-Za-z0-9_-]{86}$/);
     assert.equal(sent.body.email, EMAIL);
     assert.equal(sent.body.requestedAt, f.startedAt);
     assert.equal(Number.isSafeInteger(sent.body.requestedAt), true);

@@ -18,7 +18,7 @@ try {
   const key = randomBytes(32).toString('base64url');
   writeSync(handle, `${separator}SIGNUP_ENCRYPTION_KEY=${key}\n`, null, 'utf8');
   fsyncSync(handle);
-  console.log(`Added SIGNUP_ENCRYPTION_KEY to ${file}; configure SIGNUP_NOTIFY_URL and SIGNUP_NOTIFY_TOKEN privately`);
+  console.log(`Added SIGNUP_ENCRYPTION_KEY to ${file}; keep this secret unchanged and separately configure Ed25519 signing`);
 } finally {
   closeSync(handle);
 }

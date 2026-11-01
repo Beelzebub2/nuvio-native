@@ -5,6 +5,7 @@ import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes, 
 import { isIP } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
+import { importSigningPrivateKey, signNotification } from './signing-key.mjs';
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -96,7 +97,7 @@ export function loadSignupConfig(env = process.env) {
   if (!env.SIGNUP_ENCRYPTION_KEY || !TOKEN.test(env.SIGNUP_ENCRYPTION_KEY)) throw new Error('SIGNUP_ENCRYPTION_KEY must be 32 random base64url bytes');
   const encryptionKey = Buffer.from(env.SIGNUP_ENCRYPTION_KEY, 'base64url');
   if (encryptionKey.length !== 32) throw new Error('Invalid signup encryption key');
-  if (!env.SIGNUP_NOTIFY_TOKEN || env.SIGNUP_NOTIFY_TOKEN.length < 32) throw new Error('SIGNUP_NOTIFY_TOKEN must be configured');
+  const signingKey = importSigningPrivateKey(env.SIGNUP_SIGNING_KEY);
   const publicOrigin = validUrl(env.STARLIT_SUPABASE_URL, 'STARLIT_SUPABASE_URL').origin;
   if (publicOrigin !== env.STARLIT_SUPABASE_URL) throw new Error('STARLIT_SUPABASE_URL must be the HTTPS origin');
   const notifyUrl = validUrl(env.SIGNUP_NOTIFY_URL, 'SIGNUP_NOTIFY_URL', { localhostHttp: true });
@@ -109,7 +110,7 @@ export function loadSignupConfig(env = process.env) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid SIGNUP_PORT');
   if (!env.SIGNUP_DB_PATH) throw new Error('SIGNUP_DB_PATH is required');
   return {
-    encryptionKey, jwtSecret: env.JWT_SECRET, notifyToken: env.SIGNUP_NOTIFY_TOKEN,
+    encryptionKey, jwtSecret: env.JWT_SECRET, signingKey,
     publicOrigin, notifyUrl: notifyUrl.href, adminUrl: adminUrl.origin,
     dbPath: env.SIGNUP_DB_PATH, port, host: '127.0.0.1',
   };
@@ -319,11 +320,20 @@ async function createConfirmedUser(config, email, password, fetcher) {
 
 async function postNotification(config, email, requestedAt, token, fetcher) {
   const url = `${config.publicOrigin}/admin/signups/review?token=${encodeURIComponent(token)}`;
+  const rawBody = JSON.stringify({ email, reviewUrl: url, requestedAt });
+  // The signature covers the exact UTF-8 body we transmit, not a later JSON
+  // reserialization. The Worker rejects timestamps more than five minutes old.
+  const timestamp = Date.now().toString();
+  const signature = signNotification(config.signingKey, timestamp, rawBody);
   const response = await fetcher(config.notifyUrl, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.notifyToken}`, 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Starlit-Time': timestamp,
+      'X-Starlit-Signature': signature,
+    },
     // The separate email Worker validates requestedAt as Unix milliseconds.
-    body: JSON.stringify({ email, reviewUrl: url, requestedAt }),
+    body: rawBody,
     signal: AbortSignal.timeout(6_000),
   });
   if (!response.ok) throw new Error(`Approval notification failed with status ${response.status}`);
