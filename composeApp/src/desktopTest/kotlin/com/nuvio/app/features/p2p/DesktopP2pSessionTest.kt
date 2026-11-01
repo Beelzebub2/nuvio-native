@@ -40,6 +40,7 @@ class DesktopP2pSessionTest {
         var failAfterMetadata = false
         var healthy = true
         var peers = 0
+        var downloadSpeed = 0L
         var healthChecks = 0
         var statusDelayMs = 0L
         var statusHttpCode: Int? = null
@@ -81,7 +82,7 @@ class DesktopP2pSessionTest {
                 failures = (failures - 1).coerceAtLeast(0)
                 throw DesktopTorrentEngineUnavailable("Status unavailable", httpStatusCode = statusHttpCode)
             }
-            return TorrServerStats(0, 0, peers, 0, 10, 20, 100,
+            return TorrServerStats(downloadSpeed, 0, peers, 0, 10, 20, 100,
                 if (metadata) files else emptyList())
         }
         override suspend fun isHealthy(): Boolean {
@@ -449,7 +450,7 @@ class DesktopP2pSessionTest {
     }
 
     @Test fun virtualInterfaceChangesDoNotInterruptHealthyConnectedPeers() = runTest {
-        val backend = Backend().apply { peers = 4 }
+        val backend = Backend().apply { peers = 4; downloadSpeed = 800_000L }
         val environment = Environment()
         val engine = engine(backend, environment)
         val initialUrl = engine.startStream(request)
@@ -457,6 +458,17 @@ class DesktopP2pSessionTest {
         advanceTimeBy(10_001L)
         assertEquals(1, backend.starts, "An unrelated interface must not destroy a connected swarm")
         assertEquals(initialUrl, assertIs<P2pStreamingState.Streaming>(engine.state.value).localUrl)
+        engine.shutdown().join()
+    }
+
+    @Test fun stalledPeersAfterInterfaceChangeStillTriggerRecovery() = runTest {
+        val backend = Backend().apply { peers = 4; downloadSpeed = 0L }
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.startStream(request)
+        environment.network = setOf("ethernet:192.0.2.3")
+        advanceTimeBy(10_001L)
+        assertEquals(2, backend.starts, "A stale peer count must not suppress real network recovery")
         engine.shutdown().join()
     }
 

@@ -360,19 +360,22 @@ internal class DesktopP2pSession(
                         }
                     }
                     if (reason == DesktopP2pRecoveryReason.NetworkChange) {
-                        // VPN/virtual adapters can change while the swarm's actual
-                        // network route and already-connected peers remain healthy.
-                        // Restarting the child in that case needlessly drops the HTTP
-                        // reader, discards its buffer and interrupts the video.
-                        val peersAlive = try {
-                            backend.isHealthy() && backend.getTorrentStats(session.hash).peers > 0
+                        // VPN/virtual adapters can change without changing the swarm's
+                        // actual route. A peer count alone is not evidence of a usable
+                        // connection: dead peers can remain listed until timeout. Only
+                        // preserve the HTTP reader if payload is actively arriving.
+                        val swarmStillDownloading = try {
+                            if (!backend.isHealthy()) false else {
+                                val stats = backend.getTorrentStats(session.hash)
+                                stats.peers > 0 && stats.downloadSpeed > 0
+                            }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
                             false
                         }
-                        if (peersAlive) {
-                            log.i { "Network interfaces changed but torrent peers remain connected; keeping playback" }
+                        if (swarmStillDownloading) {
+                            log.i { "Network interfaces changed but torrent traffic continues; keeping playback" }
                             reason = null
                         }
                     }
