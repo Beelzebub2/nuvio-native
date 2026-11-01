@@ -1,3 +1,16 @@
+## Starlit 1.0.44
+
+### Improvements
+
+- Importing anonymous settings now restores the guest download-folder choice and available offline episodes to the selected account profile, while keeping downloads already saved in that account.
+- Selecting a folder containing previously completed Starlit downloads can rediscover episodes with verified file identities, without downloading them again.
+- Downloads and folder choices stay associated with their original account and profile on this device when signing out and back in.
+
+### Fixes
+
+- Signing out no longer deletes downloaded media stored in Starlit's default desktop downloads directory.
+- Android account switching clears old account download notifications and transfer records without deleting offline media.
+
 ## Starlit 1.0.43
 
 ### New
