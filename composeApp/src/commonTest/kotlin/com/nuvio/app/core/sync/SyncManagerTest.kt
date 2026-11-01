@@ -162,6 +162,7 @@ class SyncManagerTest {
         val operations = ProfileActivitySyncOperations(
             pullLibrary = { events += "library" },
             pullWatchActivity = { events += "watch" },
+            pullHomeCatalogSettings = { events += "home" },
         )
 
         val libraryOnly = runActivityProfileSync(
@@ -179,7 +180,25 @@ class SyncManagerTest {
 
         assertTrue(libraryOnly.succeeded)
         assertTrue(watchOnly.succeeded)
-        assertEquals(listOf("library", "watch"), events)
+        assertEquals(listOf("library", "watch"), events.filter { it != "home" })
+        assertEquals(2, events.count { it == "home" })
+    }
+
+    @Test
+    fun `foreground settings sync runs even without library or watch activity`() = runBlocking {
+        var requestedProfile: Int? = null
+        val result = runActivityProfileSync(
+            profileId = 4,
+            pullLibrary = false,
+            pullWatchActivity = false,
+            operations = ProfileActivitySyncOperations(
+                pullLibrary = { error("Library was not requested") },
+                pullWatchActivity = { error("Watch activity was not requested") },
+                pullHomeCatalogSettings = { requestedProfile = it; error("Offline") },
+            ),
+        )
+        assertEquals(4, requestedProfile)
+        assertEquals(setOf(ProfileSyncStep.HomeCatalogSettings), result.failedSteps)
     }
 
     @Test
