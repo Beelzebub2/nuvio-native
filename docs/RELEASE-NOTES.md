@@ -1,15 +1,9 @@
-## Starlit 1.0.46
+## Starlit 1.0.47
 
 ### Fixes
 
 - Android launcher icons are smaller and optically centered, keeping the play mark and twinkle visible on circular, rounded-square and square launchers. All icon colors, themed icons and legacy icons share the corrected alignment.
-- Windows release validation now handles canonical file URIs in download-recovery tests, including Windows short-path aliases.
-
-## Starlit 1.0.45
-
-### Fixes
-
-- Android launcher icons are smaller and optically centered, keeping the play mark and twinkle visible on circular, rounded-square and square launchers. All icon colors, themed icons and legacy icons share the corrected alignment.
+- Windows release validation now handles canonical file paths in download-recovery tests, including Windows short-path aliases.
 
 ## Starlit 1.0.44
 

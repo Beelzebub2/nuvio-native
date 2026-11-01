@@ -183,8 +183,8 @@ class DesktopDownloadRecoveryTest {
                 "Import must preserve the account's already selected default folder")
             val adopted = DownloadsRepository.uiState.value.items.single()
             assertEquals(DownloadStatus.Completed, adopted.status)
-            assertEquals(guestRoot.canonicalPath, adopted.destinationDirectory)
-            assertEquals(downloadPath(completedGuest).canonicalFile.toURI().toString(), adopted.localFileUri)
+            assertEquals(guestRoot.canonicalPath, File(assertNotNull(adopted.destinationDirectory)).canonicalPath)
+            assertEquals(downloadPath(completedGuest).toURI().toString(), adopted.localFileUri)
             assertTrue(downloadPath(completedGuest).isFile)
             assertTrue(accountRoot.listFiles().isNullOrEmpty(), "Recovery should never move or copy media")
         } finally {
