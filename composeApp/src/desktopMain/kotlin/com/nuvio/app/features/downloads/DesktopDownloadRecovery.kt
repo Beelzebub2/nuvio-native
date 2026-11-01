@@ -72,7 +72,8 @@ private fun safeTaskDirectory(root: File, ownerId: String): File? = runCatching 
 }.getOrNull()
 
 /** Returns a proven final file in this exact task directory, never a partial or guessed title. */
-private fun verifiedFile(root: File, identity: DesktopDownloadIdentity): Pair<File, DesktopDownloadProof>? {
+private fun verifiedFile(root: File, identity: DesktopDownloadIdentity,
+    verifyActive: () -> Boolean = { true }): Pair<File, DesktopDownloadProof>? {
     if (!validIdentity(identity)) return null
     val dir = safeTaskDirectory(root, identity.ownerId) ?: return null
     val file = File(dir, identity.fileName)
@@ -83,7 +84,7 @@ private fun verifiedFile(root: File, identity: DesktopDownloadIdentity): Pair<Fi
         if (proof.ownerId != identity.ownerId || proof.fileName != identity.fileName ||
             proof.totalBytes != identity.completedBytes ||
             proof.completedSha256 != identity.completedSha256 ||
-            !verifiedDesktopDownloadContent(file, proof)) return null
+            !verifiedDesktopDownloadContent(file, proof, verifyActive = verifyActive)) return null
         file to proof
     }.getOrNull()
 }
@@ -141,14 +142,15 @@ internal fun recordDesktopDownloadIdentity(item: DownloadItem): Boolean = runCat
 }.getOrDefault(false)
 
 /** Saved metadata is stronger than title guessing: match the *same* task id and verified bytes. */
-internal fun recoverKnownDesktopDownload(item: DownloadItem, folder: String?): DownloadItem? {
+internal fun recoverKnownDesktopDownload(item: DownloadItem, folder: String?,
+    verifyActive: () -> Boolean = { true }): DownloadItem? {
     val root = folder?.takeIf { it.isNotBlank() }?.let(::File) ?: return null
     if (!safeDownloadName(item.id) || !safeDownloadName(item.fileName) ||
         item.id.length > 128 || item.fileName.length > 255 || item.parentMetaId.isBlank() ||
         item.videoId.isBlank()) return null
     if (safeTaskDirectory(root, item.id) == null) return null
     val candidate = item.copy(destinationDirectory = root.canonicalPath, localFileUri = null)
-    val file = runCatching { recoverFinalDownload(candidate) }.getOrNull() ?: return null
+    val file = runCatching { recoverFinalDownload(candidate, verifyActive) }.getOrNull() ?: return null
     val proof = readDesktopDownloadProof(file) ?: return null
     val identity = identityFrom(candidate, proof) ?: return null
     val manifest = File(file.parentFile, IDENTITY_FILE)
@@ -161,7 +163,7 @@ internal fun recoverKnownDesktopDownload(item: DownloadItem, folder: String?): D
             previous.completedSha256 != identity.completedSha256 ||
             previous.completedBytes != identity.completedBytes) return null
     }
-    if (verifiedFile(root, identity) == null) return null
+    if (verifiedFile(root, identity, verifyActive) == null) return null
     val complete = candidate.copy(status = DownloadStatus.Completed, phase = null, bytesPerSecond = 0L,
         downloadedBytes = proof.totalBytes, totalBytes = proof.totalBytes,
         localFileUri = file.toURI().toString(), errorMessage = null)

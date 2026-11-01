@@ -185,6 +185,96 @@ class DesktopDownloadsTest {
         } finally { http.stop(0); root.deleteRecursively() }
     }
 
+    @Test fun cheapCompletedLookupRequiresFullVerificationAndRejectsChangedProofOrBytes() {
+        val root = Files.createTempDirectory("download-cheap-lookup").toFile()
+        try {
+            val completed = item(root, id = "cached-proof").copy(status = DownloadStatus.Completed)
+            val file = downloadPath(completed)
+            file.parentFile.mkdirs()
+            File(file.parentFile, ".starlit-owner").writeText(completed.id)
+            file.writeBytes(media)
+            val proof = DesktopDownloadProof(
+                completed.id, completed.fileName,
+                downloadSourceFingerprint(completed, completed.sourceUrl),
+                downloadEndpointFingerprint(URI.create(completed.sourceUrl)),
+                "\"fixture\"", media.size.toLong(), downloadSha256File(file),
+            )
+            writeDesktopDownloadProof(file, proof)
+            val uri = file.toURI().toString()
+
+            // Constructing a valid digest does not mark the file verified for this process.
+            assertFalse(verifiedDesktopDownloadContent(file, proof, hashIfUncached = false))
+            assertNull(DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+            assertContentEquals(media, file.readBytes())
+
+            assertEquals(file, recoverFinalDownload(completed))
+            assertTrue(verifiedDesktopDownloadContent(file, proof, hashIfUncached = false))
+            assertEquals(uri, DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+
+            // Changing just the proof metadata invalidates the cached verification.
+            val changedProof = proof.copy(validator = "\"updated-fixture\"")
+            writeDesktopDownloadProof(file, changedProof)
+            Files.setLastModifiedTime(downloadProofFile(file).toPath(),
+                java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 30_000L))
+            assertFalse(verifiedDesktopDownloadContent(file, changedProof, hashIfUncached = false))
+            assertNull(DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+            assertContentEquals(media, file.readBytes())
+            assertEquals(file, recoverFinalDownload(completed))
+            assertEquals(uri, DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+
+            // A same-length edit to the media must be rejected, without destroying the file.
+            val tampered = media.copyOf().apply { this[lastIndex] = (this[lastIndex] + 1).toByte() }
+            file.writeBytes(tampered)
+            Files.setLastModifiedTime(file.toPath(),
+                java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 60_000L))
+            assertFalse(verifiedDesktopDownloadContent(file, changedProof, hashIfUncached = false))
+            assertNull(DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+            assertFailsWith<IllegalStateException> { recoverFinalDownload(completed) }
+            assertNull(DownloadsPlatformDownloader.resolveLocalFileUri(uri, completed.fileName))
+            assertContentEquals(tampered, file.readBytes())
+            assertTrue(downloadProofFile(file).isFile, "Rejected proof must remain available for inspection")
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun aCancelledLargeFileDigestStopsBetweenReadChunksWithoutDeletingBytes() {
+        val root = Files.createTempDirectory("download-cancel-digest").toFile()
+        try {
+            val file = File(root, "offline.mp4")
+            file.writeBytes(ByteArray(1024 * 1024) { (it and 0xff).toByte() })
+            var checks = 0
+            assertFailsWith<CancellationException> {
+                downloadSha256File(file) { ++checks <= 2 }
+            }
+            assertEquals(3, checks, "A cancelled scan should stop before reading the full file")
+            assertEquals(1024 * 1024L, file.length())
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun completedDirectMediaWithoutOptionalIdentityIsImmediatelyPlayable() = runBlocking {
+        val root = Files.createTempDirectory("download-unlisted-extension").toFile()
+        val http = server { exchange ->
+            exchange.responseHeaders.add("Content-Type", "video/mp4")
+            exchange.sendResponseHeaders(200, media.size.toLong())
+            exchange.responseBody.use { it.write(media) }
+        }
+        try {
+            val download = item(root, id = "plain-mpg", url = http.url()).copy(fileName = "episode_plain-mpg.mpg")
+            val result = CompletableDeferred<String>()
+            DownloadsPlatformDownloader.start(
+                DownloadPlatformRequest(download),
+                onProgress = { _, _ -> },
+                onSuccess = { uri, _ -> result.complete(uri) },
+                onFailure = { message -> result.completeExceptionally(IllegalStateException(message)) },
+                onPaused = { result.completeExceptionally(CancellationException("Download was paused")) },
+            )
+            val uri = withTimeout(10_000L) { result.await() }
+            assertContentEquals(media, File(URI(uri)).readBytes())
+            assertFalse(File(downloadPath(download).parentFile, ".starlit-download.json").exists(),
+                "An optional catalogue manifest should not be required for offline playback")
+            assertEquals(uri, DownloadsPlatformDownloader.resolveLocalFileUri(uri, download.fileName))
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
     @Test fun aCompletedPartialWithDurableDigestFinishesWithoutNetworkAfterCrash() = runBlocking {
         val root = Files.createTempDirectory("download-complete-part").toFile()
         try {

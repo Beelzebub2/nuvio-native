@@ -33,6 +33,7 @@ internal actual object DownloadDesktopFeatures {
     actual fun useImportedDirectory(path: String?) = Unit // Android owns its private media directory.
     actual fun reconcileKnownDownloads(
         items: List<DownloadItem>, path: String?, includeDiscovered: Boolean,
+        verifyActive: () -> Boolean,
     ): List<DownloadItem> = items // Android validates finished files via DownloadsPlatformDownloader.
     actual fun directory(): String? = null
     actual fun remove(item: DownloadItem, idle: Boolean) = Unit

@@ -3,7 +3,8 @@ import androidx.compose.runtime.Composable
 import com.nuvio.app.features.details.MetaDetails
 internal actual object DownloadDesktopFeatures {
     actual fun useImportedDirectory(path: String?) {}
-    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean): List<DownloadItem> = items
+    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean,
+        verifyActive: () -> Boolean): List<DownloadItem> = items
     actual fun directory(): String? = null
     actual fun remove(item: DownloadItem, idle: Boolean) {}
     actual fun parallelDownloads(): Int = Int.MAX_VALUE
