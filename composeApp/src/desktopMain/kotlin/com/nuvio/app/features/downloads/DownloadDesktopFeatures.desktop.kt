@@ -56,6 +56,57 @@ internal actual object DownloadDesktopFeatures {
         require(folder.isDirectory && folder.canWrite()) { "Choose an available writable folder" }
         store.putString("folder", folder.canonicalPath)
     }
+    actual fun useImportedDirectory(path: String?) {
+        // Importing an anonymous list must not change an account's own chosen destination.
+        if (!store.getString("folder").isNullOrBlank()) return
+        val folder = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return
+        if (folder.isDirectory && folder.canWrite()) setDirectory(folder)
+    }
+    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean): List<DownloadItem> {
+        val verified = items.map { item ->
+            // Only the item's saved task directory and verified owner/content proof
+            // authorize a completed file. A legacy filename alone is insufficient.
+            val playable = if (item.status == DownloadStatus.Completed)
+                runCatching { recoverFinalDownload(item) }.getOrNull() else null
+            if (playable != null) {
+                recordDesktopDownloadIdentity(item)
+                item.copy(
+                    localFileUri = playable.toURI().toString(),
+                    downloadedBytes = playable.length(), totalBytes = playable.length(),
+                    phase = null, bytesPerSecond = 0L, errorMessage = null,
+                )
+            } else {
+                // The account may already have another preferred download directory.
+                // Recover guest-owned files in their saved location before trying the
+                // newly selected folder; never change the account's destination.
+                recoverKnownDesktopDownload(item, item.destinationDirectory)
+                    ?: recoverKnownDesktopDownload(item, path)
+                    ?: item
+            }
+        }
+        if (!includeDiscovered) return verified
+        val byKey = linkedMapOf<String, DownloadItem>()
+        val usedIds = mutableSetOf<String>()
+        verified.forEach { item ->
+            byKey.putIfAbsent(item.logicalContentKey, item)
+            usedIds.add(item.id)
+        }
+        discoverDesktopDownloads(path).forEach { found ->
+            val previous = byKey[found.logicalContentKey]
+            if (previous == null) {
+                if (usedIds.add(found.id)) byKey[found.logicalContentKey] = found
+            } else if (previous.status != DownloadStatus.Completed ||
+                runCatching { recoverFinalDownload(previous) }.getOrNull() == null) {
+                // The recovered item has a proof; never discard another live, playable record.
+                if (previous.id == found.id || found.id !in usedIds) {
+                    usedIds.remove(previous.id)
+                    usedIds.add(found.id)
+                    byKey[found.logicalContentKey] = found
+                }
+            }
+        }
+        return byKey.values.toList()
+    }
     actual fun remove(item: DownloadItem, idle: Boolean) { requestDownloadRemoval(item) }
 
     actual fun parallelDownloads(): Int = store.getInt("parallel")?.takeIf { it in ParallelDownloadChoices } ?: DefaultParallelDownloads
@@ -87,6 +138,7 @@ internal actual object DownloadDesktopFeatures {
     var parallel by remember { mutableStateOf(DownloadDesktopFeatures.parallelDownloads()) }
     var picking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var recoveredNotice by remember { mutableStateOf<String?>(null) }
     val items = state.items
     val transferring = items.count { it.status == DownloadStatus.Downloading }
     val paused = items.count { it.status == DownloadStatus.Paused }
@@ -102,7 +154,15 @@ internal actual object DownloadDesktopFeatures {
             scope.launch {
                 try {
                     val selected = chooseDownloadFolder(folder)
-                    if (selected != null) withContext(Dispatchers.IO) { DownloadDesktopFeatures.setDirectory(selected) }
+                    if (selected != null) {
+                        val recovered = withContext(Dispatchers.IO) {
+                            DownloadDesktopFeatures.setDirectory(selected)
+                            DownloadsRepository.recoverFromSelectedFolder()
+                        }
+                        recoveredNotice = if (recovered > 0)
+                            "Recovered $recovered verified offline ${if (recovered == 1) "download" else "downloads"}."
+                        else "No additional verified Starlit downloads were found in this folder."
+                    }
                     folder = DownloadDesktopFeatures.directory().orEmpty()
                     error = null
                 } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message }
@@ -183,6 +243,7 @@ internal actual object DownloadDesktopFeatures {
         }
         if (narrow) picker()
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
+        recoveredNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted) }
     }
     }
 }

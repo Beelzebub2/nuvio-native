@@ -99,7 +99,10 @@ object ProfileRepository {
     }
 
     fun ensureLoaded(userId: String) {
-        if (loadedCacheForUserId == userId && _state.value.isLoaded) return
+        if (loadedCacheForUserId == userId && _state.value.isLoaded) {
+            com.nuvio.app.core.auth.LocalSettingsImport.restoreAccountDownloadsIfMissing()
+            return
+        }
 
         val stored = decodeStoredPayload()
         loadedCacheForUserId = userId
@@ -116,6 +119,7 @@ object ProfileRepository {
         }
 
         applyStoredPayload(stored)
+        com.nuvio.app.core.auth.LocalSettingsImport.restoreAccountDownloadsIfMissing()
     }
 
     fun clearInMemory() {
@@ -138,6 +142,7 @@ object ProfileRepository {
             return
         }
         try {
+            val previousProfileId = activeProfileIndex
             val result = SupabaseProvider.client.postgrest.rpc("sync_pull_profiles")
             val profiles = result.decodeList<NuvioProfile>()
             _state.value = _state.value.copy(
@@ -149,7 +154,12 @@ object ProfileRepository {
             if (_state.value.activeProfile != null) {
                 activeProfileIndex = _state.value.activeProfile!!.profileIndex
             }
+            // Server profile selection can change without selectProfile(), which normally
+            // stops the old queue before loading a different profile's device-local records.
+            if (previousProfileId != activeProfileIndex) DownloadsRepository.clearLocalState()
             persist()
+            com.nuvio.app.core.auth.LocalSettingsImport.restoreAccountDownloadsIfMissing()
+            if (previousProfileId != activeProfileIndex) DownloadsRepository.onProfileChanged()
         } catch (e: Throwable) {
             if (AuthRepository.signOutIfSessionInvalid(e, "Profile pull")) return
             log.e(e) { "Failed to pull profiles" }
@@ -211,6 +221,7 @@ object ProfileRepository {
         SearchRepository.reset()
         CollectionRepository.onProfileChanged()
         CollectionMobileSettingsRepository.onProfileChanged()
+        com.nuvio.app.core.auth.LocalSettingsImport.restoreAccountDownloadsIfMissing()
         DownloadsRepository.onProfileChanged()
         ProfileSettingsSync.onProfileChanged()
     }

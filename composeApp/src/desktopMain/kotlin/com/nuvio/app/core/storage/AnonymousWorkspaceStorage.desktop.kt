@@ -10,6 +10,16 @@ internal actual object AnonymousWorkspaceStorage {
     actual fun loadValue(key: String): String? = metadata.getString(key)
     actual fun saveValue(key: String, value: String?) = metadata.putString(key, value)
 
+    actual fun loadSavedPreference(storeName: String, key: String): String? {
+        if (loadValue("userId") == null) return null
+        require(storeName.matches(Regex("[A-Za-z0-9_-]+"))) { "Invalid preference store name" }
+        val snapshot = directory.resolve("preferences-${loadValue("slot") ?: "a"}")
+        check(Files.isDirectory(snapshot)) { "Saved anonymous preferences are missing" }
+        val file = snapshot.resolve("$storeName.properties")
+        if (!Files.isRegularFile(file)) return null
+        return DesktopStorage.Store(file).getString(key)
+    }
+
     actual fun save(userId: String) {
         val slot = if (loadValue("slot") == "a") "b" else "a"
         val snapshot = directory.resolve("preferences-$slot")

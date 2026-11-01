@@ -153,7 +153,10 @@ internal fun BatchDownloadDialog(meta: MetaDetails, initialSeason: Int, onDismis
         picking = true
         scope.launch {
             try {
-                chooseDownloadFolder(folder)?.let { picked -> withContext(Dispatchers.IO) { DownloadDesktopFeatures.setDirectory(picked) } }
+                chooseDownloadFolder(folder)?.let { picked -> withContext(Dispatchers.IO) {
+                    DownloadDesktopFeatures.setDirectory(picked)
+                    DownloadsRepository.recoverFromSelectedFolder()
+                } }
                 folder = DownloadDesktopFeatures.directory().orEmpty()
                 folderError = null
             } catch (e: Exception) {

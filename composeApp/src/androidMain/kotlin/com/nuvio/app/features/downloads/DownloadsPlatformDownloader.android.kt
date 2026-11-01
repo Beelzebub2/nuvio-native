@@ -32,6 +32,11 @@ internal actual object DownloadsPlatformDownloader {
     internal fun managedTransfers(): List<AndroidDownloadTransfer> =
         downloadScheduler?.store?.transfers?.value?.values?.toList().orEmpty()
 
+    actual fun pauseForAccountCleanup() {
+        val scheduler = downloadScheduler ?: appContext?.let(::scheduler) ?: return
+        scheduler.pauseAllForAccountCleanup()
+    }
+
     actual fun restoreItem(item: DownloadItem): DownloadItem = downloadScheduler?.restore(item)
         ?: if (item.status == DownloadStatus.Downloading) item.copy(status = DownloadStatus.Paused) else item
 

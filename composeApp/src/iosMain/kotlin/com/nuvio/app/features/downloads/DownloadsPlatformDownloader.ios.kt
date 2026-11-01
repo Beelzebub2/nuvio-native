@@ -66,6 +66,7 @@ fun pauseDownloadsForAppBackground() {
 
 @OptIn(ExperimentalForeignApi::class)
 internal actual object DownloadsPlatformDownloader {
+    actual fun pauseForAccountCleanup() {}
     actual fun start(
         request: DownloadPlatformRequest,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,

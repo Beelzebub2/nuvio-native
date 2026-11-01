@@ -14,6 +14,16 @@ internal actual object AnonymousWorkspaceStorage {
         check(metadata.edit().putString(key, value).commit()) { "Could not save anonymous workspace" }
     }
 
+    actual fun loadSavedPreference(storeName: String, key: String): String? {
+        val userId = loadValue("userId") ?: return null
+        val slot = listOfNotNull(loadValue("slot"), "a", "b").distinct()
+            .firstOrNull { isCompleteSlot(it, userId) }
+            ?: error("Saved anonymous preferences are missing or incomplete")
+        val backup = prefs("anonymous_workspace_${slot}_$storeName")
+        if (backup.getString(backupMarker, null) != userId) return null
+        return backup.getString(key, null)
+    }
+
     actual fun save(userId: String) {
         val slot = if (loadValue("slot") == "a") "b" else "a"
         saveValue("ready:$slot", null)
@@ -34,7 +44,10 @@ internal actual object AnonymousWorkspaceStorage {
         val preferred = loadValue("slot")
         val slot = listOfNotNull(preferred, "a", "b").distinct().firstOrNull { isCompleteSlot(it, userId) }
             ?: error("Saved anonymous preferences are missing or incomplete")
-        names.forEach { name -> copy(prefs("anonymous_workspace_${slot}_$name"), prefs(name)) }
+        names.forEach { name ->
+            val saved = prefs("anonymous_workspace_${slot}_$name")
+            if (saved.getString(backupMarker, null) == userId) copy(saved, prefs(name))
+        }
         val backup = context.filesDir.resolve("anonymous_workspace_scrapers_$slot")
         val code = context.filesDir.resolve("nuvio_plugin_scrapers")
         if (code.exists()) check(code.deleteRecursively())
@@ -45,16 +58,18 @@ internal actual object AnonymousWorkspaceStorage {
 
     private fun isCompleteSlot(slot: String, userId: String): Boolean = runCatching {
         if (loadValue("ready:$slot") != userId) return@runCatching false
-        if (names.any { name ->
+        if (requiredNames.any { name ->
                 prefs("anonymous_workspace_${slot}_$name").getString(backupMarker, null) != userId
             }) return@runCatching false
         val code = loadValue("code:$slot") ?: return@runCatching false
         code == "false" || (code == "true" && context.filesDir.resolve("anonymous_workspace_scrapers_$slot").isDirectory)
     }.getOrDefault(false)
 
-    private val names get() = (PlatformLocalAccountDataCleaner.preferenceNames + listOf(
+    private val requiredNames get() = (PlatformLocalAccountDataCleaner.preferenceNames - "nuvio_downloads" + listOf(
         "nuvio_card_depth_style", "nuvio_custom_poster_url", "nuvio_tmdb_settings", "nuvio_meta_screen_settings",
     )).distinct().filter { it != "nuvio_auth" }
+
+    private val names get() = requiredNames + "nuvio_downloads"
 
     private fun copy(source: SharedPreferences, destination: SharedPreferences, marker: String? = null) {
         val editor = destination.edit().clear()

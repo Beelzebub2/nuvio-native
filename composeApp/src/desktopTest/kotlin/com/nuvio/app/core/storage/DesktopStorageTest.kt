@@ -7,6 +7,7 @@ import java.nio.file.attribute.FileTime
 import java.util.Comparator
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -16,6 +17,34 @@ class DesktopStorageTest {
         val directory = Files.createTempDirectory("desktop-store-recovery")
         try {
             test(directory.resolve("preferences.properties"))
+        } finally {
+            Files.walk(directory).use { paths ->
+                paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+            }
+        }
+    }
+
+    @Test
+    fun account_cleanup_keeps_downloaded_files_and_guest_backup_but_clears_account_preferences() {
+        val directory = Files.createTempDirectory("account-cleanup-downloads")
+        try {
+            val media = directory.resolve("downloads/episode.mp4")
+            val guestBackup = directory.resolve("anonymous-workspace/preferences-a/nuvio_downloads.properties")
+            Files.createDirectories(media.parent)
+            Files.createDirectories(guestBackup.parent)
+            Files.writeString(media, "downloaded media must survive account sign-out")
+            Files.writeString(guestBackup, "guest record")
+            Files.writeString(directory.resolve("desktop_download_preferences.properties"), "folder=guest")
+            Files.writeString(directory.resolve("nuvio_downloads.properties"), "downloads_1=account")
+            Files.writeString(directory.resolve("server_configuration.properties"), "server=preserved")
+
+            DesktopStorage.wipeFiles(directory)
+
+            assertEquals("downloaded media must survive account sign-out", Files.readString(media))
+            assertEquals("guest record", Files.readString(guestBackup))
+            assertTrue(Files.isRegularFile(directory.resolve("server_configuration.properties")))
+            assertFalse(Files.exists(directory.resolve("desktop_download_preferences.properties")))
+            assertFalse(Files.exists(directory.resolve("nuvio_downloads.properties")))
         } finally {
             Files.walk(directory).use { paths ->
                 paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }

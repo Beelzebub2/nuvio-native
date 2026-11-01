@@ -115,6 +115,21 @@ internal class AndroidDownloadScheduler(val context: Context) {
         paused?.let { DownloadsLiveStatusPlatform.notifyTransfer(it.item) }
     }
 
+    /** Unlike remove(), this retains each task record and its media/partial bytes. */
+    fun pauseAllForAccountCleanup() {
+        // An account switch must not leave source headers, signed URLs, titles, or
+        // background notifications belonging to the previous account accessible.
+        // The account's own download list is backed up separately before cleanup.
+        store.transfers.value.values.toList().forEach { transfer ->
+            pause(transfer.item.fileName)
+            // An old scheduled job may still exist for a transfer already marked
+            // Paused/Failed. Cancel every generation before dropping its record.
+            cancelScheduled(transfer)
+            store.remove(transfer.item.fileName)
+            DownloadsLiveStatusPlatform.removeNotification(transfer.item.id)
+        }
+    }
+
     fun remove(fileName: String) {
         val transfer = store.get(fileName)
         store.remove(fileName)

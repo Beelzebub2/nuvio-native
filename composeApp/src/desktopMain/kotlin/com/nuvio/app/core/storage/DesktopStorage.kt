@@ -56,11 +56,17 @@ internal object DesktopStorage {
         synchronized(stores) {
             stores.values.forEach(Store::clearInMemory)
         }
-        if (!rootDir.exists()) return
-        Files.walk(rootDir).use { stream ->
+        wipeFiles(rootDir)
+    }
+
+    /** Account cleanup must preserve downloaded media even in the legacy app-managed folder. */
+    internal fun wipeFiles(directory: Path) {
+        if (!Files.exists(directory)) return
+        Files.walk(directory).use { stream ->
             stream
                 .sorted(Comparator.reverseOrder())
-                .filter { it != rootDir && !it.startsWith(rootDir.resolve("anonymous-workspace")) }
+                .filter { it != directory && !it.startsWith(directory.resolve("anonymous-workspace")) }
+                .filter { !it.startsWith(directory.resolve("downloads")) }
                 .filter { it.fileName.toString() !in setOf("server_configuration.properties", "nuvio_sync_client_identity.properties") }
                 .forEach { path -> runCatching { Files.deleteIfExists(path) } }
         }
