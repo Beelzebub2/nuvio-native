@@ -172,6 +172,119 @@ object WatchedRepository {
         startExtraKeysObserverIfNeeded()
     }
 
+    /** Keep the account's existing marks and merge the guest's local Nuvio history. */
+    internal fun importAnonymousHistory(payload: String) {
+        val guest = json.decodeFromString<StoredWatchedPayload>(payload)
+        ensureLoaded()
+        check(currentProfileId == ProfileRepository.activeProfileId) { "Watched profile changed during import" }
+        var changed = false
+        itemsStore.update { nuvioItems, _, dirtyNuvioKeys, _ ->
+            guest.items.forEach { raw ->
+                val item = raw.normalizedMarkedAt()
+                if (item.id.isBlank() || item.type.isBlank()) return@forEach
+                val key = watchedItemKey(item.type, item.id, item.season, item.episode)
+                val existing = nuvioItems[key]
+                if (existing == null || item.markedAtEpochMs > existing.markedAtEpochMs) {
+                    nuvioItems[key] = item
+                    dirtyNuvioKeys += key
+                    changed = true
+                }
+            }
+        }
+        val fullyWatched = nuvioFullyWatchedSeriesKeys + guest.fullyWatchedSeriesKeys
+        if (fullyWatched != nuvioFullyWatchedSeriesKeys) {
+            nuvioFullyWatchedSeriesKeys = fullyWatched
+            changed = true
+        }
+        val expanded = expandedSiblingKeys + guest.expandedSiblingKeys
+        if (expanded != expandedSiblingKeys) {
+            expandedSiblingKeys = expanded
+            changed = true
+        }
+        if (changed) {
+            persist()
+            publish()
+        }
+    }
+
+    /** Do not overwrite newer account history stored by another device. */
+    internal suspend fun reconcileAnonymousHistoryWithServer(profileId: Int, payload: String): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        val guest = json.decodeFromString<StoredWatchedPayload>(payload)
+        ensureLoaded()
+        val generation = profileGeneration
+        return try {
+            val remote = syncAdapter.pull(profileId, watchedItemsPageSize)
+            if (!isActiveOperationForGuestPush(profileId, generation, auth.userId)) return false
+            val remoteByKey = remote.associateBy { item ->
+                watchedItemKey(item.type, item.id, item.season, item.episode)
+            }
+            val changed = itemsStore.update { nuvioItems, _, dirtyNuvioKeys, _ ->
+                var updated = false
+                guest.items.forEach { raw ->
+                    val item = raw.normalizedMarkedAt()
+                    val key = watchedItemKey(item.type, item.id, item.season, item.episode)
+                    val server = remoteByKey[key] ?: return@forEach
+                    if (key !in dirtyNuvioKeys || nuvioItems[key] != item) return@forEach
+                    if (server.markedAtEpochMs >= item.markedAtEpochMs) {
+                        nuvioItems[key] = server.copy(
+                            poster = server.poster ?: item.poster,
+                            releaseInfo = server.releaseInfo ?: item.releaseInfo,
+                            videoId = server.videoId ?: item.videoId,
+                        )
+                        dirtyNuvioKeys.remove(key)
+                        updated = true
+                    }
+                }
+                updated
+            }
+            if (changed) {
+                persist()
+                publish()
+            }
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            log.e(error) { "Could not reconcile anonymous watch history with account" }
+            false
+        }
+    }
+
+    /** Retry dirty local marks after relaunch/network failure, not only on new playback. */
+    internal suspend fun flushPendingToServer(profileId: Int): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || profileId != ProfileRepository.activeProfileId) return false
+        ensureLoaded()
+        if (currentProfileId != profileId) return false
+        val generation = profileGeneration
+        val pending = itemsStore.read { nuvioItems, _, dirtyNuvioKeys, _ ->
+            dirtyNuvioKeys.mapNotNull(nuvioItems::get)
+        }
+        try {
+            pending.chunked(200).forEach { batch ->
+                if (!isActiveOperationForGuestPush(profileId, generation, auth.userId)) return false
+                syncAdapter.push(profileId = profileId, items = batch)
+                if (!isActiveOperationForGuestPush(profileId, generation, auth.userId)) return false
+                recordSuccessfulPush(profileId, generation, batch)
+            }
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            log.e(error) { "Failed to deliver pending watched marks; retaining local outbox" }
+            return false
+        }
+    }
+
+    private fun isActiveOperationForGuestPush(profileId: Int, generation: Long, userId: String): Boolean =
+        profileId == currentProfileId && generation == profileGeneration &&
+            ProfileRepository.activeProfileId == profileId &&
+            (AuthRepository.state.value as? AuthState.Authenticated)?.let {
+                !it.isAnonymous && it.userId == userId
+            } == true
+
     fun onProfileChanged(profileId: Int) {
         if (profileId == currentProfileId && hasLoaded) return
         loadFromDisk(profileId)

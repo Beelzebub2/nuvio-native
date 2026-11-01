@@ -33,6 +33,19 @@ object SearchHistoryRepository {
         loadFromDisk()
     }
 
+    /** Explicit anonymous migration: keep account searches first and fill with guest searches. */
+    internal fun importAnonymousHistory(payload: String) {
+        val guest = json.decodeFromString<List<String>>(payload)
+            .map(String::trim)
+            .filter { it.length >= 2 }
+        ensureLoaded()
+        val merged = (recentSearches + guest).distinct().take(MAX_RECENT_SEARCHES)
+        if (merged == recentSearches) return
+        recentSearches = merged
+        persist()
+        publish()
+    }
+
     fun setEnabled(enabled: Boolean) {
         ensureLoaded()
         if (_enabled.value == enabled) return

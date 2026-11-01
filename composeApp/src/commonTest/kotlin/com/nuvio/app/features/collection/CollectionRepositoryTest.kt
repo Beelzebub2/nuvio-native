@@ -4,6 +4,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CollectionRepositoryTest {
+    @kotlin.test.Test
+    fun `guest collections do not overwrite account ids and remain ordered`() {
+        val account = listOf(Collection(id = "shared", title = "Account"))
+        val guest = listOf(
+            Collection(id = "shared", title = "Anonymous"),
+            Collection(id = "new", title = "Guest only"),
+        )
+
+        val merged = mergeGuestCollections(account, guest)
+
+        kotlin.test.assertEquals(listOf("shared", "new"), merged.map { it.id })
+        kotlin.test.assertEquals("Account", merged.first().title)
+    }
     @Test
     fun `deduplication keeps stable order and latest collection value`() {
         val collections = listOf(

@@ -3,6 +3,7 @@ package com.nuvio.app.features.library
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.auth.LocalSettingsImport
 import com.nuvio.app.core.tracking.ensureTrackingProvidersRegistered
 import com.nuvio.app.features.library.sync.LibrarySyncAdapter
 import com.nuvio.app.features.library.sync.SupabaseLibrarySyncAdapter
@@ -173,6 +174,11 @@ object LibraryRepository {
             shouldPublish
         }
         if (shouldPublish) publish()
+        if (loaded && shouldPublish) {
+            // A previous upload may have failed or been interrupted by app shutdown.
+            // Its outbox is persisted; merely loading the profile must restart delivery.
+            pushToServer(localState.snapshot(), delayMs = 0L)
+        }
         return loaded
     }
 
@@ -195,6 +201,95 @@ object LibraryRepository {
         ) != null
     }
 
+    /** Merge an anonymous library into this account profile, never replacing existing items. */
+    internal fun importAnonymousLibrary(payload: String) {
+        val guestItems = LibraryStoragePayloadCodec.decodeStrict(payload).items
+        ensureLoaded()
+        val previous = localState.snapshot()
+        val merged = localState.importMissing(guestItems)
+        if (merged.revision == previous.revision) return
+        persist(merged)
+        publish()
+        // Do not push before reconciling the guest entries against remote account data.
+    }
+
+    /** Merge guest-only entries into the remote account, preserving remote account metadata. */
+    internal suspend fun reconcileGuestImportWithServer(profileId: Int, payload: String): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        val guest = LibraryStoragePayloadCodec.decodeStrict(payload).items
+        return nuvioSyncMutex.withLock {
+            try {
+                val token = activeOperationToken(profileId) ?: return@withLock false
+                val remote = syncAdapter.pullSnapshot(profileId, librarySnapshotPageSize)
+                val current = AuthRepository.state.value as? AuthState.Authenticated
+                if (!localState.isCurrent(token) || current == null || current.userId != auth.userId ||
+                    current.isAnonymous || ProfileRepository.activeProfileId != profileId) {
+                    return@withLock false
+                }
+                val remoteKeys = remote.mapTo(mutableSetOf()) { libraryItemKey(it.id, it.type) }
+                // Only guest rows that remain pending and have no remote counterpart
+                // are uploaded. This avoids clobbering different data from another device.
+                val pending = localState.snapshot()
+                val pendingKeys = pending.pendingUpsertKeys.mapTo(mutableSetOf()) { key ->
+                    libraryItemKey(key.contentId, key.contentType)
+                }
+                val pendingItems = pending.items.associateBy { libraryItemKey(it.id, it.type) }
+                val missing = guest.filter { item ->
+                    val key = libraryItemKey(item.id, item.type)
+                    key !in remoteKeys && key in pendingKeys && pendingItems[key] == item
+                }
+                syncAdapter.pushItems(profileId, missing)
+                if (!localState.isCurrent(token) || AuthRepository.state.value != current ||
+                    ProfileRepository.activeProfileId != profileId) return@withLock false
+                val reconciled = localState.acknowledgeGuestImport(guest, remote)
+                persist(reconciled)
+                publish()
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.e(error) { "Failed to reconcile guest library with remote account" }
+                false
+            }
+        }
+    }
+
+    /** Acknowledges the durable outbox only after both remote operations have succeeded. */
+    internal suspend fun flushPendingToServer(profileId: Int): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        ensureLoaded()
+        return nuvioSyncMutex.withLock {
+            val snapshot = localState.snapshot()
+            if (!snapshot.hasLoaded || snapshot.token.profileId != profileId) return@withLock false
+            if (!snapshot.hasPendingPush) return@withLock true
+            try {
+                val itemsByKey = snapshot.items.associateBy { item -> libraryItemKey(item.id, item.type) }
+                val upsertItems = snapshot.pendingUpsertKeys.mapNotNull { key ->
+                    itemsByKey[libraryItemKey(key.contentId, key.contentType)]
+                }
+                syncAdapter.pushItems(profileId, upsertItems)
+                syncAdapter.deleteItems(profileId, snapshot.pendingDeleteKeys)
+                val sameAccount = (AuthRepository.state.value as? AuthState.Authenticated)
+                    ?.let { !it.isAnonymous && it.userId == auth.userId } == true
+                if (!sameAccount || ProfileRepository.activeProfileId != profileId) return@withLock false
+                val completed = localState.markPushCompleted(snapshot) ?: return@withLock false
+                persist(completed)
+                log.i {
+                    "Library delta push completed profile=$profileId " +
+                        "upserts=${upsertItems.size} deletes=${snapshot.pendingDeleteKeys.size}"
+                }
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.e(error) { "Library upload failed; keeping pending changes for the next sync" }
+                false
+            }
+        }
+    }
+
     suspend fun pullFromServer(
         profileId: Int,
         refreshIntent: TrackingRefreshIntent = TrackingRefreshIntent.AUTOMATIC,
@@ -212,7 +307,8 @@ object LibraryRepository {
             )
             if (!isActiveOperation(operationToken)) return
             publish()
-            return
+            // A connected tracking provider may supply the displayed library, but the
+            // account's own Starlit library still needs to stay synchronized.
         }
 
         nuvioSyncMutex.withLock {
@@ -247,6 +343,7 @@ object LibraryRepository {
                 log.e(error) { "Failed to pull library from server" }
             }
         }
+        pushToServer(localState.snapshot(), delayMs = 0L)
     }
 
     private suspend fun pullLibraryDelta(
@@ -547,44 +644,10 @@ object LibraryRepository {
             log.w { "Skipping library push: anonymous auth user=${authState.userId} profile=$profileId" }
             return
         }
+        if (LocalSettingsImport.hasPendingImport(profileId)) return
         val pushJob = syncScope.launch(start = CoroutineStart.LAZY) {
             delay(delayMs)
-            nuvioSyncMutex.withLock {
-                if (!localState.isCurrent(snapshot)) {
-                    val current = localState.snapshot()
-                    log.d {
-                        "Skipping stale debounced library push scheduled=${snapshot.token} " +
-                            "current=${current.token} scheduledRevision=${snapshot.revision} " +
-                            "currentRevision=${current.revision}"
-                    }
-                    return@withLock
-                }
-                val currentAuthState = AuthRepository.state.value
-                if (currentAuthState !is AuthState.Authenticated || currentAuthState.isAnonymous) {
-                    return@withLock
-                }
-                runCatching {
-                    val itemsByKey = snapshot.items.associateBy { item ->
-                        libraryItemKey(item.id, item.type)
-                    }
-                    val upsertItems = snapshot.pendingUpsertKeys.mapNotNull { key ->
-                        itemsByKey[libraryItemKey(key.contentId, key.contentType)]
-                    }
-                    syncAdapter.pushItems(profileId, upsertItems)
-                    syncAdapter.deleteItems(profileId, snapshot.pendingDeleteKeys)
-                    localState.markPushCompleted(snapshot)?.let(::persist)
-                    log.i {
-                        "Library delta push completed profile=$profileId " +
-                            "upserts=${upsertItems.size} deletes=${snapshot.pendingDeleteKeys.size}"
-                    }
-                }.onFailure { error ->
-                    if (error is CancellationException) throw error
-                    log.e(error) {
-                        "Failed to push library delta profile=$profileId " +
-                            "upserts=${snapshot.pendingUpsertKeys.size} deletes=${snapshot.pendingDeleteKeys.size}"
-                    }
-                }
-            }
+            flushPendingToServer(profileId)
         }
         pushJob.invokeOnCompletion { localState.clearPushJob(pushJob) }
 

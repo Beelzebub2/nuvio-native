@@ -16,6 +16,17 @@ import com.nuvio.app.features.downloads.DownloadStatus
 import com.nuvio.app.features.downloads.DownloadsCodec
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.downloads.DownloadsStorage
+import com.nuvio.app.features.library.LibraryItem
+import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.LibraryStorage
+import com.nuvio.app.features.library.LibraryStoragePayloadCodec
+import com.nuvio.app.features.library.StoredLibraryPayload
+import com.nuvio.app.features.watched.StoredWatchedPayload
+import com.nuvio.app.features.watched.WatchedItem
+import com.nuvio.app.features.watched.WatchedStorage
+import com.nuvio.app.features.watchprogress.WatchProgressCodec
+import com.nuvio.app.features.watchprogress.WatchProgressEntry
+import com.nuvio.app.features.watchprogress.WatchProgressStorage
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsStorage
 import com.nuvio.app.features.plugins.PluginRepository
@@ -149,6 +160,16 @@ class AnonymousWorkspaceTest {
                 createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
             )
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(guestItem)))
+            val guestLibrary = LibraryItem(id = "guest-library", type = "movie", name = "Guest Library", savedAtEpochMs = 1L)
+            LibraryStorage.savePayload(2, Json.encodeToString(StoredLibraryPayload(items = listOf(guestLibrary))))
+            val guestWatched = WatchedItem(id = "guest-watched", type = "movie", name = "Watched Guest", markedAtEpochMs = 1700000000000L)
+            WatchedStorage.savePayload(2, Json.encodeToString(StoredWatchedPayload(items = listOf(guestWatched))))
+            val guestProgress = WatchProgressEntry(
+                contentType = "series", parentMetaId = "guest-series", parentMetaType = "series",
+                videoId = "guest-episode", title = "Guest show", lastPositionMs = 1000L,
+                durationMs = 5000L, lastUpdatedEpochMs = 1700000000000L,
+            )
+            WatchProgressStorage.savePayload(2, WatchProgressCodec.encodeEntries(listOf(guestProgress)))
             DownloadsRepository.clearLocalState()
             DownloadsRepository.ensureLoaded()
             AddonRepository.replaceLocalBackup(addonBackup)
@@ -160,6 +181,7 @@ class AnonymousWorkspaceTest {
             // Simulate a snapshot saved by the previous release, with no download fields.
             AnonymousWorkspaceStorage.saveValue("import", Json.encodeToString(saved.copy(
                 downloads = null, downloadFolder = null, downloadProfileId = null,
+                library = null, watchedHistory = null, watchProgress = null,
             )))
 
             val accountItem = guestItem.copy(
@@ -167,13 +189,23 @@ class AnonymousWorkspaceTest {
                 title = "Account episode", fileName = "account-episode.mp4",
             )
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(accountItem)))
+            val accountLibrary = LibraryItem(id = "account-library", type = "movie", name = "Account Library", savedAtEpochMs = 2L)
+            LibraryStorage.savePayload(1, Json.encodeToString(StoredLibraryPayload(items = listOf(accountLibrary))))
+            LibraryRepository.clearLocalState()
+            LibraryRepository.ensureLoaded()
             DownloadsRepository.clearLocalState()
             assertFalse(LocalSettingsImport.importIntoCurrentProfile().getOrThrow())
             val pendingKey = "pending:${ServerConfigurationRepository.active.value.backendUrl}:account-with-own-downloads:1"
             val pending = Json.decodeFromString<LocalSettingsSnapshot>(assertNotNull(AnonymousWorkspaceStorage.loadValue(pendingKey)))
             assertEquals(2, pending.downloadProfileId)
             assertEquals(listOf("guest-profile-two"), DownloadsCodec.decodeItems(pending.downloads).map { it.id })
+            assertEquals(listOf("guest-library"), LibraryStoragePayloadCodec.decodeStrict(pending.library!!).items.map { it.id })
+            assertEquals(listOf("guest-watched"), Json.decodeFromString<StoredWatchedPayload>(pending.watchedHistory!!).items.map { it.id })
+            assertEquals(listOf("guest-episode"), WatchProgressCodec.decodeEntries(pending.watchProgress!!).map { it.videoId })
             assertEquals(setOf("account-original", "guest-profile-two"), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id }.toSet())
+            assertEquals(setOf("guest-library", "account-library"), LibraryStoragePayloadCodec.decodeStrict(LibraryStorage.loadPayload(1)!!).items.map { it.id }.toSet())
+            assertEquals(listOf("guest-watched"), Json.decodeFromString<StoredWatchedPayload>(WatchedStorage.loadPayload(1)!!).items.map { it.id })
+            assertEquals(listOf("guest-episode"), WatchProgressCodec.decodeEntries(WatchProgressStorage.loadPayload(1)!!).map { it.videoId })
         } finally {
             AuthRepository.signOut()
             AnonymousWorkspaceStorage.saveValue("userId", null)

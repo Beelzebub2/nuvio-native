@@ -135,6 +135,20 @@ object CollectionRepository {
         return mergedCollectionsJson().toString()
     }
 
+    /** Add guest collections without overwriting collections already in this account. */
+    internal fun importAnonymousCollections(payload: String) {
+        val guest = json.decodeFromString<List<Collection>>(payload)
+        require(validateImportModel(guest) == null) { "Saved anonymous collections are invalid" }
+        ensureLoaded()
+        val existing = _collections.value
+        val merged = mergeGuestCollections(existing, guest)
+        if (merged == existing) return
+        _collections.value = CollectionMobileSettingsRepository.applyToCollections(merged)
+        // A background push here could overwrite cloud collections not yet pulled.
+        // The pending import performs a remote-first merge and checked upload.
+        persist(sync = false)
+    }
+
     fun importFromJson(jsonString: String): Result<List<Collection>> {
         return runCatching {
             val validation = validateJson(jsonString)
@@ -255,6 +269,12 @@ internal fun List<Collection>.deduplicatedById(): List<Collection> {
         collectionsById[collection.id] = collection
     }
     return if (collectionsById.size == size) this else collectionsById.values.toList()
+}
+
+/** Remote/account IDs win, anonymous-only IDs are appended in stable guest order. */
+internal fun mergeGuestCollections(account: List<Collection>, guest: List<Collection>): List<Collection> {
+    val existingIds = account.mapTo(mutableSetOf()) { it.id }
+    return account.deduplicatedById() + guest.filter { existingIds.add(it.id) }
 }
 
 internal fun List<Collection>.upsertCollectionById(collection: Collection): List<Collection> {

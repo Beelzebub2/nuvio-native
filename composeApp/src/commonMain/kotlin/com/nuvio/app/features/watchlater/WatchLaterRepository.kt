@@ -13,4 +13,6 @@ internal expect object WatchLaterRepository {
     fun remove(item: LibraryItem)
     fun removeCompletedEpisode(session: WatchProgressPlaybackSession)
     fun resolveEpisodes()
+    fun exportLocalImportSnapshot(): String?
+    fun importAnonymousItems(payload: String)
 }
