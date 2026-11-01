@@ -41,9 +41,7 @@ import com.nuvio.app.features.streams.supportsStream
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import kotlinx.coroutines.*
 import java.io.File
-import javax.swing.JFileChooser
-import javax.swing.SwingUtilities
-import kotlin.coroutines.resume
+import com.nuvio.app.core.ui.DesktopFileDialogs
 
 /** Choices for how many episodes download at once; a few keep the connection busy when one source slows. */
 internal val ParallelDownloadChoices = 1..5
@@ -273,14 +271,8 @@ private fun ParallelDownloadsPicker(value: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-internal suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
-    SwingUtilities.invokeLater {
-        if (!continuation.isActive) return@invokeLater
-        val chooser = JFileChooser(current).apply { fileSelectionMode = JFileChooser.DIRECTORIES_ONLY; dialogTitle = "Choose download folder" }
-        val selected = if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
-        if (continuation.isActive) continuation.resume(selected)
-    }
-}
+internal suspend fun chooseDownloadFolder(current: String): File? =
+    DesktopFileDialogs.folder("Choose download folder", current)
 
 internal fun batchDownloadEpisodes(meta: MetaDetails, selectedIds: Set<String>, today: String): List<MetaVideo> =
     meta.videos.filter { downloadEpisodeKey(it) in selectedIds && it.id.isNotBlank() && it.isReleasedBy(today) }

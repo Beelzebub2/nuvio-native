@@ -10,10 +10,7 @@ import org.jetbrains.compose.resources.getString
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import javax.swing.JFileChooser
-import javax.swing.JOptionPane
-import javax.swing.SwingUtilities
-import javax.swing.filechooser.FileNameExtensionFilter
+import com.nuvio.app.core.ui.DesktopFileDialogs
 
 @Composable
 internal actual fun rememberAddonBackupFileLauncher(
@@ -52,19 +49,5 @@ internal actual fun rememberAddonBackupFileLauncher(
 private suspend fun chooseBackupFile(save: Boolean): File? {
     val title = getString(if (save) Res.string.addons_backup_export else Res.string.addons_backup_import)
     val overwrite = getString(Res.string.addons_backup_overwrite)
-    var selected: File? = null
-    SwingUtilities.invokeAndWait {
-        val chooser = JFileChooser().apply {
-            dialogTitle = title
-            fileFilter = FileNameExtensionFilter("JSON", "json")
-            if (save) selectedFile = File("starlit-addons.json")
-        }
-        val choice = if (save) chooser.showSaveDialog(null) else chooser.showOpenDialog(null)
-        if (choice == JFileChooser.APPROVE_OPTION) {
-            val file = chooser.selectedFile.let { if (save && !it.name.endsWith(".json", true)) File(it.path + ".json") else it }
-            if (!save || !file.exists() || JOptionPane.showConfirmDialog(null, overwrite, title,
-                    JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) selected = file
-        }
-    }
-    return selected
+    return DesktopFileDialogs.json(title, save, overwrite)
 }
