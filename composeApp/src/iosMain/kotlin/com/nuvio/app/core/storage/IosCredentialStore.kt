@@ -1,6 +1,7 @@
 package com.nuvio.app.core.storage
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.get
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr

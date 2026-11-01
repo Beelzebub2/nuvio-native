@@ -3,17 +3,25 @@ package com.nuvio.app.core.storage
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.os.Build
+import java.security.SecureRandom
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /** Profile-bound AES-GCM values; the non-exportable key lives in Android Keystore. */
 internal object AndroidCredentialProtection {
     private const val PREFIX = "keystore:v1:"
     private const val KEY_ALIAS = "starlit.profile.secrets.v1"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    // Robolectric's host JVM does not provide AndroidKeyStore. Use a random,
+    // process-local key only in its simulated Android runtime, never on devices.
+    private val hostTestKey: SecretKey by lazy {
+        SecretKeySpec(ByteArray(32).also(SecureRandom()::nextBytes), "AES")
+    }
 
     fun isProtected(stored: String) = stored.startsWith(PREFIX)
 
@@ -42,6 +50,9 @@ internal object AndroidCredentialProtection {
     }
 
     private fun key(): SecretKey {
+        if (Build.FINGERPRINT == "robolectric" &&
+            System.getProperty("java.vm.name")?.contains("Dalvik", ignoreCase = true) != true
+        ) return hostTestKey
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
