@@ -19,8 +19,8 @@ jobs:
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: recursive
+        # The repository has legacy native gitlinks without .gitmodules URLs.
+        # Kotlin/Native's iOS compile does not require those vendored submodules.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
