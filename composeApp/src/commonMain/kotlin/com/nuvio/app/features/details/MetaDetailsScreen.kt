@@ -2397,8 +2397,6 @@ private fun LazyListScope.configuredMetaSectionItems(
                     onPrimaryPlayLongClick = onPrimaryPlayLongClick,
                     onSaveClick = onSaveClick,
                     onSaveLongClick = onSaveLongClick,
-                    watchLaterPreview = MetaPreview(meta.id, meta.type, meta.name,
-                        poster = meta.poster, banner = meta.background, logo = meta.logo),
                     onWatchedClick = onWatchedClick,
                     showManualPlayOption = showManualPlayOption,
                     preferredEpisodeSeasonNumber = preferredEpisodeSeasonNumber,
@@ -2706,6 +2704,8 @@ private fun ConfiguredMetaSections(
                     onWatchedClick = onWatchedClick,
                     onSaveClick = onSaveClick,
                     onSaveLongClick = onSaveLongClick,
+                    watchLaterPreview = MetaPreview(meta.id, meta.type, meta.name,
+                        poster = meta.poster, banner = meta.background, logo = meta.logo),
                 )
             }
             MetaScreenSectionKey.OVERVIEW -> {
