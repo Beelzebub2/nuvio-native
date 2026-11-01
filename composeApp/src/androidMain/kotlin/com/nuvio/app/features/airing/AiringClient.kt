@@ -34,7 +34,7 @@ internal class AiringClient(
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS)
         .callTimeout(20, TimeUnit.SECONDS).build(),
     private val gateway: String = (System.getenv("NUVIO_AIRING_GATEWAY")
-        ?: "https://nuvio-native-gateway.cloudflaredomainrrm.workers.dev").trimEnd('/'),
+        ?: "https://starlit-api.rrmtools.uk/gateway").trimEnd('/'),
     private val clock: () -> Long = System::currentTimeMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
 ) {
