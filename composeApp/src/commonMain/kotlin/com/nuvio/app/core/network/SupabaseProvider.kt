@@ -103,7 +103,12 @@ object SupabaseProvider {
                     headers.append(HttpHeaders.UserAgent, userAgent)
                 }
             }
-            install(Auth)
+            install(Auth) {
+                // Starlit's app handles the OAuth result without exposing
+                // Google client credentials or tokens to a web page.
+                scheme = "nuvio"
+                host = "auth"
+            }
             install(Postgrest)
             install(Functions)
             install(Storage)

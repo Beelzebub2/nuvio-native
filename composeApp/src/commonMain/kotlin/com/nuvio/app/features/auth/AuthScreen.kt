@@ -95,6 +95,8 @@ import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.auth_request_account
+import nuvio.composeapp.generated.resources.auth_google_request_access
+import nuvio.composeapp.generated.resources.auth_google_sign_in
 import nuvio.composeapp.generated.resources.auth_request_account_subtitle
 import nuvio.composeapp.generated.resources.auth_request_password_minimum
 import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
@@ -202,6 +204,7 @@ fun AuthScreen(
     val isStarlitServer = !serverConnectionState.activeServer.supportsNuvioAccountFeatures
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val uriHandler = LocalUriHandler.current
     var isSignUp by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -248,6 +251,27 @@ fun AuthScreen(
                 isLoading = false
             }
         }
+    }
+
+    fun signInWithGoogle() {
+        if (isLoading || isRequestPending) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithGoogle()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun requestAccessWithGoogle() {
+        if (isLoading || isRequestPending || !isStarlitServer) return
+        focusManager.clearFocus(force = true)
+        AuthRepository.clearError()
+        uriHandler.openUri(backendUrl.trimEnd('/') + "/auth/google/request")
     }
 
     fun toggleAuthMode() {
@@ -364,6 +388,8 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -401,6 +427,8 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -492,6 +520,8 @@ private fun AuthMobileLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -559,6 +589,8 @@ private fun AuthMobileLayout(
                 onReturnToSignIn = onReturnToSignIn,
                 onContinueWithoutAccount = onContinueWithoutAccount,
                 onStartDeviceLink = onStartDeviceLink,
+                onGoogleSignIn = onGoogleSignIn,
+                onGoogleRequest = onGoogleRequest,
                 onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
@@ -594,6 +626,8 @@ private fun AuthLargeLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -701,6 +735,8 @@ private fun AuthLargeLayout(
                     onReturnToSignIn = onReturnToSignIn,
                     onContinueWithoutAccount = onContinueWithoutAccount,
                     onStartDeviceLink = onStartDeviceLink,
+                    onGoogleSignIn = onGoogleSignIn,
+                    onGoogleRequest = onGoogleRequest,
                     onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
@@ -806,6 +842,8 @@ private fun AuthForm(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -936,6 +974,25 @@ private fun AuthForm(
         AuthDivider(scale = scale)
 
         Spacer(modifier = Modifier.height(metrics.secondaryTop))
+
+        if (isStarlitServer) {
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_google_sign_in),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onGoogleSignIn,
+            )
+            Spacer(modifier = Modifier.height(12.dp * scale))
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_google_request_access),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onGoogleRequest,
+            )
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
 
         if (!isSignUp && deviceLinkEnabled) {
             DeviceLinkAuthSection(

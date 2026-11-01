@@ -10,6 +10,9 @@ import androidx.activity.SystemBarStyle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.nuvio.app.core.auth.AuthStorage
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.network.SupabaseProvider
+import io.github.jan.supabase.auth.handleDeeplinks
 import com.nuvio.app.core.network.ServerConfigurationStorage
 import com.nuvio.app.core.diagnostics.SentryInitializer
 import com.nuvio.app.core.deeplink.handleAppUrl
@@ -194,8 +197,18 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIncomingAppIntent(intent: Intent?) {
-        val appUrl = intent?.dataString?.trim().orEmpty()
+        val incoming = intent ?: return
+        val appUrl = incoming.dataString?.trim().orEmpty()
         if (appUrl.isBlank()) return
+        if (appUrl.startsWith("nuvio://auth#", ignoreCase = true) ||
+            appUrl.startsWith("nuvio://auth?", ignoreCase = true)
+        ) {
+            // Import the session only from the configured backend; Supabase
+            // validates the OAuth state before accepting a browser callback.
+            AuthRepository.expectRemoteSession()
+            SupabaseProvider.client.handleDeeplinks(incoming)
+            return
+        }
         handleAppUrl(appUrl)
     }
 }
