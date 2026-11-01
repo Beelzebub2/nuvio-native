@@ -51,7 +51,7 @@ Made by [Beelzebub2](https://github.com/Beelzebub2) · Based on [Nuvio](https://
 
 Starlit runs on Windows 10 and 11 (64-bit).
 
-1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/nuvio-native/releases/latest). Releases are private, so you need read access to this repository.
+1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/nuvio-native/releases/latest).
 2. Run it. Setup installs to `%LOCALAPPDATA%\Starlit` and lets you choose the folder and shortcuts.
 3. For updates, sign in to the [GitHub CLI](https://cli.github.com/) once with `gh auth login`. Starlit checks for updates at startup, every six hours, and from Settings → About.
 
@@ -83,7 +83,7 @@ The installer is written to `composeApp/build/compose/binaries/main-release/inst
 
 ### Android mobile
 
-The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account sync. Desktop and Android use Starlit's account server automatically: sign into the same owner-created account and profile on each device to sync. Public registration is closed; guest mode and custom servers remain available. The independent [Starlit backend](private-server-setup) is also included for self-hosting. iOS sources are present, but require macOS and Xcode to build and test.
+The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account sync. Builds configured with an account server can sync between desktop and Android: sign into the same approved account and profile on each device. Guest mode remains available, and Full builds support custom servers. iOS sources are present, but require macOS and Xcode to build and test.
 
 ### Releasing
 

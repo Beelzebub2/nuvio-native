@@ -36,7 +36,7 @@ Local and debug builds use the mobile version in `iosApp/Configuration/Version.x
 
 ## Releases
 
-Every `vX.Y.Z` release tag publishes the Windows installer and signed Full APKs together (`Starlit-Android-<abi>-X.Y.Z.apk`; most phones need `arm64-v8a`). The release workflow builds the APKs with the release version (`-Pnuvio.app.versionName` / `-Pnuvio.app.versionCode` from `composeApp/Configuration/DesktopVersion.properties`), so the in-app updater compares the installed APK with the release tag. The build job has no secrets and produces unsigned APKs (a release build without a configured key is always unsigned). A separate job that runs only GitHub's own actions signs them with the key in the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, so third-party build actions never see it. Without those secrets the release stops before publishing anything.
+Every `vX.Y.Z` release tag publishes the Windows installer and signed Full APKs together (`Starlit-Android-<abi>-X.Y.Z.apk`; most phones need `arm64-v8a`). The release workflow builds the APKs with the release version (`-Pnuvio.app.versionName` / `-Pnuvio.app.versionCode` from `composeApp/Configuration/DesktopVersion.properties`), so the in-app updater compares the installed APK with the release tag. The unsigned APK build receives only the official public account-server URL and client key from repository secrets. A separate job that runs only GitHub's own actions signs the APKs with the private signing credentials in `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, so third-party build actions never see the signing key. A release stops before publishing if the required account-server or signing settings are missing.
 
 The Full updater checks this fork's public GitHub releases and picks the APK for the phone's ABI. Play Store builds disable the in-app updater.
 
@@ -76,21 +76,25 @@ To move locally configured add-ons without an account, open **Settings → Add-o
 
 Backups include configured URLs, add-on order, enabled states and custom names for the current profile. Imports append missing add-ons in backup order and skip duplicates, preserving existing entries. Unreachable add-ons remain installed and can be refreshed later. Profiles using the primary profile's add-ons must import from the primary profile. Backups can contain access keys inside configured URLs; keep them private. They do not include JavaScript plugins or account/provider settings.
 
-Starlit 1.0.42 and later use `https://accounts.example.invalid` for accounts automatically on desktop and Android. Builds with the **Request account** option let new users submit their email and a password; the request remains pending until the server owner explicitly approves it from an email link. A pending request cannot sign in, and direct public account creation remains disabled. Existing approved accounts can sign in with the same credentials and profile on each device. No custom-server setup is needed. Guest mode remains available, and existing guest data and saved custom-server choices are preserved. Guest libraries, profiles and watch progress remain on that installation until explicitly imported into an account.
+Release builds can connect to an account server configured by the distributor. When one is configured, existing approved users can sign in on desktop and Android with the same account and profile to sync supported data. Builds with **Request account** let new users submit an email and password for review by the server owner; requests remain pending until approved. A pending account cannot sign in, and the owner controls whether registrations are accepted. If the build has no account server configured, you can still use guest mode. Guest mode, existing local data and saved custom-server choices remain available; guest libraries, profiles and watch progress stay on that device until explicitly imported into an account.
 
-The checked-in `composeApp/Configuration/AccountServer.properties` contains only the public Starlit URL and anon client key. To build against another compatible backend, override both values using these environment variables or entries in ignored `local.properties` before building (`local.properties` takes precedence):
+### Build-time account configuration
+
+The official account URL and public client key are provided to the release workflow using the `STARLIT_OFFICIAL_SUPABASE_URL` and `STARLIT_OFFICIAL_SUPABASE_ANON_KEY` repository secrets. These values are bundled into the published desktop and Android apps, so the key must be a public anon/publishable key. They are not maintained in the public source tree. Both values are required for the release workflow; it stops if either is missing.
+
+For local builds, set these values in your environment or in the ignored root `local.properties` (`local.properties` takes precedence):
 
 ```properties
-NUVIO_SUPABASE_URL=https://your-backend.example
-NUVIO_SUPABASE_ANON_KEY=your-public-anon-or-publishable-key
+NUVIO_SUPABASE_URL=https://your-account-server.example
+NUVIO_SUPABASE_ANON_KEY=your-public-client-key
 NUVIO_SUPABASE_FALLBACK_URL=
 ```
 
-Only a public client key belongs in an app. Never embed a Supabase service-role key or private JWT signing secret. A different build-time URL without its own key deliberately gets no Starlit key. Desktop and mobile must use the same server, account and profile for shared data. Play Store builds use the same default because custom-server selection is disabled. Unsupported TV-code login, profile PINs, account deletion and Nuvio membership/catalog features stay disabled on the Starlit server.
+Only a public client key belongs in an app. Never embed a service-role key, password or private signing secret. Configure a URL and its matching public key together. Desktop and mobile must use the same server, account and profile for shared data. Play Store builds use their build-time configured server because custom-server selection is disabled. TV-code login, profile PINs, account deletion and membership features are available only when the server explicitly supports them.
 
-To choose another server in a Full build, open **Profile → Account → Sign Out** and confirm. On the login screen, choose **Server options → Connect to custom server**, enter its discovery address, choose **Check server**, and review/confirm trust. Close the server sheet and sign into an account on that server (registration depends on its policy). For the local emulator setup below, enter `http://127.0.0.1:8787` after forwarding both ports.
+To choose another server in a Full build, open **Profile → Account → Sign Out** and confirm. On the login screen, choose **Server options → Connect to custom server**, enter its discovery address, choose **Check server**, and review/confirm trust. Close the server sheet and sign into an account on that server (registration depends on its policy). Developers using a local server with an Android emulator can forward the relevant local ports using `adb reverse` and enter the server's forwarded discovery URL.
 
-Account sync uses a Supabase-compatible Auth and PostgREST contract, implemented by either the Cloudflare Worker or your own Supabase backend described below. A guest ID is only a local identifier, not a server user. The app skips backend availability probes when its backend configuration is blank.
+Account sync requires a compatible server implementing the app's authentication, discovery and data-sync contracts. A guest ID is only a local identifier, not a server user. The app skips server availability probes when its account-server configuration is blank.
 
 | Data | Desktop and Android behavior |
 | --- | --- |
@@ -99,11 +103,7 @@ Account sync uses a Supabase-compatible Auth and PostgREST contract, implemented
 | Debrid, TMDB, MDBList, IntroDB credentials and AnimeSkip client ID | Sensitive values synced by a dedicated provider-credential RPC |
 | Downloaded media, device paths, desktop schedules and updater state | Device-local |
 
-Only connect to an account backend you trust: it stores both viewing data and supported provider credentials. An empty Supabase project is insufficient; it needs the required schema, RPCs, functions and access policies. Existing Nuvio accounts are not automatically available to this fork.
-
-The simplest free option is the [Cloudflare sync Worker](../private-server-setup): it runs on the Workers Free plan, and each new account needs the owner's approval by email. Its address (`https://starlit-sync.<subdomain>.workers.dev`) is the custom server to enter on every device. If a sign-up is waiting for approval, the app says so, and signing in explains the account is not approved yet.
-
-The independent [Starlit sync backend](../private-server-setup) supplies the same client contracts for your own Supabase stack/project. Follow its setup, test and deployment instructions, create a new account there, then use the same server/account/profile on desktop and mobile. For an Android emulator, `adb reverse tcp:8787 tcp:8787` and `adb reverse tcp:54321 tcp:54321` let the app use the desktop discovery address `http://127.0.0.1:8787`. The backend guide covers physical devices and deployment. TV login, profile PINs, membership services and account deletion are outside the initial backend; discovery disables TV login.
+Only connect to an account server you trust: it stores viewing data and supported provider credentials. A compatible server must supply the appropriate authentication, data schema, functions and access policies; an empty database project is not sufficient. Existing Nuvio accounts are not automatically available to this fork. Server implementation, deployment and private infrastructure configuration are maintained separately from this public client repository.
 
 The `gateway/` Cloudflare Worker only caches schedule-provider/artwork responses. It is unrelated to authentication or account sync. Its `/health` endpoint returned HTTP 200 during the 2026-10-28 audit. Upstream `https://api.nuvio.tv/auth/v1/settings` returned HTTP 401 without credentials, which is an authentication requirement rather than evidence of an outage. Neither check establishes access to upstream account data.
 

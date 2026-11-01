@@ -615,14 +615,22 @@ fun runtimeConfigBoolean(key: String, default: Boolean): Boolean =
     }
 
 val accountServerDefaults = Properties().apply {
-    rootProject.file("composeApp/Configuration/AccountServer.properties").inputStream().use(::load)
+    val file = rootProject.file("composeApp/Configuration/AccountServer.properties")
+    if (file.isFile) file.inputStream().use(::load)
 }
-val defaultAccountServerUrl = accountServerDefaults.getProperty("URL")
+val defaultAccountServerUrl = runtimeConfigValue(
+    "STARLIT_OFFICIAL_SUPABASE_URL",
+    accountServerDefaults.getProperty("URL").orEmpty(),
+)
+val defaultAccountServerKey = runtimeConfigValue(
+    "STARLIT_OFFICIAL_SUPABASE_ANON_KEY",
+    accountServerDefaults.getProperty("ANON_KEY").orEmpty(),
+)
 val configuredAccountServerUrl = runtimeConfigValue("NUVIO_SUPABASE_URL", defaultAccountServerUrl)
 // A different backend must provide its own key; never pair it with Starlit's key.
 val configuredAccountServerKey = runtimeConfigValue(
     "NUVIO_SUPABASE_ANON_KEY",
-    if (configuredAccountServerUrl.trimEnd('/').equals(defaultAccountServerUrl, ignoreCase = true)) accountServerDefaults.getProperty("ANON_KEY") else "",
+    if (configuredAccountServerUrl.trimEnd('/').equals(defaultAccountServerUrl.trimEnd('/'), ignoreCase = true)) defaultAccountServerKey else "",
 )
 
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {

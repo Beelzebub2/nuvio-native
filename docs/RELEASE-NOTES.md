@@ -50,7 +50,7 @@
 ### New
 
 - Starlit is now available for Android 7.0 and later. Signed Full APKs for ARM64, ARMv7, x86 and x86_64 are included alongside the Windows installer; most phones need **arm64-v8a**. Fresh installs start with a usable guest profile, and future Full APK updates come from Starlit's own releases.
-- Desktop and Android can share profiles, add-ons, library, watch progress, history, collections and provider credentials through your own configured, trusted account server, using the same account and profile on every device. Server source and setup instructions are included for Cloudflare with owner-approved sign-ups, plus a Supabase alternative.
+- Desktop and Android can share profiles, add-ons, library, watch progress, history, collections and provider credentials through a compatible, trusted account server, using the same account and profile on every device. Account-server configuration is covered in the Android guide; the server implementation is maintained separately.
 
 ### Fixes
 

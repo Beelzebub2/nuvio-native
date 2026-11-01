@@ -69,7 +69,13 @@ jobs:
           "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Test and build the installer
         shell: pwsh
+        env:
+          STARLIT_OFFICIAL_SUPABASE_URL: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_URL }}
+          STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:STARLIT_OFFICIAL_SUPABASE_URL) -or [string]::IsNullOrWhiteSpace($env:STARLIT_OFFICIAL_SUPABASE_ANON_KEY)) {
+            throw 'Missing STARLIT_OFFICIAL_SUPABASE_URL or STARLIT_OFFICIAL_SUPABASE_ANON_KEY release secret.'
+          }
           & .\gradlew.bat :composeApp:desktopTest :composeApp:packageReleaseInstaller "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT" '-Pcompose.desktop.packaging.checkJdkVendor=false' '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' '-Pkotlin.daemon.jvmargs=-Xmx3072m' --no-configuration-cache --no-daemon --console=plain
           if ($LASTEXITCODE -ne 0) { throw 'Tests or packaging failed.' }
       - name: Verify package and write checksums
@@ -130,18 +136,25 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
-      # No secrets in this job: it runs third-party actions and Gradle init scripts. The APKs are
-      # built unsigned and signed in android-sign, which runs only GitHub's own actions.
+      # The public account-server client settings are limited to the Gradle build step.
+      # APK signing secrets stay in android-sign, which runs only GitHub's own actions.
       - name: Build unsigned release APKs
         # The APK carries the release version so the in-app updater compares it with the release tag.
-        run: >-
-          ./gradlew :androidApp:assembleFullRelease
-          -Pnuvio.android.distribution=full
-          -Pnuvio.app.versionName=${RELEASE_VERSION}
-          -Pnuvio.app.versionCode=${RELEASE_VERSION_CODE}
-          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
-          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
-          --no-configuration-cache --no-daemon --console=plain
+        env:
+          STARLIT_OFFICIAL_SUPABASE_URL: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_URL }}
+          STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
+        run: |
+          if [[ -z "${STARLIT_OFFICIAL_SUPABASE_URL//[[:space:]]/}" || -z "${STARLIT_OFFICIAL_SUPABASE_ANON_KEY//[[:space:]]/}" ]]; then
+            echo '::error::Missing STARLIT_OFFICIAL_SUPABASE_URL or STARLIT_OFFICIAL_SUPABASE_ANON_KEY release secret.'
+            exit 1
+          fi
+          ./gradlew :androidApp:assembleFullRelease \
+            -Pnuvio.android.distribution=full \
+            -Pnuvio.app.versionName="${RELEASE_VERSION}" \
+            -Pnuvio.app.versionCode="${RELEASE_VERSION_CODE}" \
+            '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8' \
+            '-Pkotlin.daemon.jvmargs=-Xmx3072m' \
+            --no-configuration-cache --no-daemon --console=plain
       - name: Name the unsigned APKs
         run: |
           mkdir -p unsigned

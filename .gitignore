@@ -7,6 +7,8 @@
 xcuserdata
 !src/**/build/
 local.properties
+/composeApp/Configuration/AccountServer.properties
+/.worktrees/
 .idea
 .DS_Store
 captures
