@@ -14,7 +14,13 @@ thread_local FileDialogCancellation *currentFileDialog = nullptr;
 void CALLBACK cancelFileDialog(HWND, UINT, UINT_PTR, DWORD) {
     auto *state = currentFileDialog;
     if (state && state->env->CallBooleanMethod(state->flag, state->get)) {
-        state->dialog->Close(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        // IFileDialog::Close is only effective inside its event callbacks, not a TIMERPROC.
+        ComPtr<IOleWindow> nativeWindow;
+        HWND window = nullptr;
+        if (SUCCEEDED(state->dialog->QueryInterface(IID_PPV_ARGS(&nativeWindow))) &&
+            SUCCEEDED(nativeWindow->GetWindow(&window))) {
+            PostMessageW(window, WM_CLOSE, 0, 0);
+        }
     }
 }
 
