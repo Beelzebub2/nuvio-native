@@ -69,7 +69,7 @@ class DesktopDownloadRecoveryTest {
             assertNull(recoverKnownDesktopDownload(failed.copy(id = "different-task"), root.absolutePath))
             val restored = assertNotNull(recoverKnownDesktopDownload(failed, root.absolutePath))
             assertEquals(DownloadStatus.Completed, restored.status)
-            assertEquals(item.localFileUri, restored.localFileUri)
+            assertEquals(downloadPath(item).canonicalFile.toURI().toString(), restored.localFileUri)
             assertEquals(item.logicalContentKey, discoverDesktopDownloads(root.absolutePath).single().logicalContentKey)
             assertNull(recoverKnownDesktopDownload(failed.copy(parentMetaId = "other-series"), root.absolutePath),
                 "An existing identity sidecar must reject conflicting catalogue IDs")
@@ -184,7 +184,7 @@ class DesktopDownloadRecoveryTest {
             val adopted = DownloadsRepository.uiState.value.items.single()
             assertEquals(DownloadStatus.Completed, adopted.status)
             assertEquals(guestRoot.canonicalPath, adopted.destinationDirectory)
-            assertEquals(downloadPath(completedGuest).toURI().toString(), adopted.localFileUri)
+            assertEquals(downloadPath(completedGuest).canonicalFile.toURI().toString(), adopted.localFileUri)
             assertTrue(downloadPath(completedGuest).isFile)
             assertTrue(accountRoot.listFiles().isNullOrEmpty(), "Recovery should never move or copy media")
         } finally {
