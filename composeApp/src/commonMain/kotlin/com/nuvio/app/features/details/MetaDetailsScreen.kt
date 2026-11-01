@@ -1494,6 +1494,8 @@ fun MetaDetailsScreen(
                                                         onWatchedClick = toggleWatched,
                                                         onSaveClick = toggleSaved,
                                                         onSaveLongClick = openLibraryListPicker,
+                                                        watchLaterPreview = MetaPreview(meta.id, meta.type, meta.name,
+                                                            poster = meta.poster, banner = meta.background, logo = meta.logo),
                                                     )
                                                 }
                                             } else {
@@ -1794,12 +1796,12 @@ fun MetaDetailsScreen(
                             val episodeMenuAnchor = remember(selectedEpisode) {
                                 if (isDesktop) NuvioContextMenuAnchorHolder.consume() else null
                             }
+                            val watchLaterItems by remember {
+                                WatchLaterRepository.ensureLoaded()
+                                WatchLaterRepository.items
+                            }.collectAsStateWithLifecycle()
+                            val watchLaterPreview = remember(meta, selectedEpisode) { meta.toWatchLaterPreview(selectedEpisode) }
                             if (episodeMenuAnchor != null) {
-                                val watchLaterItems by remember {
-                                    WatchLaterRepository.ensureLoaded()
-                                    WatchLaterRepository.items
-                                }.collectAsStateWithLifecycle()
-                                val watchLaterPreview = remember(meta, selectedEpisode) { meta.toWatchLaterPreview(selectedEpisode) }
                                 EpisodeContextMenu(
                                     episode = selectedEpisode,
                                     anchorInRoot = episodeMenuAnchor,
@@ -1833,6 +1835,8 @@ fun MetaDetailsScreen(
                                     onToggleWatched = toggleSelectedWatched,
                                     onTogglePreviousWatched = togglePreviousWatched,
                                     onToggleSeasonWatched = toggleSelectedSeasonWatched,
+                                    isSavedForLater = watchLaterItems.any { it.matchesWatchLaterPreview(watchLaterPreview) },
+                                    onToggleWatchLater = { WatchLaterRepository.toggle(watchLaterPreview) },
                                     showPlayManually = showManualPlayOption,
                                     onPlayManually = {
                                         onEpisodeManualPlayClick(selectedEpisode)
@@ -2700,6 +2704,8 @@ private fun ConfiguredMetaSections(
                     onWatchedClick = onWatchedClick,
                     onSaveClick = onSaveClick,
                     onSaveLongClick = onSaveLongClick,
+                    watchLaterPreview = MetaPreview(meta.id, meta.type, meta.name,
+                        poster = meta.poster, banner = meta.background, logo = meta.logo),
                 )
             }
             MetaScreenSectionKey.OVERVIEW -> {

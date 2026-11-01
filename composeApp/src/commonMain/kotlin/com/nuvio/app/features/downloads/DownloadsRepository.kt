@@ -370,7 +370,7 @@ object DownloadsRepository {
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
 
     private fun pumpQueue() {
-        val limit = if (isDesktop) DownloadDesktopFeatures.parallelDownloads() else Int.MAX_VALUE
+        val limit = DownloadDesktopFeatures.parallelDownloads()
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
             .take((limit - activeHandles.size).coerceAtLeast(0)).forEach { startDownload(it) }
     }

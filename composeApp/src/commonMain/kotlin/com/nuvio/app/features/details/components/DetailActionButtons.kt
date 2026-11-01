@@ -23,12 +23,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +49,10 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.secondaryClick
+import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchlater.WatchLaterRepository
+import com.nuvio.app.features.watchlater.matchesWatchLaterPreview
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.details_actions_menu_label
@@ -257,7 +264,15 @@ fun DetailActions(
     onWatchedClick: () -> Unit,
     onSaveClick: () -> Unit,
     onSaveLongClick: (() -> Unit)?,
+    watchLaterPreview: MetaPreview? = null,
 ) {
+    val watchLaterItems by remember {
+        WatchLaterRepository.ensureLoaded()
+        WatchLaterRepository.items
+    }.collectAsState()
+    val isSavedForLater = watchLaterPreview?.let { preview ->
+        watchLaterItems.any { it.matchesWatchLaterPreview(preview) }
+    } == true
     val shuffleAction = onShuffleClick?.let { onClick ->
         DetailSecondaryAction(
             label = stringResource(if (shuffleEnabled) Res.string.shuffle_stop else Res.string.random_episode_title),
@@ -272,6 +287,14 @@ fun DetailActions(
         pinnedAction = shuffleAction?.takeIf { shuffleEnabled },
         secondaryActions = buildList {
             if (!shuffleEnabled) shuffleAction?.let(::add)
+            if (!isDesktop && watchLaterPreview != null) {
+                add(DetailSecondaryAction(
+                    label = if (isSavedForLater) "Remove from Watch Later" else "Save to Watch Later",
+                    icon = if (isSavedForLater) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    isActive = isSavedForLater,
+                    onClick = { WatchLaterRepository.toggle(watchLaterPreview) },
+                ))
+            }
             add(
                 DetailSecondaryAction(
                     label = stringResource(if (isWatched) Res.string.hero_mark_unwatched else Res.string.hero_mark_watched),

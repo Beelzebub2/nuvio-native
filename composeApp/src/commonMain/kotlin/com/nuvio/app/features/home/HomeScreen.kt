@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.AppScreenTab
 import com.nuvio.app.isDesktop
+import com.nuvio.app.isIos
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.network.NetworkCondition
@@ -935,7 +936,7 @@ fun HomeScreen(
         homeCatalogLoading = homeUiState.isLoading,
     )
 
-    if (isDesktop && LocalScreenActive.current && homeSettingsUiState.askToShowBuiltInAiring) {
+    if (!isIos && LocalScreenActive.current && homeSettingsUiState.askToShowBuiltInAiring) {
         BuiltInAiringChoiceDialog(onChoose = HomeCatalogSettingsRepository::setShowBuiltInAiring)
     }
 
@@ -1039,7 +1040,7 @@ fun HomeScreen(
                 }
             }
 
-            if (isDesktop &&
+            if (!isIos &&
                 homeSettingsUiState.builtInAiringPreferenceLoaded &&
                 homeSettingsUiState.showBuiltInAiring &&
                 !homeSettingsUiState.askToShowBuiltInAiring
