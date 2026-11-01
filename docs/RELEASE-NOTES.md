@@ -1,3 +1,17 @@
+## Starlit 1.2.0
+
+### Features
+
+- **Native desktop file dialogs:** Windows uses the system open, save and folder dialogs for download locations and addon backup import/export, including Unicode paths, file filters, cancellation and overwrite confirmation.
+- Metadata requests use the new hosted Starlit gateway, with caching and compatibility for installed releases using the previous endpoint.
+
+### Fixes
+
+- **Anonymous settings import** stays responsive while restoring providers and checking download files. Importing again safely cancels old refreshes instead of crashing when their completion handlers run.
+- An animated import popup shows the real restoration and account-sync stages, plus counts of saved addons, providers, downloads, library/history items and lists. It keeps the Close action accessible on compact screens and never displays imported API keys.
+- Repeated import clicks share the active operation. Retrying a pending import preserves changes made after its first application, and imported theme or language changes no longer interrupt the operation.
+- **Hidden Airing Now anime sync across Windows and Android** for the same account profile. Existing hidden lists are uploaded once, and showing titles again, including clearing the final entry, updates other devices on sync.
+
 ## Starlit 1.1.0
 
 ### Improvements
