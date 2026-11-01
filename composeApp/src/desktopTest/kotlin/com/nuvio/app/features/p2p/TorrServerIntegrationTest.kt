@@ -40,7 +40,7 @@ class TorrServerIntegrationTest {
             assertEquals(JsonPrimitive(false), applied["UseDisk"])
             assertEquals(JsonPrimitive(true), applied["DisableUpload"])
             assertEquals(JsonPrimitive(100), applied["ConnectionsLimit"])
-            assertEquals(JsonPrimitive(10), applied["PreloadCache"])
+            assertEquals(JsonPrimitive(50), applied["PreloadCache"])
             assertEquals(JsonPrimitive(95), applied["ReaderReadAHead"])
         } finally {
             backend.stop()

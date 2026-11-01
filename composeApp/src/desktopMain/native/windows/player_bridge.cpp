@@ -1722,7 +1722,9 @@ private:
             } else {
                 setMpvOptionStringLocked("vd-lavc-software-fallback", "yes");
             }
-            setMpvOptionStringLocked("vd-lavc-threads", "4");
+            // Allow FFmpeg to select decoder threads for the actual CPU. Four
+            // hard-coded threads can bottleneck high-resolution software fallback.
+            setMpvOptionStringLocked("vd-lavc-threads", "0");
             setMpvOptionStringLocked("tone-mapping", "auto");
             setMpvOptionStringLocked("dither-depth", "auto");
             setMpvOptionStringLocked("deband", "yes");
@@ -1732,6 +1734,16 @@ private:
             setMpvOptionStringLocked("demuxer-max-back-bytes", "256MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
             setMpvOptionStringLocked("cache-secs", "36000");
+            if (sourceUrl.rfind("http://127.0.0.1:", 0) == 0 &&
+                sourceUrl.find("/stream?") != std::string::npos) {
+                // TorrServer's HTTP source can pause for new torrent pieces. Wait for a
+                // real demuxer cushion before playback and after an underrun, rather
+                // than repeatedly resuming after mpv's default one second.
+                setMpvOptionStringLocked("cache", "yes");
+                setMpvOptionStringLocked("cache-pause", "yes");
+                setMpvOptionStringLocked("cache-pause-initial", "yes");
+                setMpvOptionStringLocked("cache-pause-wait", "8");
+            }
             setMpvOptionStringLocked("hr-seek", "no");
 
             int64_t wid = (int64_t)(intptr_t)containerHwnd;
@@ -2108,10 +2120,9 @@ private:
         double effectivePosition = effectiveCachePositionSeconds();
         double cacheTime = doubleProperty("demuxer-cache-time", 0.0);
         if (std::isfinite(cacheTime) && cacheTime > 0.0) {
-            if (cacheTime >= effectivePosition - 5.0) {
-                return std::max(cacheTime - effectivePosition, 0.0);
-            }
-            return cacheTime;
+            // mpv reports the last buffered timestamp, NOT a relative duration.
+            // After a distant seek an old timestamp must never appear as seconds ahead.
+            return std::max(cacheTime - effectivePosition, 0.0);
         }
 
         double cacheDuration = doubleProperty("demuxer-cache-duration", 0.0);

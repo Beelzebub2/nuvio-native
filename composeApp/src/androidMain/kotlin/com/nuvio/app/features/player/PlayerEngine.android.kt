@@ -388,13 +388,17 @@ private fun ExoPlayerSurface(
             setParameters(parameters)
         }
 
+        // A torrent on loopback is still served by remote peers. The 1s/2s Media3
+        // defaults can cause a high-bitrate file to repeatedly start and stall.
+        // Give these sources more headroom without delaying normal direct/local files.
+        val bufferPolicy = androidPlaybackBufferPolicy(isLoopbackPlaybackSource(sourceUrl))
         val loadControl = DefaultLoadControl.Builder()
             .setBackBuffer(10_000, true)
             .setBufferDurationsMs(
                 DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
                 50_000,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                bufferPolicy.startMs,
+                bufferPolicy.afterRebufferMs,
             )
             .build()
 
