@@ -9,12 +9,12 @@
 
 Made by [Beelzebub2](https://github.com/Beelzebub2) · Based on [Nuvio](https://github.com/NuvioMedia/NuvioDesktop) by Tapframe and friends
 
-[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3965D4?style=flat-square)](https://github.com/Beelzebub2/nuvio-native/releases/latest)
+[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3965D4?style=flat-square)](https://github.com/Beelzebub2/starlit/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-B250EF?style=flat-square)](LICENSE)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-45D6EB?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-3965D4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/compose-multiplatform/)
 
-**[Download for Windows](https://github.com/Beelzebub2/nuvio-native/releases/latest)** · [What's new](docs/RELEASE-NOTES.md) · [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md)
+**[Download for Windows](https://github.com/Beelzebub2/starlit/releases/latest)** · [What's new](docs/RELEASE-NOTES.md) · [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md)
 
 </div>
 
@@ -51,7 +51,7 @@ Made by [Beelzebub2](https://github.com/Beelzebub2) · Based on [Nuvio](https://
 
 Starlit runs on Windows 10 and 11 (64-bit).
 
-1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/nuvio-native/releases/latest).
+1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/starlit/releases/latest).
 2. Run it. Setup installs to `%LOCALAPPDATA%\Starlit` and lets you choose the folder and shortcuts.
 3. For updates, sign in to the [GitHub CLI](https://cli.github.com/) once with `gh auth login`. Starlit checks for updates at startup, every six hours, and from Settings → About.
 

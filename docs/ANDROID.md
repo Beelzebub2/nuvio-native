@@ -68,7 +68,7 @@ On 2026-10-28 the Full debug APK was verified on an Android 16 (API 36, x86_64) 
 
 On 2026-10-29 the Full debug APK from CI commit `8928dc37` was clean-installed on the API 36 emulator. A cold launch created a new guest, reached Home with Home/Search/Library/Profile navigation available, and kept the app process stable without an app runtime crash.
 
-Both Android debug APK builds and host suites pass on Linux CI: Full reports 1,611 tests with no failures or skips; Play Store reports 1,591 tests with no failures and six skips. The Windows Android host suite runs 1,611 tests with six failures in download persistence/subtitle fixtures that use Android AtomicFile; those cases pass on Linux CI. The hero pager, episode rating, subtitle restore and playback regressions pass. The desktop Windows suite passes all 1,645 tests. See [the mobile/backend pull request](https://github.com/Beelzebub2/nuvio-native/pull/14) for the recorded results and current CI status.
+Both Android debug APK builds and host suites pass on Linux CI: Full reports 1,611 tests with no failures or skips; Play Store reports 1,591 tests with no failures and six skips. The Windows Android host suite runs 1,611 tests with six failures in download persistence/subtitle fixtures that use Android AtomicFile; those cases pass on Linux CI. The hero pager, episode rating, subtitle restore and playback regressions pass. The desktop Windows suite passes all 1,645 tests. See [the mobile/backend pull request](https://github.com/Beelzebub2/starlit/pull/14) for the recorded results and current CI status.
 
 ## Servers and account sync
 
