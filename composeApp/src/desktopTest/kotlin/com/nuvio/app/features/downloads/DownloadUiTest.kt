@@ -14,6 +14,7 @@ import com.nuvio.app.features.library.LibraryDownloadsButton
 import com.nuvio.app.features.streams.StreamItem
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.net.URI
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import org.junit.Rule
@@ -39,8 +40,7 @@ class DownloadUiTest {
         show: String? = null, episode: Int? = null): DownloadItem {
         val file = File(File(root, id).apply { mkdirs() }, "$id.mp4")
         File(file.parentFile, ".starlit-owner").writeText(id)
-        if (status == DownloadStatus.Completed) file.writeBytes(byteArrayOf(1,2,3))
-        return DownloadItem(id, if (show == null) "movie" else "series", show ?: id,
+        val download = DownloadItem(id, if (show == null) "movie" else "series", show ?: id,
             if (show == null) "movie" else "series", id, show ?: id,
             seasonNumber = if (show == null) null else 1, episodeNumber = episode,
             episodeTitle = if (show == null) null else "Episode $episode",
@@ -48,6 +48,19 @@ class DownloadUiTest {
             localFileUri = if (status == DownloadStatus.Completed) file.toURI().toString() else null,
             destinationDirectory = root.absolutePath, fileName = file.name, status = status,
             createdAtEpochMs = 0, updatedAtEpochMs = 0)
+        if (status == DownloadStatus.Completed) {
+            file.writeBytes(byteArrayOf(1, 2, 3))
+            // A restored completed file must carry a durable integrity proof.
+            // Previously the UI fixture treated an unverified file as playable,
+            // which is correctly rejected by the background verification worker.
+            writeDesktopDownloadProof(file, DesktopDownloadProof(
+                download.id, download.fileName,
+                downloadSourceFingerprint(download, download.sourceUrl),
+                downloadEndpointFingerprint(URI(download.sourceUrl)),
+                "\"fixture\"", file.length(), downloadSha256File(file),
+            ))
+        }
+        return download
     }
 
     private fun scrollToText(text: String): SemanticsNodeInteraction {
