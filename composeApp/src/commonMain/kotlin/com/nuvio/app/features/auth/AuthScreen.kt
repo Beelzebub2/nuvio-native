@@ -94,7 +94,13 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.auth_owner_created_accounts
+import nuvio.composeapp.generated.resources.auth_request_account
+import nuvio.composeapp.generated.resources.auth_request_account_subtitle
+import nuvio.composeapp.generated.resources.auth_request_password_minimum
+import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
+import nuvio.composeapp.generated.resources.auth_request_submitted_detail
+import nuvio.composeapp.generated.resources.auth_request_submitted_subtitle
+import nuvio.composeapp.generated.resources.auth_request_submitted_title
 import nuvio.composeapp.generated.resources.compose_auth_already_have_account
 import nuvio.composeapp.generated.resources.compose_auth_continue_without_account
 import nuvio.composeapp.generated.resources.compose_auth_create_account
@@ -192,6 +198,8 @@ fun AuthScreen(
     val authError by AuthRepository.error.collectAsStateWithLifecycle()
     val deviceLinkAuthState by DeviceLinkAuthRepository.state.collectAsStateWithLifecycle()
     val serverConnectionState by ServerConnectionController.state.collectAsStateWithLifecycle()
+    val backendUrl = serverConnectionState.activeServer.backendUrl
+    val isStarlitServer = !serverConnectionState.activeServer.supportsNuvioAccountFeatures
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var isSignUp by rememberSaveable { mutableStateOf(false) }
@@ -199,26 +207,62 @@ fun AuthScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
+    var isRequestPending by rememberSaveable(backendUrl) { mutableStateOf(false) }
+    var passwordTooShort by rememberSaveable(backendUrl) { mutableStateOf(false) }
+    var lastBackendUrl by remember { mutableStateOf(backendUrl) }
     var emailFieldBounds by remember { mutableStateOf<Rect?>(null) }
     var passwordFieldBounds by remember { mutableStateOf<Rect?>(null) }
     var showServerSheet by rememberSaveable { mutableStateOf(false) }
     var showOfficialServerDialog by rememberSaveable { mutableStateOf(false) }
 
     fun submitAuth() {
-        if (email.isBlank() || password.length < 6 || isLoading) return
+        if (email.isBlank() || isLoading || isRequestPending) return
+        val minimumPasswordLength = if (isSignUp && isStarlitServer) 12 else 6
+        if (password.length < minimumPasswordLength) {
+            if (isSignUp && isStarlitServer) passwordTooShort = true
+            return
+        }
+        val submittingSignUp = isSignUp
+        val submittingStarlitRequest = submittingSignUp && isStarlitServer
+        val submittingServerUrl = backendUrl
+        val submittingEmail = email
+        val submittingPassword = password
         DeviceLinkAuthRepository.cancel()
         isLoading = true
         focusManager.clearFocus(force = true)
         scope.launch {
-            if (isSignUp) AuthRepository.signUpWithEmail(email, password)
-            else AuthRepository.signInWithEmail(email, password)
-            isLoading = false
+            try {
+                val result = if (submittingSignUp) {
+                    AuthRepository.signUpWithEmail(submittingEmail, submittingPassword)
+                } else {
+                    AuthRepository.signInWithEmail(submittingEmail, submittingPassword)
+                }
+                if (submittingStarlitRequest && result.isSuccess &&
+                    submittingServerUrl == ServerConnectionController.state.value.activeServer.backendUrl
+                ) {
+                    isRequestPending = true
+                    password = ""
+                    passwordVisible = false
+                }
+            } finally {
+                isLoading = false
+            }
         }
     }
 
     fun toggleAuthMode() {
+        if (isLoading) return
         DeviceLinkAuthRepository.cancel()
         isSignUp = !isSignUp
+        passwordTooShort = false
+        AuthRepository.clearError()
+    }
+
+    fun returnToSignIn() {
+        isRequestPending = false
+        isSignUp = false
+        password = ""
+        passwordTooShort = false
         AuthRepository.clearError()
     }
 
@@ -231,9 +275,12 @@ fun AuthScreen(
 
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    LaunchedEffect(serverConnectionState.activeServer.backendUrl) {
+    LaunchedEffect(backendUrl) {
         DeviceLinkAuthRepository.cancel()
-        if (!serverConnectionState.activeServer.supportsNuvioAccountFeatures) isSignUp = false
+        if (lastBackendUrl != backendUrl) {
+            lastBackendUrl = backendUrl
+            AuthRepository.clearError()
+        }
         if (!serverConnectionState.activeServer.isCustom) {
             showOfficialServerDialog = false
         }
@@ -283,6 +330,9 @@ fun AuthScreen(
                     AuthLargeLayout(
                         modifier = Modifier.fillMaxSize(),
                         isSignUp = isSignUp,
+                        isStarlitServer = isStarlitServer,
+                        isRequestPending = isRequestPending,
+                        passwordTooShort = passwordTooShort,
                         email = email,
                         password = password,
                         passwordVisible = passwordVisible,
@@ -301,11 +351,13 @@ fun AuthScreen(
                         },
                         onPasswordChange = {
                             password = it
+                            passwordTooShort = false
                             AuthRepository.clearError()
                         },
                         onPasswordVisibilityToggle = { passwordVisible = !passwordVisible },
                         onSubmit = ::submitAuth,
                         onToggleAuthMode = ::toggleAuthMode,
+                        onReturnToSignIn = ::returnToSignIn,
                         onContinueWithoutAccount = {
                             focusManager.clearFocus(force = true)
                             DeviceLinkAuthRepository.cancel()
@@ -319,6 +371,9 @@ fun AuthScreen(
                 } else {
                     AuthMobileLayout(
                         isSignUp = isSignUp,
+                        isStarlitServer = isStarlitServer,
+                        isRequestPending = isRequestPending,
+                        passwordTooShort = passwordTooShort,
                         email = email,
                         password = password,
                         passwordVisible = passwordVisible,
@@ -333,11 +388,13 @@ fun AuthScreen(
                         },
                         onPasswordChange = {
                             password = it
+                            passwordTooShort = false
                             AuthRepository.clearError()
                         },
                         onPasswordVisibilityToggle = { passwordVisible = !passwordVisible },
                         onSubmit = ::submitAuth,
                         onToggleAuthMode = ::toggleAuthMode,
+                        onReturnToSignIn = ::returnToSignIn,
                         onContinueWithoutAccount = {
                             focusManager.clearFocus(force = true)
                             DeviceLinkAuthRepository.cancel()
@@ -416,6 +473,9 @@ fun AuthScreen(
 @Composable
 private fun AuthMobileLayout(
     isSignUp: Boolean,
+    isStarlitServer: Boolean,
+    isRequestPending: Boolean,
+    passwordTooShort: Boolean,
     email: String,
     password: String,
     passwordVisible: Boolean,
@@ -429,6 +489,7 @@ private fun AuthMobileLayout(
     onPasswordVisibilityToggle: () -> Unit,
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
+    onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
     onCancelDeviceLink: () -> Unit,
@@ -459,6 +520,8 @@ private fun AuthMobileLayout(
 
             AuthHeading(
                 isSignUp = isSignUp,
+                isStarlitServer = isStarlitServer,
+                isRequestPending = isRequestPending,
                 headingStyle = MaterialTheme.typography.headlineLarge.copy(
                     color = AuthTextPrimary,
                     fontSize = 28.sp,
@@ -477,6 +540,9 @@ private fun AuthMobileLayout(
 
             AuthForm(
                 isSignUp = isSignUp,
+                isStarlitServer = isStarlitServer,
+                isRequestPending = isRequestPending,
+                passwordTooShort = passwordTooShort,
                 email = email,
                 password = password,
                 passwordVisible = passwordVisible,
@@ -490,6 +556,7 @@ private fun AuthMobileLayout(
                 onPasswordVisibilityToggle = onPasswordVisibilityToggle,
                 onSubmit = onSubmit,
                 onToggleAuthMode = onToggleAuthMode,
+                onReturnToSignIn = onReturnToSignIn,
                 onContinueWithoutAccount = onContinueWithoutAccount,
                 onStartDeviceLink = onStartDeviceLink,
                 onCancelDeviceLink = onCancelDeviceLink,
@@ -504,6 +571,9 @@ private fun AuthMobileLayout(
 private fun AuthLargeLayout(
     modifier: Modifier = Modifier,
     isSignUp: Boolean,
+    isStarlitServer: Boolean,
+    isRequestPending: Boolean,
+    passwordTooShort: Boolean,
     email: String,
     password: String,
     passwordVisible: Boolean,
@@ -521,6 +591,7 @@ private fun AuthLargeLayout(
     onPasswordVisibilityToggle: () -> Unit,
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
+    onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
     onCancelDeviceLink: () -> Unit,
@@ -555,7 +626,8 @@ private fun AuthLargeLayout(
             )
             Spacer(modifier = Modifier.height(18.dp * scale))
             Text(
-                text = stringResource(Res.string.compose_auth_sign_up_subtitle),
+                text = if (isStarlitServer) stringResource(Res.string.auth_request_account_subtitle)
+                else stringResource(Res.string.compose_auth_sign_up_subtitle),
                 modifier = Modifier.widthIn(max = 400.dp * scale),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     color = AuthTextSecondary,
@@ -584,10 +656,13 @@ private fun AuthLargeLayout(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = formHorizontalPadding),
             ) {
                 AuthHeading(
                     isSignUp = isSignUp,
+                    isStarlitServer = isStarlitServer,
+                    isRequestPending = isRequestPending,
                     headingStyle = MaterialTheme.typography.headlineLarge.copy(
                         color = AuthTextPrimary,
                         fontSize = (30f * scale).sp,
@@ -606,6 +681,9 @@ private fun AuthLargeLayout(
 
                 AuthForm(
                     isSignUp = isSignUp,
+                    isStarlitServer = isStarlitServer,
+                    isRequestPending = isRequestPending,
+                    passwordTooShort = passwordTooShort,
                     email = email,
                     password = password,
                     passwordVisible = passwordVisible,
@@ -620,6 +698,7 @@ private fun AuthLargeLayout(
                     onPasswordVisibilityToggle = onPasswordVisibilityToggle,
                     onSubmit = onSubmit,
                     onToggleAuthMode = onToggleAuthMode,
+                    onReturnToSignIn = onReturnToSignIn,
                     onContinueWithoutAccount = onContinueWithoutAccount,
                     onStartDeviceLink = onStartDeviceLink,
                     onCancelDeviceLink = onCancelDeviceLink,
@@ -658,33 +737,45 @@ private fun AuthBrandLockup(
 @Composable
 private fun AuthHeading(
     isSignUp: Boolean,
+    isStarlitServer: Boolean,
+    isRequestPending: Boolean,
     headingStyle: TextStyle,
     subtitleStyle: TextStyle,
 ) {
+    val heading = when {
+        isRequestPending -> stringResource(Res.string.auth_request_submitted_title)
+        isSignUp && isStarlitServer -> stringResource(Res.string.auth_request_account)
+        isSignUp -> stringResource(Res.string.compose_auth_create_account)
+        else -> stringResource(Res.string.compose_auth_welcome_back)
+    }
+    val subtitle = when {
+        isRequestPending -> stringResource(Res.string.auth_request_submitted_subtitle)
+        isSignUp && isStarlitServer -> stringResource(Res.string.auth_request_account_subtitle)
+        isSignUp -> stringResource(Res.string.compose_auth_sign_up_subtitle)
+        else -> stringResource(Res.string.compose_auth_sign_in_subtitle)
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         AnimatedContent(
-            targetState = isSignUp,
+            targetState = heading,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "authHeading",
-        ) { signUp ->
+        ) { title ->
             Text(
-                text = if (signUp) stringResource(Res.string.compose_auth_create_account)
-                else stringResource(Res.string.compose_auth_welcome_back),
+                text = title,
                 style = headingStyle,
                 color = AuthTextPrimary,
             )
         }
         AnimatedContent(
-            targetState = isSignUp,
+            targetState = subtitle,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "authSubtitle",
-        ) { signUp ->
+        ) { description ->
             Text(
-                text = if (signUp) stringResource(Res.string.compose_auth_sign_up_subtitle)
-                else stringResource(Res.string.compose_auth_sign_in_subtitle),
+                text = description,
                 style = subtitleStyle,
                 color = AuthTextSecondary,
             )
@@ -695,6 +786,9 @@ private fun AuthHeading(
 @Composable
 private fun AuthForm(
     isSignUp: Boolean,
+    isStarlitServer: Boolean,
+    isRequestPending: Boolean,
+    passwordTooShort: Boolean,
     email: String,
     password: String,
     passwordVisible: Boolean,
@@ -709,12 +803,21 @@ private fun AuthForm(
     onPasswordVisibilityToggle: () -> Unit,
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
+    onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
 ) {
+    if (isRequestPending) {
+        AuthPendingRequestContent(
+            metrics = metrics,
+            scale = scale,
+            onReturnToSignIn = onReturnToSignIn,
+        )
+        return
+    }
     val uriHandler = LocalUriHandler.current
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -759,6 +862,18 @@ private fun AuthForm(
             ),
         )
 
+        if (isSignUp && isStarlitServer) {
+            Spacer(modifier = Modifier.height(10.dp * scale))
+            Text(
+                text = stringResource(Res.string.auth_request_password_minimum),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = if (passwordTooShort) MaterialTheme.colorScheme.error else AuthTextSecondary,
+                    fontSize = (13f * scale).sp,
+                    lineHeight = (18f * scale).sp,
+                ),
+            )
+        }
+
         authError?.let { errorText ->
             Spacer(modifier = Modifier.height(12.dp))
             Text(
@@ -784,7 +899,7 @@ private fun AuthForm(
             )
         }
 
-        if (isSignUp) {
+        if (isSignUp && !isStarlitServer) {
             Spacer(modifier = Modifier.height(14.dp * scale))
             AuthTermsAcknowledgement(
                 scale = scale,
@@ -795,8 +910,11 @@ private fun AuthForm(
         Spacer(modifier = Modifier.height(metrics.primaryTop))
 
         AuthPrimaryButton(
-            text = if (isSignUp) stringResource(Res.string.compose_auth_create_account)
-            else stringResource(Res.string.compose_auth_sign_in),
+            text = when {
+                isSignUp && isStarlitServer -> stringResource(Res.string.auth_request_account)
+                isSignUp -> stringResource(Res.string.compose_auth_create_account)
+                else -> stringResource(Res.string.compose_auth_sign_in)
+            },
             isLoading = isLoading,
             enabled = !isLoading,
             height = metrics.primaryHeight,
@@ -806,19 +924,12 @@ private fun AuthForm(
 
         Spacer(modifier = Modifier.height(metrics.toggleTop))
 
-        if (ServerConnectionController.state.value.activeServer.supportsNuvioAccountFeatures) {
-            AuthModeToggle(
-                isSignUp = isSignUp,
-                scale = scale,
-                onToggleAuthMode = onToggleAuthMode,
-            )
-        } else {
-            Text(
-                text = stringResource(Res.string.auth_owner_created_accounts),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        AuthModeToggle(
+            isSignUp = isSignUp,
+            isStarlitServer = isStarlitServer,
+            scale = scale,
+            onToggleAuthMode = onToggleAuthMode,
+        )
 
         Spacer(modifier = Modifier.height(metrics.dividerTop))
 
@@ -859,6 +970,33 @@ private fun AuthForm(
                 fontWeight = FontWeight.Normal,
             ),
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun AuthPendingRequestContent(
+    metrics: AuthFormMetrics,
+    scale: Float,
+    onReturnToSignIn: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(Res.string.auth_request_submitted_detail),
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = AuthTextSecondary,
+                fontSize = (15f * scale).sp,
+                lineHeight = (22f * scale).sp,
+            ),
+        )
+        Spacer(modifier = Modifier.height(metrics.primaryTop))
+        AuthPrimaryButton(
+            text = stringResource(Res.string.auth_request_return_to_sign_in),
+            isLoading = false,
+            enabled = true,
+            height = metrics.primaryHeight,
+            scale = scale,
+            onClick = onReturnToSignIn,
         )
     }
 }
@@ -1039,6 +1177,7 @@ internal fun AuthPrimaryButton(
 @Composable
 private fun AuthModeToggle(
     isSignUp: Boolean,
+    isStarlitServer: Boolean,
     scale: Float,
     onToggleAuthMode: () -> Unit,
 ) {
@@ -1073,8 +1212,11 @@ private fun AuthModeToggle(
             label = "authToggleAction",
         ) { signUp ->
             Text(
-                text = if (signUp) stringResource(Res.string.compose_auth_sign_in)
-                else stringResource(Res.string.compose_auth_sign_up),
+                text = when {
+                    signUp -> stringResource(Res.string.compose_auth_sign_in)
+                    isStarlitServer -> stringResource(Res.string.auth_request_account)
+                    else -> stringResource(Res.string.compose_auth_sign_up)
+                },
                 modifier = Modifier.clickable(onClick = onToggleAuthMode),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = AuthTextPrimary,

@@ -197,25 +197,52 @@ object AuthRepository {
         }
     }
 
-    suspend fun signUpWithEmail(email: String, password: String): Result<Unit> = runCatching {
-        _error.value = null
-        _notice.value = null
-        expectRemoteSession()
-        SupabaseProvider.client.auth.signUpWith(Email) {
-            this.email = email
-            this.password = password
-        }
-        // Servers that confirm or approve new accounts return no session yet.
-        if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
+    suspend fun signUpWithEmail(email: String, password: String): Result<Unit> {
+        val isStarlitRequest = !ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures
+        return runCatching {
+            _error.value = null
+            _notice.value = null
+            if (isStarlitRequest) {
+                require(password.length >= 12) { getString(Res.string.auth_request_password_minimum) }
+                // Account requests must never adopt a remote session before owner approval.
+                cancelRemoteSessionRequest()
+                changingSession = true
+            } else {
+                expectRemoteSession()
+            }
+            try {
+                SupabaseProvider.client.auth.signUpWith(Email) {
+                    this.email = email
+                    this.password = password
+                }
+                if (isStarlitRequest) {
+                    if (SupabaseProvider.client.auth.currentSessionOrNull() != null) {
+                        SupabaseProvider.client.auth.clearSession()
+                        val message = getString(Res.string.auth_request_unexpected_session)
+                        _error.value = message
+                        error(message)
+                    }
+                    _notice.value = getString(Res.string.auth_request_submitted_subtitle)
+                } else if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
+                    // Other servers can require email confirmation before sign-in.
+                    cancelRemoteSessionRequest()
+                    _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
+                }
+            } finally {
+                if (isStarlitRequest) changingSession = false
+            }
+            Unit
+        }.onFailure { e ->
             cancelRemoteSessionRequest()
-            _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
+            log.e(e) { "Email sign-up failed" }
+            _error.value = (if (isStarlitRequest && e.isApprovalNotificationFailure()) {
+                getString(Res.string.auth_request_notification_failed)
+            } else null)
+                ?: e.safeAuthErrorDescription()
+                ?: (e as? IllegalArgumentException)?.message
+                ?: _error.value
+                ?: getString(Res.string.auth_sign_up_failed)
         }
-        Unit
-    }.onFailure { e ->
-        cancelRemoteSessionRequest()
-        log.e(e) { "Email sign-up failed" }
-        _error.value = e.safeAuthErrorDescription()
-            ?: getString(Res.string.auth_sign_up_failed)
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
@@ -421,6 +448,12 @@ object AuthRepository {
             current = current.cause
         }
         return null
+    }
+
+    private fun Throwable.isApprovalNotificationFailure(): Boolean {
+        val errorCode = findCause<RestException>()?.error?.trim()?.lowercase().orEmpty()
+        return errorCode.endsWith("_failed") &&
+            ("notification" in errorCode || "notifier" in errorCode || "notify" in errorCode)
     }
 
     private fun Throwable.safeAuthErrorDescription(): String? =
