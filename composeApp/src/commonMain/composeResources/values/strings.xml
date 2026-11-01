@@ -385,6 +385,9 @@
     <string name="compose_auth_welcome_back">Welcome Back</string>
     <string name="server_menu_content_description">Server options</string>
     <string name="auth_request_account">Request account</string>
+    <string name="auth_google_sign_in">Sign in with Google</string>
+    <string name="auth_google_request_access">Request Google access (approval required)</string>
+    <string name="auth_google_sign_in_failed">Google sign-in failed. Make sure your account has been approved.</string>
     <string name="auth_request_account_subtitle">Choose a password to request an account. The server owner must approve it before you can sign in.</string>
     <string name="auth_request_password_minimum">Password must be at least 12 characters.</string>
     <string name="auth_request_submitted_title">Request submitted</string>

@@ -8,6 +8,7 @@ import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.functions.functions
@@ -258,6 +259,20 @@ object AuthRepository {
         log.e(e) { "Email sign-in failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_in_failed)
+    }
+
+    /** Approved Google identities only. GoTrue signup is disabled on the Starlit server. */
+    suspend fun signInWithGoogle(): Result<Unit> = runCatching {
+        _error.value = null
+        _notice.value = null
+        // Preserve anonymous settings before importing the new Google session.
+        expectRemoteSession()
+        SupabaseProvider.client.auth.signInWith(Google)
+    }.onFailure { e ->
+        cancelRemoteSessionRequest()
+        log.e(e) { "Google sign-in failed" }
+        _error.value = e.safeAuthErrorDescription()
+            ?: getString(Res.string.auth_google_sign_in_failed)
     }
 
     suspend fun signOut(): Result<Unit> {
