@@ -160,6 +160,28 @@ internal object DesktopStorage {
             }
         }
 
+        /**
+         * Secret-bearing preference files may have a plaintext older generation in .bak.
+         * Once the protected primary generation is durable, replace the backup with
+         * that same protected generation; never retain historical cleartext secrets.
+         */
+        fun putProtectedString(key: String, value: String?) = synchronized(lock) {
+            ensureLoaded()
+            mutate {
+                if (value == null) properties.remove(key) != null
+                else properties.setProperty(key, value) != value
+            }
+            committed?.let { replaceSynced(backup, it) }
+        }
+
+        fun scrubProtectedBackup() = synchronized(lock) {
+            ensureLoaded()
+            committed?.let { current ->
+                val existing = runCatching { Files.readAllBytes(backup) }.getOrNull()
+                if (existing == null || !existing.contentEquals(current)) replaceSynced(backup, current)
+            }
+        }
+
         fun getBoolean(key: String): Boolean? =
             getString(key)?.toBooleanStrictOrNull()
 

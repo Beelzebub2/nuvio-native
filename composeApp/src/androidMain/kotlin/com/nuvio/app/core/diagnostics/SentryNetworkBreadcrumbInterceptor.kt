@@ -59,12 +59,11 @@ class SentryNetworkBreadcrumbInterceptor : Interceptor {
         }
         breadcrumb.setCategory("http.client")
         breadcrumb.setLevel(levelFor(statusCode, error))
-        breadcrumb.setData("host", url.host)
-        breadcrumb.setData("path", url.encodedPath)
+        // Add-on configuration may put credentials in path segments or even subdomains.
+        // Never upload a user's actual request destination or exception message.
         breadcrumb.setData("elapsed_ms", elapsedMs)
         if (error != null) {
             breadcrumb.setData("error_type", error.javaClass.name)
-            error.message?.let { breadcrumb.setData("error_message", it.take(240)) }
         }
         Sentry.addBreadcrumb(breadcrumb)
     }
@@ -79,12 +78,7 @@ class SentryNetworkBreadcrumbInterceptor : Interceptor {
         }
     }
 
-    private fun scrubbedUrl(url: HttpUrl): String =
-        url.newBuilder()
-            .query(null)
-            .fragment(null)
-            .build()
-            .toString()
+    private fun scrubbedUrl(url: HttpUrl): String = "${url.scheme}://[redacted]"
 
     private fun elapsedMs(startedAtNs: Long): Long =
         (System.nanoTime() - startedAtNs) / 1_000_000L

@@ -3,6 +3,7 @@ package com.nuvio.app.features.trakt
 import android.content.Context
 import android.content.SharedPreferences
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.core.storage.AndroidCredentialProtection
 
 internal actual object TraktAuthStorage {
     private const val preferencesName = "nuvio_trakt_auth"
@@ -14,13 +15,21 @@ internal actual object TraktAuthStorage {
         preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     }
 
-    actual fun loadPayload(profileId: Int): String? =
-        preferences?.getString(ProfileScopedKey.of(payloadKey, profileId), null)
+    actual fun loadPayload(profileId: Int): String? {
+        val key = ProfileScopedKey.of(payloadKey, profileId)
+        val stored = preferences?.getString(key, null) ?: return null
+        return runCatching {
+            AndroidCredentialProtection.reveal(key, stored).also { plaintext ->
+                if (!AndroidCredentialProtection.isProtected(stored)) savePayload(profileId, plaintext)
+            }
+        }.getOrNull()
+    }
 
     actual fun savePayload(profileId: Int, payload: String) {
         preferences
             ?.edit()
-            ?.putString(ProfileScopedKey.of(payloadKey, profileId), payload)
+            ?.putString(ProfileScopedKey.of(payloadKey, profileId),
+                AndroidCredentialProtection.protect(ProfileScopedKey.of(payloadKey, profileId), payload))
             ?.apply()
     }
 

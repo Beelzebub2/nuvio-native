@@ -1,6 +1,7 @@
 package com.nuvio.app.features.tmdb
 
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.DesktopCredentialProtection
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.sync.decodeSyncBoolean
 import com.nuvio.app.core.sync.decodeSyncString
@@ -71,8 +72,10 @@ internal actual object TmdbSettingsStorage {
     actual fun loadUseCollections(): Boolean? = loadBoolean(useCollectionsKey)
     actual fun saveUseCollections(enabled: Boolean) = saveBoolean(useCollectionsKey, enabled)
 
-    private fun loadString(key: String): String? = store.getString(ProfileScopedKey.of(key))
-    private fun saveString(key: String, value: String) = store.putString(ProfileScopedKey.of(key), value)
+    private fun loadString(key: String): String? = if (key == apiKeyKey)
+        DesktopCredentialProtection.read(store, ProfileScopedKey.of(key)) else store.getString(ProfileScopedKey.of(key))
+    private fun saveString(key: String, value: String) = if (key == apiKeyKey)
+        DesktopCredentialProtection.write(store, ProfileScopedKey.of(key), value) else store.putString(ProfileScopedKey.of(key), value)
     private fun loadBoolean(key: String): Boolean? = store.getBoolean(ProfileScopedKey.of(key))
     private fun saveBoolean(key: String, value: Boolean) = store.putBoolean(ProfileScopedKey.of(key), value)
 

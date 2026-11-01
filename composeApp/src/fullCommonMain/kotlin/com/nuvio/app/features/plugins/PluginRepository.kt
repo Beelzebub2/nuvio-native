@@ -8,9 +8,12 @@ import co.touchlab.kermit.Logger
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.features.addons.encodeUnsafeHttpUrlCharacters
 import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.plugins.runtime.PluginRuntime
+import com.nuvio.app.features.plugins.runtime.network.requirePublicPluginUrl
+import io.ktor.http.Url
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
@@ -453,9 +456,11 @@ actual object PluginRepository {
     ): Pair<PluginRepositoryItem, List<PluginScraper>> {
         val storageProfileId = currentProfileId
         return withContext(Dispatchers.Default) {
-            val payload = httpGetText(manifestUrl)
+            val payload = fetchPluginSource(manifestUrl)
             val manifest = PluginManifestParser.parse(payload)
             val baseUrl = manifestUrl.substringBefore("?").removeSuffix("/manifest.json")
+
+            var updatedCodeNeedsApproval = false
 
             val scrapers = manifest.scrapers
                 .filter { scraper -> scraper.isSupportedOnCurrentPlatform() }
@@ -466,8 +471,21 @@ actual object PluginRepository {
                         "$baseUrl/${info.filename.trimStart('/')}"
                     }
                     runCatching {
-                        val code = httpGetText(codeUrl)
+                        val safeCodeUrl = requirePublicPluginUrl(codeUrl)
+                        // Code must remain on the explicitly installed repository's origin.
+                        val manifestOrigin = Url(manifestUrl)
+                        val codeOrigin = Url(safeCodeUrl)
+                        require(codeOrigin.host == manifestOrigin.host && codeOrigin.port == manifestOrigin.port &&
+                            codeOrigin.protocol == manifestOrigin.protocol) { "Plugin script changed origin" }
+                        val downloadedCode = fetchPluginSource(safeCodeUrl)
                         val scraperId = "${manifestUrl.lowercase()}:${info.id}"
+                        val previous = previousScrapers[scraperId]
+                        // A repository owner or compromised server cannot silently replace
+                        // previously approved executable JavaScript. Uninstall/reinstall is
+                        // the explicit approval step; the old code remains pinned meanwhile.
+                        val codeChanged = previous != null && previous.code != downloadedCode
+                        if (codeChanged) updatedCodeNeedsApproval = true
+                        val code = if (codeChanged) previous!!.code else downloadedCode
                         val cached = PluginStorage.saveScraperCode(
                             profileId = storageProfileId,
                             scraperId = scraperId,
@@ -477,9 +495,9 @@ actual object PluginRepository {
                         if (!cached) {
                             log.w { "Failed to cache plugin scraper $scraperId" }
                         }
-                        val previous = previousScrapers[scraperId]
                         val enabled = when {
                             !info.enabled -> false
+                            codeChanged -> false
                             previous != null -> previous.enabled
                             else -> info.enabled
                         }
@@ -489,7 +507,7 @@ actual object PluginRepository {
                             repositoryUrl = manifestUrl,
                             name = info.name,
                             description = info.description.orEmpty(),
-                            version = info.version,
+                            version = if (codeChanged) previous!!.version else info.version,
                             filename = info.filename,
                             supportedTypes = info.supportedTypes,
                             enabled = enabled,
@@ -511,7 +529,9 @@ actual object PluginRepository {
                 scraperCount = scrapers.size,
                 lastUpdated = currentEpochMillis(),
                 isRefreshing = false,
-                errorMessage = null,
+                errorMessage = if (updatedCodeNeedsApproval) {
+                    "Plugin code changed. Remove and reinstall this repository only after reviewing the update."
+                } else null,
             )
             repo to scrapers
         }
@@ -717,7 +737,19 @@ actual object PluginRepository {
         val path = withoutFragment.substringBefore("?").trimEnd('/')
         val manifestPath = if (path.endsWith("/manifest.json")) path else "$path/manifest.json"
         val manifestUrl = if (query.isEmpty()) manifestPath else "$manifestPath?$query"
-        return manifestUrl.encodeUnsafeHttpUrlCharacters()
+        return requirePublicPluginUrl(manifestUrl.encodeUnsafeHttpUrlCharacters())
+    }
+
+    private suspend fun fetchPluginSource(url: String): String {
+        val safeUrl = requirePublicPluginUrl(url)
+        val response = httpRequestRaw(
+            method = "GET", url = safeUrl, headers = mapOf("Accept" to "text/plain, application/json"),
+            body = "", followRedirects = false, maxResponseBodyBytes = 1024 * 1024,
+            privateNetworkDenied = true,
+        )
+        check(response.status == 200 && response.body.isNotBlank() &&
+            !response.body.endsWith("\n...[truncated]")) { "Plugin source must be complete HTTPS content" }
+        return response.body
     }
 
     private fun resolveEffectiveProfileId(profileId: Int): Int {

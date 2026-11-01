@@ -1,0 +1,22 @@
+name: Public source security checks
+
+on:
+  push:
+    branches: [Dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: node .github/security-check.mjs

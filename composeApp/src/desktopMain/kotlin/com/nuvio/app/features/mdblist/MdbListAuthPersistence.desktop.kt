@@ -1,6 +1,7 @@
 package com.nuvio.app.features.mdblist
 
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.DesktopCredentialProtection
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.profiles.MAX_PROFILES
 
@@ -9,10 +10,10 @@ internal actual object PlatformMdbListAuthPersistence : MdbListAuthPersistence {
     private val store = DesktopStorage.store("nuvio_mdblist_auth")
 
     actual override fun read(profileId: Int): String? =
-        store.getString(ProfileScopedKey.of(payloadKey, profileId))
+        DesktopCredentialProtection.read(store, ProfileScopedKey.of(payloadKey, profileId))
 
     actual override fun write(profileId: Int, value: String?) {
-        store.putString(ProfileScopedKey.of(payloadKey, profileId), value)
+        DesktopCredentialProtection.write(store, ProfileScopedKey.of(payloadKey, profileId), value)
     }
 
     actual override fun clear() {

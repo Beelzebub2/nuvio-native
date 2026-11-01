@@ -29,6 +29,9 @@ object SupabaseProvider {
     @OptIn(SupabaseInternal::class)
     private fun createClient(): SupabaseClient {
         val configuration = ServerConfigurationRepository.active.value
+        check(configuration.backendUrl.isBlank() || isAllowedAccountServerUrl(configuration.backendUrl)) {
+            "Account server must use HTTPS (except localhost development)"
+        }
         val userAgent = "NuvioMobile/${AppVersionConfig.VERSION_NAME.ifBlank { "dev" }}"
         return createSupabaseClient(
             supabaseUrl = configuration.backendUrl,

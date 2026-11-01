@@ -1,3 +1,23 @@
+## Starlit 1.0.48
+
+### Security
+
+- Tracking-service sign-in now rejects unexpected, expired, mismatched and replayed authorization callbacks, preventing unauthorized account linking.
+- Android streaming verifies HTTPS server certificates and names instead of accepting untrusted certificates, and playback redirects cannot reattach credentials to other hosts.
+- Account-server connections require HTTPS except when using a local development server on the same device. Android and iOS no longer permit arbitrary cleartext network requests.
+- Third-party scraper plugins cannot read your private TMDB key or request local network addresses. Plugin downloads require public HTTPS endpoints, and changed script code stays disabled until you deliberately reinstall the repository.
+- Saved tracking tokens and provider keys are protected using Android Keystore, iOS Keychain or Windows user-bound encryption, with migration from older local settings on supported platforms. Diagnostics no longer include sensitive network destinations and exception messages.
+- The Windows updater fetches verified release files without accessing a personal GitHub token. Release automation includes source-secret checks and build provenance attestations.
+
+### Fixes
+
+- Download season sections, iOS navigation, and subtitle style controls use the correct cross-platform implementations.
+- Anonymous guests can select their first account server without creating an invalid or insecure backend connection.
+
+### Compatibility
+
+- Insecure HTTP plugin repositories and insecure remote stream HTTPS certificates are deliberately blocked. Review and reinstall trusted HTTPS plugin sources if they stop refreshing.
+
 ## Starlit 1.0.47
 
 ### Fixes

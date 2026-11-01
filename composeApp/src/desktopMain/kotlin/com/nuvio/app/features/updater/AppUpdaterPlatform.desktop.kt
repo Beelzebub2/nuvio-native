@@ -61,7 +61,7 @@ actual object AppUpdaterPlatform {
         channelBranch = null,
         includePrereleases = true,
         userAgent = "NuvioNative",
-        privateRepository = true,
+        privateRepository = false,
     )
 
     actual val assetSelector: AppUpdateAssetSelector
@@ -69,9 +69,7 @@ actual object AppUpdaterPlatform {
 
     actual val currentVersionName: String = AppVersionConfig.DESKTOP_VERSION_NAME
 
-    actual suspend fun releaseRequestHeaders(): Map<String, String> = withContext(Dispatchers.IO) {
-        mapOf("Authorization" to "Bearer ${PrivateReleaseAuth.token()}")
-    }
+    actual suspend fun releaseRequestHeaders(): Map<String, String> = emptyMap()
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 
@@ -124,10 +122,10 @@ actual object AppUpdaterPlatform {
             val tempFile = File(updatesDir, "$safeName.part")
 
             require(expectedSha256 != null && expectedSha256.matches(Regex("[a-fA-F0-9]{64}"))) {
-                "This private update has no SHA-256 digest. Publish it through the Windows release workflow."
+                "This update has no SHA-256 digest. Publish it through the Windows release workflow."
             }
             val apiUri = URI(assetUrl)
-            require(isPrivateReleaseAssetUri(apiUri)) { "Unexpected private update download address" }
+            require(isPublicReleaseAssetUri(apiUri)) { "Unexpected update download address" }
             var downloadUri = apiUri
             var response: HttpResponse<java.io.InputStream>? = null
             repeat(5) {
@@ -135,16 +133,13 @@ actual object AppUpdaterPlatform {
                 currentCoroutineContext().ensureActive()
                 val builder = HttpRequest.newBuilder(downloadUri).GET().timeout(Duration.ofMinutes(10))
                     .header("User-Agent", "NuvioNative")
-                if (downloadUri == apiUri) {
-                    builder.header("Accept", "application/octet-stream")
-                        .header("Authorization", "Bearer ${PrivateReleaseAuth.token()}")
-                }
+                if (downloadUri == apiUri) builder.header("Accept", "application/octet-stream")
                 val next = desktopUpdaterHttpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream())
                 if (next.statusCode() in listOf(301, 302, 303, 307, 308)) {
                     next.body().close()
                     val location = next.headers().firstValue("Location").orElseThrow()
                     downloadUri = downloadUri.resolve(location)
-                    require(downloadUri.scheme == "https" && downloadUri.userInfo == null) { "Unsafe update redirect" }
+                    require(isAllowedReleaseRedirectUri(downloadUri)) { "Unsafe update redirect" }
                 } else response = next
             }
             val completedResponse = response ?: error("Too many update redirects")

@@ -6,6 +6,8 @@ import com.nuvio.app.features.addons.httpPostJsonWithHeaders
 import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.isDesktop
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.simkl.SimklPkceCrypto
+import com.nuvio.app.features.simkl.base64UrlWithoutPadding
 import com.nuvio.app.features.tracking.TrackingAuthProvider
 import com.nuvio.app.features.tracking.TrackingCapability
 import com.nuvio.app.features.tracking.TrackingProviderDescriptor
@@ -32,7 +34,6 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlin.random.Random
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -50,6 +51,7 @@ object TraktAuthRepository : TrackingAuthProvider {
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val refreshMutex = Mutex()
+    private val authorizationCallbackMutex = Mutex()
 
     private val _uiState = MutableStateFlow(TraktAuthUiState())
     val uiState: StateFlow<TraktAuthUiState> = _uiState.asStateFlow()
@@ -484,6 +486,16 @@ object TraktAuthRepository : TrackingAuthProvider {
         callbackUrl: String,
         profileId: Int = currentProfileId,
     ) {
+        authorizationCallbackMutex.lock()
+        try {
+            completeAuthorizationFromCallbackLocked(callbackUrl, profileId)
+        } finally {
+            authorizationCallbackMutex.unlock()
+        }
+    }
+
+    private suspend fun completeAuthorizationFromCallbackLocked(callbackUrl: String, profileId: Int) {
+        if (currentProfileId != profileId) return
         publish(isLoading = true, errorMessage = null)
 
         val parsedUrl = runCatching { Url(callbackUrl) }
@@ -501,6 +513,27 @@ object TraktAuthRepository : TrackingAuthProvider {
             )
             return
         }
+
+        val expectedState = authState.pendingAuthorizationState
+        val callbackState = parsedUrl.parameters["state"].orEmpty().trim()
+        if (!validTraktCallbackState(
+                expectedState, callbackState,
+                authState.pendingAuthorizationStartedAtMillis, TraktPlatformClock.nowEpochMs(),
+            )) {
+            // An unsolicited callback must never replace existing credentials or cancel a
+            // different in-progress authorization. Expired requests are retired explicitly.
+            if (isTraktAuthorizationExpired(authState.pendingAuthorizationStartedAtMillis, TraktPlatformClock.nowEpochMs())) {
+                clearPendingAuthorization()
+                persist(profileId)
+            }
+            publish(isLoading = false, errorMessage = localizedString(Res.string.trakt_invalid_callback_state))
+            return
+        }
+
+        // Consume the state before network I/O; simultaneous or replayed links cannot
+        // exchange two codes, even when the first exchange is still pending.
+        clearPendingAuthorization()
+        persist(profileId)
 
         val errorCode = parsedUrl.parameters["error"]
         if (!errorCode.isNullOrBlank()) {
@@ -526,18 +559,6 @@ object TraktAuthRepository : TrackingAuthProvider {
             return
         }
 
-        val expectedState = authState.pendingAuthorizationState
-        val callbackState = parsedUrl.parameters["state"].orEmpty().trim()
-        if (!expectedState.isNullOrBlank() && callbackState != expectedState) {
-            clearPendingAuthorization()
-            persist(profileId)
-            publish(
-                isLoading = false,
-                errorMessage = localizedString(Res.string.trakt_invalid_callback_state),
-            )
-            return
-        }
-
         exchangeAuthorizationCode(code, profileId)
     }
 
@@ -545,6 +566,7 @@ object TraktAuthRepository : TrackingAuthProvider {
         code: String,
         profileId: Int = currentProfileId,
     ) {
+        val generation = profileGeneration
         val body = json.encodeToString(
             TraktAuthorizationCodeRequest(
                 code = code,
@@ -583,7 +605,9 @@ object TraktAuthRepository : TrackingAuthProvider {
             return
         }
 
-        completeAuthorizationWithToken(parsed, profileId)
+        if (generation == profileGeneration && currentProfileId == profileId) {
+            completeAuthorizationWithToken(parsed, profileId)
+        }
     }
 
     private suspend fun completeAuthorizationWithToken(
@@ -804,9 +828,7 @@ object TraktAuthRepository : TrackingAuthProvider {
     }
 
     private fun generateOauthState(): String {
-        val nowPart = TraktPlatformClock.nowEpochMs().toString(16)
-        val randomPart = Random.nextLong().toULong().toString(16)
-        return "$nowPart$randomPart"
+        return SimklPkceCrypto.secureRandomBytes(32).base64UrlWithoutPadding()
     }
 
     private fun isTokenExpiredOrExpiring(state: TraktAuthState): Boolean {
@@ -853,6 +875,20 @@ object TraktAuthRepository : TrackingAuthProvider {
         }
     }
 
+}
+
+internal const val TRAKT_OAUTH_STATE_LIFETIME_MS = 10 * 60 * 1000L
+
+internal fun isTraktAuthorizationExpired(startedAt: Long?, now: Long): Boolean =
+    startedAt == null || startedAt > now || now - startedAt >= TRAKT_OAUTH_STATE_LIFETIME_MS
+
+/** Fail closed for missing, stale, mismatched and replayed callbacks. */
+internal fun validTraktCallbackState(expected: String?, received: String, startedAt: Long?, now: Long): Boolean {
+    if (expected.isNullOrBlank() || received.isBlank() ||
+        isTraktAuthorizationExpired(startedAt, now) || expected.length != received.length) return false
+    var differences = 0
+    for (index in expected.indices) differences = differences or (expected[index].code xor received[index].code)
+    return differences == 0
 }
 
 internal enum class TraktTokenRefreshResponseAction {
