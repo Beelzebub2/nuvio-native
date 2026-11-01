@@ -1,3 +1,22 @@
+## Starlit 1.1.0
+
+### Improvements
+
+- **Import anonymous settings** now also transfers the selected guest profile's Starlit library, watched movies and episodes, resume positions, collections, recent searches and supported desktop Watch Later and personal-media lists, in addition to settings, add-ons, plugins and existing downloads.
+- Importing into an account merges previously saved items rather than replacing the account's library or playback history. Cloud records from other devices are checked before guest entries are uploaded, and unfinished imports can retry after a network error or restart.
+- The account's Starlit library continues syncing across Windows and Android when an external tracking library is selected. Saved changes that did not upload while offline are retried on later syncs.
+- Android now has more of desktop's Airing Now, batch-download and Watch Later functionality, including the corresponding playback actions.
+- Torrent streaming is steadier for large episodes and inconsistent peer speeds, with tuned buffering and more careful coordination between downloads and active playback.
+
+### Fixes
+
+- Guest history and playback progress no longer disappear solely because the user imports their anonymous settings into an approved account.
+- Account library entries and pending removals are retained when overlapping anonymous entries are imported. Collection imports also preserve the destination account's existing lists.
+
+### Release policy
+
+- Version numbers now follow Semantic Versioning: compatible features advance MINOR, fixes advance PATCH, and incompatible changes advance MAJOR. Windows and Android versions and numeric Android build codes are checked automatically before publication.
+
 ## Starlit 1.0.48
 
 ### Security

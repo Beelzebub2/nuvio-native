@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - '.github/release-notes*.mjs'
+      - '.github/release-policy*.mjs'
       - '.github/release.yml'
       - '.github/workflows/release-notes-check.yml'
       - '.github/workflows/windows-release.yml'
       - 'docs/RELEASE-NOTES.md'
+      - 'docs/RELEASING.md'
       - 'composeApp/Configuration/DesktopVersion.properties'
 
 permissions:
@@ -18,11 +20,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-      - run: node --test .github/release-notes.test.mjs
+      - run: node --test .github/release-notes.test.mjs .github/release-policy.test.mjs
       - name: Validate current release section
         run: |
           version="$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')"
+          node .github/release-policy.mjs verify "v$version"
           node .github/release-notes.mjs extract docs/RELEASE-NOTES.md "v$version" "$RUNNER_TEMP/current-release-notes.md"
