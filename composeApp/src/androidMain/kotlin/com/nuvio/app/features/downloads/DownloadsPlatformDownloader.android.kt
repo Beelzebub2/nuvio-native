@@ -6,7 +6,12 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -18,6 +23,7 @@ internal actual object DownloadsPlatformDownloader {
     private var appContext: Context? = null
     private var downloadScheduler: AndroidDownloadScheduler? = null
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    @Volatile private var accountEpoch = 0L
 
     fun initialize(context: Context) {
         scheduler(context)
@@ -33,6 +39,7 @@ internal actual object DownloadsPlatformDownloader {
         downloadScheduler?.store?.transfers?.value?.values?.toList().orEmpty()
 
     actual fun pauseForAccountCleanup() {
+        accountEpoch++
         val scheduler = downloadScheduler ?: appContext?.let(::scheduler) ?: return
         scheduler.pauseAllForAccountCleanup()
     }
@@ -48,26 +55,63 @@ internal actual object DownloadsPlatformDownloader {
         onPaused: () -> Unit,
     ): DownloadsTaskHandle {
         val scheduler = checkNotNull(downloadScheduler) { "Downloads are not initialized" }
-        val transfer = scheduler.enqueue(request.item)
+        val epoch = accountEpoch
+        var scheduled: AndroidDownloadTransfer? = null
         val observer = observerScope.launch {
-            scheduler.store.transfers.map { it[request.destinationFileName] }
-                .distinctUntilChanged()
-                .takeWhile { current ->
-                    if (current == null || current.generation != transfer.generation) return@takeWhile false
-                    val item = current.item
-                    when (item.status) {
-                        DownloadStatus.Downloading -> onProgress(item.downloadedBytes, item.totalBytes)
-                        DownloadStatus.Completed -> onSuccess(checkNotNull(item.localFileUri), item.totalBytes)
-                        DownloadStatus.Failed -> onFailure(item.errorMessage ?: "Download failed")
-                        DownloadStatus.Paused -> onPaused()
+            try {
+                // Batch downloads need the same provider/quality lookup as desktop,
+                // before a durable JobScheduler/WorkManager transfer can be enqueued.
+                val stream = if (request.item.sourceSelection != null) withContext(Dispatchers.IO) {
+                    withTimeout(120_000L) {
+                        resolveDownloadSource(request.item.copy(sourceSelection =
+                            request.item.sourceSelection.copy(transport = "Direct files")))
                     }
-                    item.status == DownloadStatus.Downloading
-                }.collect()
+                } else null
+                coroutineContext.ensureActive()
+                if (epoch != accountEpoch) return@launch
+                val item = if (stream == null) request.item else request.item.copy(
+                    sourceUrl = stream.playableDirectUrl.orEmpty(),
+                    sourceHeaders = stream.behaviorHints.proxyHeaders?.request.orEmpty(),
+                    sourceResponseHeaders = stream.behaviorHints.proxyHeaders?.response.orEmpty(),
+                    sourceSubtitles = stream.externalSubtitles,
+                    streamTitle = stream.streamLabel,
+                    streamSubtitle = stream.streamSubtitle,
+                    providerName = stream.addonName,
+                    providerAddonId = stream.addonId,
+                )
+                require(supportedDesktopDownloadUrl(item.sourceUrl)) {
+                    "Choose a direct media file. Android offline downloads do not support torrent files or streaming playlists."
+                }
+                request.onResolved(item)
+                coroutineContext.ensureActive()
+                if (epoch != accountEpoch) return@launch
+                val transfer = scheduler.enqueue(item)
+                scheduled = transfer
+                scheduler.store.transfers.map { it[request.destinationFileName] }
+                    .distinctUntilChanged()
+                    .takeWhile { current ->
+                        if (current == null || current.generation != transfer.generation) return@takeWhile false
+                        val currentItem = current.item
+                        when (currentItem.status) {
+                            DownloadStatus.Downloading -> onProgress(currentItem.downloadedBytes, currentItem.totalBytes)
+                            DownloadStatus.Completed -> onSuccess(checkNotNull(currentItem.localFileUri), currentItem.totalBytes)
+                            DownloadStatus.Failed -> onFailure(currentItem.errorMessage ?: "Download failed")
+                            DownloadStatus.Paused -> onPaused()
+                        }
+                        currentItem.status == DownloadStatus.Downloading
+                    }.collect()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onFailure(error.message ?: "Could not find a downloadable file for this episode.")
+            }
         }
         return object : DownloadsTaskHandle {
             override fun cancel() {
                 observer.cancel()
-                if (scheduler.store.get(request.destinationFileName)?.generation == transfer.generation) {
+                val transfer = scheduled
+                if (transfer != null &&
+                    scheduler.store.get(request.destinationFileName)?.generation == transfer.generation) {
                     scheduler.pause(request.destinationFileName)
                 }
             }

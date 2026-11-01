@@ -169,6 +169,9 @@ fun DownloadsScreen(
             )
             return@NuvioScreen
         }
+        if (selectedShowId == null) {
+            item { DownloadManagementControls() }
+        }
         if (canManage && visibleIds.isNotEmpty()) {
             item {
                 DownloadSelectionControls(

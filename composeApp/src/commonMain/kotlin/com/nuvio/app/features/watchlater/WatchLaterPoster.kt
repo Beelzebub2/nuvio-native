@@ -50,7 +50,7 @@ internal fun WatchLaterPoster(
     Box(modifier) {
         // Keep the handler on the card's own layer so its hovered, scaled edges stay clickable.
         EpisodeSynopsis(item) { content(Modifier.watchLaterMiddleClick(item)) }
-        if (isDesktop && items.any { it.matchesWatchLaterPreview(item) }) {
+        if (items.any { it.matchesWatchLaterPreview(item) }) {
             Icon(Icons.Filled.Bookmark, contentDescription = stringResource(Res.string.watch_later_saved),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))

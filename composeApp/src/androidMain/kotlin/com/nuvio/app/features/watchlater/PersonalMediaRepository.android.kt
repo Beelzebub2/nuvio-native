@@ -1,11 +1,63 @@
 package com.nuvio.app.features.watchlater
+
+import android.content.Context
+import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
+import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.library.toLibraryItem
+import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
 internal actual object PersonalMediaRepository {
-    actual val items: StateFlow<List<PersonalMediaEntry>> = MutableStateFlow(emptyList())
-    actual fun ensureLoaded() = Unit
-    actual fun clearLocalState() = Unit
-    actual fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = Unit
-    actual fun setRating(item: MetaPreview, rating: Int?) = Unit
+    private val storage get() = checkNotNull(PlatformLocalAccountDataCleaner.appContext)
+        .getSharedPreferences("nuvio_personal_media", Context.MODE_PRIVATE)
+    private val list = PersonalMediaList({ ProfileRepository.activeProfileId },
+        { storage.getString(ProfileScopedKey.of("items", it), null) },
+        { p, data ->
+            check(storage.edit().putString(ProfileScopedKey.of("items", p), data).commit()) {
+                "Could not save personal media"
+            }
+        })
+    actual val items get() = list.items
+    actual fun ensureLoaded() = list.ensureLoaded()
+    actual fun clearLocalState() = list.clearLocalState()
+    actual fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = list.setStatus(item, status)
+    actual fun setRating(item: MetaPreview, rating: Int?) = list.setRating(item, rating)
+}
+
+internal class PersonalMediaList(
+    private val profileId: () -> Int, private val load: (Int) -> String?, private val save: (Int, String) -> Unit,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+    private val json = Json { ignoreUnknownKeys = true }
+    private var profile: Int? = null
+    private val state = MutableStateFlow<List<PersonalMediaEntry>>(emptyList())
+    val items: StateFlow<List<PersonalMediaEntry>> = state.asStateFlow()
+    @Synchronized fun ensureLoaded() {
+        val current = profileId()
+        if (profile == current) return
+        state.value = load(current)?.takeIf { it.isNotBlank() }?.let { json.decodeFromString<List<PersonalMediaEntry>>(it) }
+            .orEmpty().distinctBy { it.item.type to it.item.id }
+        profile = current
+    }
+    @Synchronized fun clearLocalState() { profile = null; state.value = emptyList() }
+    @Synchronized fun setStatus(item: MetaPreview, status: PersonalMediaStatus?) = update(item) { it.copy(status = status) }
+    @Synchronized fun setRating(item: MetaPreview, rating: Int?) {
+        require(rating == null || rating in 1..10) { "Rating must be between 1 and 10" }
+        update(item) { it.copy(rating = rating) }
+    }
+    private fun update(item: MetaPreview, change: (PersonalMediaEntry) -> PersonalMediaEntry) {
+        ensureLoaded()
+        val old = state.value.firstOrNull { it.item.id == item.id && it.item.type == item.type }
+            ?: PersonalMediaEntry(item.copy(watchLaterEpisode = null).toLibraryItem(now()))
+        val updated = change(old.copy(item = item.copy(watchLaterEpisode = null).toLibraryItem(now())))
+        val others = state.value.filterNot { it.item.id == item.id && it.item.type == item.type }
+        val result = if (updated.status == null && updated.rating == null) others else listOf(updated) + others
+        save(requireNotNull(profile), json.encodeToString(result))
+        state.value = result
+    }
 }
