@@ -70,9 +70,13 @@ object SentryInitializer {
             options.setReportHistoricalAnrs(false)
             options.setAttachAnrThreadDump(false)
             options.beforeSend = SentryOptions.BeforeSendCallback { event, _ ->
+                val drop = shouldDrop(event)
                 event.request = null
                 event.user = null
-                if (shouldDrop(event)) null else event
+                event.message = null
+                event.transaction = null
+                event.exceptions?.forEach { exception -> exception.value = null }
+                if (drop) null else event
             }
         }
 

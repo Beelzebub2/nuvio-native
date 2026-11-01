@@ -1,6 +1,7 @@
 package com.nuvio.app.features.debrid
 
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.DesktopCredentialProtection
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.sync.decodeSyncBoolean
 import com.nuvio.app.core.sync.decodeSyncInt
@@ -76,8 +77,10 @@ internal actual object DebridSettingsStorage {
     private fun saveBoolean(key: String, value: Boolean) = store.putBoolean(ProfileScopedKey.of(key), value)
     private fun loadInt(key: String): Int? = store.getInt(ProfileScopedKey.of(key))
     private fun saveInt(key: String, value: Int) = store.putInt(ProfileScopedKey.of(key), value)
-    private fun loadString(key: String): String? = store.getString(ProfileScopedKey.of(key))
-    private fun saveString(key: String, value: String) = store.putString(ProfileScopedKey.of(key), value)
+    private fun loadString(key: String): String? = if (key.endsWith("_api_key") || key.startsWith(pendingDeviceAuthorizationPrefix))
+        DesktopCredentialProtection.read(store, ProfileScopedKey.of(key)) else store.getString(ProfileScopedKey.of(key))
+    private fun saveString(key: String, value: String) = if (key.endsWith("_api_key") || key.startsWith(pendingDeviceAuthorizationPrefix))
+        DesktopCredentialProtection.write(store, ProfileScopedKey.of(key), value) else store.putString(ProfileScopedKey.of(key), value)
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadEnabled()?.let { put(enabledKey, encodeSyncBoolean(it)) }

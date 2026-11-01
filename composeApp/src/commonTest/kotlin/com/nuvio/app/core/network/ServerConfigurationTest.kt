@@ -7,6 +7,17 @@ import kotlin.test.assertTrue
 
 class ServerConfigurationTest {
     @Test
+    fun insecurePublicAccountServersAreRejectedEvenWhenAlreadySaved() {
+        assertTrue(isAllowedAccountServerUrl("https://accounts.example.org"))
+        assertTrue(isAllowedAccountServerUrl("http://127.0.0.1:54321"))
+        assertTrue(isAllowedAccountServerUrl("http://localhost:54321"))
+        assertFalse(isAllowedAccountServerUrl("http://accounts.example.org"))
+        assertFalse(isAllowedAccountServerUrl("http://192.168.1.10:54321"))
+        assertFalse(isAllowedAccountServerUrl("http://example.org@127.0.0.1"))
+        assertFalse(isAllowedAccountServerUrl("https://accounts.example.org/?token=secret"))
+    }
+
+    @Test
     fun officialConfigurationSupportsConfiguredAndBlankBuilds() {
         val server = officialConfiguration()
         assertEquals(SupabaseConfig.URL.trim().trimEnd('/'), server.backendUrl)

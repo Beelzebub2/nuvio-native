@@ -287,6 +287,7 @@ actual suspend fun httpRequestRaw(
     followRedirects: Boolean,
     maxResponseBodyBytes: Int,
     bodyBytes: ByteArray?,
+    privateNetworkDenied: Boolean,
 ): RawHttpResponse =
     withContext(Dispatchers.IO) {
         val normalizedMethod = method.uppercase()
@@ -306,7 +307,13 @@ actual suspend fun httpRequestRaw(
             builder.method(normalizedMethod, null)
         }.build()
 
-        val client = if (followRedirects) {
+        val client = if (privateNetworkDenied) {
+            AddonHttpClientProvider.get().newBuilder()
+                .dns(PluginPublicDns)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build()
+        } else if (followRedirects) {
             AddonHttpClientProvider.get()
         } else {
             AddonHttpClientProvider.get().newBuilder()

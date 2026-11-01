@@ -94,6 +94,17 @@ private val addonHttpClient = HttpClient(Darwin) {
     expectSuccess = false
 }
 
+/** Separate client: the Darwin transport must not follow unvalidated plugin redirects. */
+private val addonNoRedirectHttpClient = HttpClient(Darwin) {
+    followRedirects = false
+    install(HttpTimeout) {
+        requestTimeoutMillis = 60_000
+        connectTimeoutMillis = 60_000
+        socketTimeoutMillis = 60_000
+    }
+    expectSuccess = false
+}
+
 actual suspend fun httpGetText(url: String, timeoutMillis: Long?): String =
     addonHttpClient
         .get(url) {
@@ -184,8 +195,9 @@ actual suspend fun httpRequestRaw(
     followRedirects: Boolean,
     maxResponseBodyBytes: Int,
     bodyBytes: ByteArray?,
+    privateNetworkDenied: Boolean,
 ): RawHttpResponse =
-    addonHttpClient
+    (if (followRedirects && !privateNetworkDenied) addonHttpClient else addonNoRedirectHttpClient)
         .request {
             url(url)
             this.method = HttpMethod.parse(method.uppercase())
@@ -197,6 +209,9 @@ actual suspend fun httpRequestRaw(
             }
         }
         .let { response ->
+            // Reject advertised oversized bodies before Ktor allocates a byte array.
+            val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+            require(contentLength == null || contentLength <= maxResponseBodyBytes) { "Response too large" }
             val receivedBytes = response.body<ByteArray>()
             val limitedBytes = receivedBytes.copyOf(minOf(receivedBytes.size, maxResponseBodyBytes.coerceAtLeast(0)))
             val decoded = limitedBytes.decodeToString()

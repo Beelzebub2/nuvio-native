@@ -1,6 +1,7 @@
 package com.nuvio.app.features.debrid
 
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.core.storage.IosCredentialStore
 import com.nuvio.app.core.sync.decodeSyncBoolean
 import com.nuvio.app.core.sync.decodeSyncInt
 import com.nuvio.app.core.sync.decodeSyncString
@@ -151,9 +152,9 @@ actual object DebridSettingsStorage {
     }
 
     actual fun clearPendingDeviceAuthorization(providerId: String) {
-        NSUserDefaults.standardUserDefaults.removeObjectForKey(
-            ProfileScopedKey.of(pendingDeviceAuthorizationKey(providerId)),
-        )
+        val key = ProfileScopedKey.of(pendingDeviceAuthorizationKey(providerId))
+        IosCredentialStore.remove(key)
+        NSUserDefaults.standardUserDefaults.removeObjectForKey(key)
     }
 
     private fun loadBoolean(key: String): Boolean? {
@@ -184,11 +185,22 @@ actual object DebridSettingsStorage {
         NSUserDefaults.standardUserDefaults.setInteger(value.toLong(), forKey = ProfileScopedKey.of(key))
     }
 
-    private fun loadString(key: String): String? =
-        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(key))
+    private fun loadString(key: String): String? {
+        val scoped = ProfileScopedKey.of(key)
+        val defaults = NSUserDefaults.standardUserDefaults
+        if (!key.endsWith("_api_key") && !key.startsWith(pendingDeviceAuthorizationPrefix)) return defaults.stringForKey(scoped)
+        IosCredentialStore.read(scoped)?.let { return it }
+        val legacy = defaults.stringForKey(scoped) ?: return null
+        saveString(key, legacy)
+        return legacy
+    }
 
     private fun saveString(key: String, value: String) {
-        NSUserDefaults.standardUserDefaults.setObject(value, forKey = ProfileScopedKey.of(key))
+        val scoped = ProfileScopedKey.of(key)
+        if (key.endsWith("_api_key") || key.startsWith(pendingDeviceAuthorizationPrefix)) {
+            IosCredentialStore.put(scoped, value)
+            NSUserDefaults.standardUserDefaults.removeObjectForKey(scoped)
+        } else NSUserDefaults.standardUserDefaults.setObject(value, forKey = scoped)
     }
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
@@ -215,6 +227,7 @@ actual object DebridSettingsStorage {
     actual fun replaceFromSyncPayload(payload: JsonObject) {
         syncKeys().forEach { key ->
             NSUserDefaults.standardUserDefaults.removeObjectForKey(ProfileScopedKey.of(key))
+            if (key.endsWith("_api_key")) IosCredentialStore.remove(ProfileScopedKey.of(key))
         }
 
         payload.decodeSyncBoolean(enabledKey)?.let(::saveEnabled)

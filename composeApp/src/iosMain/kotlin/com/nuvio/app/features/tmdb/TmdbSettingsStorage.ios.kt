@@ -5,6 +5,7 @@ import com.nuvio.app.core.sync.decodeSyncString
 import com.nuvio.app.core.sync.encodeSyncBoolean
 import com.nuvio.app.core.sync.encodeSyncString
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.core.storage.IosCredentialStore
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -47,11 +48,18 @@ actual object TmdbSettingsStorage {
         saveBoolean(enabledKey, enabled)
     }
 
-    actual fun loadApiKey(): String? =
-        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(apiKeyKey))
+    actual fun loadApiKey(): String? {
+        val key = ProfileScopedKey.of(apiKeyKey)
+        IosCredentialStore.read(key)?.let { return it }
+        val legacy = NSUserDefaults.standardUserDefaults.stringForKey(key) ?: return null
+        saveApiKey(legacy)
+        return legacy
+    }
 
     actual fun saveApiKey(apiKey: String) {
-        NSUserDefaults.standardUserDefaults.setObject(apiKey, forKey = ProfileScopedKey.of(apiKeyKey))
+        val key = ProfileScopedKey.of(apiKeyKey)
+        IosCredentialStore.put(key, apiKey)
+        NSUserDefaults.standardUserDefaults.removeObjectForKey(key)
     }
 
     actual fun loadLanguage(): String? =

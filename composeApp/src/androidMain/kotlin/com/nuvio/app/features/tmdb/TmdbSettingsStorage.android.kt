@@ -7,6 +7,7 @@ import com.nuvio.app.core.sync.decodeSyncString
 import com.nuvio.app.core.sync.encodeSyncBoolean
 import com.nuvio.app.core.sync.encodeSyncString
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.core.storage.AndroidCredentialProtection
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -55,13 +56,21 @@ actual object TmdbSettingsStorage {
         saveBoolean(enabledKey, enabled)
     }
 
-    actual fun loadApiKey(): String? =
-        preferences?.getString(ProfileScopedKey.of(apiKeyKey), null)
+    actual fun loadApiKey(): String? {
+        val key = ProfileScopedKey.of(apiKeyKey)
+        val stored = preferences?.getString(key, null) ?: return null
+        return runCatching {
+            AndroidCredentialProtection.reveal(key, stored).also { plain ->
+                if (!AndroidCredentialProtection.isProtected(stored)) saveApiKey(plain)
+            }
+        }.getOrNull()
+    }
 
     actual fun saveApiKey(apiKey: String) {
         preferences
             ?.edit()
-            ?.putString(ProfileScopedKey.of(apiKeyKey), apiKey)
+            ?.putString(ProfileScopedKey.of(apiKeyKey),
+                AndroidCredentialProtection.protect(ProfileScopedKey.of(apiKeyKey), apiKey))
             ?.apply()
     }
 

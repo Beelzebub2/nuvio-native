@@ -46,4 +46,6 @@ expect suspend fun httpRequestRaw(
     maxResponseBodyBytes: Int = DefaultRawHttpResponseMaxBytes,
     /** When present, sends these bytes verbatim instead of UTF-8 encoding [body]. */
     bodyBytes: ByteArray? = null,
+    /** Enforces public-address DNS resolution for untrusted plugin scripts. */
+    privateNetworkDenied: Boolean = false,
 ): RawHttpResponse
