@@ -197,7 +197,8 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIncomingAppIntent(intent: Intent?) {
-        val appUrl = intent?.dataString?.trim().orEmpty()
+        val incoming = intent ?: return
+        val appUrl = incoming.dataString?.trim().orEmpty()
         if (appUrl.isBlank()) return
         if (appUrl.startsWith("nuvio://auth#", ignoreCase = true) ||
             appUrl.startsWith("nuvio://auth?", ignoreCase = true)
@@ -205,7 +206,7 @@ open class MainActivity : AppCompatActivity() {
             // Import the session only from the configured backend; Supabase
             // validates the OAuth state before accepting a browser callback.
             AuthRepository.expectRemoteSession()
-            SupabaseProvider.client.handleDeeplinks(intent)
+            SupabaseProvider.client.handleDeeplinks(incoming)
             return
         }
         handleAppUrl(appUrl)
