@@ -139,8 +139,15 @@ class DesktopDownloadRecoveryTest {
         try {
             val completed = owned(root, "already-done", 1)
             val account = owned(root, "account-task", 2)
-            val pending = owned(root, "unfinished-task", 3).copy(
-                status = DownloadStatus.Downloading, localFileUri = null)
+            // A genuinely unfinished transfer has no completed file or content proof.
+            // Creating it through owned() would create a verified finished episode,
+            // which import correctly recovers as Completed instead of pausing.
+            val pending = completed.copy(
+                id = "unfinished-task", videoId = "series:alpha:1:3", episodeNumber = 3,
+                fileName = "Example Series S01E03_unfinished-task.mp4",
+                status = DownloadStatus.Downloading, localFileUri = null,
+                downloadedBytes = 0L, totalBytes = null,
+            )
             DownloadsRepository.clearLocalState()
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(account)))
             DownloadsRepository.ensureLoaded()
