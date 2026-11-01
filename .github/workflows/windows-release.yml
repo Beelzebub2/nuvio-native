@@ -3,12 +3,21 @@ name: Release Starlit
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to build and publish
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+env:
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+
 concurrency:
-  group: windows-release-${{ github.ref }}
+  group: windows-release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -16,11 +25,11 @@ jobs:
     runs-on: windows-2022
     # Read-only: this job runs a third-party action; only the publish job may write the release.
     env:
-      RELEASE_TAG: ${{ github.ref_name }}
       WEBVIEW2_VERSION: 1.0.4078.44
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
           fetch-depth: 0
       - name: Validate version tag
         shell: pwsh
@@ -33,6 +42,9 @@ jobs:
         shell: pwsh
         run: |
           # Read the original public LFS store; a private clone need not duplicate its storage.
+          # The rewritten fork history may not contain this upstream commit for LFS to scan.
+          git fetch --no-tags --depth=1 https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime commit fetch failed.' }
           git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/**,composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
           if ($LASTEXITCODE -ne 0) { throw 'Native runtime fetch failed.' }
           git lfs checkout
@@ -116,12 +128,13 @@ jobs:
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - name: Validate version tag
         run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo '::error::Release requires a vMAJOR.MINOR.PATCH tag'; exit 1; fi
           version=$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
           code=$(sed -n 's/^VERSION_CODE=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
           if [ "$RELEASE_TAG" != "v$version" ]; then echo "::error::Tag does not match DesktopVersion.properties"; exit 1; fi
@@ -173,8 +186,6 @@ jobs:
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -220,9 +231,10 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
