@@ -1,3 +1,9 @@
+## Starlit 1.0.45
+
+### Fixes
+
+- Android launcher icons are smaller and optically centered, keeping the play mark and twinkle visible on circular, rounded-square and square launchers. All icon colors, themed icons and legacy icons share the corrected alignment.
+
 ## Starlit 1.0.44
 
 ### Improvements

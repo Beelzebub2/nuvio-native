@@ -1,6 +1,6 @@
 """Generates every Starlit logo, app icon and wordmark asset from one vector mark.
 
-    python branding/generate_brand_assets.py [--preview-only | --readme-only]
+    python branding/generate_brand_assets.py [--preview-only | --readme-only | --android-only]
 
 The mark is a rounded play triangle holding a four-point star, with a small
 twinkle above it. Each app-icon colourway (Settings > Appearance > App icon)
@@ -240,6 +240,24 @@ def save_webp(image: Image.Image, path: Path) -> None:
     image.save(path, "WEBP", lossless=True, method=6)
 
 
+def write_android_icons(key: str, mark: Image.Image) -> None:
+    # Android masks the middle 72 dp of a 108 dp layer. Keep the entire mark
+    # inside the 66 dp safe circle and optically centre the left-heavy play body.
+    adaptive = Image.new("RGBA", (1080, 1080))
+    adaptive.alpha_composite(fit(mark, 1080, 0.46), (40, 0))  # 4 dp to the right.
+    legacy_icon = on_black(adaptive.crop((180, 180, 900, 900)))
+    launcher = "ic_launcher" if key == "original" else f"ic_launcher_{key}"
+    for density, scale in ANDROID_DENSITIES.items():
+        folder = ANDROID_RES / f"mipmap-{density}"
+        legacy = round(48 * scale)
+        foreground = round(108 * scale)
+        save_webp(legacy_icon.resize((legacy, legacy), Image.Resampling.LANCZOS), folder / f"{launcher}.webp")
+        save_webp(adaptive.resize((foreground, foreground), Image.Resampling.LANCZOS), folder / f"{launcher}_foreground.webp")
+        if key == "original":
+            save_webp(round_mask(legacy_icon.resize((legacy, legacy), Image.Resampling.LANCZOS)), folder / "ic_launcher_round.webp")
+            save_webp(silhouette(adaptive).resize((foreground, foreground), Image.Resampling.LANCZOS), folder / "ic_launcher_monochrome.webp")
+
+
 def write_platform_icons(key: str, ios_name: str, mark: Image.Image) -> Image.Image:
     # Desktop: transparent, filling most of the square like other Windows/macOS icons.
     desktop = fit(mark, 1024, 0.92)
@@ -264,18 +282,7 @@ def write_platform_icons(key: str, ios_name: str, mark: Image.Image) -> Image.Im
             "info": {"author": "xcode", "version": 1},
         }, indent=2) + "\n", encoding="utf-8")
 
-    # Android: legacy square icon, adaptive foreground (inside the 66 dp safe zone), splash.
-    launcher = "ic_launcher" if key == "original" else f"ic_launcher_{key}"
-    adaptive = fit(mark, 1024, 0.56)
-    for density, scale in ANDROID_DENSITIES.items():
-        folder = ANDROID_RES / f"mipmap-{density}"
-        legacy = round(48 * scale)
-        foreground = round(108 * scale)
-        save_webp(on_black(picker).resize((legacy, legacy), Image.Resampling.LANCZOS), folder / f"{launcher}.webp")
-        save_webp(adaptive.resize((foreground, foreground), Image.Resampling.LANCZOS), folder / f"{launcher}_foreground.webp")
-        if key == "original":
-            save_webp(round_mask(on_black(picker).resize((legacy, legacy), Image.Resampling.LANCZOS)), folder / "ic_launcher_round.webp")
-            save_webp(silhouette(adaptive).resize((foreground, foreground), Image.Resampling.LANCZOS), folder / "ic_launcher_monochrome.webp")
+    write_android_icons(key, mark)
     splash = "ic_splash_logo" if key == "original" else f"ic_splash_logo_{key}"
     save_webp(fit(mark, 1080, 0.72), ANDROID_RES / "drawable-nodpi" / f"{splash}.webp")
     return on_black(picker)
@@ -307,11 +314,19 @@ def main() -> None:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--preview-only", action="store_true", help="render the board without touching app assets")
     modes.add_argument("--readme-only", action="store_true", help="render only the README wordmarks")
+    modes.add_argument("--android-only", action="store_true", help="render only Android launcher icons")
     args = parser.parse_args()
 
     edge = find_edge()
     with tempfile.TemporaryDirectory(prefix="starlit-brand-") as temp:
         work = Path(temp)
+        if args.android_only:
+            for key, (stops, _) in COLORWAYS.items():
+                page = svg_page(work, f"mark-{key}", mark_document(stops), 1024)
+                mark = render(edge, page, work / f"mark-{key}.png", 1024, 1024, work / f"profile-{key}")
+                write_android_icons(key, mark)
+            print(f"Android launcher icons: {ANDROID_RES}")
+            return
         # GitHub shows the README on light and dark backgrounds, so it gets one wordmark for each.
         for theme, text_color in (("dark", "#FFFFFF"), ("light", "#16181D")):
             page = work / f"readme-{theme}.html"
