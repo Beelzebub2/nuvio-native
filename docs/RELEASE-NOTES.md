@@ -1,3 +1,11 @@
+## Starlit 1.2.2
+
+### Fixes
+
+- **Responsive Windows startup with large offline libraries:** Saved downloads are verified in the background so even very large episodes no longer keep the app on its loading spinner.
+- **Safe offline playback and account switching:** Files become playable after their complete integrity check; interrupted checks are canceled when changing profiles, and existing files are preserved.
+- **Reliable desktop release checks:** Completed-download UI fixtures include the integrity proofs required by the new verifier, allowing the full desktop test suite to validate this patch correctly.
+
 ## Starlit 1.2.1
 
 ### Fixes
