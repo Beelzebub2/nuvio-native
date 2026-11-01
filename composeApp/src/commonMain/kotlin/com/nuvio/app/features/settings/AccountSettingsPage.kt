@@ -285,38 +285,31 @@ private fun LocalSettingsImportCard(authState: AuthState) {
     if (signedIn.isAnonymous || !LocalSettingsImport.isAvailable) return
     val profileState by com.nuvio.app.features.profiles.ProfileRepository.state.collectAsStateWithLifecycle()
     val profileId = profileState.activeProfile?.profileIndex
-    val scope = rememberCoroutineScope()
+    val progress by LocalSettingsImport.progress.collectAsStateWithLifecycle()
+    val current = progress?.takeIf(LocalSettingsImport::isCurrentProgress)
     var confirming by remember(signedIn.userId, profileId) { mutableStateOf(false) }
-    var busy by remember(signedIn.userId, profileId) { mutableStateOf(false) }
-    var status by remember(signedIn.userId, profileId) { mutableStateOf<String?>(null) }
-    var pending by remember(signedIn.userId, profileId) { mutableStateOf(LocalSettingsImport.hasPendingImport()) }
-    var damaged by remember(signedIn.userId, profileId) { mutableStateOf(LocalSettingsImport.hasDamagedPendingImport()) }
-    val success = stringResource(Res.string.settings_account_import_success)
-    val pendingMessage = stringResource(Res.string.settings_account_import_pending)
-    val failed = stringResource(Res.string.settings_account_import_failed)
+    val pending = LocalSettingsImport.hasPendingImport()
+    val damaged = LocalSettingsImport.hasDamagedPendingImport()
     NuvioSurfaceCard {
         Text(stringResource(Res.string.settings_account_import_local), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(Res.string.settings_account_import_description), style = MaterialTheme.typography.bodyMedium)
-        (status ?: if (pending) pendingMessage else if (damaged) failed else null)?.let {
+        val message = when {
+            current?.outcome == com.nuvio.app.core.auth.LocalImportOutcome.Synced -> Res.string.settings_account_import_success
+            current?.outcome == com.nuvio.app.core.auth.LocalImportOutcome.Failed || damaged -> Res.string.settings_account_import_failed
+            pending -> Res.string.settings_account_import_pending
+            else -> null
+        }
+        message?.let {
             Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(it), style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(14.dp))
         NuvioPrimaryButton(
             text = stringResource(if (pending) Res.string.settings_account_import_retry else Res.string.settings_account_import_local),
-            enabled = !busy,
+            enabled = current?.isRunning != true,
             onClick = {
-                if (!pending) confirming = true else {
-                    busy = true
-                    scope.launch {
-                        status = runCatching { LocalSettingsImport.retryPendingImport(com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) }
-                            .fold({ if (it && !LocalSettingsImport.hasDamagedPendingImport()) success else if (it) failed else pendingMessage }, { failed })
-                        pending = LocalSettingsImport.hasPendingImport()
-                        damaged = LocalSettingsImport.hasDamagedPendingImport()
-                        busy = false
-                    }
-                }
+                if (pending) LocalSettingsImport.startImport(retry = true) else confirming = true
             },
         )
     }
@@ -324,23 +317,12 @@ private fun LocalSettingsImportCard(authState: AuthState) {
         title = stringResource(Res.string.settings_account_import_local),
         message = stringResource(Res.string.settings_account_import_description),
         isVisible = confirming,
-        isBusy = busy,
         confirmText = stringResource(Res.string.settings_account_import_local),
         dismissText = stringResource(Res.string.action_cancel),
         onConfirm = {
-            if (!busy) {
-                busy = true
-                scope.launch {
-                    status = LocalSettingsImport.importIntoCurrentProfile().fold(
-                        { if (it) success else pendingMessage }, { it.message ?: failed },
-                    )
-                    pending = LocalSettingsImport.hasPendingImport()
-                    damaged = LocalSettingsImport.hasDamagedPendingImport()
-                    busy = false
-                    confirming = false
-                }
-            }
+            confirming = false
+            LocalSettingsImport.startImport()
         },
-        onDismiss = { if (!busy) confirming = false },
+        onDismiss = { confirming = false },
     )
 }
