@@ -111,6 +111,7 @@ internal fun AppEnvironment(content: @Composable () -> Unit) {
             desktopUiScale = desktopUiScaleForWindow(maxWidth.value, maxHeight.value),
         ) {
             content()
+            com.nuvio.app.features.settings.LocalSettingsImportProgressHost()
         }
     }
 }

@@ -1,6 +1,8 @@
 package com.nuvio.app.features.settings
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.content.SharedPreferences
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -125,6 +127,10 @@ actual object ThemeSettingsStorage {
     }
 
     actual fun applySelectedAppLanguage(languageCode: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            Handler(Looper.getMainLooper()).post { applySelectedAppLanguage(languageCode) }
+            return
+        }
         if (languageCode.equals("device", ignoreCase = true)) {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
         } else {
