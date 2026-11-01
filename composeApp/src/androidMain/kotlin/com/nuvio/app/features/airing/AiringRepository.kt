@@ -19,6 +19,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.builtins.ListSerializer
+import com.nuvio.app.features.home.HomeCatalogSettingsSyncService
 import java.time.Instant
 import java.time.ZoneId
 
@@ -39,6 +43,7 @@ internal class AiringRepository(
     private val now: () -> Instant = Instant::now,
     private val fetchUpdates: (suspend (AiringSettings, Instant, suspend (List<AiringEvent>) -> Unit) -> List<AiringEvent>)? = null,
     private val loadSaved: (suspend () -> Pair<AiringSettings, AiringSnapshot>)? = null,
+    private val onHiddenChanged: () -> Unit = {},
 ) {
     private val mutex = Mutex()
     private val refreshMutex = Mutex()
@@ -77,6 +82,7 @@ internal class AiringRepository(
         restore()
         val sourceChanged = mutex.withLock {
             val previous = _state.value
+            val settings = settings.copy(hidden = previous.settings.hidden, hiddenSyncPending = previous.settings.hiddenSyncPending)
             saveSettings(settings)
             val changed = previous.settings.airType != settings.airType || previous.settings.hideNsfw != settings.hideNsfw
             if (changed) {
@@ -107,12 +113,51 @@ internal class AiringRepository(
 
     suspend fun showAllAgain() = updateHidden { emptyList() }
 
+    private fun hiddenJson(settings: AiringSettings): JsonArray =
+        Json.encodeToJsonElement(ListSerializer(HiddenAiringTitle.serializer()), settings.hidden).jsonArray
+
+    suspend fun exportHiddenTitles(): HiddenAiringSyncState {
+        restore()
+        val settings = state.value.settings
+        return HiddenAiringSyncState(hiddenJson(settings), settings.hiddenSyncPending)
+    }
+
+    suspend fun applyHiddenTitles(titles: JsonArray, expected: JsonArray? = null) {
+        val hidden = Json { ignoreUnknownKeys = true }.decodeFromJsonElement(
+            ListSerializer(HiddenAiringTitle.serializer()), titles,
+        ).filter { it.mediaId > 0 }.distinctBy { it.mediaId }
+        restore()
+        mutex.withLock {
+            val current = _state.value.settings
+            // A hide/restore performed while the pull was in flight takes precedence.
+            if (current.hiddenSyncPending || expected != null && hiddenJson(current) != expected) return@withLock
+            val settings = current.copy(hidden = hidden)
+            saveSettings(settings)
+            _state.update { it.copy(settings = settings) }
+        }
+    }
+
+    suspend fun acknowledgeHiddenTitles(titles: JsonArray) {
+        restore()
+        mutex.withLock {
+            val current = _state.value.settings
+            if (!current.hiddenSyncPending || hiddenJson(current) != titles) return@withLock
+            val settings = current.copy(hiddenSyncPending = false)
+            saveSettings(settings)
+            _state.update { it.copy(settings = settings) }
+        }
+    }
+
     private suspend fun updateHidden(transform: (List<HiddenAiringTitle>) -> List<HiddenAiringTitle>) {
         restore()
         mutex.withLock {
-            val settings = _state.value.settings.let { it.copy(hidden = transform(it.hidden)) }
+            val current = _state.value.settings
+            val hidden = transform(current.hidden)
+            if (hidden == current.hidden) return@withLock
+            val settings = current.copy(hidden = hidden, hiddenSyncPending = true)
             saveSettings(settings)
             _state.update { it.copy(settings = settings) }
+            onHiddenChanged()
         }
     }
 
@@ -185,7 +230,7 @@ internal class AiringRepository(
 }
 
 internal object NativeAiring {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val store get() = PlatformLocalAccountDataCleaner.appContext
         ?.getSharedPreferences("nuvio_native_airing", Context.MODE_PRIVATE)
     val client by lazy { AiringClient() }
@@ -213,7 +258,7 @@ internal object NativeAiring {
         return AiringRepository(AiringSettings(), fetch = { settings, instant -> client.schedule(settings, instant) },
             fetchUpdates = { settings, instant, onBatch -> client.scheduleWithUpdates(settings, instant, onBatch) },
             loadSaved = { withContext(Dispatchers.IO) {
-                val settings = runCatching { json.decodeFromString<AiringSettings>(stored("settings").orEmpty()) }
+                val settings = runCatching { decodeSavedAiringSettings(stored("settings").orEmpty()) }
                     .getOrNull()?.takeIf { runCatching { ZoneId.of(it.zone) }.isSuccess && it.historyDays in 1..7 && it.airType in listOf("broadcast", "sub", "dub") }
                     ?.let { it.copy(historyDays = it.historyDays.coerceAtMost(MAX_AIRING_HISTORY_DAYS)) } ?: AiringSettings()
                 val snapshot = runCatching { json.decodeFromString<AiringSnapshot>(stored("snapshot").orEmpty()) }
@@ -222,10 +267,18 @@ internal object NativeAiring {
             } },
             saveSnapshot = { withContext(Dispatchers.IO) { save("snapshot", json.encodeToString(it)) } },
             saveSettings = { withContext(Dispatchers.IO) { save("settings", json.encodeToString(it)) } },
+            onHiddenChanged = {
+                val currentScope = "${AuthRepository.state.value.userId.orEmpty()}:${ProfileScopedKey.of("native_airing")}"
+                if (currentScope == scope) HomeCatalogSettingsSyncService.triggerPush()
+            },
         )
     }
 
 }
+
+internal actual suspend fun exportBuiltInAiringHiddenTitles(): HiddenAiringSyncState? = NativeAiring.repository.exportHiddenTitles()
+internal actual suspend fun applyBuiltInAiringHiddenTitles(titles: JsonArray, expected: JsonArray?) = NativeAiring.repository.applyHiddenTitles(titles, expected)
+internal actual suspend fun acknowledgeBuiltInAiringHiddenTitles(titles: JsonArray) = NativeAiring.repository.acknowledgeHiddenTitles(titles)
 
 internal actual suspend fun fetchBuiltInAiringDetails(id: String): com.nuvio.app.features.details.MetaDetails? {
     val number = id.removePrefix(NATIVE_AIRING_PREFIX).toIntOrNull()?.takeIf { it > 0 } ?: return null

@@ -64,6 +64,7 @@ internal data class ProfileSyncOperations(
 internal data class ProfileActivitySyncOperations(
     val pullLibrary: suspend (Int) -> Unit,
     val pullWatchActivity: suspend (Int) -> Unit,
+    val pullHomeCatalogSettings: suspend (Int) -> Unit,
 )
 
 internal data class ProfileSyncResult(
@@ -173,6 +174,7 @@ internal suspend fun runActivityProfileSync(
     }
 
     coroutineScope {
+        launch { runStep(ProfileSyncStep.HomeCatalogSettings, operations.pullHomeCatalogSettings) }
         if (pullLibrary) {
             launch {
                 runStep(ProfileSyncStep.Library, operations.pullLibrary)
@@ -303,6 +305,7 @@ object SyncManager {
         pullHomeCatalogSettings = { profileId -> HomeCatalogSettingsSyncService.pullFromServer(profileId) },
     )
     private val profileActivitySyncOperations = ProfileActivitySyncOperations(
+        pullHomeCatalogSettings = { profileId -> HomeCatalogSettingsSyncService.pullFromServer(profileId) },
         pullLibrary = { profileId ->
             check(LibraryRepository.flushPendingToServer(profileId))
             LibraryRepository.pullFromServer(profileId)
@@ -323,6 +326,7 @@ object SyncManager {
     }
 
     internal fun cancelAccountSync() {
+        HomeCatalogSettingsSyncService.clearAccountState()
         syncRequestGate.cancel()
         val previousAccountJob = synchronized(accountScopeLock) {
             accountScopeJob.also {
