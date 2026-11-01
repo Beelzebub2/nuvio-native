@@ -228,6 +228,10 @@ class DownloadTorrentResourcesTest {
                     val reserved = downloadTorrentResourceBudget(settings)
                     assertEquals(reserved.cacheBytes, configured.getValue("CacheSize").jsonPrimitive.long)
                     assertEquals(reserved.connectionLimit, configured.getValue("ConnectionsLimit").jsonPrimitive.int)
+                    // Increasing the interactive playback preload must not make
+                    // background downloads wait for a large initial cache fill.
+                    assertEquals(if (size == P2pCacheSize.NONE) 10 else 1,
+                        configured.getValue("PreloadCache").jsonPrimitive.int)
                     assertTrue(5 * reserved.connectionLimit <= 400)
                     if (size != P2pCacheSize.NONE) assertTrue(5 * reserved.cacheBytes <= size.bytes)
                     else assertTrue(5 * reserved.cacheBytes <= 1_536L * 1024 * 1024)

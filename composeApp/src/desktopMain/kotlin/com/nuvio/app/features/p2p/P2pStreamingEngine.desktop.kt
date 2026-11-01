@@ -359,6 +359,26 @@ internal class DesktopP2pSession(
                             }
                         }
                     }
+                    if (reason == DesktopP2pRecoveryReason.NetworkChange) {
+                        // VPN/virtual adapters can change without changing the swarm's
+                        // actual route. A peer count alone is not evidence of a usable
+                        // connection: dead peers can remain listed until timeout. Only
+                        // preserve the HTTP reader if payload is actively arriving.
+                        val swarmStillDownloading = try {
+                            if (!backend.isHealthy()) false else {
+                                val stats = backend.getTorrentStats(session.hash)
+                                stats.peers > 0 && stats.downloadSpeed > 0
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            false
+                        }
+                        if (swarmStillDownloading) {
+                            log.i { "Network interfaces changed but torrent traffic continues; keeping playback" }
+                            reason = null
+                        }
+                    }
                     if (reason != null) {
                         try {
                             if (reason == DesktopP2pRecoveryReason.EngineUnavailable && ++healthRecoveries > 2) {
@@ -404,13 +424,23 @@ internal class DesktopP2pSession(
             uploadSpeed = stats.uploadSpeed,
             peers = stats.peers,
             seeds = stats.seeds,
-            bufferProgress = stats.preloadedBytes.fractionOf(stats.torrentSize),
+            // TorrServer's preloaded_bytes is cache occupancy for the whole torrent, not
+            // continuous playable bytes ahead of this episode. The player measures its
+            // actual demuxer buffer separately; do not report a false file buffer here.
+            bufferProgress = 0f,
             totalProgress = stats.loadedSize.fractionOf(stats.torrentSize),
             downloadedBytes = stats.loadedSize,
-            verifiedBytes = stats.loadedSize,
-            deliveredBytes = stats.preloadedBytes,
+            // The API does not expose selected-file verified/delivered byte counters.
+            verifiedBytes = 0L,
+            deliveredBytes = 0L,
         )
-        _cacheState.value = P2pCacheUiState(usedBytes = stats.loadedSize, protectedBytes = stats.preloadedBytes, hasMeasurement = true)
+        // loaded_size counts all completed torrent pieces, which can vastly exceed the
+        // cache occupancy. TorrServer exposes cache Filled but not a protected subset.
+        _cacheState.value = P2pCacheUiState(
+            usedBytes = stats.preloadedBytes.coerceAtLeast(0L),
+            protectedBytes = 0L,
+            hasMeasurement = true,
+        )
     }
 
     private fun isCurrent(expected: Long): Boolean = synchronized(intentLock) { intent == expected }

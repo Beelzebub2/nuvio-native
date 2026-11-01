@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -29,6 +30,7 @@ private val pathLocks = ConcurrentHashMap<String, Mutex>()
 private val pendingRemovals = ConcurrentHashMap<String, DownloadItem>()
 private val transfers = ConcurrentHashMap<String, Job>()
 private val transferIo = ConcurrentHashMap<String, DownloadIo>()
+private val playbackAwareDownloadLimiter = PlaybackAwareDownloadLimiter()
 private val torrentCacheOwnershipDelegate = lazy {
     DownloadTorrentCacheOwnership(DesktopStorage.cacheDir.resolve("download-torrents")).also { it.scavenge() }
 }
@@ -439,6 +441,17 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 check(total == null || bytes <= total) { "Source sent more bytes than advertised" }
                                 val now = System.nanoTime()
                                 if (now - lastProgress >= 500_000_000L) { report(bytes); lastProgress = now }
+                                // Throttle only when a P2P playback session is active. The HTTP
+                                // reader applies TCP backpressure to each download's torrent
+                                // process, freeing bandwidth for the live video. The shared
+                                // limiter prevents three jobs each consuming a full allowance.
+                                val state = P2pStreamingEngine.state.value
+                                val playbackActive = state is P2pStreamingState.Connecting ||
+                                    state is P2pStreamingState.Streaming
+                                val pauseNanos = playbackAwareDownloadLimiter.reserveDelayNanos(
+                                    count, playbackActive, now,
+                                )
+                                if (pauseNanos > 0L) TimeUnit.NANOSECONDS.sleep(pauseNanos)
                             }
                             if (stalled.get()) throw IOException("Source stopped sending data; retry to resume")
                             if (bytes <= 0 || (total != null && bytes != total) ||
