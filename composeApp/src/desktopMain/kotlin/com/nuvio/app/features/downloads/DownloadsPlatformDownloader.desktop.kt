@@ -101,7 +101,17 @@ internal actual object DownloadsPlatformDownloader {
                     // Save sidecars while the source is still available, before reporting offline-ready.
                     withTimeoutOrNull(60_000L) { DownloadSubtitles.prepare(source, local.toURI().toString()) }
                     currentCoroutineContext().ensureActive()
-                    recordDesktopDownloadIdentity(source)
+                    if (!recordDesktopDownloadIdentity(source)) {
+                        // The optional catalogue manifest does not cover every valid
+                        // direct media file. Those files still need a verified digest
+                        // in memory before the non-blocking playback lookup can use them.
+                        val proof = readDesktopDownloadProof(local)
+                        check(proof != null && proof.ownerId == source.id &&
+                            proof.fileName == source.fileName &&
+                            verifiedDesktopDownloadContent(local, proof)) {
+                            "Completed file could not be verified; it was preserved"
+                        }
+                    }
                     onSuccess(local.toURI().toString(), local.length())
                 }
             } catch (e: TimeoutCancellationException) { onFailure("Source lookup timed out. Retry or choose another provider.") }
@@ -164,7 +174,10 @@ private fun verifiedPlayableDownload(file: File): File? = runCatching {
             file.parentFile.toPath().toRealPath() != file.parentFile.parentFile.toPath().toRealPath().resolve(proof.ownerId)) return null
     } else if (file.parentFile.canonicalFile != legacyDownloadsDirectory.canonicalFile ||
         !file.name.contains("_${proof.ownerId}.")) return null
-    file.takeIf { verifiedDesktopDownloadContent(it, proof) }
+    // UI/composition and playback availability call this synchronously. Never hash a
+    // multi-GB file while holding their state lock: the IO recovery worker fills the
+    // verified snapshot after checking the entire digest.
+    file.takeIf { verifiedDesktopDownloadContent(it, proof, hashIfUncached = false) }
 }.getOrNull()
 
 internal fun openDownloadDirectory(directory: File): Boolean = runCatching {
@@ -590,7 +603,7 @@ internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?,
     return selected
 }
 
-internal fun recoverFinalDownload(item: DownloadItem): File? {
+internal fun recoverFinalDownload(item: DownloadItem, verifyActive: () -> Boolean = { true }): File? {
     val file = downloadPath(item)
     if (!file.exists()) return null
     // Inspect the owner even on offline recovery. A file cannot create ownership for itself.
@@ -611,14 +624,14 @@ internal fun recoverFinalDownload(item: DownloadItem): File? {
         if (legacySize != null && file.length() == legacySize) {
             val migrated = DesktopDownloadProof(item.id, item.fileName,
                 downloadSha256Text("legacy-completed\u0000${item.id}\u0000${item.fileName}"),
-                "-", "", legacySize, downloadSha256File(file))
+                "-", "", legacySize, downloadSha256File(file, verifyActive))
             writeDesktopDownloadProof(file, migrated)
             proof = migrated
         }
     }
     check(proof != null && proof.ownerId == item.id && proof.fileName == item.fileName &&
         proof.completedSha256 != null && file.isFile && file.length() == proof.totalBytes &&
-        proof.totalBytes > 0 && verifiedDesktopDownloadContent(file, proof)) {
+        proof.totalBytes > 0 && verifiedDesktopDownloadContent(file, proof, verifyActive = verifyActive)) {
         "Existing destination is missing its verified content proof or its bytes changed; file was preserved"
     }
     return file

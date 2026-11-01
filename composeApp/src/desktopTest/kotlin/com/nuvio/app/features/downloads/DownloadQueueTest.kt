@@ -8,9 +8,11 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 import org.junit.Test
 import java.io.File
 import java.net.InetSocketAddress
+import java.net.URI
 import java.nio.file.Files
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +25,90 @@ class DownloadQueueTest {
         StreamItem(name = "1080p", url = url, addonName = "Local fixture", addonId = "fixture"))
     private fun waitFor(predicate: () -> Boolean) = runBlocking {
         withTimeout(8_000) { while (!predicate()) delay(20) }
+    }
+
+    @Test fun completedDownloadRestoresPromptlyAndBecomesPlayableOnlyAfterAsyncVerification() {
+        assertNotNull(System.getProperty("nuvio.dataDir"), "Tests must use isolated storage")
+        val root = Files.createTempDirectory("download-background-sha").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val id = "async-verified-episode"
+        var observer: Job? = null
+        try {
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(root)
+            val file = File(File(root, id).apply { mkdirs() }, "$id.mp4")
+            File(file.parentFile, ".starlit-owner").writeText(id)
+            // 8 MiB of deterministic local media: large enough to exercise streamed SHA,
+            // but bounded in size and created without allocating a multi-megabyte array.
+            val chunk = ByteArray(128 * 1024) { index -> (index * 31 + 7).toByte() }
+            file.outputStream().buffered().use { output ->
+                output.write(media)
+                repeat(64) { output.write(chunk) }
+            }
+            val saved = DownloadItem(
+                id = id, contentType = "series", parentMetaId = "async-show", parentMetaType = "series",
+                videoId = "async-show:1:1", title = "Fixture", seasonNumber = 1, episodeNumber = 1,
+                streamTitle = "1080p", providerName = "fixture",
+                sourceUrl = "http://127.0.0.1/offline.mp4", fileName = file.name,
+                localFileUri = file.toURI().toString(), destinationDirectory = root.absolutePath,
+                status = DownloadStatus.Completed, downloadedBytes = file.length(), totalBytes = file.length(),
+                createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
+            )
+            writeDesktopDownloadProof(file, DesktopDownloadProof(
+                saved.id, saved.fileName, downloadSourceFingerprint(saved, saved.sourceUrl),
+                downloadEndpointFingerprint(URI.create(saved.sourceUrl)),
+                "\"fixture\"", file.length(), downloadSha256File(file),
+            ))
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(saved)))
+
+            // Observe the StateFlow inline at publish time: the IO worker can finish a
+            // fast test fixture before ensureLoaded returns, so a post-return phase
+            // assertion would race. Unconfined observation records the pending phase
+            // before the background verifier is scheduled.
+            val observed = CopyOnWriteArrayList<DownloadItem>()
+            val pendingLookup = AtomicInteger(-1)
+            observer = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+                DownloadsRepository.uiState.collect { state ->
+                    state.items.firstOrNull { it.id == saved.id }?.let { item ->
+                        observed += item
+                        if (item.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE) {
+                            val available = DownloadsRepository.findPlayableDownloadByVideoId(saved.videoId)
+                            pendingLookup.compareAndSet(-1, if (available == null) 0 else 1)
+                        }
+                    }
+                }
+            }
+
+            val started = System.nanoTime()
+            DownloadsRepository.ensureLoaded()
+            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+            assertTrue(elapsedMs < 2_000L, "Saved metadata should load without waiting for an 8 MiB SHA-256 ($elapsedMs ms)")
+            val pending = assertNotNull(observed.firstOrNull { it.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE },
+                "A completed file must enter an observable pending-verification state")
+            assertEquals(DownloadStatus.Completed, pending.status)
+            assertFalse(pending.isPlayable, "Unverified bytes must never be advertised as playable")
+            assertEquals(0, pendingLookup.get(), "Playback lookup must deny an unverified saved file")
+
+            waitFor {
+                DownloadsRepository.uiState.value.items.singleOrNull()?.let {
+                    it.id == id && it.phase == null && it.isPlayable &&
+                        DownloadsRepository.findPlayableDownloadByVideoId(saved.videoId) != null
+                } == true
+            }
+            val ready = DownloadsRepository.uiState.value.items.single()
+            assertEquals(DownloadStatus.Completed, ready.status)
+            assertEquals(file.toURI().toString(), DownloadsRepository.playableLocalFileUri(ready))
+            assertEquals(file.length(), ready.totalBytes)
+            assertTrue(file.isFile, "Background verification must preserve the saved media")
+            assertTrue(downloadProofFile(file).isFile, "Background verification must preserve its proof")
+        } finally {
+            observer?.cancel()
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original)))
+            root.deleteRecursively()
+        }
     }
 
     @Test fun damagedDownloadsPayloadRecoversPreviousGoodVersionOrFailsWithoutOverwritingIt() {
@@ -259,10 +345,12 @@ class DownloadQueueTest {
             assertContentEquals(media, firstFile.readBytes())
             server.stop(0) // every playback lookup below is offline
             DownloadsRepository.clearLocalState(); DownloadsRepository.ensureLoaded()
+            waitFor { DownloadsRepository.findPlayableDownload("queue-show",1,2,"absolute:14") != null }
             assertNotNull(DownloadsRepository.findPlayableDownload("queue-show",1,2,"absolute:14"))
             assertTrue(firstFile.delete())
             assertNull(DownloadsRepository.findPlayableDownload("queue-show",1,1,"absolute:13"))
             DownloadsRepository.clearLocalState(); DownloadsRepository.ensureLoaded()
+            waitFor { DownloadsRepository.uiState.value.items.first { it.episodeNumber == 1 }.status == DownloadStatus.Failed }
             assertEquals(DownloadStatus.Failed, DownloadsRepository.uiState.value.items.first { it.episodeNumber == 1 }.status)
         } finally {
             gate.countDown(); server.stop(0)

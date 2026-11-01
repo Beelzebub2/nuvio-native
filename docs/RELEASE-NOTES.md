@@ -1,3 +1,10 @@
+## Starlit 1.2.1
+
+### Fixes
+
+- **Windows startup no longer waits for downloaded episodes to be fully scanned.** Large offline files are verified in the background after profile selection, so Starlit can open without remaining on the loading spinner.
+- Completed downloads are available for offline playback only after their saved content proofs have been checked. Changed or missing files remain untouched and are reported as unavailable; profile switches cannot apply stale verification results to a different profile.
+
 ## Starlit 1.2.0
 
 ### Features

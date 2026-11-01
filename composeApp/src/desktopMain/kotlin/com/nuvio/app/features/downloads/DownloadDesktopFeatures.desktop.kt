@@ -48,6 +48,7 @@ internal val ParallelDownloadChoices = 1..5
 internal const val DefaultParallelDownloads = 3
 
 internal actual object DownloadDesktopFeatures {
+    actual fun verificationDispatcher(): CoroutineDispatcher = Dispatchers.IO
     private val store by lazy { DesktopStorage.store("desktop_download_preferences") }
     actual fun directory(): String? = store.getString("folder") ?: legacyDownloadsDirectory.also { it.mkdirs() }.absolutePath
     internal fun setDirectory(folder: File) {
@@ -60,12 +61,15 @@ internal actual object DownloadDesktopFeatures {
         val folder = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return
         if (folder.isDirectory && folder.canWrite()) setDirectory(folder)
     }
-    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean): List<DownloadItem> {
+    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean,
+        verifyActive: () -> Boolean): List<DownloadItem> {
         val verified = items.map { item ->
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             // Only the item's saved task directory and verified owner/content proof
             // authorize a completed file. A legacy filename alone is insufficient.
             val playable = if (item.status == DownloadStatus.Completed)
-                runCatching { recoverFinalDownload(item) }.getOrNull() else null
+                runCatching { recoverFinalDownload(item, verifyActive) }.getOrNull() else null
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             if (playable != null) {
                 recordDesktopDownloadIdentity(item)
                 item.copy(
@@ -77,8 +81,8 @@ internal actual object DownloadDesktopFeatures {
                 // The account may already have another preferred download directory.
                 // Recover guest-owned files in their saved location before trying the
                 // newly selected folder; never change the account's destination.
-                recoverKnownDesktopDownload(item, item.destinationDirectory)
-                    ?: recoverKnownDesktopDownload(item, path)
+                recoverKnownDesktopDownload(item, item.destinationDirectory, verifyActive)
+                    ?: recoverKnownDesktopDownload(item, path, verifyActive)
                     ?: item
             }
         }
@@ -90,6 +94,7 @@ internal actual object DownloadDesktopFeatures {
             usedIds.add(item.id)
         }
         discoverDesktopDownloads(path).forEach { found ->
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             val previous = byKey[found.logicalContentKey]
             if (previous == null) {
                 if (usedIds.add(found.id)) byKey[found.logicalContentKey] = found

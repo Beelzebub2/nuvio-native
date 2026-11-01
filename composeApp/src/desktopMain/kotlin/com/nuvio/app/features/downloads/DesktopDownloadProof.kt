@@ -1,6 +1,7 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.p2p.TorrServerFile
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -72,11 +73,12 @@ internal fun ByteArray.downloadHex(): String = buildString(size * 2) {
     }
 }
 
-internal fun downloadSha256File(file: File): String {
+internal fun downloadSha256File(file: File, verifyActive: () -> Boolean = { true }): String {
     val digest = MessageDigest.getInstance("SHA-256")
     FileInputStream(file).buffered().use { input ->
         val buffer = ByteArray(128 * 1024)
         while (true) {
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             val read = input.read(buffer)
             if (read < 0) break
             digest.update(buffer, 0, read)
@@ -85,8 +87,17 @@ internal fun downloadSha256File(file: File): String {
     return digest.digest().downloadHex()
 }
 
-/** Hash a final file on first access and again if either the data or its proof changes. */
-internal fun verifiedDesktopDownloadContent(file: File, proof: DesktopDownloadProof): Boolean {
+/**
+ * A full digest check can take minutes for large episodes. Callers on the UI thread may
+ * inspect the in-memory verified snapshot, but must never hash an unverified file there.
+ * Profile restoration performs the first full check separately on an IO worker.
+ */
+internal fun verifiedDesktopDownloadContent(
+    file: File,
+    proof: DesktopDownloadProof,
+    hashIfUncached: Boolean = true,
+    verifyActive: () -> Boolean = { true },
+): Boolean {
     val expected = proof.completedSha256 ?: return false
     val filePath = file.toPath()
     val proofPath = downloadProofFile(file).toPath()
@@ -101,7 +112,8 @@ internal fun verifiedDesktopDownloadContent(file: File, proof: DesktopDownloadPr
     if (before.size != proof.totalBytes || before.size <= 0L) return false
     val key = file.absolutePath
     if (verifiedFinalSnapshots[key] == before) return true
-    val valid = downloadSha256File(file) == expected && signature() == before
+    if (!hashIfUncached) return false
+    val valid = downloadSha256File(file, verifyActive) == expected && signature() == before
     if (valid) verifiedFinalSnapshots[key] = before else verifiedFinalSnapshots.remove(key)
     return valid
 }

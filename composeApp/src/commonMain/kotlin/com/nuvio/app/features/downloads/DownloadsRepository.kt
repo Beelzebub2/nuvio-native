@@ -2,6 +2,13 @@ package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.player.addonSubtitleRequests
 import com.nuvio.app.features.streams.StreamItem
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +38,8 @@ object DownloadsRepository {
     private var ordinal = 0L
     private var hasLoaded = false
     private var loadedProfile: Int? = null
+    private val desktopVerificationScope = CoroutineScope(SupervisorJob() + DownloadDesktopFeatures.verificationDispatcher())
+    private var desktopVerificationJob: Job? = null
 
     fun ensureLoaded() = synchronized(lock) { if (!hasLoaded) loadFromDisk() }
     fun onProfileChanged() = synchronized(lock) { loadFromDisk() }
@@ -172,8 +181,14 @@ object DownloadsRepository {
 
     fun playableLocalFileUri(item: DownloadItem): String? = synchronized(lock) {
         ensureLoaded()
-        if (item.status != DownloadStatus.Completed) return null
-        DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName)
+        // Callers may retain an item from before a profile switch. Resolve only an
+        // entry belonging to the currently loaded queue, after its scan completes.
+        val current = _uiState.value.items.firstOrNull {
+            it.id == item.id && it.logicalContentKey == item.logicalContentKey
+        } ?: return null
+        if (current.status != DownloadStatus.Completed ||
+            current.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE) return null
+        DownloadsPlatformDownloader.resolveLocalFileUri(current.localFileUri, current.fileName)
     }
 
     fun enqueueFromStream(contentType: String, videoId: String, parentMetaId: String, parentMetaType: String,
@@ -324,6 +339,8 @@ object DownloadsRepository {
 
     private fun invalidateTransfers() {
         generation++
+        desktopVerificationJob?.cancel()
+        desktopVerificationJob = null
         tokens.clear()
         activeHandles.values.forEach(DownloadsTaskHandle::detach)
         activeHandles.clear()
@@ -339,17 +356,14 @@ object DownloadsRepository {
             hadStoredPayload = payload != null
             val stored = DownloadsCodec.decodeItems(payload)
                 .map(DownloadsPlatformDownloader::restoreItem)
-            // A profile can only regain downloads from its own saved task IDs on load.
-            // Importing other identities from a shared folder requires an explicit picker/import.
-            val verified = if (isDesktop) DownloadDesktopFeatures.reconcileKnownDownloads(
-                stored, DownloadDesktopFeatures.directory(), includeDiscovered = false,
-            ) else stored
-            verified.map { restored ->
-                // Retry re-adopts a proven file in place once a desktop drive is reconnected.
-                if (isDesktop && restored.status == DownloadStatus.Completed && !restored.hasPlayableLocalFile()) {
-                    restored.copy(status = DownloadStatus.Failed, errorMessage = "Downloaded file is missing or its drive is unavailable")
-                } else restored
-            }
+            // A downloaded episode may be tens of GB. Restoring its metadata must not
+            // hash those bytes while the profile gate waits for this lock. The IO
+            // verifier below checks content before it becomes available for playback.
+            if (isDesktop) stored.map { restored ->
+                if (restored.status == DownloadStatus.Completed)
+                    restored.copy(phase = SAVED_DOWNLOAD_VERIFICATION_PHASE)
+                else restored
+            } else stored
         } catch (error: Exception) {
             // A damaged queue must never be decoded as empty and saved over the
             // original. Keep the last displayed snapshot without publishing a
@@ -365,6 +379,53 @@ object DownloadsRepository {
         // that distinction to decide whether to repopulate locally saved downloads.
         if (hadStoredPayload) persist()
         pumpQueue()
+        if (isDesktop) verifyRestoredDesktopDownloads(items, profile, generation)
+    }
+
+    /** Check each saved final file off the launch path and without holding the queue lock. */
+    private fun verifyRestoredDesktopDownloads(items: List<DownloadItem>, profile: Int, expectedGeneration: Long) {
+        val pending = items.filter {
+            it.status == DownloadStatus.Completed && it.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE
+        }
+        if (pending.isEmpty()) return
+        val folder = DownloadDesktopFeatures.directory()
+        desktopVerificationJob = desktopVerificationScope.launch {
+            val verificationJob = currentCoroutineContext()[Job]
+            for (original in pending) {
+                currentCoroutineContext().ensureActive()
+                val checked = try {
+                    // A single episode is verified at a time so a large library does
+                    // not saturate the disk with competing full-file reads.
+                    val recovered = DownloadDesktopFeatures.reconcileKnownDownloads(
+                        listOf(original), folder, includeDiscovered = false,
+                        verifyActive = { verificationJob?.isActive == true },
+                    ).firstOrNull() ?: original
+                    currentCoroutineContext().ensureActive()
+                    if (recovered.status == DownloadStatus.Completed &&
+                        (recovered.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE || !recovered.hasPlayableLocalFile())) {
+                        recovered.copy(status = DownloadStatus.Failed, phase = null,
+                            errorMessage = "Downloaded file is missing or its drive is unavailable")
+                    } else recovered.copy(phase = null)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    // Never delete an unverified file or overwrite the whole queue.
+                    original.copy(status = DownloadStatus.Failed, phase = null,
+                        errorMessage = "Saved download could not be verified; reconnect its drive and retry")
+                }
+                synchronized(lock) {
+                    if (!hasLoaded || loadedProfile != profile || generation != expectedGeneration ||
+                        com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != profile) return@synchronized
+                    val current = _uiState.value.items
+                    // A transfer, folder recovery, sign-out or account import may have
+                    // changed this record while hashing. Never overwrite newer state.
+                    val updated = current.map { item -> if (item == original) checked else item }
+                    if (updated != current) {
+                        publish(updated)
+                        persist()
+                    }
+                }
+            }
+        }
     }
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
@@ -448,6 +509,7 @@ object DownloadsRepository {
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(_uiState.value.items))
     }
     private fun DownloadItem.hasPlayableLocalFile(): Boolean = status == DownloadStatus.Completed &&
+        phase != SAVED_DOWNLOAD_VERIFICATION_PHASE &&
         DownloadsPlatformDownloader.resolveLocalFileUri(localFileUri, fileName) != null
 }
 

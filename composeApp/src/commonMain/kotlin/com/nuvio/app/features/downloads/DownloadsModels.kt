@@ -20,6 +20,8 @@ enum class DownloadStatus {
     Failed,
 }
 
+internal const val SAVED_DOWNLOAD_VERIFICATION_PHASE = "Verifying saved file"
+
 @Serializable
 data class DownloadItem(
     val id: String,
@@ -66,7 +68,8 @@ data class DownloadItem(
         get() = seasonNumber != null && episodeNumber != null
 
     val isPlayable: Boolean
-        get() = status == DownloadStatus.Completed && !localFileUri.isNullOrBlank()
+        get() = status == DownloadStatus.Completed &&
+            phase != SAVED_DOWNLOAD_VERIFICATION_PHASE && !localFileUri.isNullOrBlank()
 
     val displaySubtitle: String
         get() = episodeTitle.orEmpty()
