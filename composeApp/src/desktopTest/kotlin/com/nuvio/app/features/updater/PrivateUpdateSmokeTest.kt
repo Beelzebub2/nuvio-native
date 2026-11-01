@@ -14,7 +14,7 @@ import java.nio.file.Path
 class PrivateUpdateSmokeTest {
     @Test fun `private release downloads through the actual updater and verifies SHA256`() = runBlocking {
         assumeTrue(System.getProperty("nuvio.updateSmoke") == "true")
-        val request = HttpRequest.newBuilder(URI("https://api.github.com/repos/Beelzebub2/nuvio-native/releases?per_page=10"))
+        val request = HttpRequest.newBuilder(URI("https://api.github.com/repos/Beelzebub2/starlit/releases?per_page=10"))
             .header("Accept", "application/vnd.github+json").header("User-Agent", "NuvioNative-Test")
             .header("Authorization", "Bearer ${PrivateReleaseAuth.token()}").GET().build()
         val response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString())

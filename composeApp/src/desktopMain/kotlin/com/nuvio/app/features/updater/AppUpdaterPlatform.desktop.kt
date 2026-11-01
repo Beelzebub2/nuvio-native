@@ -57,7 +57,7 @@ actual object AppUpdaterPlatform {
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
-        repo = "nuvio-native",
+        repo = "starlit",
         channelBranch = null,
         includePrereleases = true,
         userAgent = "NuvioNative",

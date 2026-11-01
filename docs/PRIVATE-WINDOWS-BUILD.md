@@ -2,7 +2,7 @@
 
 Starlit is made by [Beelzebub2](https://github.com/Beelzebub2) and based on Nuvio by Tapframe and friends. It was called Nuvio Native up to version 1.0.14.
 
-Source: https://github.com/Beelzebub2/nuvio-native (public client source; account-server implementation is maintained separately)
+Source: https://github.com/Beelzebub2/starlit (public client source; account-server implementation is maintained separately)
 
 Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a3239427b4507f2fafb35. GPLv3 and upstream copyright notices are retained.
 
@@ -17,6 +17,10 @@ The in-app updater currently uses a GitHub CLI login, including for public relea
 An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credential. Use a fine-grained token restricted to this repository with Contents: read. Never put a token in source, build settings, release assets, command arguments, or logs. GitHub CLI manages its credential; the app reads it only into memory. HTTP redirects are followed without forwarding the credential. Every downloaded installer must have GitHub's SHA-256 digest and pass verification before installation.
 
 Starlit builds configured with an account server connect to that server automatically. With a build that offers **Request account**, you can submit an account request from the sign-in screen and wait for owner approval before signing in and syncing with Android. Approved accounts can sign in on each device; guest mode and saved custom-server choices remain available. The account server is selected at build time, as described in the [account-server guide](ANDROID.md#servers-and-account-sync).
+
+### Repository rename rollout
+
+Desktop builds through 1.0.47 only accept update assets under `Beelzebub2/nuvio-native`. Renaming the repository makes GitHub return asset URLs under `Beelzebub2/starlit`, which those installed builds reject even when the old repository URL redirects correctly. Before renaming, publish and install a compatibility build that accepts both names while still checking the old repository. Then switch the update source and rename the repository together. This source change accepts both asset paths; it does not repair an already installed older updater. If the repository is renamed first, download the new compatible installer from Releases and run it once manually; existing app data is retained. Keep the old repository name unused so GitHub's redirects remain available.
 
 ## Built-in Airing Now
 

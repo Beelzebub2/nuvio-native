@@ -33,4 +33,5 @@ internal object PrivateReleaseAuth {
 internal fun isPrivateReleaseAssetUri(uri: URI): Boolean =
     uri.scheme == "https" && uri.host == "api.github.com" && uri.userInfo == null &&
         (uri.port == -1 || uri.port == 443) && uri.query == null && uri.fragment == null &&
-        uri.path.matches(Regex("/repos/Beelzebub2/nuvio-native/releases/assets/[0-9]+"))
+        // Keep saved asset URLs from before the repository rename valid.
+        uri.path.matches(Regex("/repos/Beelzebub2/(?:starlit|nuvio-native)/releases/assets/[0-9]+"))
