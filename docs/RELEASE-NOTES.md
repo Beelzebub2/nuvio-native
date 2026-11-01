@@ -1,3 +1,14 @@
+## Starlit 1.0.43
+
+### New
+
+- **Request account** on the sign-in screen now lets new users submit an email and password for approval by the Starlit server owner. The account stays inactive until the owner accepts the request.
+- The owner receives a one-use review link to approve or deny each request. Denied requests do not create accounts.
+
+### Fixes
+
+- If the owner's notification email cannot be sent, Starlit explains that the request was saved and lets you retry after 30 seconds using the same email and password.
+
 ## Starlit 1.0.42
 
 ### Improvements
