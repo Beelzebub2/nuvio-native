@@ -3,6 +3,8 @@ package com.nuvio.app.features.downloads
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,11 @@ import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.details.MetaDetails
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.downloads_mobile_parallel
+import nuvio.composeapp.generated.resources.downloads_mobile_pause_all
+import nuvio.composeapp.generated.resources.downloads_mobile_resume_all
+import org.jetbrains.compose.resources.stringResource
 
 internal actual object DownloadDesktopFeatures {
     actual fun verificationDispatcher(): CoroutineDispatcher = Dispatchers.IO
@@ -56,28 +63,34 @@ internal actual object DownloadDesktopFeatures {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal actual fun DownloadManagementControls() {
     val state by DownloadsRepository.uiState.collectAsState()
     var parallel by remember { mutableIntStateOf(DownloadDesktopFeatures.parallelDownloads()) }
+    var showParallel by remember { mutableStateOf(false) }
     val active = state.items.count { it.status == DownloadStatus.Downloading }
     val paused = state.items.count { it.status == DownloadStatus.Paused }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(onClick = DownloadsRepository::pauseActiveDownloads, enabled = active > 0) { Text("Pause all") }
-            TextButton(onClick = DownloadsRepository::resumeAll, enabled = paused > 0) { Text("Resume all") }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (active > 0) TextButton(onClick = DownloadsRepository::pauseActiveDownloads) {
+                Text(stringResource(Res.string.downloads_mobile_pause_all))
+            }
+            if (paused > 0) TextButton(onClick = DownloadsRepository::resumeAll) {
+                Text(stringResource(Res.string.downloads_mobile_resume_all))
+            }
+            OutlinedButton(onClick = { showParallel = !showParallel }) {
+                Text(stringResource(Res.string.downloads_mobile_parallel, parallel))
+            }
         }
-        Text("Downloads at once", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showParallel) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (1..5).forEach { count ->
-                FilterChip(
-                    selected = parallel == count,
-                    onClick = {
-                        DownloadDesktopFeatures.setParallelDownloads(count)
-                        parallel = count
-                    },
-                    label = { Text("$count") },
-                )
+                FilterChip(selected = parallel == count, onClick = {
+                    DownloadDesktopFeatures.setParallelDownloads(count)
+                    parallel = count
+                    showParallel = false
+                }, label = { Text("$count") })
             }
         }
     }

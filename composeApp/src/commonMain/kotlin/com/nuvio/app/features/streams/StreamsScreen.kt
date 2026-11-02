@@ -384,7 +384,7 @@ fun StreamsScreen(
                 }
             },
             onDownload = { stream ->
-                if ((!isDesktop || !stream.isTorrentStream) && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+                if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
                     downloadScope.launch {
                         val resolved = DirectDebridPlaybackResolver.resolveToPlayableStream(
                             stream = stream,

@@ -2,11 +2,13 @@ package com.nuvio.app.features.downloads
 
 import android.content.Context
 import android.content.Intent
+import com.nuvio.app.features.p2p.P2pSettingsRepository
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ import java.io.File
 import java.net.URI
 
 internal actual object DownloadsPlatformDownloader {
+    actual val supportsTorrentDownloads: Boolean = true
     private var appContext: Context? = null
     private var downloadScheduler: AndroidDownloadScheduler? = null
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -63,14 +66,19 @@ internal actual object DownloadsPlatformDownloader {
                 // before a durable JobScheduler/WorkManager transfer can be enqueued.
                 val stream = if (request.item.sourceSelection != null) withContext(Dispatchers.IO) {
                     withTimeout(120_000L) {
-                        resolveDownloadSource(request.item.copy(sourceSelection =
-                            request.item.sourceSelection.copy(transport = "Direct files")))
+                        resolveDownloadSource(request.item)
                     }
                 } else null
                 coroutineContext.ensureActive()
                 if (epoch != accountEpoch) return@launch
+                val filenameHints = stream?.downloadTorrentFilenameHints().orEmpty()
                 val item = if (stream == null) request.item else request.item.copy(
                     sourceUrl = stream.playableDirectUrl.orEmpty(),
+                    torrentHash = if (stream.playableDirectUrl == null) stream.p2pInfoHash else null,
+                    torrentFileIdx = stream.p2pFileIdx,
+                    torrentFilename = filenameHints.firstOrNull(),
+                    torrentFilenameAlternates = filenameHints.drop(1),
+                    torrentTrackers = stream.p2pTrackers,
                     sourceHeaders = stream.behaviorHints.proxyHeaders?.request.orEmpty(),
                     sourceResponseHeaders = stream.behaviorHints.proxyHeaders?.response.orEmpty(),
                     sourceSubtitles = stream.externalSubtitles,
@@ -79,27 +87,41 @@ internal actual object DownloadsPlatformDownloader {
                     providerName = stream.addonName,
                     providerAddonId = stream.addonId,
                 )
-                require(supportedDesktopDownloadUrl(item.sourceUrl)) {
-                    "Choose a direct media file. Android offline downloads do not support torrent files or streaming playlists."
+                if (item.torrentHash != null && item.sourceUrl.isBlank()) {
+                    P2pSettingsRepository.ensureLoaded()
+                    require(P2pSettingsRepository.isVisible && P2pSettingsRepository.uiState.value.p2pEnabled) {
+                        "Enable P2P in Settings to download torrent sources."
+                    }
+                } else require(supportedDesktopDownloadUrl(item.sourceUrl)) {
+                    "Choose a downloadable video file or torrent. Streaming playlists cannot be saved."
                 }
                 request.onResolved(item)
                 coroutineContext.ensureActive()
                 if (epoch != accountEpoch) return@launch
                 val transfer = scheduler.enqueue(item)
                 scheduled = transfer
+                var lastResolvedPhase = item.phase
                 scheduler.store.transfers.map { it[request.destinationFileName] }
                     .distinctUntilChanged()
                     .takeWhile { current ->
                         if (current == null || current.generation != transfer.generation) return@takeWhile false
                         val currentItem = current.item
                         when (currentItem.status) {
-                            DownloadStatus.Downloading -> onProgress(currentItem.downloadedBytes, currentItem.totalBytes)
+                            DownloadStatus.Downloading -> {
+                                if (currentItem.phase != lastResolvedPhase) {
+                                    lastResolvedPhase = currentItem.phase
+                                    request.onResolved(currentItem)
+                                }
+                                onProgress(currentItem.downloadedBytes, currentItem.totalBytes)
+                            }
                             DownloadStatus.Completed -> onSuccess(checkNotNull(currentItem.localFileUri), currentItem.totalBytes)
                             DownloadStatus.Failed -> onFailure(currentItem.errorMessage ?: "Download failed")
                             DownloadStatus.Paused -> onPaused()
                         }
                         currentItem.status == DownloadStatus.Downloading
                     }.collect()
+            } catch (_: TimeoutCancellationException) {
+                onFailure("The source search timed out. Retry this download.")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

@@ -28,6 +28,8 @@ internal suspend fun transferAndroidDownload(
     directory: File,
     validator: String?,
     client: OkHttpClient = downloadHttpClient,
+    expectedBytes: Long? = null,
+    immutableTorrent: Boolean = false,
     onHeaders: (totalBytes: Long?, validator: String?) -> Unit,
     onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
 ): File = coroutineScope {
@@ -38,6 +40,14 @@ internal suspend fun transferAndroidDownload(
             check(directory.isDirectory || directory.mkdirs()) { "Cannot create downloads directory" }
             val partial = File(directory, "${item.fileName}.part")
             var offset = partial.takeIf(File::isFile)?.length() ?: 0L
+            require(expectedBytes == null || expectedBytes > 0L)
+            if (expectedBytes != null && offset > expectedBytes) {
+                check(partial.delete()) { "Cannot reset an oversized partial download" }
+                offset = 0L
+            }
+            // Without a validator direct HTTP content can change between requests.
+            // A torrent file is immutable and separately bound to a verified infohash.
+            if (offset > 0L && !immutableTorrent && validator.isNullOrBlank()) offset = 0L
             var restarted = false
 
             while (true) {
@@ -62,16 +72,30 @@ internal suspend fun transferAndroidDownload(
                         restarted = true
                         return@use
                     }
-                    if (!response.isSuccessful) throw DownloadHttpException(response.code)
+                    if (response.code != 200 && response.code != 206) {
+                        throw DownloadHttpException(response.code)
+                    }
                     val range = response.header("Content-Range")?.let(::parseDownloadContentRange)
                     val resumed = response.code == 206
-                    if (resumed && (range == null || range.first != offset)) {
+                    if (resumed && (range == null || range.start != offset)) {
                         throw IOException("Server returned an invalid download range")
+                    }
+                    if (resumed && expectedBytes != null && range?.total != expectedBytes) {
+                        throw IOException("Torrent HTTP range does not match the selected video size")
+                    }
+                    if (resumed && range?.total == null && expectedBytes == null) {
+                        throw IOException("Cannot safely complete a download with an unknown range total")
                     }
                     val startingBytes = if (resumed) offset else 0L
                     val body = response.body ?: throw IOException("Download response is empty")
                     val contentLength = body.contentLength().takeIf { it >= 0L }
-                    val totalBytes = range?.second ?: contentLength?.let { startingBytes + it }
+                    if (resumed && contentLength != null && contentLength != range!!.length) {
+                        throw IOException("Server returned an inconsistent download range length")
+                    }
+                    val totalBytes = expectedBytes ?: range?.total ?: contentLength?.let { startingBytes + it }
+                    if (expectedBytes != null && contentLength != null && !resumed && contentLength != expectedBytes) {
+                        throw IOException("Torrent stream is not the expected video size")
+                    }
                     val responseValidator = response.header("ETag")?.takeUnless { it.startsWith("W/") }
                         ?: response.header("Last-Modified")
                     onHeaders(totalBytes, responseValidator)
@@ -92,6 +116,9 @@ internal suspend fun transferAndroidDownload(
                         }
                     }
                     ensureActive()
+                    if (resumed && downloaded - startingBytes != range!!.length) {
+                        throw IOException("Download range ended before all bytes were received")
+                    }
                     if (totalBytes != null && downloaded != totalBytes) {
                         throw IOException("Download ended before all bytes were received")
                     }
@@ -113,11 +140,15 @@ internal suspend fun transferAndroidDownload(
     }
 }
 
-internal fun parseDownloadContentRange(value: String): Pair<Long, Long?>? {
+internal data class DownloadContentRange(val start: Long, val end: Long, val total: Long?) {
+    val length: Long get() = end - start + 1L
+}
+
+internal fun parseDownloadContentRange(value: String): DownloadContentRange? {
     val match = Regex("bytes (\\d+)-(\\d+)/(\\d+|\\*)").matchEntire(value.trim()) ?: return null
     val start = match.groupValues[1].toLongOrNull() ?: return null
     val end = match.groupValues[2].toLongOrNull() ?: return null
     val total = match.groupValues[3].toLongOrNull()
     if (end < start || (total != null && end >= total)) return null
-    return start to total
+    return DownloadContentRange(start, end, total)
 }

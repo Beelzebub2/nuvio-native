@@ -17,6 +17,8 @@ internal interface DownloadsTaskHandle {
 }
 
 internal expect object DownloadsPlatformDownloader {
+    /** True only where an offline native torrent transfer engine is implemented. */
+    val supportsTorrentDownloads: Boolean
     fun start(
         request: DownloadPlatformRequest,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
