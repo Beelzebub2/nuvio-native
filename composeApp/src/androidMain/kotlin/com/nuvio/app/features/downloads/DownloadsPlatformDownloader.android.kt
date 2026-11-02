@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -119,6 +120,8 @@ internal actual object DownloadsPlatformDownloader {
                         }
                         currentItem.status == DownloadStatus.Downloading
                     }.collect()
+            } catch (_: TimeoutCancellationException) {
+                onFailure("The source search timed out. Retry this download.")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

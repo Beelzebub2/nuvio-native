@@ -8,11 +8,13 @@ import com.nuvio.app.features.p2p.canonicalP2pInfoHash
 import com.nuvio.engine.NuvioEngine
 import com.nuvio.engine.NuvioTorrentFile
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -64,13 +66,13 @@ internal object AndroidP2pDownload {
                     "udp://open.stealth.si:80/announce",
                 )).distinct()
                 val torrentId = engine.addMagnet(buildP2pMagnetUri(hash, trackers))
-                val files = withTimeout(120_000L) {
+                val files = withRetryableTorrentMetadataTimeout(120_000L) {
                     var result: List<NuvioTorrentFile>
                     do {
                         currentCoroutineContext().ensureActive()
                         result = try { engine.files(torrentId) }
                         catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { emptyList() } // Metadata is not ready on all native engine versions.
+                        catch (_: Exception) { emptyList() } // Metadata may not be ready yet.
                         if (result.isNotEmpty() && result.all { it.path.isNotBlank() && it.size >= 0L }) break
                         delay(700L)
                     } while (true)
@@ -130,4 +132,14 @@ internal object AndroidP2pDownload {
             }
         }
     }
+}
+
+/** Metadata starvation must not be interpreted as a cancelled Android job. */
+internal suspend fun <T> withRetryableTorrentMetadataTimeout(
+    timeoutMillis: Long,
+    operation: suspend () -> T,
+): T = try {
+    withTimeout(timeoutMillis) { operation() }
+} catch (timeout: TimeoutCancellationException) {
+    throw IOException("Torrent metadata is unavailable from peers. Retry this download.", timeout)
 }

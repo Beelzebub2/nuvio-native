@@ -1,10 +1,14 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.engine.NuvioTorrentFile
+import java.io.IOException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class AndroidTorrentFileSelectionTest {
     private fun file(index: Int, name: String, size: Long = 1_048_576L) =
@@ -77,5 +81,14 @@ class AndroidTorrentFileSelectionTest {
             androidTorrentSourceIdentity(hash.uppercase(), original))
         assertNotEquals(androidTorrentSourceIdentity(hash, original),
             androidTorrentSourceIdentity(hash, file(2, "Show.S01E03.mkv")))
+    }
+
+    @Test
+    fun peerMetadataTimeoutIsRetryableInsteadOfCancellingTheWorker() = runBlocking {
+        val failure = assertFailsWith<IOException> {
+            withRetryableTorrentMetadataTimeout(15L) { delay(10_000L) }
+        }
+        assertTrue(failure.message.orEmpty().contains("metadata"))
+        assertTrue(shouldRetryAndroidDownload(failure, 0))
     }
 }
