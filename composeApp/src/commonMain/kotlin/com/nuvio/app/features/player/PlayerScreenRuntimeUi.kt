@@ -14,6 +14,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.RemoteChoice
+import com.nuvio.app.features.remote.RemotePlayback
+import com.nuvio.app.features.remote.newRemotePlaybackId
+import com.nuvio.app.features.remote.isAllowedFor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -479,6 +486,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val playbackGesturesEnabled = !isDesktop && !isInPip && initialLoadCompleted && errorMessage == null
     val enableSurfaceGestures = !isDesktop && !isInPip
 
+    BindRemotePlayback(playerControlsState)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -854,6 +863,83 @@ private fun PlayerScreenRuntime.requestBack() {
         } catch (failure: Throwable) {
             playerReleaseSurfaceRetention.finish(releaseAttemptId)
             throw failure
+        }
+    }
+}
+
+@Composable
+private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
+    if (!isDesktop) return
+    val owner = this
+    DisposableEffect(owner) {
+        onDispose {
+            DesktopRemote.dispatch = null
+            DesktopRemote.playback = RemotePlayback()
+            DesktopRemote.transport.disconnect()
+        }
+    }
+    val identity = remember(activePlaybackKey) { newRemotePlaybackId() }
+    val episodeSources = state.episodeStreamItems.filter { it.isEnabled }
+    val sourceContext = episodeStreamsPanelState.selectedEpisode?.id.orEmpty()
+    fun sourceId(item: PlayerControlSourceItem) = "$sourceContext:${item.index}:${item.label.hashCode()}"
+    val remoteState = RemotePlayback(
+        playbackId = identity,
+        title = listOf(state.title, state.episodeText).filter { it.isNotBlank() }.joinToString(" • ").take(250),
+        playing = state.isPlaying,
+        position = state.positionMs,
+        duration = state.durationMs,
+        volume = playerController?.getRemoteVolume() ?: 1f,
+        skip = state.skipPromptVisible,
+        episodes = state.episodeItems.take(2000).map { RemoteChoice(it.id, "${it.code} ${it.title}".take(150), it.isCurrent) },
+        subtitles = listOf(RemoteChoice("off", "Off", isSubtitleOffSelected)) + state.subtitleOptionItems.take(500).map {
+            RemoteChoice(it.id, "${it.title} • ${it.sourceLabel}".take(150), it.isSelected)
+        },
+        sources = episodeSources.take(500).map { RemoteChoice(sourceId(it), "${it.addonName} • ${it.label}".take(180)) },
+        message = when {
+            state.showP2pConsent -> "Confirm P2P streaming on the desktop before continuing."
+            state.episodeStreamsIsLoading -> "Finding episode sources…"
+            state.episodeStreamsVisible && episodeSources.isNotEmpty() -> "Choose an episode source below."
+            state.episodeStreamsVisible -> "No episode sources found. Check the desktop's addons."
+            else -> ""
+        },
+    )
+    SideEffect {
+        DesktopRemote.playback = remoteState
+        DesktopRemote.dispatch = dispatch@ { command ->
+            if (!command.isAllowedFor(remoteState)) return@dispatch
+            val controller = playerController ?: return@dispatch
+            when (command.type) {
+                "play" -> { shouldPlay = true; controller.play() }
+                "pause" -> { shouldPlay = false; controller.pause() }
+                "seek" -> {
+                    val target = command.value.toLong().coerceIn(0, playbackSnapshot.durationMs.coerceAtLeast(0))
+                    finishTimelineScrub(target)
+                    controller.seekTo(target)
+                    scheduleProgressSyncAfterSeek()
+                }
+                "seekBy" -> seekBy(command.value.toLong().coerceIn(-60_000, 60_000))
+                "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, 1f))
+                "mute" -> controller.setMuted(controller.getRemoteVolume() > 0f)
+                "skipInterval" -> handlePlayerControlsEvent("skipInterval", 0.0)
+                "next" -> playNextEpisode()
+                "previous" -> {
+                    val index = state.episodeItems.indexOfFirst { it.isCurrent }
+                    state.episodeItems.getOrNull(index - 1)?.let { handlePlayerControlsEvent("selectEpisode", it.index.toDouble()) }
+                }
+                "episode" -> state.episodeItems.firstOrNull { it.id == command.id }?.let {
+                    handlePlayerControlsEvent("selectEpisode", it.index.toDouble())
+                }
+                "subtitle" -> {
+                    if (command.id == "off") selectUserSubtitleTrack(-1)
+                    else state.subtitleOptionItems.firstOrNull { it.id == command.id }?.let {
+                        handlePlayerControlsEvent(if (it.kind == "addon") "selectAddonSubtitle" else "selectBuiltInSubtitleTrack", it.index.toDouble())
+                    }
+                }
+                "fetchSubtitles" -> { refreshTracks(); fetchAddonSubtitlesForActiveItem() }
+                "source" -> episodeSources.firstOrNull { sourceId(it) == command.id }?.let {
+                    handlePlayerControlsEvent("selectEpisodeStream", it.index.toDouble())
+                }
+            }
         }
     }
 }

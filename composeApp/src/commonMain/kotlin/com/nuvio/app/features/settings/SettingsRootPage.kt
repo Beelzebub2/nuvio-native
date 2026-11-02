@@ -81,6 +81,7 @@ internal fun LazyListScope.settingsRootContent(
     showAttribution: Boolean = true,
 ) {
     if (showAccountSection) {
+        item { com.nuvio.app.features.remote.DesktopRemoteSettingsButton() }
         item {
             SettingsSection(
                 title = stringResource(Res.string.compose_settings_root_account_section),
