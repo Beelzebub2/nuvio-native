@@ -1,0 +1,42 @@
+name: Check desktop authentication
+
+on:
+  pull_request:
+    paths:
+      - 'composeApp/src/**/core/auth/**'
+      - 'composeApp/src/commonMain/kotlin/com/nuvio/app/core/network/SupabaseProvider.kt'
+      - '.github/workflows/desktop-auth-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-auth:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test passkey policies and Google loopback callbacks
+        shell: pwsh
+        run: >-
+          ./gradlew.bat :composeApp:desktopTest
+          --tests '*GoogleOAuth*' --tests '*PasskeyRepositoryTest*'
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --no-configuration-cache --no-daemon --console=plain
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: desktop-auth-test-results
+          path: composeApp/build/reports/tests/desktopTest/
+          if-no-files-found: warn
