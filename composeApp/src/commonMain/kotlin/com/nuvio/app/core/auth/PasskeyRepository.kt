@@ -208,7 +208,7 @@ object PasskeyRepository {
         val config = ServerConfigurationRepository.active.value
         require(isTrustedPasskeyOrigin(config.backendUrl)) { "Passkeys are not available on this server" }
         val token = requireNotNull(SupabaseProvider.client.auth.currentSessionOrNull()?.accessToken)
-        val response = http.get("$STARLIT_RP_ORIGIN/auth/v1/passkeys/") {
+        val response = http.get("$STARLIT_RP_ORIGIN/auth/v1/passkeys") {
             header("apikey", config.publishableKey)
             header(HttpHeaders.Authorization, "Bearer $token")
         }
@@ -232,7 +232,7 @@ object PasskeyRepository {
         val config = ServerConfigurationRepository.active.value
         check(config.backendUrl == origin) { "The account server changed" }
         val token = requireNotNull(auth.currentSessionOrNull()?.accessToken)
-        val response = http.delete("$STARLIT_RP_ORIGIN/auth/v1/passkeys/$id/") {
+        val response = http.delete("$STARLIT_RP_ORIGIN/auth/v1/passkeys/$id") {
             header("apikey", config.publishableKey)
             header(HttpHeaders.Authorization, "Bearer $token")
         }
