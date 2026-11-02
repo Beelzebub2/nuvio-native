@@ -1,0 +1,58 @@
+package com.nuvio.app.core.auth
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+class PasskeyRepositoryTest {
+    @Test
+    fun onlyTheExactOfficialHttpsRelyingPartyCanBeUsed() {
+        assertTrue(isTrustedPasskeyOrigin("https://starlit-api.rrmtools.uk"))
+        assertTrue(isTrustedPasskeyOrigin("https://starlit-api.rrmtools.uk/"))
+        for (url in listOf(
+            "http://starlit-api.rrmtools.uk", "https://starlit-api.rrmtools.uk.evil.test",
+            "https://other.rrmtools.uk", "https://starlit-api.rrmtools.uk:443",
+            "https://starlit-api.rrmtools.uk/auth/v1", "https://user@starlit-api.rrmtools.uk",
+            "https://starlit-api.rrmtools.uk?redirect=evil", "",
+        )) {
+            assertFalse(isTrustedPasskeyOrigin(url), "Accepted a non-Starlit RP: $url")
+        }
+    }
+
+    @Test
+    fun parsesTheServerGeneratedChallengeAndNativeOptions() {
+        val options = parsePasskeyOptions("""{
+            "challenge_id":"5df2038a-34da-4d6f-a5b8-a5af9890a5e6",
+            "expires_at":1793635200,
+            "options":{"challenge":"YWJj","rpId":"starlit-api.rrmtools.uk","userVerification":"required"}
+        }""")
+        assertEquals("5df2038a-34da-4d6f-a5b8-a5af9890a5e6", options.challengeId)
+        assertEquals("YWJj", Json.parseToJsonElement(options.optionsJson).jsonObject.getValue("challenge").jsonPrimitive.content)
+    }
+
+    @Test
+    fun malformedOrMissingServerChallengesFailClosed() {
+        for (json in listOf("{}", "[]", "not-json", """{"challenge_id":"?","options":{"challenge":"abc"}}""",
+            """{"challenge_id":"5df2038a-34da-4d6f-a5b8-a5af9890a5e6","options":{}}""",
+            """{"challenge_id":"5df2038a-34da-4d6f-a5b8-a5af9890a5e6","options":null}""")) {
+            assertFailsWith<Exception> { parsePasskeyOptions(json) }
+        }
+    }
+
+    @Test
+    fun credentialIsSentAsJsonObjectNotAnEscapedString() {
+        val body = passkeyVerificationBody("5df2038a-34da-4d6f-a5b8-a5af9890a5e6",
+            """{"id":"credential-id","rawId":"YWJj","type":"public-key","response":{"clientDataJSON":"abc"}}""")
+        val parsed = Json.parseToJsonElement(body).jsonObject
+        assertEquals("5df2038a-34da-4d6f-a5b8-a5af9890a5e6", parsed.getValue("challenge_id").jsonPrimitive.content)
+        assertEquals("credential-id", parsed.getValue("credential").jsonObject.getValue("id").jsonPrimitive.content)
+        assertFailsWith<Exception> { passkeyVerificationBody("abc", """{"type":"public-key"}""") }
+        assertFailsWith<Exception> { passkeyVerificationBody("abc", "{}") }
+        assertFailsWith<Exception> { passkeyVerificationBody("abc", "invalid") }
+    }
+}

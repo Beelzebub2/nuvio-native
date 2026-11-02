@@ -260,6 +260,24 @@ object AuthRepository {
             ?: getString(Res.string.auth_sign_in_failed)
     }
 
+    suspend fun signInWithPasskey(ceremony: PasskeyCeremony): Result<Unit> {
+        _error.value = null
+        _notice.value = null
+        return try {
+            PasskeyRepository.signIn(ceremony)
+            Result.success(Unit)
+        } catch (error: CancellationException) {
+            cancelRemoteSessionRequest()
+            throw error
+        } catch (error: Throwable) {
+            cancelRemoteSessionRequest()
+            // WebAuthn responses are sensitive: never log the platform's raw credential JSON.
+            _error.value = error.message?.takeIf { it.length <= 180 }
+                ?: "Couldn't sign in with your passkey. Try again."
+            Result.failure(error)
+        }
+    }
+
     suspend fun signOut(): Result<Unit> {
         _error.value = null
         val anonymousRead = runCatching { AuthStorage.loadAnonymousUserId() }

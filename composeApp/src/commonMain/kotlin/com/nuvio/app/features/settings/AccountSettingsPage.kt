@@ -9,8 +9,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,6 +34,9 @@ import com.nuvio.app.isDesktop
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.LocalSettingsImport
+import com.nuvio.app.core.auth.PasskeyRepository
+import com.nuvio.app.core.auth.RegisteredPasskey
+import com.nuvio.app.core.auth.rememberPasskeyCeremony
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.ui.NuvioPrimaryButton
@@ -49,6 +57,12 @@ import nuvio.composeapp.generated.resources.settings_account_delete_confirm_titl
 import nuvio.composeapp.generated.resources.settings_account_email
 import nuvio.composeapp.generated.resources.settings_account_not_signed_in
 import nuvio.composeapp.generated.resources.settings_account_sign_out
+import nuvio.composeapp.generated.resources.auth_add_passkey
+import nuvio.composeapp.generated.resources.auth_passkey_added
+import nuvio.composeapp.generated.resources.auth_passkey_confirm_password
+import nuvio.composeapp.generated.resources.auth_passkey_manage
+import nuvio.composeapp.generated.resources.auth_passkey_remove
+import nuvio.composeapp.generated.resources.auth_passkey_removed
 import nuvio.composeapp.generated.resources.settings_account_sign_out_confirm_message
 import nuvio.composeapp.generated.resources.settings_account_sign_out_confirm_title
 import nuvio.composeapp.generated.resources.settings_account_status
@@ -85,6 +99,7 @@ private fun AccountSettingsBody(
             DesktopAccountCard(authState = authState, onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true })
             signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             LocalSettingsImportCard(authState)
+            PasskeySecurityCard(authState)
             if (canDeleteAccount) {
                 DesktopDeleteAccountRow(
                     errorMessage = deleteErrorMessage,
@@ -141,6 +156,7 @@ private fun AccountSettingsBody(
 
         signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         LocalSettingsImportCard(authState)
+        PasskeySecurityCard(authState)
         if (canDeleteAccount) {
             DeleteAccountCard(
                 errorMessage = deleteErrorMessage,
@@ -199,6 +215,127 @@ private fun AccountSettingsBody(
             }
         },
     )
+}
+
+/** Passkey management never appears on guest/custom/upstream servers. */
+@Composable
+private fun PasskeySecurityCard(authState: AuthState) {
+    val account = authState as? AuthState.Authenticated ?: return
+    val ceremony = rememberPasskeyCeremony() ?: return
+    if (account.isAnonymous || !PasskeyRepository.canUseOnActiveServer()) return
+
+    val scope = rememberCoroutineScope()
+    var keys by remember(account.userId) { mutableStateOf<List<RegisteredPasskey>>(emptyList()) }
+    var showPasswordConfirm by remember(account.userId) { mutableStateOf(false) }
+    var removing by remember(account.userId) { mutableStateOf<RegisteredPasskey?>(null) }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val added = stringResource(Res.string.auth_passkey_added)
+    val removed = stringResource(Res.string.auth_passkey_removed)
+
+    LaunchedEffect(account.userId) {
+        keys = runCatching { PasskeyRepository.list() }.getOrDefault(emptyList())
+    }
+
+    NuvioSurfaceCard {
+        Text(
+            text = stringResource(Res.string.auth_passkey_manage),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Passkeys let you sign in using your device lock, fingerprint or face instead of a password.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        keys.forEach { key ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(key.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = {
+                    removing = key
+                    showPasswordConfirm = true
+                    message = null
+                }, enabled = !busy) {
+                    Text(stringResource(Res.string.auth_passkey_remove))
+                }
+            }
+        }
+        NuvioPrimaryButton(
+            text = stringResource(Res.string.auth_add_passkey),
+            onClick = {
+                removing = null
+                password = ""
+                message = null
+                showPasswordConfirm = true
+            },
+        )
+        message?.let { status ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(status, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+
+    if (showPasswordConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!busy) { password = ""; showPasswordConfirm = false }
+            },
+            title = { Text(stringResource(Res.string.auth_passkey_manage)) },
+            text = {
+                Column {
+                    Text(stringResource(Res.string.auth_passkey_confirm_password))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        label = { Text(stringResource(Res.string.compose_auth_password)) },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (busy || password.isBlank()) return@TextButton
+                    busy = true
+                    val secret = password
+                    password = ""
+                    val selectedKey = removing
+                    scope.launch {
+                        try {
+                            if (selectedKey == null) PasskeyRepository.register(ceremony, secret)
+                            else PasskeyRepository.revoke(selectedKey.id, secret)
+                            keys = PasskeyRepository.list()
+                            message = if (selectedKey == null) added else removed
+                            showPasswordConfirm = false
+                            removing = null
+                        } catch (error: Throwable) {
+                            message = error.message?.takeIf { it.length <= 180 }
+                                ?: "Unable to update passkeys. Try again."
+                            showPasswordConfirm = false
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }, enabled = !busy && password.isNotBlank()) {
+                    Text(if (removing == null) stringResource(Res.string.auth_add_passkey)
+                        else stringResource(Res.string.auth_passkey_remove))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { password = ""; showPasswordConfirm = false }, enabled = !busy) {
+                    Text(stringResource(Res.string.action_cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
