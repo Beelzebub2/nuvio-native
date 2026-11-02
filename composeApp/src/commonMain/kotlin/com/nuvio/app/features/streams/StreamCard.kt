@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +67,8 @@ internal fun StreamCard(
     modifier: Modifier = Modifier,
     isCurrent: Boolean = false,
     currentLabel: String? = null,
+    compact: Boolean = false,
+    inlineMetadata: Boolean = false,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
     val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
@@ -121,7 +124,7 @@ internal fun StreamCard(
                     null
                 },
             )
-            .padding(14.dp),
+            .padding(if (compact) 10.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -137,6 +140,8 @@ internal fun StreamCard(
             StreamNameWithInstantService(
                 stream = stream,
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                compact = compact,
+                inlineMetadata = inlineMetadata,
             ) {
                 if (isCurrent && !currentLabel.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -148,12 +153,14 @@ internal fun StreamCard(
             if (!subtitle.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = subtitle,
+                    text = if (compact || inlineMetadata) subtitle.lineSequence().joinToString(" · ") { it.trim() } else subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (compact) 2 else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -170,6 +177,7 @@ internal fun StreamCard(
         if (showAddonLogo) {
             Spacer(modifier = Modifier.width(12.dp))
             Column(
+                modifier = if (compact || inlineMetadata) Modifier.widthIn(max = 96.dp) else Modifier,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (!stream.addonLogo.isNullOrBlank()) {
@@ -240,6 +248,8 @@ private fun StreamCardBadgeRow(
 private fun StreamNameWithInstantService(
     stream: StreamItem,
     appendInstantServiceToDefaultName: Boolean,
+    compact: Boolean,
+    inlineMetadata: Boolean,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -264,10 +274,12 @@ private fun StreamNameWithInstantService(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stream.streamLabel,
+            text = if (compact || inlineMetadata) stream.streamLabel.lineSequence().joinToString(" · ") { it.trim() } else stream.streamLabel,
             modifier = Modifier.weight(1f, fill = false),
             style = nameStyle,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (compact) 1 else Int.MAX_VALUE,
+            overflow = TextOverflow.Ellipsis,
         )
         AnimatedVisibility(
             visibleState = visibleState,
