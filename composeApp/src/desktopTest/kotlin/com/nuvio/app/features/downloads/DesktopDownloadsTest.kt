@@ -719,7 +719,8 @@ class DesktopDownloadsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val engines = DownloadTorrentEngines(create = { backend }, scope = scope, idleMs = 50)
         try {
-            val download = item(root).copy(sourceUrl = "", torrentHash = "a".repeat(40), torrentFileIdx = 1,
+            val download = item(root).copy(videoId = "show:1:2", episodeNumber = 2,
+                sourceUrl = "", torrentHash = "a".repeat(40), torrentFileIdx = 1,
                 torrentFilename = "E02.mkv")
             assertFails { downloadTorrentFile(download, engines, { P2pSettingsUiState(p2pEnabled = false) }) { _, _ -> error("P2P disabled") } }
             assertTrue(calls.isEmpty())
