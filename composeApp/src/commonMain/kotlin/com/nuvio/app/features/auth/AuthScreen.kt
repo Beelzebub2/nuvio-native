@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.PasskeyRepository
+import com.nuvio.app.core.auth.rememberPasskeyCeremony
 import com.nuvio.app.core.auth.DeviceLinkAuthRepository
 import com.nuvio.app.core.auth.DeviceLinkAuthState
 import com.nuvio.app.core.build.AppFeaturePolicy
@@ -108,6 +110,7 @@ import nuvio.composeapp.generated.resources.compose_auth_dont_have_account
 import nuvio.composeapp.generated.resources.compose_auth_email
 import nuvio.composeapp.generated.resources.compose_auth_or_separator
 import nuvio.composeapp.generated.resources.compose_auth_password
+import nuvio.composeapp.generated.resources.auth_sign_in_with_passkey
 import nuvio.composeapp.generated.resources.compose_auth_sign_in
 import nuvio.composeapp.generated.resources.compose_auth_sign_in_subtitle
 import nuvio.composeapp.generated.resources.compose_auth_sign_up
@@ -200,6 +203,13 @@ fun AuthScreen(
     val serverConnectionState by ServerConnectionController.state.collectAsStateWithLifecycle()
     val backendUrl = serverConnectionState.activeServer.backendUrl
     val isStarlitServer = !serverConnectionState.activeServer.supportsNuvioAccountFeatures
+    val passkeyCeremony = rememberPasskeyCeremony()
+    var serverPasskeysEnabled by remember(backendUrl) { mutableStateOf(false) }
+    LaunchedEffect(backendUrl) {
+        serverPasskeysEnabled = passkeyCeremony != null && PasskeyRepository.isEnabledOnActiveServer()
+    }
+    val passkeyEnabled = isStarlitServer && passkeyCeremony != null && serverPasskeysEnabled &&
+        PasskeyRepository.canUseOnActiveServer()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var isSignUp by rememberSaveable { mutableStateOf(false) }
@@ -273,6 +283,21 @@ fun AuthScreen(
         DeviceLinkAuthRepository.start()
     }
 
+    fun startPasskeySignIn() {
+        val ceremony = passkeyCeremony ?: return
+        if (isLoading || isSignUp || isRequestPending || !passkeyEnabled) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithPasskey(ceremony)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(backendUrl) {
@@ -340,6 +365,7 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        passkeyEnabled = passkeyEnabled,
                         formPaneWidth = if (compactLargeScreen) 460.dp else formPaneWidth,
                         brandHorizontalPadding = brandHorizontalPadding,
                         formHorizontalPadding = formHorizontalPadding,
@@ -364,6 +390,7 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onPasskeySignIn = ::startPasskeySignIn,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -381,6 +408,7 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        passkeyEnabled = passkeyEnabled,
                         statusBarTop = statusBarTop,
                         onEmailChange = {
                             email = it
@@ -401,6 +429,7 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onPasskeySignIn = ::startPasskeySignIn,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -483,6 +512,7 @@ private fun AuthMobileLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    passkeyEnabled: Boolean,
     statusBarTop: Dp,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
@@ -492,6 +522,7 @@ private fun AuthMobileLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onPasskeySignIn: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -550,6 +581,7 @@ private fun AuthMobileLayout(
                 authError = authError,
                 deviceLinkAuthState = deviceLinkAuthState,
                 deviceLinkEnabled = deviceLinkEnabled,
+                passkeyEnabled = passkeyEnabled,
                 metrics = MobileAuthFormMetrics,
                 onEmailChange = onEmailChange,
                 onPasswordChange = onPasswordChange,
@@ -559,6 +591,7 @@ private fun AuthMobileLayout(
                 onReturnToSignIn = onReturnToSignIn,
                 onContinueWithoutAccount = onContinueWithoutAccount,
                 onStartDeviceLink = onStartDeviceLink,
+                onPasskeySignIn = onPasskeySignIn,
                 onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
@@ -581,6 +614,7 @@ private fun AuthLargeLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    passkeyEnabled: Boolean,
     formPaneWidth: Dp,
     brandHorizontalPadding: Dp,
     formHorizontalPadding: Dp,
@@ -594,6 +628,7 @@ private fun AuthLargeLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onPasskeySignIn: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -691,6 +726,7 @@ private fun AuthLargeLayout(
                     authError = authError,
                     deviceLinkAuthState = deviceLinkAuthState,
                     deviceLinkEnabled = deviceLinkEnabled,
+                    passkeyEnabled = passkeyEnabled,
                     metrics = formMetrics,
                     scale = scale,
                     onEmailChange = onEmailChange,
@@ -701,6 +737,7 @@ private fun AuthLargeLayout(
                     onReturnToSignIn = onReturnToSignIn,
                     onContinueWithoutAccount = onContinueWithoutAccount,
                     onStartDeviceLink = onStartDeviceLink,
+                    onPasskeySignIn = onPasskeySignIn,
                     onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
@@ -796,6 +833,7 @@ private fun AuthForm(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    passkeyEnabled: Boolean,
     metrics: AuthFormMetrics,
     scale: Float = 1f,
     onEmailChange: (String) -> Unit,
@@ -806,6 +844,7 @@ private fun AuthForm(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onPasskeySignIn: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -936,6 +975,17 @@ private fun AuthForm(
         AuthDivider(scale = scale)
 
         Spacer(modifier = Modifier.height(metrics.secondaryTop))
+
+        if (!isSignUp && passkeyEnabled) {
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_sign_in_with_passkey),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onPasskeySignIn,
+            )
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
 
         if (!isSignUp && deviceLinkEnabled) {
             DeviceLinkAuthSection(

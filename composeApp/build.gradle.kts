@@ -1228,6 +1228,8 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.appcompat)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.credentials.core)
+                implementation(libs.androidx.credentials.play.services.auth)
                 implementation(libs.androidx.core.splashscreen)
                 implementation(libs.androidx.work.runtime)
                 implementation(libs.coil.gif)

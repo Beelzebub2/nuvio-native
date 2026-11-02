@@ -376,6 +376,13 @@
     <string name="compose_auth_password">Password</string>
     <string name="compose_auth_sign_in_subtitle">Sign in to access your library and progress</string>
     <string name="compose_auth_sign_in">Sign In</string>
+    <string name="auth_sign_in_with_passkey">Sign in with passkey</string>
+    <string name="auth_add_passkey">Add a passkey</string>
+    <string name="auth_passkey_confirm_password">Confirm your password to securely add a passkey to this account.</string>
+    <string name="auth_passkey_added">Passkey added. You can use it to sign in on this or another supported device.</string>
+    <string name="auth_passkey_manage">Passkey security</string>
+    <string name="auth_passkey_remove">Remove</string>
+    <string name="auth_passkey_removed">Passkey removed.</string>
     <string name="compose_auth_sign_up_subtitle">Sign up to sync your data across devices</string>
     <string name="compose_auth_sign_up">Sign Up</string>
     <string name="compose_auth_store_locally">Your data will only be stored locally</string>
