@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -32,14 +33,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.addons.*
 import com.nuvio.app.features.details.*
 import com.nuvio.app.features.plugins.PluginRepository
+import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.streams.streamAddonInstanceId
 import com.nuvio.app.features.streams.supportsStream
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import kotlinx.coroutines.*
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.downloads_auto_watch_later_description
+import nuvio.composeapp.generated.resources.downloads_auto_watch_later_title
+import org.jetbrains.compose.resources.stringResource
 import java.io.File
 import com.nuvio.app.core.ui.DesktopFileDialogs
 
@@ -119,6 +127,14 @@ internal actual object DownloadDesktopFeatures {
         DownloadsRepository.onParallelLimitChanged()
     }
 
+    internal fun autoDownloadWatchLater(profileId: Int = ProfileRepository.activeProfileId): Boolean =
+        store.getBoolean(ProfileScopedKey.of("auto_download_watch_later", profileId)) ?: false
+
+    internal fun setAutoDownloadWatchLater(enabled: Boolean, profileId: Int = ProfileRepository.activeProfileId) {
+        store.putBoolean(ProfileScopedKey.of("auto_download_watch_later", profileId), enabled)
+        WatchLaterRepository.onAutoDownloadPreferenceChanged(profileId, enabled)
+    }
+
     /** The provider, quality and source type chosen last time, so the dialog opens on them. */
     internal fun lastSelection() = DownloadSourceSelection(
         providerId = store.getString("provider"),
@@ -137,6 +153,8 @@ internal actual object DownloadDesktopFeatures {
     val tokens = MaterialTheme.nuvio
     val scope = rememberCoroutineScope()
     val state by DownloadsRepository.uiState.collectAsState()
+    val profileId = state.profileId ?: ProfileRepository.activeProfileId
+    var autoWatchLater by remember(profileId) { mutableStateOf(DownloadDesktopFeatures.autoDownloadWatchLater(profileId)) }
     var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
     var parallel by remember { mutableStateOf(DownloadDesktopFeatures.parallelDownloads()) }
     var picking by remember { mutableStateOf(false) }
@@ -245,6 +263,30 @@ internal actual object DownloadDesktopFeatures {
             if (!narrow) picker()
         }
         if (narrow) picker()
+        HorizontalDivider(color = tokens.colors.borderSubtle)
+        Row(
+            modifier = Modifier.fillMaxWidth().toggleable(
+                value = autoWatchLater,
+                role = Role.Switch,
+                onValueChange = { enabled ->
+                    try {
+                        DownloadDesktopFeatures.setAutoDownloadWatchLater(enabled, profileId)
+                        autoWatchLater = enabled
+                        error = null
+                    } catch (e: Exception) { error = e.message ?: "Couldn't save download setting" }
+                },
+            ),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.DownloadForOffline, null, tint = tokens.colors.textSecondary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(Res.string.downloads_auto_watch_later_title), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(Res.string.downloads_auto_watch_later_description),
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
+            }
+            Switch(checked = autoWatchLater, onCheckedChange = null)
+        }
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
         recoveredNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted) }
     }

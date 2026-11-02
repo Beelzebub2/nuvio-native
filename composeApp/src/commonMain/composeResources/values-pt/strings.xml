@@ -518,6 +518,8 @@
     <string name="detail_trailers_title">Trailers</string>
     <string name="downloads_empty_episodes">Nenhum episódio concluído</string>
     <string name="downloads_empty_title">Ainda sem transferências</string>
+    <string name="downloads_auto_watch_later_title">Transferir automaticamente do Ver mais tarde</string>
+    <string name="downloads_auto_watch_later_description">Adiciona automaticamente os novos filmes e episódios disponíveis à fila de transferências para veres offline. Os conteúdos já guardados não são afetados.</string>
     <string name="downloads_episode_count">Episódios transferidos: %1$d</string>
     <string name="downloads_section_active">Ativas</string>
     <string name="downloads_section_movies">Filmes</string>

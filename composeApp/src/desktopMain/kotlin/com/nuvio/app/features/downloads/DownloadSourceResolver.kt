@@ -29,13 +29,12 @@ internal suspend fun resolveDownloadSource(item: DownloadItem, excluded: Set<Str
     suspend fun cached(key: String, fetch: suspend () -> List<StreamItem>): List<StreamItem> =
         cachedSources[key] ?: fetch().also { cachedSources[key] = it }
     val sources = buildList<suspend () -> List<StreamItem>> {
-        // Each embedded video owns its streams; never flatten another episode's
-        // streams when a provider uses the parent title ID as the episode ID.
-        val meta = MetaDetailsRepository.uiState.value.meta
-        if (meta?.id == item.parentMetaId) {
-            val embedded = embeddedDownloadStreams(meta, item)
-            if (embedded.isNotEmpty()) add { embedded }
-        }
+        // Background downloads have no open details screen, so prefer the per-title
+        // cache. Preserve the live-screen fallback for uncached manually queued items.
+        val metadata = MetaDetailsRepository.peek(item.contentType, item.parentMetaId)
+            ?: MetaDetailsRepository.uiState.value.meta?.takeIf { it.id == item.parentMetaId }
+        val embedded = embeddedDownloadStreams(metadata, item)
+        if (embedded.isNotEmpty()) add { embedded }
         for (addon in AddonRepository.uiState.value.addons.enabledAddons()) {
             val manifest = addon.manifest ?: continue
             val id = addon.streamAddonInstanceId(manifest.id)
@@ -62,6 +61,18 @@ internal suspend fun resolveDownloadSource(item: DownloadItem, excluded: Set<Str
                 }.orEmpty() }
             }
         }
+        if (metadata == null && selection.providerId == null) {
+            // Restored queue items survive restart, while the metadata cache does not.
+            // Skip this lookup for cached titles that are known to have no embedded sources.
+            add {
+                val fetched = withTimeoutOrNull(15_000L) {
+                    runCatchingUnlessCancelled {
+                        MetaDetailsRepository.fetch(item.contentType, item.parentMetaId, forceRefresh = true)
+                    }.getOrNull()
+                }
+                embeddedDownloadStreams(fetched, item)
+            }
+        }
     }
     return selectDownloadSource(selection, sources,
         resolve = { stream ->
@@ -72,18 +83,6 @@ internal suspend fun resolveDownloadSource(item: DownloadItem, excluded: Set<Str
         include = { stream -> downloadSourceIdentity(stream) !in excluded &&
             (allowTorrents || stream.playableDirectUrl != null || !stream.isTorrentStream) },
     )
-}
-
-internal fun embeddedDownloadStreams(meta: MetaDetails, item: DownloadItem): List<StreamItem> {
-    val withStreams = meta.videos.filter { it.streams.isNotEmpty() }
-    if (item.seasonNumber != null && item.episodeNumber != null) {
-        withStreams.filter { it.season == item.seasonNumber && it.episode == item.episodeNumber }.singleOrNull()
-            ?.let { return it.streams }
-    }
-    withStreams.filter { it.id == item.videoId }.singleOrNull()?.let { return it.streams }
-    withStreams.filter { it.id.startsWith("${item.videoId}:") }.singleOrNull()?.let { return it.streams }
-    if (item.videoId == meta.id && withStreams.size == 1) return withStreams.single().streams
-    return emptyList()
 }
 
 /** Stable across independent add-on queries, so a rejected torrent is not chosen again. */
@@ -122,6 +121,31 @@ internal suspend fun <T> downloadUsingAlternativeSources(
     throw DownloadTorrentFileSelectionException(
         "Tried $maxCandidates torrent sources without a unique episode file. Choose another provider or source.",
     )
+}
+
+internal fun embeddedDownloadStreams(meta: MetaDetails?, item: DownloadItem): List<StreamItem> {
+    val candidates = meta?.videos?.filter { it.streams.isNotEmpty() }.orEmpty()
+    // An episode provider may reuse its title ID across a season. Its season/episode
+    // pair takes precedence over an ambiguous or stale provider video ID.
+    if (item.seasonNumber != null && item.episodeNumber != null) {
+        val episodeMatches = candidates.filter { it.season == item.seasonNumber && it.episode == item.episodeNumber }
+        if (episodeMatches.size == 1) return episodeMatches.single().streams
+    }
+    val exact = candidates.filter { it.id == item.videoId }
+    if (exact.size == 1 &&
+        (item.seasonNumber == null || exact.single().season == null || exact.single().season == item.seasonNumber) &&
+        (item.episodeNumber == null || exact.single().episode == null || exact.single().episode == item.episodeNumber)
+    ) return exact.single().streams
+    val prefixed = candidates.filter { it.id.startsWith("${item.videoId}:") }
+    if (prefixed.size == 1 && item.videoId != meta?.id &&
+        (item.seasonNumber == null || prefixed.single().season == item.seasonNumber) &&
+        (item.episodeNumber == null || prefixed.single().episode == item.episodeNumber)
+    ) return prefixed.single().streams
+    // A title ID cannot identify an episode in a season pack. Never merge unrelated
+    // episodes' embedded streams into one automatic-download source list.
+    if (meta != null && item.contentType == "movie" && item.videoId == meta.id && candidates.size == 1)
+        return candidates.single().streams
+    return emptyList()
 }
 
 internal suspend fun selectDownloadSource(
