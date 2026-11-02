@@ -199,6 +199,7 @@ object DownloadsRepository {
         val torrent = if (isDesktop && direct == null) stream.p2pInfoHash else null
         if (direct == null && torrent == null) return DownloadEnqueueResult.MissingUrl
         if (direct != null && !direct.isSupportedDownloadUrl()) return DownloadEnqueueResult.UnsupportedFormat
+        val filenames = stream.downloadTorrentFilenameHints()
         val item = newItem(contentType, videoId, parentMetaId, parentMetaType, title, logo, poster, background,
             seasonNumber, episodeNumber, episodeTitle, episodeThumbnail, direct.orEmpty(), stream.streamLabel,
             stream.addonName, stream.addonId).copy(
@@ -207,7 +208,8 @@ object DownloadsRepository {
                 sourceResponseHeaders = sanitizeResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
                 sourceSubtitles = stream.externalSubtitles,
                 torrentHash = torrent, torrentFileIdx = stream.p2pFileIdx,
-                torrentFilename = stream.behaviorHints.filename, torrentTrackers = stream.p2pTrackers,
+                torrentFilename = filenames.firstOrNull(), torrentFilenameAlternates = filenames.drop(1),
+                torrentTrackers = stream.p2pTrackers,
             )
         val existing = _uiState.value.items.firstOrNull { it.logicalContentKey == item.logicalContentKey }
         // A manually picked source replaces a failed or still-automatic task. Desktop keeps finished
@@ -459,6 +461,7 @@ object DownloadsRepository {
                 sourceUrl = resolved.sourceUrl, sourceHeaders = resolved.sourceHeaders,
                 sourceSubtitles = resolved.sourceSubtitles, torrentHash = resolved.torrentHash,
                 torrentFileIdx = resolved.torrentFileIdx, torrentFilename = resolved.torrentFilename,
+                torrentFilenameAlternates = resolved.torrentFilenameAlternates,
                 torrentTrackers = resolved.torrentTrackers, phase = "Connecting") }
         } }),
             onProgress = { bytes, total -> synchronized(lock) {
