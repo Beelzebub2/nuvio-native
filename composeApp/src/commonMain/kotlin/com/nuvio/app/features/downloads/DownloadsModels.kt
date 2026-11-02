@@ -1,6 +1,7 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.player.SubtitleAddonRequest
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamSubtitle
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.runBlocking
@@ -21,6 +22,11 @@ enum class DownloadStatus {
 }
 
 internal const val SAVED_DOWNLOAD_VERIFICATION_PHASE = "Verifying saved file"
+
+/** Providers may describe the same file in behavior hints or in client-resolve metadata. */
+internal fun StreamItem.downloadTorrentFilenameHints(): List<String> = listOfNotNull(
+    behaviorHints.filename, clientResolve?.filename, clientResolve?.stream?.raw?.filename,
+).map { it.trim() }.filter { it.isNotBlank() }.distinct()
 
 @Serializable
 data class DownloadItem(
@@ -52,6 +58,7 @@ data class DownloadItem(
     val torrentHash: String? = null,
     val torrentFileIdx: Int? = null,
     val torrentFilename: String? = null,
+    val torrentFilenameAlternates: List<String> = emptyList(),
     val torrentTrackers: List<String> = emptyList(),
     val sourceSelection: DownloadSourceSelection? = null,
     val phase: String? = null,
