@@ -1,3 +1,11 @@
+## Starlit 1.2.3
+
+### Fixes
+
+- **Android Airing Now:** Restored the Today and next-six-days selector, with an option to return to recently aired episodes on the full page. Text, icons, selected-day controls and hide actions now have readable contrast.
+- **Mobile home banner:** The rotating hero now loads eligible trending movies or shows when addon catalogs are empty, and can fall back to the built-in Airing Now schedule when that data source is unavailable. Broken artwork falls back to posters, and an empty carousel no longer reserves a blank space.
+- **Reliable torrent episode downloads:** Season packs can identify the requested episode from verified torrent metadata when a provider's filename is missing or stale. Automatic downloads try other eligible sources when selection is ambiguous, protect against selecting a different episode, and preserve partial torrent downloads on retry.
+
 ## Starlit 1.2.2
 
 ### Fixes
