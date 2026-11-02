@@ -384,7 +384,7 @@ object HomeRepository {
                 catch (_: Exception) { emptyList() }
             } else emptyList()
             val builtIn = if (!isDesktop && fromCollections.isEmpty() && fallback.isEmpty() &&
-                snapshot.showBuiltInAiring) {
+                HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring) {
                 try { platformHomeHeroFallbackItems(includeUpcoming = !snapshot.hideUnreleasedContent) }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { emptyList() }
@@ -471,6 +471,8 @@ object HomeRepository {
         append(requestKey.orEmpty())
         append("|hideUnreleased=")
         append(snapshot.hideUnreleasedContent)
+        append("|showBuiltInAiring=")
+        append(HomeCatalogSettingsRepository.uiState.value.showBuiltInAiring)
         append("|collections=")
         collections.forEach { collection ->
             val preference = snapshot.preferences["collection_${collection.id}"]
