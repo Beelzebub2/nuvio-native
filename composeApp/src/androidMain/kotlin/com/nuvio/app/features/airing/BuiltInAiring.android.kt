@@ -74,6 +74,7 @@ import nuvio.composeapp.generated.resources.airing_action_settings
 import nuvio.composeapp.generated.resources.airing_coming_up
 import nuvio.composeapp.generated.resources.airing_now_title
 import nuvio.composeapp.generated.resources.airing_recent_title
+import nuvio.composeapp.generated.resources.airing_today
 import nuvio.composeapp.generated.resources.airing_settings_estimated
 import nuvio.composeapp.generated.resources.airing_settings_hide_nsfw
 import nuvio.composeapp.generated.resources.airing_settings_title
