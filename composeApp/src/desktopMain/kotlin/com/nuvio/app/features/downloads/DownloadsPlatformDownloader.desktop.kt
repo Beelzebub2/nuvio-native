@@ -62,6 +62,7 @@ private val shutdownHook by lazy {
 internal val legacyDownloadsDirectory: File get() = DesktopStorage.rootDir.resolve("downloads").toFile()
 
 internal actual object DownloadsPlatformDownloader {
+    actual val supportsTorrentDownloads: Boolean = true
     actual fun pauseForAccountCleanup() {}
     actual fun restoreItem(item: DownloadItem): DownloadItem = item.copy(bytesPerSecond = 0,
         phase = if (item.status == DownloadStatus.Downloading) "Queued" else null)

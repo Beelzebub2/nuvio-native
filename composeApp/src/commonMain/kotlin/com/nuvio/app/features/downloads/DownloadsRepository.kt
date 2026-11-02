@@ -196,7 +196,13 @@ object DownloadsRepository {
         episodeTitle: String?, episodeThumbnail: String?, stream: StreamItem): DownloadEnqueueResult = synchronized(lock) {
         ensureLoaded()
         val direct = stream.playableDirectUrl?.trim()
-        val torrent = if (isDesktop && direct == null) stream.p2pInfoHash else null
+        val torrent = if (DownloadsPlatformDownloader.supportsTorrentDownloads && direct == null)
+            stream.p2pInfoHash else null
+        if (torrent != null) {
+            com.nuvio.app.features.p2p.P2pSettingsRepository.ensureLoaded()
+            if (!com.nuvio.app.features.p2p.P2pSettingsRepository.uiState.value.p2pEnabled)
+                return DownloadEnqueueResult.P2pDisabled
+        }
         if (direct == null && torrent == null) return DownloadEnqueueResult.MissingUrl
         if (direct != null && !direct.isSupportedDownloadUrl()) return DownloadEnqueueResult.UnsupportedFormat
         val filenames = stream.downloadTorrentFilenameHints()
@@ -492,7 +498,7 @@ object DownloadsRepository {
                 sourceSubtitles = resolved.sourceSubtitles, torrentHash = resolved.torrentHash,
                 torrentFileIdx = resolved.torrentFileIdx, torrentFilename = resolved.torrentFilename,
                 torrentFilenameAlternates = resolved.torrentFilenameAlternates,
-                torrentTrackers = resolved.torrentTrackers, phase = "Connecting") }
+                torrentTrackers = resolved.torrentTrackers, phase = resolved.phase ?: "Connecting") }
         } }),
             onProgress = { bytes, total -> synchronized(lock) {
                 if (current()) {
@@ -506,7 +512,7 @@ object DownloadsRepository {
                         else -> "Downloading"
                     }
                     mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
-                        phase = phase, bytesPerSecond = speed, updatedAtEpochMs = now) }
+                        phase = if (!isDesktop) it.phase else phase, bytesPerSecond = speed, updatedAtEpochMs = now) }
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,
