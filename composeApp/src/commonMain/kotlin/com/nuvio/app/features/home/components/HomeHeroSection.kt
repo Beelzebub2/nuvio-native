@@ -265,7 +265,10 @@ private fun HeroBackgroundLayers(
     val backgroundMotionStrength = if (desktopFrame) layout.backgroundMotionStrength else 1f
     layerPages.forEach { page ->
         val item = items[page % items.size]
-        val imageUrl = item.banner ?: item.poster
+        var backdropFailed by remember(item.type, item.id, item.banner, item.poster) {
+            mutableStateOf(false)
+        }
+        val imageUrl = if (backdropFailed || item.banner.isNullOrBlank()) item.poster else item.banner
         val backgroundModifier = if (desktopFrame) {
             Modifier
                 .fillMaxSize()
@@ -279,6 +282,13 @@ private fun HeroBackgroundLayers(
         AsyncImage(
             model = if (desktopFrame) originalTmdbImageUrl(imageUrl) else imageUrl,
             contentDescription = item.name,
+            onError = {
+                // A number of addons return stale backdrop URLs while their poster
+                // URLs still work. Keep a visible hero instead of a black banner.
+                if (!backdropFailed && !item.poster.isNullOrBlank() && item.poster != item.banner) {
+                    backdropFailed = true
+                }
+            },
             modifier = backgroundModifier
                 .graphicsLayer {
                     val pageOffset = heroPageOffset(pagerState, page)
