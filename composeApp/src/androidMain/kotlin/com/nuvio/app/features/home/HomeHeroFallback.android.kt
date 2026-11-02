@@ -5,6 +5,10 @@ import com.nuvio.app.features.airing.NativeAiring
 import com.nuvio.app.features.airing.filterAiringContent
 import com.nuvio.app.features.airing.selectAiringEvents
 import com.nuvio.app.features.airing.AiringWindow
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal actual suspend fun platformHomeHeroFallbackItems(includeUpcoming: Boolean): List<MetaPreview> {
@@ -13,7 +17,18 @@ internal actual suspend fun platformHomeHeroFallbackItems(includeUpcoming: Boole
     // first install, wait briefly for a classified schedule; do not block Home.
     val cached = homeAiringHeroItems(repository.state.value, includeUpcoming)
     if (cached.isNotEmpty()) return cached
-    withTimeoutOrNull(18_000L) { repository.refresh() }
+    withTimeoutOrNull(18_000L) {
+        coroutineScope {
+            // Airing Now may already be refreshing for the Home section. In that
+            // case refresh() coalesces and returns immediately; observe its state
+            // until usable items or a terminal result actually arrive.
+            launch(start = CoroutineStart.UNDISPATCHED) { repository.refresh() }
+            repository.state.first { state ->
+                homeAiringHeroItems(state, includeUpcoming).isNotEmpty() ||
+                    (!state.loading && (state.snapshot.savedAt > 0L || state.error != null))
+            }
+        }
+    }
     return homeAiringHeroItems(repository.state.value, includeUpcoming)
 }
 
