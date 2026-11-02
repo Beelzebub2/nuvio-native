@@ -26,10 +26,17 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
+      - name: Install WebView2 build SDK
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.4078.44 -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
+          "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.1.0.4078.44" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Test passkey policies and Google loopback callbacks
         shell: pwsh
         run: >-
           ./gradlew.bat :composeApp:desktopTest
+          "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT"
           --tests '*GoogleOAuth*' --tests '*PasskeyRepositoryTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
