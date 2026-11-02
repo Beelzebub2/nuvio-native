@@ -198,9 +198,12 @@ object DownloadsRepository {
         val direct = stream.playableDirectUrl?.trim()
         val torrent = if (DownloadsPlatformDownloader.supportsTorrentDownloads && direct == null)
             stream.p2pInfoHash else null
-        if (torrent != null) {
+        // Desktop's existing native-download behavior is unchanged; Android
+        // requires the user to explicitly enable its P2P feature.
+        if (torrent != null && !isDesktop) {
             com.nuvio.app.features.p2p.P2pSettingsRepository.ensureLoaded()
-            if (!com.nuvio.app.features.p2p.P2pSettingsRepository.uiState.value.p2pEnabled)
+            if (!com.nuvio.app.features.p2p.P2pSettingsRepository.isVisible ||
+                !com.nuvio.app.features.p2p.P2pSettingsRepository.uiState.value.p2pEnabled)
                 return DownloadEnqueueResult.P2pDisabled
         }
         if (direct == null && torrent == null) return DownloadEnqueueResult.MissingUrl
@@ -512,7 +515,8 @@ object DownloadsRepository {
                         else -> "Downloading"
                     }
                     mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
-                        phase = if (!isDesktop) it.phase else phase, bytesPerSecond = speed, updatedAtEpochMs = now) }
+                        phase = if (!isDesktop && DownloadsPlatformDownloader.supportsTorrentDownloads) it.phase else phase,
+                        bytesPerSecond = speed, updatedAtEpochMs = now) }
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,
