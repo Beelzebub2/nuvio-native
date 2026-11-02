@@ -966,6 +966,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     notCompatibleWithConfigurationCache("Builds a host-local player bridge against WebView2 and libmpv for Windows.")
     enabled = isWindowsHost
     inputs.file(windowsPlayerBridgeSource)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)
     }
@@ -1217,6 +1218,7 @@ kotlin {
             kotlin.srcDir(generatedRuntimeConfigDir)
         }
         androidMain {
+            kotlin.srcDir("src/jvmSharedMain/kotlin")
             kotlin.srcDir(project.file(androidDistributionSourceDir))
             if (androidDistribution == "full") {
                 kotlin.srcDir(fullCommonSourceDir)
@@ -1226,6 +1228,8 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.appcompat)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.credentials.core)
+                implementation(libs.androidx.credentials.play.services.auth)
                 implementation(libs.androidx.core.splashscreen)
                 implementation(libs.androidx.work.runtime)
                 implementation(libs.coil.gif)
@@ -1255,6 +1259,7 @@ kotlin {
             }
         }
         val desktopMain by getting {
+            kotlin.srcDir("src/jvmSharedMain/kotlin")
             kotlin.srcDir(fullPluginSourceDir)
             kotlin.srcDir(fullTrailerSourceDir)
             kotlin.srcDir(
@@ -1279,6 +1284,7 @@ kotlin {
             }
         }
         val androidHostTest by getting {
+            kotlin.srcDir("src/jvmSharedTest/kotlin")
             dependencies {
                 implementation("org.robolectric:robolectric:4.16")
                 implementation("androidx.compose.ui:ui-test-junit4:${libs.versions.composeMultiplatform.get()}")
@@ -1329,6 +1335,7 @@ kotlin {
             implementation(libs.reorderable)
         }
         val desktopTest by getting {
+            kotlin.srcDir("src/jvmSharedTest/kotlin")
             dependencies {
                 implementation(compose.desktop.uiTestJUnit4)
             }

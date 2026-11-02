@@ -49,6 +49,7 @@ fun App(
     appGateController: AppGateController? = null,
 ) {
     AppEnvironment {
+        if (ownsAppRuntime) com.nuvio.app.features.remote.DesktopRemoteHost()
         AppGate(
             initialTab = initialTab,
             initialRoute = initialRoute,
@@ -111,6 +112,7 @@ internal fun AppEnvironment(content: @Composable () -> Unit) {
             desktopUiScale = desktopUiScaleForWindow(maxWidth.value, maxHeight.value),
         ) {
             content()
+            com.nuvio.app.features.settings.LocalSettingsImportProgressHost()
         }
     }
 }

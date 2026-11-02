@@ -16,6 +16,17 @@ import com.nuvio.app.features.downloads.DownloadStatus
 import com.nuvio.app.features.downloads.DownloadsCodec
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.downloads.DownloadsStorage
+import com.nuvio.app.features.library.LibraryItem
+import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.LibraryStorage
+import com.nuvio.app.features.library.LibraryStoragePayloadCodec
+import com.nuvio.app.features.library.StoredLibraryPayload
+import com.nuvio.app.features.watched.StoredWatchedPayload
+import com.nuvio.app.features.watched.WatchedItem
+import com.nuvio.app.features.watched.WatchedStorage
+import com.nuvio.app.features.watchprogress.WatchProgressCodec
+import com.nuvio.app.features.watchprogress.WatchProgressEntry
+import com.nuvio.app.features.watchprogress.WatchProgressStorage
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsStorage
 import com.nuvio.app.features.plugins.PluginRepository
@@ -25,6 +36,19 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.ProfileStorage
 import com.nuvio.app.features.settings.ThemeSettingsStorage
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.assertSame
+import kotlin.test.assertNotEquals
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.sun.net.httpserver.HttpServer
@@ -149,6 +173,16 @@ class AnonymousWorkspaceTest {
                 createdAtEpochMs = 1L, updatedAtEpochMs = 1L,
             )
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(guestItem)))
+            val guestLibrary = LibraryItem(id = "guest-library", type = "movie", name = "Guest Library", savedAtEpochMs = 1L)
+            LibraryStorage.savePayload(2, Json.encodeToString(StoredLibraryPayload(items = listOf(guestLibrary))))
+            val guestWatched = WatchedItem(id = "guest-watched", type = "movie", name = "Watched Guest", markedAtEpochMs = 1700000000000L)
+            WatchedStorage.savePayload(2, Json.encodeToString(StoredWatchedPayload(items = listOf(guestWatched))))
+            val guestProgress = WatchProgressEntry(
+                contentType = "series", parentMetaId = "guest-series", parentMetaType = "series",
+                videoId = "guest-episode", title = "Guest show", lastPositionMs = 1000L,
+                durationMs = 5000L, lastUpdatedEpochMs = 1700000000000L,
+            )
+            WatchProgressStorage.savePayload(2, WatchProgressCodec.encodeEntries(listOf(guestProgress)))
             DownloadsRepository.clearLocalState()
             DownloadsRepository.ensureLoaded()
             AddonRepository.replaceLocalBackup(addonBackup)
@@ -160,6 +194,7 @@ class AnonymousWorkspaceTest {
             // Simulate a snapshot saved by the previous release, with no download fields.
             AnonymousWorkspaceStorage.saveValue("import", Json.encodeToString(saved.copy(
                 downloads = null, downloadFolder = null, downloadProfileId = null,
+                library = null, watchedHistory = null, watchProgress = null,
             )))
 
             val accountItem = guestItem.copy(
@@ -167,13 +202,23 @@ class AnonymousWorkspaceTest {
                 title = "Account episode", fileName = "account-episode.mp4",
             )
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(accountItem)))
+            val accountLibrary = LibraryItem(id = "account-library", type = "movie", name = "Account Library", savedAtEpochMs = 2L)
+            LibraryStorage.savePayload(1, Json.encodeToString(StoredLibraryPayload(items = listOf(accountLibrary))))
+            LibraryRepository.clearLocalState()
+            LibraryRepository.ensureLoaded()
             DownloadsRepository.clearLocalState()
             assertFalse(LocalSettingsImport.importIntoCurrentProfile().getOrThrow())
             val pendingKey = "pending:${ServerConfigurationRepository.active.value.backendUrl}:account-with-own-downloads:1"
             val pending = Json.decodeFromString<LocalSettingsSnapshot>(assertNotNull(AnonymousWorkspaceStorage.loadValue(pendingKey)))
             assertEquals(2, pending.downloadProfileId)
             assertEquals(listOf("guest-profile-two"), DownloadsCodec.decodeItems(pending.downloads).map { it.id })
+            assertEquals(listOf("guest-library"), LibraryStoragePayloadCodec.decodeStrict(pending.library!!).items.map { it.id })
+            assertEquals(listOf("guest-watched"), Json.decodeFromString<StoredWatchedPayload>(pending.watchedHistory!!).items.map { it.id })
+            assertEquals(listOf("guest-episode"), WatchProgressCodec.decodeEntries(pending.watchProgress!!).map { it.videoId })
             assertEquals(setOf("account-original", "guest-profile-two"), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id }.toSet())
+            assertEquals(setOf("guest-library", "account-library"), LibraryStoragePayloadCodec.decodeStrict(LibraryStorage.loadPayload(1)!!).items.map { it.id }.toSet())
+            assertEquals(listOf("guest-watched"), Json.decodeFromString<StoredWatchedPayload>(WatchedStorage.loadPayload(1)!!).items.map { it.id })
+            assertEquals(listOf("guest-episode"), WatchProgressCodec.decodeEntries(WatchProgressStorage.loadPayload(1)!!).map { it.videoId })
         } finally {
             AuthRepository.signOut()
             AnonymousWorkspaceStorage.saveValue("userId", null)
@@ -230,6 +275,18 @@ class AnonymousWorkspaceTest {
             assertFalse(calls.first().second.contains("guest-secret"))
             assertTrue(calls.first { it.first == "sync_push_provider_credentials" }.second.contains("guest-secret"))
 
+            calls.clear()
+            PlayerSettingsStorage.savePreferredAudioLanguage("de")
+            PlayerSettingsRepository.onProfileChanged()
+            val repeatStages = mutableListOf<LocalImportStage>()
+            val initiatingThread = Thread.currentThread()
+            assertFalse(LocalSettingsImport.importIntoCurrentProfile({ stage, _ ->
+                assertNotEquals(initiatingThread, Thread.currentThread(), "Import work must leave the caller thread")
+                repeatStages += stage
+            }).getOrThrow())
+            assertEquals("de", PlayerSettingsStorage.loadPreferredAudioLanguage())
+            assertFalse(LocalImportStage.Preferences in repeatStages, "Retry must not reset already-imported preferences")
+            assertTrue(LocalImportStage.SyncSettings in repeatStages)
             calls.clear()
             rejectPlugins.set(false)
             assertTrue(LocalSettingsImport.retryPendingImport(1))
@@ -422,6 +479,128 @@ class AnonymousWorkspaceTest {
             else ServerConfigurationRepository.useOfficial()
             SupabaseProvider.reset()
             guestDownloadFolder.delete()
+        }
+    }
+
+    @Test
+    fun repeatedImportCancelsLoadedRefreshesSafelyAndSurvivesItsUiCaller() = runBlocking {
+        val originalServer = ServerConfigurationRepository.active.value
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val canceled = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { request ->
+            if (request.requestURI.path.endsWith("sync_push_profile_settings_blob")) {
+                entered.countDown()
+                release.await(15, TimeUnit.SECONDS)
+            }
+            val body = "[]".toByteArray()
+            request.responseHeaders.set("Content-Type", "application/json")
+            request.sendResponseHeaders(200, body.size.toLong())
+            request.responseBody.use { it.write(body) }
+        }
+        server.start()
+        ServerConfigurationRepository.saveCustom(ServerConfiguration(
+            "http://127.0.0.1:${server.address.port}", "test-key", ServerCapabilities(true, false), true,
+        ))
+        SupabaseProvider.reset()
+        LocalAccountDataCleaner.wipe()
+        AnonymousWorkspaceStorage.saveValue("userId", null)
+        val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            AuthRepository.signInAnonymously()
+            val guestId = (AuthRepository.state.value as AuthState.Authenticated).userId
+            ProfileRepository.ensureLoaded(guestId)
+            PlayerSettingsStorage.saveIntroDbApiKey("never-show-this-secret")
+            AddonRepository.replaceLocalBackup(addonBackup)
+            PluginRepository.importLocalSnapshot(pluginSnapshot)
+            AuthRepository.acceptRemoteSession("repeat-import-account", "repeat@example.com")
+            loadAccountProfile("repeat-import-account")
+            AddonRepository.initialize()
+            PluginRepository.initialize()
+            // Completion handlers remove their own registration, just like real refresh jobs.
+            // Previously cancelActiveRefreshes iterated this same map and threw mid-import.
+            for (repository in listOf(AddonRepository, PluginRepository)) {
+                val field = repository.javaClass.getDeclaredField("activeRefreshJobs").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val jobs = field.get(repository) as MutableMap<String, Job>
+                repeat(4) { index ->
+                    val key = "loaded-refresh-$index"
+                    jobs[key] = Job().apply { invokeOnCompletion { jobs.remove(key); canceled.incrementAndGet() } }
+                }
+            }
+            val started = CompletableDeferred<Job>()
+            uiScope.launch { started.complete(checkNotNull(LocalSettingsImport.startImport())) }
+            val operation = started.await()
+            assertTrue(entered.await(10, TimeUnit.SECONDS), "Import should reach its first cloud upload")
+            assertSame(operation, LocalSettingsImport.startImport(), "Duplicate clicks must share the running import")
+            uiScope.cancel()
+            assertTrue(operation.isActive, "Disposing the settings UI must not cancel the import")
+            assertEquals(8, canceled.get())
+            assertEquals(LocalImportStage.SyncSettings, LocalSettingsImport.progress.value?.stage)
+            assertFalse(LocalSettingsImport.progress.value.toString().contains("never-show-this-secret"))
+            release.countDown()
+            withTimeout(15_000) { operation.join() }
+            assertEquals(LocalImportOutcome.Synced, LocalSettingsImport.progress.value?.outcome)
+            assertFalse(LocalSettingsImport.hasPendingImport())
+            assertEquals(1, LocalSettingsImport.progress.value?.summary?.addons)
+            LocalSettingsImport.dismissProgress()
+            assertNull(LocalSettingsImport.progress.value)
+            // Invalid input must not leave ordinary settings sync disabled.
+            AnonymousWorkspaceStorage.saveValue("import", "{damaged")
+            withTimeout(15_000) { checkNotNull(LocalSettingsImport.startImport()).join() }
+            assertEquals(LocalImportOutcome.Failed, LocalSettingsImport.progress.value?.outcome)
+            val observerField = ProfileSettingsSync.javaClass.getDeclaredField("observeJob").apply { isAccessible = true }
+            assertTrue((observerField.get(ProfileSettingsSync) as? Job)?.isActive == true)
+            LocalSettingsImport.dismissProgress()
+        } finally {
+            release.countDown()
+            uiScope.cancel()
+            LocalSettingsImport.startImport(retry = true)?.join()
+            LocalSettingsImport.dismissProgress()
+            AuthRepository.signOut()
+            AnonymousWorkspaceStorage.saveValue("userId", null)
+            AnonymousWorkspaceStorage.saveValue("import", null)
+            if (originalServer.isCustom) ServerConfigurationRepository.saveCustom(originalServer)
+            else ServerConfigurationRepository.useOfficial()
+            SupabaseProvider.reset()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun accountChangeBeforeAnImportStageCannotWriteGuestSettingsIntoTheNewAccount() = runBlocking {
+        val originalServer = ServerConfigurationRepository.active.value
+        ServerConfigurationRepository.saveCustom(ServerConfiguration("", "", ServerCapabilities(true, false), true))
+        SupabaseProvider.reset()
+        LocalAccountDataCleaner.wipe()
+        AnonymousWorkspaceStorage.saveValue("userId", null)
+        try {
+            AuthRepository.signInAnonymously()
+            val guestId = (AuthRepository.state.value as AuthState.Authenticated).userId
+            ProfileRepository.ensureLoaded(guestId)
+            PlayerSettingsStorage.savePreferredAudioLanguage("pt")
+            AddonRepository.replaceLocalBackup(addonBackup)
+            PluginRepository.importLocalSnapshot(pluginSnapshot)
+            AuthRepository.acceptRemoteSession("import-source-account", "first@example.com")
+            loadAccountProfile("import-source-account")
+            val result = LocalSettingsImport.importIntoCurrentProfile({ stage, _ ->
+                if (stage == LocalImportStage.Preferences) runBlocking {
+                    AuthRepository.acceptRemoteSession("import-other-account", "other@example.com")
+                    loadAccountProfile("import-other-account")
+                }
+            })
+            assertTrue(result.isFailure)
+            assertNull(PlayerSettingsStorage.loadPreferredAudioLanguage())
+            assertTrue(AddonRepository.uiState.value.addons.isEmpty())
+            assertFalse(LocalSettingsImport.hasPendingImport())
+        } finally {
+            AuthRepository.signOut()
+            AnonymousWorkspaceStorage.saveValue("userId", null)
+            AnonymousWorkspaceStorage.saveValue("import", null)
+            if (originalServer.isCustom) ServerConfigurationRepository.saveCustom(originalServer)
+            else ServerConfigurationRepository.useOfficial()
+            SupabaseProvider.reset()
         }
     }
 

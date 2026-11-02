@@ -1,3 +1,78 @@
+## Starlit 1.3.0
+
+### Features
+
+- **Control desktop playback from Android:** An Android phone signed in to the same Starlit account and server can discover and securely pair with the desktop app on the same local network. Compare the matching codes on both screens, then control play/pause, seek, volume/mute, intro and credits skipping, episodes, sources and subtitles. Open **Settings → Desktop remote** on Android to connect. This supports the built-in desktop player on private IPv4 networks; iOS and external players are not supported yet.
+
+### Fixes
+
+- **Only one desktop Starlit window:** Opening the app again now brings the running window to the foreground instead of starting a duplicate. Supported `nuvio://` and `stremio://` links are delivered to the existing window, including during startup.
+- **Readable source selection on 1080p displays:** Long source names no longer make the recommended-source card crowd out other results. The full metadata remains available in the source list, with usable layouts at common display scaling levels.
+
+## Starlit 1.2.4
+
+### Fixes
+
+- **Android torrent downloads:** Directly chosen torrent sources and automatically selected torrent episodes can now be downloaded for offline viewing when P2P is enabled in Settings. Android uses a separate native torrent engine for downloads so playback is not interrupted.
+- **Safer offline transfers:** Native torrent metadata identifies the correct video in multi-file torrents rather than trusting stale episode indexes. Resume state is tied to the exact torrent file, and invalid HTTP ranges are rejected instead of risking a corrupted saved episode. Native loopback requests do not forward provider credentials or follow redirects.
+- **Redesigned mobile Downloads:** Added an offline-library overview, artwork cards, clearer download states and progress, more readable errors, accessible pause/resume/retry/play controls, compact simultaneous-transfer settings, and selection mode for bulk removal. Updated English and Portuguese translations.
+
+## Starlit 1.2.3
+
+### Fixes
+
+- **Android Airing Now:** Restored the Today and next-six-days selector, with an option to return to recently aired episodes on the full page. Text, icons, selected-day controls and hide actions now have readable contrast.
+- **Mobile home banner:** The rotating hero now loads eligible trending movies or shows when addon catalogs are empty, and can fall back to the built-in Airing Now schedule when that data source is unavailable. Broken artwork falls back to posters, and an empty carousel no longer reserves a blank space.
+- **Reliable torrent episode downloads:** Season packs can identify the requested episode from verified torrent metadata when a provider's filename is missing or stale. Automatic downloads try other eligible sources when selection is ambiguous, protect against selecting a different episode, and preserve partial torrent downloads on retry.
+
+## Starlit 1.2.2
+
+### Fixes
+
+- **Responsive Windows startup with large offline libraries:** Saved downloads are verified in the background so even very large episodes no longer keep the app on its loading spinner.
+- **Safe offline playback and account switching:** Files become playable after their complete integrity check; interrupted checks are canceled when changing profiles, and existing files are preserved.
+- **Reliable desktop release checks:** Completed-download UI fixtures include the integrity proofs required by the new verifier, allowing the full desktop test suite to validate this patch correctly.
+
+## Starlit 1.2.1
+
+### Fixes
+
+- **Windows startup no longer waits for downloaded episodes to be fully scanned.** Large offline files are verified in the background after profile selection, so Starlit can open without remaining on the loading spinner.
+- Completed downloads are available for offline playback only after their saved content proofs have been checked. Changed or missing files remain untouched and are reported as unavailable; profile switches cannot apply stale verification results to a different profile.
+
+## Starlit 1.2.0
+
+### Features
+
+- **Native desktop file dialogs:** Windows uses the system open, save and folder dialogs for download locations and addon backup import/export, including Unicode paths, file filters, cancellation and overwrite confirmation.
+- Metadata requests use the new hosted Starlit gateway, with caching and compatibility for installed releases using the previous endpoint.
+
+### Fixes
+
+- **Anonymous settings import** stays responsive while restoring providers and checking download files. Importing again safely cancels old refreshes instead of crashing when their completion handlers run.
+- An animated import popup shows the real restoration and account-sync stages, plus counts of saved addons, providers, downloads, library/history items and lists. It keeps the Close action accessible on compact screens and never displays imported API keys.
+- Repeated import clicks share the active operation. Retrying a pending import preserves changes made after its first application, and imported theme or language changes no longer interrupt the operation.
+- **Hidden Airing Now anime sync across Windows and Android** for the same account profile. Existing hidden lists are uploaded once, and showing titles again, including clearing the final entry, updates other devices on sync.
+
+## Starlit 1.1.0
+
+### Improvements
+
+- **Import anonymous settings** now also transfers the selected guest profile's Starlit library, watched movies and episodes, resume positions, collections, recent searches and supported desktop Watch Later and personal-media lists, in addition to settings, add-ons, plugins and existing downloads.
+- Importing into an account merges previously saved items rather than replacing the account's library or playback history. Cloud records from other devices are checked before guest entries are uploaded, and unfinished imports can retry after a network error or restart.
+- The account's Starlit library continues syncing across Windows and Android when an external tracking library is selected. Saved changes that did not upload while offline are retried on later syncs.
+- Android now has more of desktop's Airing Now, batch-download and Watch Later functionality, including the corresponding playback actions.
+- Torrent streaming is steadier for large episodes and inconsistent peer speeds, with tuned buffering and more careful coordination between downloads and active playback.
+
+### Fixes
+
+- Guest history and playback progress no longer disappear solely because the user imports their anonymous settings into an approved account.
+- Account library entries and pending removals are retained when overlapping anonymous entries are imported. Collection imports also preserve the destination account's existing lists.
+
+### Release policy
+
+- Version numbers now follow Semantic Versioning: compatible features advance MINOR, fixes advance PATCH, and incompatible changes advance MAJOR. Windows and Android versions and numeric Android build codes are checked automatically before publication.
+
 ## Starlit 1.0.48
 
 ### Security

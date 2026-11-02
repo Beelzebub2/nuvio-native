@@ -1533,6 +1533,13 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     setMpvOptionString(_mpv, "dither-depth", "auto");
     setMpvOptionString(_mpv, "demuxer-max-bytes", "150MiB");
     setMpvOptionString(_mpv, "cache-secs", "120");
+    if ([sourceUrl hasPrefix:@"http://127.0.0.1:"] &&
+        [sourceUrl rangeOfString:@"/stream?"].location != NSNotFound) {
+        setMpvOptionString(_mpv, "cache", "yes");
+        setMpvOptionString(_mpv, "cache-pause", "yes");
+        setMpvOptionString(_mpv, "cache-pause-initial", "yes");
+        setMpvOptionString(_mpv, "cache-pause-wait", "8");
+    }
     setMpvOptionString(_mpv, "hr-seek", "no");
 
     if (headerLines.count > 0) {
@@ -2128,10 +2135,9 @@ static void nuvioMpvWakeup(void *ctx) {
     }
     double cacheTime = [self doubleProperty:"demuxer-cache-time" fallback:0.0];
     if (std::isfinite(cacheTime) && cacheTime > 0.0) {
-        if (cacheTime >= effectivePosition - 5.0) {
-            return fmax(cacheTime - effectivePosition, 0.0);
-        }
-        return cacheTime;
+        // This is the buffered end timestamp, not the duration; stale ranges
+        // behind a seek cannot satisfy current playback.
+        return fmax(cacheTime - effectivePosition, 0.0);
     }
 
     double cacheDuration = [self doubleProperty:"demuxer-cache-duration" fallback:0.0];

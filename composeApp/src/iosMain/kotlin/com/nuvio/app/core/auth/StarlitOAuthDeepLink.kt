@@ -6,11 +6,9 @@ import platform.Foundation.NSURL
 
 /** Invoked by SwiftUI only for the application's OAuth callback URL. */
 fun handleStarlitOAuthDeepLink(url: String) {
-    if (!url.startsWith("nuvio://auth#", ignoreCase = true) &&
-        !url.startsWith("nuvio://auth?", ignoreCase = true)
-    ) return
+    if (!GoogleOAuthAvailability.isOfficialServer() || !isStarlitOAuthCallback(url)) return
     NSURL.URLWithString(url)?.let {
-        AuthRepository.expectRemoteSession()
-        SupabaseProvider.client.handleDeeplinks(it)
+        SupabaseProvider.client.handleDeeplinks(it,
+            onError = { AuthRepository.cancelRemoteSessionRequest() })
     }
 }

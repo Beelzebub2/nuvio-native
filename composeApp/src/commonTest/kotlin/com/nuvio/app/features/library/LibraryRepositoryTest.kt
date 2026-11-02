@@ -282,6 +282,75 @@ class LibraryRepositoryTest {
         assertEquals(listOf("remote-new"), result.snapshot.items.map { it.id })
     }
 
+    @Test
+    fun `guest library import keeps account entries and does not resurrect pending deletions`() {
+        val state = LibraryLocalState()
+        val token = state.beginProfileLoad(profileId = 2).snapshot.token
+        state.completeProfileLoad(
+            token = token,
+            activeProfileId = 2,
+            items = listOf(
+                libraryItem(id = "account", savedAtEpochMs = 8L),
+                libraryItem(id = "removed", savedAtEpochMs = 3L),
+            ),
+        )
+        state.remove("removed", "movie")
+        val guest = listOf(
+            libraryItem(id = "account", savedAtEpochMs = 1L),
+            libraryItem(id = "removed", savedAtEpochMs = 1L),
+            libraryItem(id = "new-from-guest", savedAtEpochMs = 2L),
+        )
+
+        val result = state.importMissing(guest)
+
+        assertEquals(setOf("account", "new-from-guest"), result.items.map { it.id }.toSet())
+        assertEquals(8L, result.items.single { it.id == "account" }.savedAtEpochMs)
+        assertEquals(listOf("new-from-guest"), result.pendingUpsertKeys.map { it.contentId })
+        assertEquals(listOf("removed"), result.pendingDeleteKeys.map { it.contentId })
+        assertEquals(result.revision, state.importMissing(guest).revision)
+    }
+
+    @Test
+    fun `guest library import survives a new profile load with upload outbox intact`() {
+        val state = LibraryLocalState()
+        val token = state.beginProfileLoad(profileId = 1).snapshot.token
+        state.completeProfileLoad(token, activeProfileId = 1, items = emptyList())
+        val imported = state.importMissing(listOf(libraryItem("guest", 33L)))
+        val payload = LibraryStoragePayloadCodec.encode(imported)
+        val saved = LibraryStoragePayloadCodec.decodeStrict(payload)
+
+        val restarted = LibraryLocalState()
+        val reloadToken = restarted.beginProfileLoad(profileId = 1).snapshot.token
+        val restored = assertNotNull(restarted.completeProfileLoad(
+            token = reloadToken,
+            activeProfileId = 1,
+            items = saved.items,
+            deltaCursorEventId = saved.deltaCursorEventId,
+            deltaInitialized = saved.deltaInitialized,
+            pendingUpsertKeys = saved.pendingUpsertKeys,
+            pendingDeleteKeys = saved.pendingDeleteKeys,
+        ))
+        assertEquals(listOf("guest"), restored.items.map { it.id })
+        assertTrue(restored.hasPendingPush)
+        assertEquals(listOf("guest"), restored.pendingUpsertKeys.map { it.contentId })
+    }
+
+    @Test
+    fun `guest cloud merge keeps the remote account record when both contain the same title`() {
+        val state = LibraryLocalState()
+        val token = state.beginProfileLoad(profileId = 2).snapshot.token
+        state.completeProfileLoad(token, activeProfileId = 2, items = emptyList())
+        val guest = libraryItem("shared", 11L)
+        state.importMissing(listOf(guest))
+        val remote = libraryItem("shared", 42L)
+
+        val merged = state.acknowledgeGuestImport(listOf(guest), listOf(remote))
+
+        assertEquals(listOf(remote), merged.items)
+        assertFalse(merged.hasPendingPush)
+        assertEquals(merged.revision, state.acknowledgeGuestImport(listOf(guest), listOf(remote)).revision)
+    }
+
     private fun libraryItem(id: String, savedAtEpochMs: Long): LibraryItem =
         LibraryItem(
             id = id,

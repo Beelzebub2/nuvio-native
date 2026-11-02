@@ -46,6 +46,26 @@ object TmdbMetadataService {
     private val backdropCacheMutex = Mutex()
     private val backdropRequests = Semaphore(4)
 
+    /** A built-in source for Home's mobile hero when a user has no available addon catalog. */
+    suspend fun fetchTrendingHeroItems(): List<MetaPreview> = withContext(Dispatchers.Default) {
+        val language = normalizeTmdbLanguage(TmdbSettingsRepository.snapshot().language)
+        val response = fetch<TmdbDiscoverResponse>(
+            endpoint = "trending/all/week", query = mapOf("language" to language),
+        ) ?: return@withContext emptyList()
+        trendingHeroItems(response.results, language)
+    }
+
+    internal fun trendingHeroItems(results: List<TmdbDiscoverResult>, language: String = "en"): List<MetaPreview> =
+        results.asSequence().filter { it.adult != true }.mapNotNull { result ->
+            val mediaType = when (result.mediaType) {
+                "movie" -> TmdbEntityMediaType.MOVIE
+                "tv" -> TmdbEntityMediaType.TV
+                else -> return@mapNotNull null // People have no playable details or hero artwork.
+            }
+            mapEntityDiscoverResult(result, mediaType, language, emptyMap())
+        }.filter { !it.banner.isNullOrBlank() || !it.poster.isNullOrBlank() }
+            .distinctBy { "${it.type}:${it.id}" }.take(8).toList()
+
     suspend fun fetchLocalizedBackdrop(id: String, type: String, language: String): String? =
         withContext(Dispatchers.Default) {
             val mediaType = TmdbService.normalizeMediaType(type)
@@ -2235,4 +2255,6 @@ internal data class TmdbDiscoverResult(
     @SerialName("first_air_date") val firstAirDate: String? = null,
     @SerialName("vote_average") val voteAverage: Double? = null,
     @SerialName("vote_count") val voteCount: Int? = null,
+    @SerialName("media_type") val mediaType: String? = null,
+    val adult: Boolean? = null,
 )

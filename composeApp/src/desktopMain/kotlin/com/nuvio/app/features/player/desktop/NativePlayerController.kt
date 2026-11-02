@@ -632,6 +632,10 @@ internal class NativePlayerController(
         }
     }
 
+    override fun setRemoteVolume(level: Float) = setFallbackVolume(level)
+    override fun getRemoteVolume(): Float = currentVolumeLevel
+    override fun setMuted(muted: Boolean) = setTemporaryVolume(if (muted) 0f else rememberedVolumeLevel.takeIf { it > 0f } ?: 1f)
+
     @Synchronized
     private fun setTemporaryVolume(level: Float) {
         val current = handle

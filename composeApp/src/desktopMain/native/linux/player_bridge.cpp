@@ -1565,6 +1565,10 @@ JNIEXPORT jlong JNICALL NP(create)(
         if (!headers.empty()) headerFields = joinHeaderFields(headers);
     }
 
+    const std::string playbackUrl = jstringToUtf8(env, sourceUrl);
+    const bool isTorrServerStream = playbackUrl.rfind("http://127.0.0.1:", 0) == 0 &&
+                                   playbackUrl.find("/stream?") != std::string::npos;
+
     auto configure = [&](mpv_handle *m, const char *gpuCtx, const char *hwdec) {
         // Surface mpv's own diagnostics (drained by the event thread).
         mpv_request_log_messages(m, nuvioDebug() ? "v" : "no");
@@ -1595,6 +1599,18 @@ JNIEXPORT jlong JNICALL NP(create)(
         // X11 embedding composites correctly inside the Nuvio window.
         mpv_set_option_string(m, "gpu-context", gpuCtx);
         mpv_set_option_string(m, "force-seekable", "yes");
+        if (isTorrServerStream) {
+            // Keep a bounded local demuxer cushion for the bursty torrent HTTP
+            // reader; only enable the startup/rebuffer wait for P2P, not CDN files.
+            mpv_set_option_string(m, "cache", "yes");
+            mpv_set_option_string(m, "demuxer-max-bytes", "192MiB");
+            mpv_set_option_string(m, "demuxer-max-back-bytes", "48MiB");
+            mpv_set_option_string(m, "demuxer-seekable-cache", "yes");
+            mpv_set_option_string(m, "cache-secs", "120");
+            mpv_set_option_string(m, "cache-pause", "yes");
+            mpv_set_option_string(m, "cache-pause-initial", "yes");
+            mpv_set_option_string(m, "cache-pause-wait", "8");
+        }
 
         // Decoder config mirrors the macOS bridge for parity (mac: hwdec=auto +
         // gpu-hwdec-interop=auto + decoderPriority handling). gpu-hwdec-interop=auto
@@ -1703,8 +1719,7 @@ JNIEXPORT jlong JNICALL NP(create)(
     player->running.store(true);
     player->eventThread = std::thread(runEventLoop, player);
 
-    std::string url = jstringToUtf8(env, sourceUrl);
-    const char *cmd[] = {"loadfile", url.c_str(), nullptr};
+    const char *cmd[] = {"loadfile", playbackUrl.c_str(), nullptr};
     mpv_command(player->mpv, cmd);
 
     // Bring up the WebKitGTK controls overlay now so it can render the loading

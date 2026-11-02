@@ -263,6 +263,49 @@ internal class LibraryLocalState {
         snapshotLocked()
     }
 
+    /** An explicit guest import adds missing entries without replacing the account's library. */
+    fun importMissing(items: Collection<LibraryItem>): LibraryLocalSnapshot = synchronized(lock) {
+        check(hasLoaded) { "Load the destination profile before importing library items" }
+        var changed = false
+        items.forEach { item ->
+            if (item.id.isBlank() || item.type.isBlank()) return@forEach
+            val key = libraryItemKey(item.id, item.type)
+            // An account-side pending removal wins over a guest import.
+            if (key in itemsById || key in pendingDeleteKeysByKey) return@forEach
+            itemsById[key] = item
+            pendingUpsertKeysByKey[key] = item.toLibrarySyncKey()
+            changed = true
+        }
+        if (changed) {
+            revision += 1L
+            contentRevision += 1L
+        }
+        snapshotLocked()
+    }
+
+    /** A guest entry is cloud-acknowledged only when its exact local copy is still pending.
+     * Existing remote entries take precedence; other local edits and removals are untouched. */
+    fun acknowledgeGuestImport(
+        guestItems: Collection<LibraryItem>,
+        remoteItems: Collection<LibraryItem>,
+    ): LibraryLocalSnapshot = synchronized(lock) {
+        check(hasLoaded) { "Load the destination profile before reconciling guest library" }
+        val remoteByKey = remoteItems.associateBy { libraryItemKey(it.id, it.type) }
+        var changed = false
+        guestItems.forEach { guest ->
+            val key = libraryItemKey(guest.id, guest.type)
+            if (itemsById[key] != guest || key !in pendingUpsertKeysByKey) return@forEach
+            pendingUpsertKeysByKey.remove(key)
+            remoteByKey[key]?.let { remote ->
+                itemsById[key] = remote
+                contentRevision += 1L
+            }
+            changed = true
+        }
+        if (changed) revision += 1L
+        snapshotLocked()
+    }
+
     fun toggle(item: LibraryItem): LibraryLocalToggleResult = synchronized(lock) {
         val key = libraryItemKey(item.id, item.type)
         val removedItem = itemsById.remove(key)

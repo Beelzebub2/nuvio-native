@@ -8,6 +8,10 @@ import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.core.sync.HOME_CATALOG_SHARED_SYNC_PLATFORM
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.airing.AIRING_HIDDEN_TITLES_SYNC_KEY
+import com.nuvio.app.features.airing.exportBuiltInAiringHiddenTitles
+import com.nuvio.app.features.airing.applyBuiltInAiringHiddenTitles
+import com.nuvio.app.features.airing.acknowledgeBuiltInAiringHiddenTitles
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlin.concurrent.Volatile
@@ -17,10 +21,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -54,6 +62,7 @@ private data class SupabaseHomeCatalogSettingsBlob(
 private data class PullToken(
     val userId: String,
     val profileId: Int,
+    val generation: Long,
 )
 
 private data class CachedSharedSettings(
@@ -69,6 +78,9 @@ internal fun mergeHomeCatalogSettingsJson(
     localJson.forEach { (key, value) -> put(key, value) }
 }
 
+internal fun shouldSeedHiddenAiringTitles(remoteJson: JsonObject?, localTitles: JsonArray): Boolean =
+    remoteJson?.containsKey(AIRING_HIDDEN_TITLES_SYNC_KEY) != true && localTitles.isNotEmpty()
+
 object HomeCatalogSettingsSyncService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val log = Logger.withTag("HomeCatalogSettingsSyncService")
@@ -83,7 +95,9 @@ object HomeCatalogSettingsSyncService {
     @Volatile
     var isSyncingFromRemote: Boolean = false
 
+    @Volatile private var accountGeneration: Long = 0
     private var pushJob: Job? = null
+    private val syncMutex = Mutex()
 
     @Volatile
     private var completedInitialPull: PullToken? = null
@@ -91,47 +105,46 @@ object HomeCatalogSettingsSyncService {
     @Volatile
     private var cachedSharedSettings: CachedSharedSettings? = null
 
-    suspend fun pullFromServer(profileId: Int) {
-        if (LocalSettingsImport.hasPendingImport(profileId)) return
+    internal fun clearAccountState() {
+        accountGeneration++
+        pushJob?.cancel()
+        pushJob = null
+        completedInitialPull = null
+        cachedSharedSettings = null
+    }
 
+    suspend fun pullFromServer(profileId: Int) = syncMutex.withLock {
+        if (LocalSettingsImport.hasPendingImport(profileId)) return@withLock
         runCatching {
-            val pullToken = currentPullToken(profileId) ?: return
+            val token = currentPullToken(profileId) ?: return@withLock
+            if (currentPullToken() != token) return@withLock
             val localPayload = HomeCatalogSettingsRepository.exportToSyncPayload()
+            val localHidden = exportBuiltInAiringHiddenTitles()
+            if (currentPullToken() != token) return@withLock
             val remoteBlob = fetchRemoteBlob(profileId)
-            if (LocalSettingsImport.hasPendingImport(profileId)) return
-            cachedSharedSettings = CachedSharedSettings(
-                token = pullToken,
-                settingsJson = remoteBlob?.settingsJson ?: buildJsonObject { },
-            )
-            val remotePayload = remoteBlob?.let { blob ->
-                decodePayloadPreservingLocalDefaults(blob.settingsJson, localPayload)
-            }
-
-            if (remoteBlob == null) {
-                log.i { "pullFromServer — no remote home catalog settings found; preserving local" }
-                markInitialPullComplete(pullToken)
-                return
-            }
-
-            if (remotePayload == null) {
-                log.w { "pullFromServer — failed to parse remote home catalog settings" }
-                markInitialPullComplete(pullToken)
-                return
-            }
-
-            if (remotePayload.items.isEmpty()) {
-                log.i { "pullFromServer — remote has empty items, preserving local catalog order" }
+            if (currentPullToken() != token || LocalSettingsImport.hasPendingImport(profileId)) return@withLock
+            cachedSharedSettings = CachedSharedSettings(token, remoteBlob?.settingsJson ?: buildJsonObject { })
+            if (remoteBlob != null) {
+                val remotePayload = decodePayloadPreservingLocalDefaults(remoteBlob.settingsJson, localPayload)
+                    ?: error("Failed to parse remote home catalog settings")
                 applyRemotePayload(remotePayload)
-                markInitialPullComplete(pullToken)
-                return
+                val remoteHidden = remoteBlob.settingsJson[AIRING_HIDDEN_TITLES_SYNC_KEY] as? JsonArray
+                if (remoteHidden != null && localHidden != null) {
+                    applyBuiltInAiringHiddenTitles(remoteHidden, localHidden.titles)
+                }
             }
-
-            applyRemotePayload(remotePayload)
-            log.i { "pullFromServer — applied ${remotePayload.items.size} items from remote" }
-            markInitialPullComplete(pullToken)
-        }.onFailure { e ->
-            isSyncingFromRemote = false
-            log.e(e) { "pullFromServer — FAILED" }
+            if (currentPullToken() != token) return@withLock
+            markInitialPullComplete(token)
+            val hidden = exportBuiltInAiringHiddenTitles()
+            if (currentPullToken() != token) return@withLock
+            // Older blobs have no hidden list. Seed existing local titles once;
+            // an explicit remote [] is authoritative and must never be unioned.
+            if (hidden != null && (hidden.pending || shouldSeedHiddenAiringTitles(remoteBlob?.settingsJson, hidden.titles))) {
+                pushToRemoteLocked(token)
+            }
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            log.e(error) { "pullFromServer - FAILED" }
         }
     }
 
@@ -155,9 +168,16 @@ object HomeCatalogSettingsSyncService {
         return pushToRemote(token)
     }
 
-    private suspend fun pushToRemote(token: PullToken): Boolean = runCatching {
+    private suspend fun pushToRemote(token: PullToken): Boolean = syncMutex.withLock {
+        pushToRemoteLocked(token)
+    }
+
+    private suspend fun pushToRemoteLocked(token: PullToken): Boolean = runCatching {
+        if (currentPullToken() != token) return false
         val payload = HomeCatalogSettingsRepository.exportToSyncPayload()
-        val jsonElement = mergedSharedPayloadJson(token, payload)
+        val hidden = exportBuiltInAiringHiddenTitles()
+        if (currentPullToken() != token) return false
+        val jsonElement = mergedSharedPayloadJson(token, payload, hidden?.titles)
         val params = buildJsonObject {
             put("p_profile_id", token.profileId)
             put("p_platform", HOME_CATALOG_SHARED_SYNC_PLATFORM)
@@ -165,9 +185,14 @@ object HomeCatalogSettingsSyncService {
             putSyncOriginClientId()
         }
         SupabaseProvider.client.postgrest.rpc("sync_push_home_catalog_settings", params)
+        if (currentPullToken() != token) return false
         cachedSharedSettings = CachedSharedSettings(token = token, settingsJson = jsonElement)
+        hidden?.let { acknowledgeBuiltInAiringHiddenTitles(it.titles) }
         true
-    }.onFailure { log.e(it) { "pushToRemote failed" } }.getOrDefault(false)
+    }.onFailure {
+        if (it is CancellationException) throw it
+        log.e(it) { "pushToRemote failed" }
+    }.getOrDefault(false)
 
     private fun currentPullToken(profileId: Int = ProfileRepository.activeProfileId): PullToken? {
         val authState = AuthRepository.state.value
@@ -175,6 +200,7 @@ object HomeCatalogSettingsSyncService {
         return PullToken(
             userId = authState.userId,
             profileId = profileId,
+            generation = accountGeneration,
         )
     }
 
@@ -229,8 +255,12 @@ object HomeCatalogSettingsSyncService {
     private fun mergedSharedPayloadJson(
         token: PullToken,
         payload: SyncHomeCatalogPayload,
+        hiddenTitles: JsonArray?,
     ): JsonObject {
-        val localJson = json.encodeToJsonElement(SyncHomeCatalogPayload.serializer(), payload).jsonObject
+        val localJson = buildJsonObject {
+            json.encodeToJsonElement(SyncHomeCatalogPayload.serializer(), payload).jsonObject.forEach { (key, value) -> put(key, value) }
+            hiddenTitles?.let { put(AIRING_HIDDEN_TITLES_SYNC_KEY, it) }
+        }
         val remoteJson = cachedSharedSettings
             ?.takeIf { cached -> cached.token == token }
             ?.settingsJson

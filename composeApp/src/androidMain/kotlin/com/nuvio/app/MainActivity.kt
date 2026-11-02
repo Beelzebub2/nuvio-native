@@ -11,6 +11,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.nuvio.app.core.auth.AuthStorage
 import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.isStarlitOAuthCallback
+import com.nuvio.app.core.auth.GoogleOAuthAvailability
 import com.nuvio.app.core.network.SupabaseProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.nuvio.app.core.network.ServerConfigurationStorage
@@ -200,13 +202,10 @@ open class MainActivity : AppCompatActivity() {
         val incoming = intent ?: return
         val appUrl = incoming.dataString?.trim().orEmpty()
         if (appUrl.isBlank()) return
-        if (appUrl.startsWith("nuvio://auth#", ignoreCase = true) ||
-            appUrl.startsWith("nuvio://auth?", ignoreCase = true)
-        ) {
-            // Import the session only from the configured backend; Supabase
-            // validates the OAuth state before accepting a browser callback.
-            AuthRepository.expectRemoteSession()
-            SupabaseProvider.client.handleDeeplinks(incoming)
+        if (GoogleOAuthAvailability.isOfficialServer() && isStarlitOAuthCallback(appUrl)) {
+            // The SDK verifies the saved PKCE verifier before importing a session.
+            SupabaseProvider.client.handleDeeplinks(incoming,
+                onError = { AuthRepository.cancelRemoteSessionRequest() })
             return
         }
         handleAppUrl(appUrl)

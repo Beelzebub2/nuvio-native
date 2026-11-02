@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test worker.test.mjs",
-    "deploy": "wrangler deploy",
-    "deploy:dry": "wrangler deploy --dry-run"
+    "start": "node server.mjs",
+    "test": "node --test *.test.mjs",
+    "deploy": "wrangler deploy --no-autoconfig",
+    "deploy:dry": "wrangler deploy --no-autoconfig --dry-run"
   },
   "devDependencies": {
     "miniflare": "5.20261023.3-beta",

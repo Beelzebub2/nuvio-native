@@ -1,5 +1,6 @@
 package com.nuvio.app.features.downloads
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,10 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -39,10 +45,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +61,7 @@ import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.NuvioAsyncImage
 import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.isDesktop
@@ -80,6 +90,7 @@ fun DownloadsScreen(
     val profileId = uiState.profileId
     val canManage = profileId != null && profileId == activeProfileId
     var selectedIds by remember(profileId, selectedShowId) { mutableStateOf(emptySet<String>()) }
+    var selectionMode by remember(profileId, selectedShowId) { mutableStateOf(false) }
     var pendingDeletionIds by remember(profileId, selectedShowId) { mutableStateOf<Set<String>?>(null) }
     var bulkDeletion by remember(profileId, selectedShowId) { mutableStateOf(false) }
     val visibleIds = remember(uiState.items, selectedShowId) {
@@ -169,11 +180,20 @@ fun DownloadsScreen(
             )
             return@NuvioScreen
         }
+        if (selectedShowId == null) {
+            item { MobileDownloadsOverview(uiState) }
+            item { DownloadManagementControls() }
+        }
         if (canManage && visibleIds.isNotEmpty()) {
             item {
                 DownloadSelectionControls(
+                    selecting = selectionMode,
                     allSelected = selection.containsAll(visibleIds),
                     selectedCount = selection.size,
+                    onToggleMode = {
+                        selectionMode = !selectionMode
+                        if (!selectionMode) selectedIds = emptySet()
+                    },
                     onSelectAll = { selectedIds = visibleIds },
                     onClear = { selectedIds = emptySet() },
                     onRemove = {
@@ -192,6 +212,7 @@ fun DownloadsScreen(
                     onNavigateToShow?.invoke(showId, title) ?: run { selectedShowId = showId }
                 },
                 onDeleteDownload = requestSingleDeletion,
+                selecting = selectionMode,
                 selectedIds = selection,
                 onToggleSelection = toggleSelection,
             )
@@ -201,6 +222,7 @@ fun DownloadsScreen(
                 episodes = completedEpisodes,
                 onOpenDownload = onOpenDownload,
                 onDeleteDownload = requestSingleDeletion,
+                selecting = selectionMode,
                 selectedIds = selection,
                 onToggleSelection = toggleSelection,
             )
@@ -232,26 +254,88 @@ fun DownloadsScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DownloadSelectionControls(
+    selecting: Boolean,
     allSelected: Boolean,
     selectedCount: Int,
+    onToggleMode: () -> Unit,
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End) {
+            if (selecting) {
+                Text(
+                    stringResource(Res.string.downloads_mobile_selected_count, selectedCount),
+                    modifier = Modifier.weight(1f).padding(start = 10.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onToggleMode) {
+                Text(stringResource(if (selecting) Res.string.downloads_mobile_done else
+                    Res.string.downloads_mobile_select))
+            }
+        }
+        if (selecting) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onSelectAll, enabled = !allSelected) {
+                Text(stringResource(Res.string.downloads_select_all))
+            }
+            TextButton(onClick = onClear, enabled = selectedCount > 0) {
+                Text(stringResource(Res.string.downloads_clear_selection))
+            }
+            TextButton(onClick = onRemove, enabled = selectedCount > 0) {
+                Text(stringResource(Res.string.downloads_remove_selected, selectedCount), color =
+                    if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileDownloadsOverview(state: DownloadsUiState) {
+    val downloading = state.items.count { it.status == DownloadStatus.Downloading }
+    val completed = state.completedItems.size
+    val problems = state.items.count { it.status == DownloadStatus.Failed }
+    val downloadedSize = state.completedItems.fold(0L) { total, item ->
+        total + (item.totalBytes ?: item.downloadedBytes).coerceAtLeast(0L)
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        TextButton(onClick = onSelectAll, enabled = !allSelected) {
-            Text(stringResource(Res.string.downloads_select_all))
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(26.dp))
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(stringResource(Res.string.downloads_mobile_library),
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(Res.string.downloads_mobile_storage_used, formatDownloadBytes(downloadedSize)),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                OverviewMetric(downloading, stringResource(Res.string.downloads_mobile_in_progress))
+                OverviewMetric(completed, stringResource(Res.string.downloads_mobile_ready))
+                OverviewMetric(problems, stringResource(Res.string.downloads_mobile_attention))
+            }
         }
-        TextButton(onClick = onClear, enabled = selectedCount > 0) {
-            Text(stringResource(Res.string.downloads_clear_selection))
-        }
-        TextButton(onClick = onRemove, enabled = selectedCount > 0) {
-            Text(stringResource(Res.string.downloads_remove_selected, selectedCount), color =
-                if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    }
+}
+
+@Composable
+private fun OverviewMetric(count: Int, title: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("$count", style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text(title, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
     }
 }
 
@@ -260,6 +344,7 @@ private fun LazyListScope.downloadsRootContent(
     onOpenDownload: (DownloadItem) -> Unit,
     onOpenShow: (showId: String, title: String) -> Unit,
     onDeleteDownload: (String) -> Unit,
+    selecting: Boolean,
     selectedIds: Set<String>,
     onToggleSelection: (Set<String>) -> Unit,
 ) {
@@ -285,6 +370,7 @@ private fun LazyListScope.downloadsRootContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selecting = selecting,
                 selected = item.id in selectedIds,
                 onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
@@ -306,6 +392,7 @@ private fun LazyListScope.downloadsRootContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selecting = selecting,
                 selected = item.id in selectedIds,
                 onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
@@ -342,15 +429,24 @@ private fun LazyListScope.downloadsRootContent(
                 ) {
                     val episodeIds = episodes.map { it.id }.toSet()
                     val selectionLabel = stringResource(Res.string.downloads_select_item, item.title)
-                    TriStateCheckbox(
-                        state = when {
-                            selectedIds.containsAll(episodeIds) -> ToggleableState.On
-                            episodeIds.any { it in selectedIds } -> ToggleableState.Indeterminate
-                            else -> ToggleableState.Off
-                        },
-                        onClick = { onToggleSelection(episodeIds) },
-                        modifier = Modifier.semantics { contentDescription = selectionLabel },
-                    )
+                    if (selecting) TriStateCheckbox(
+                            state = when {
+                                selectedIds.containsAll(episodeIds) -> ToggleableState.On
+                                episodeIds.any { it in selectedIds } -> ToggleableState.Indeterminate
+                                else -> ToggleableState.Off
+                            },
+                            onClick = { onToggleSelection(episodeIds) },
+                            modifier = Modifier.semantics { contentDescription = selectionLabel },
+                        )
+                    val artwork = item.poster ?: item.episodeThumbnail
+                    Box(Modifier.width(52.dp).height(74.dp).clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center) {
+                        if (artwork != null) NuvioAsyncImage(model = artwork, contentDescription = null,
+                            modifier = Modifier.fillMaxWidth().height(74.dp), contentScale = ContentScale.Crop)
+                        else Icon(Icons.Rounded.DownloadForOffline, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -359,7 +455,7 @@ private fun LazyListScope.downloadsRootContent(
                             text = item.title,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
@@ -380,17 +476,20 @@ private fun LazyListScope.downloadsRootContent(
 
     if (uiState.items.isEmpty()) {
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 40.dp),
-                contentAlignment = Alignment.Center,
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(46.dp))
                 Text(
                     text = stringResource(Res.string.downloads_empty_title),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(stringResource(Res.string.downloads_mobile_empty_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -401,6 +500,7 @@ private fun LazyListScope.downloadsShowContent(
     episodes: List<DownloadItem>,
     onOpenDownload: (DownloadItem) -> Unit,
     onDeleteDownload: (String) -> Unit,
+    selecting: Boolean,
     selectedIds: Set<String>,
     onToggleSelection: (Set<String>) -> Unit,
 ) {
@@ -454,6 +554,7 @@ private fun LazyListScope.downloadsShowContent(
         ) { item ->
             DownloadRow(
                 item = item,
+                selecting = selecting,
                 selected = item.id in selectedIds,
                 onToggleSelection = { onToggleSelection(setOf(item.id)) },
                 onOpen = { onOpenDownload(item) },
@@ -469,6 +570,7 @@ private fun LazyListScope.downloadsShowContent(
 @Composable
 private fun DownloadRow(
     item: DownloadItem,
+    selecting: Boolean,
     selected: Boolean,
     onToggleSelection: () -> Unit,
     onOpen: () -> Unit,
@@ -478,119 +580,145 @@ private fun DownloadRow(
     onDelete: () -> Unit,
 ) {
     val displayTitle = item.displayTitle()
-    val displaySubtitle = downloadDisplaySubtitle(
-        item = item,
-        displayTitle = displayTitle,
-    )
-
+    val displaySubtitle = downloadDisplaySubtitle(item, displayTitle)
+    val artwork = item.episodeThumbnail ?: item.poster ?: item.background
+    val selectionLabel = stringResource(Res.string.downloads_select_item, displayTitle)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clickable(enabled = item.isPlayable, onClick = onOpen),
-        shape = MaterialTheme.shapes.medium,
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .clickable(enabled = selecting || item.isPlayable,
+                onClick = if (selecting) onToggleSelection else onOpen),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val selectionLabel = stringResource(Res.string.downloads_select_item, displayTitle)
-                Checkbox(
-                    checked = selected,
-                    onCheckedChange = { onToggleSelection() },
-                    modifier = Modifier.semantics { contentDescription = selectionLabel },
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = displayTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = displaySubtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = statusText(item),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Box(Modifier.width(82.dp).height(112.dp).clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center) {
+                    if (artwork != null) {
+                        NuvioAsyncImage(model = artwork, contentDescription = null,
+                            modifier = Modifier.width(82.dp).height(112.dp), contentScale = ContentScale.Crop)
+                    } else {
+                        Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
+                            modifier = Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    when (item.status) {
-                        DownloadStatus.Downloading -> {
-                            IconButton(onClick = onPause) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Pause,
-                                    contentDescription = stringResource(Res.string.compose_action_pause),
-                                )
-                            }
-                        }
-                        DownloadStatus.Paused -> {
-                            IconButton(onClick = onResume) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = stringResource(Res.string.action_resume),
-                                )
-                            }
-                        }
-                        DownloadStatus.Failed -> {
-                            IconButton(onClick = onRetry) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Refresh,
-                                    contentDescription = stringResource(Res.string.action_retry),
-                                )
-                            }
-                        }
-                        DownloadStatus.Completed -> {
-                            IconButton(onClick = onOpen) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = stringResource(Res.string.action_play),
-                                )
-                            }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (selecting) Checkbox(
+                            checked = selected, onCheckedChange = { onToggleSelection() },
+                            modifier = Modifier.semantics {
+                                contentDescription = selectionLabel
+                            },
+                        )
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(displayTitle, style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (displaySubtitle.isNotBlank()) Text(displaySubtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Rounded.Delete,
-                            contentDescription = stringResource(Res.string.action_delete),
-                        )
+                    if (item.providerName.isNotBlank()) Text(item.providerName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        DownloadStateTag(item.status)
+                        if (item.torrentHash != null && item.sourceUrl.isBlank()) {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+                                Text("P2P", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
                     }
                 }
             }
 
-            if (item.status == DownloadStatus.Downloading) {
+            if (item.status == DownloadStatus.Downloading ||
+                (item.status == DownloadStatus.Paused && item.downloadedBytes > 0L)) {
                 if (item.totalBytes != null && item.totalBytes > 0L) {
-                    LinearProgressIndicator(
-                        progress = item.progressFraction,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    LinearProgressIndicator(progress = item.progressFraction,
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
+                } else if (item.status == DownloadStatus.Downloading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
+                }
+            }
+            Text(statusText(item),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (item.status == DownloadStatus.Failed) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (item.status == DownloadStatus.Failed) 3 else 2,
+                overflow = TextOverflow.Ellipsis)
+            if (!selecting) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                when (item.status) {
+                    DownloadStatus.Downloading -> TextButton(onClick = onPause) {
+                        Icon(Icons.Rounded.Pause, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(Res.string.compose_action_pause))
+                    }
+                    DownloadStatus.Paused -> TextButton(onClick = onResume) {
+                        Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(Res.string.action_resume))
+                    }
+                    DownloadStatus.Failed -> TextButton(onClick = onRetry) {
+                        Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(Res.string.action_retry))
+                    }
+                    DownloadStatus.Completed -> TextButton(onClick = onOpen, enabled = item.isPlayable) {
+                        Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(Res.string.action_play))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(Res.string.action_delete),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DownloadStateTag(status: DownloadStatus) {
+    val container = when (status) {
+        DownloadStatus.Downloading -> MaterialTheme.colorScheme.primaryContainer
+        DownloadStatus.Paused -> MaterialTheme.colorScheme.surfaceContainerHigh
+        DownloadStatus.Completed -> MaterialTheme.colorScheme.tertiaryContainer
+        DownloadStatus.Failed -> MaterialTheme.colorScheme.errorContainer
+    }
+    val foreground = when (status) {
+        DownloadStatus.Downloading -> MaterialTheme.colorScheme.onPrimaryContainer
+        DownloadStatus.Paused -> MaterialTheme.colorScheme.onSurfaceVariant
+        DownloadStatus.Completed -> MaterialTheme.colorScheme.onTertiaryContainer
+        DownloadStatus.Failed -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    val title = when (status) {
+        DownloadStatus.Downloading -> stringResource(Res.string.downloads_mobile_in_progress)
+        DownloadStatus.Paused -> stringResource(Res.string.downloads_mobile_paused)
+        DownloadStatus.Completed -> stringResource(Res.string.downloads_mobile_ready)
+        DownloadStatus.Failed -> stringResource(Res.string.downloads_mobile_attention)
+    }
+    Surface(color = container, shape = CircleShape) {
+        Text(title, modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall, color = foreground)
     }
 }
 

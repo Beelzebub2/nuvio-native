@@ -1,12 +1,14 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.player.SubtitleAddonRequest
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamSubtitle
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.downloads_enqueue_already_added
 import nuvio.composeapp.generated.resources.downloads_enqueue_missing_url
+import nuvio.composeapp.generated.resources.downloads_enqueue_p2p_disabled
 import nuvio.composeapp.generated.resources.downloads_enqueue_replaced
 import nuvio.composeapp.generated.resources.downloads_enqueue_started
 import nuvio.composeapp.generated.resources.downloads_enqueue_unsupported_format
@@ -19,6 +21,13 @@ enum class DownloadStatus {
     Completed,
     Failed,
 }
+
+internal const val SAVED_DOWNLOAD_VERIFICATION_PHASE = "Verifying saved file"
+
+/** Providers may describe the same file in behavior hints or in client-resolve metadata. */
+internal fun StreamItem.downloadTorrentFilenameHints(): List<String> = listOfNotNull(
+    behaviorHints.filename, clientResolve?.filename, clientResolve?.stream?.raw?.filename,
+).map { it.trim() }.filter { it.isNotBlank() }.distinct()
 
 @Serializable
 data class DownloadItem(
@@ -50,6 +59,7 @@ data class DownloadItem(
     val torrentHash: String? = null,
     val torrentFileIdx: Int? = null,
     val torrentFilename: String? = null,
+    val torrentFilenameAlternates: List<String> = emptyList(),
     val torrentTrackers: List<String> = emptyList(),
     val sourceSelection: DownloadSourceSelection? = null,
     val phase: String? = null,
@@ -66,7 +76,8 @@ data class DownloadItem(
         get() = seasonNumber != null && episodeNumber != null
 
     val isPlayable: Boolean
-        get() = status == DownloadStatus.Completed && !localFileUri.isNullOrBlank()
+        get() = status == DownloadStatus.Completed &&
+            phase != SAVED_DOWNLOAD_VERIFICATION_PHASE && !localFileUri.isNullOrBlank()
 
     val displaySubtitle: String
         get() = episodeTitle.orEmpty()
@@ -103,6 +114,7 @@ enum class DownloadEnqueueResult {
     Replaced,
     MissingUrl,
     UnsupportedFormat,
+    P2pDisabled,
     AlreadyAdded;
 
     fun toastMessage(): String = runBlocking {
@@ -111,6 +123,7 @@ enum class DownloadEnqueueResult {
             Replaced -> getString(Res.string.downloads_enqueue_replaced)
             MissingUrl -> getString(Res.string.downloads_enqueue_missing_url)
             UnsupportedFormat -> getString(Res.string.downloads_enqueue_unsupported_format)
+            P2pDisabled -> getString(Res.string.downloads_enqueue_p2p_disabled)
             AlreadyAdded -> getString(Res.string.downloads_enqueue_already_added)
         }
     }

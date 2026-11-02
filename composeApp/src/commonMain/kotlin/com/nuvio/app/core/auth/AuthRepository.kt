@@ -8,7 +8,6 @@ import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.functions.functions
@@ -265,14 +264,33 @@ object AuthRepository {
     suspend fun signInWithGoogle(): Result<Unit> = runCatching {
         _error.value = null
         _notice.value = null
+        check(GoogleOAuthAvailability.isEnabled()) { "Google sign-in is not enabled on this server" }
         // Preserve anonymous settings before importing the new Google session.
         expectRemoteSession()
-        SupabaseProvider.client.auth.signInWith(Google)
+        launchGoogleOAuth(SupabaseProvider.client)
     }.onFailure { e ->
         cancelRemoteSessionRequest()
-        log.e(e) { "Google sign-in failed" }
+        if (e is CancellationException) throw e
+        // Provider errors can contain callback URLs; keep them out of logs.
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_google_sign_in_failed)
+    }
+
+    suspend fun signInWithPasskey(ceremony: PasskeyCeremony): Result<Unit> {
+        _error.value = null
+        _notice.value = null
+        return try {
+            PasskeyRepository.signIn(ceremony)
+            Result.success(Unit)
+        } catch (error: CancellationException) {
+            cancelRemoteSessionRequest()
+            throw error
+        } catch (error: Throwable) {
+            cancelRemoteSessionRequest()
+            _error.value = error.message?.takeIf { it.length <= 180 }
+                ?: "Couldn't sign in with your passkey. Try again."
+            Result.failure(error)
+        }
     }
 
     suspend fun signOut(): Result<Unit> {

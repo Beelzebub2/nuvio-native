@@ -14,6 +14,8 @@ import io.github.jan.supabase.postgrest.rpc
 import kotlinx.atomicfu.locks.SynchronizedObject
 import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +68,7 @@ object AddonRepository {
     private var currentProfileId: Int = 1
     internal var backupProfileRevision: Long = 0
         private set
+    private val refreshJobsLock = SynchronizedObject()
     private val activeRefreshJobs = mutableMapOf<String, Job>()
     private val pushJobsByProfile = mutableMapOf<Int, Job>()
     private val cloudPushLock = SynchronizedObject()
@@ -122,8 +125,10 @@ object AddonRepository {
     fun clearLocalState() {
         backupProfileRevision++
         cancelActiveRefreshes()
-        pushJobsByProfile.values.forEach(Job::cancel)
-        pushJobsByProfile.clear()
+        val pushes = synchronized(cloudPushLock) {
+            pushJobsByProfile.values.toList().also { pushJobsByProfile.clear() }
+        }
+        pushes.forEach(Job::cancel)
         currentProfileId = 1
         initialized = false
         _uiState.value = AddonsUiState()
@@ -347,56 +352,67 @@ object AddonRepository {
         manifestUrl: String,
         forceRefresh: Boolean = false,
     ) {
-        val existingJob = activeRefreshJobs[manifestUrl]
-        if (existingJob?.isActive == true) return
+        val jobToStart = synchronized(refreshJobsLock) {
+            val existingJob = activeRefreshJobs[manifestUrl]
+            if (existingJob != null && !existingJob.isCompleted) return
 
-        markRefreshing(manifestUrl)
-        var refreshJob: Job? = null
-        refreshJob = scope.launch {
-            try {
-                val result = runCatching {
-                    val payload = fetchAddonResponseText(
-                        url = manifestUrl,
-                        forceRefresh = forceRefresh,
-                    )
-                    AddonManifestParser.parse(
-                        manifestUrl = manifestUrl,
-                        payload = payload,
-                    )
-                }
+            markRefreshing(manifestUrl)
+            var refreshJob: Job? = null
+            refreshJob = scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    val result = runCatching {
+                        val payload = fetchAddonResponseText(
+                            url = manifestUrl,
+                            forceRefresh = forceRefresh,
+                        )
+                        AddonManifestParser.parse(
+                            manifestUrl = manifestUrl,
+                            payload = payload,
+                        )
+                    }
 
-                _uiState.update { current ->
-                    current.copy(
-                        addons = current.addons.map { addon ->
-                            if (addon.manifestUrl != manifestUrl) {
-                                addon
-                            } else {
-                                result.fold(
-                                    onSuccess = { manifest ->
-                                        addon.copy(
-                                            manifest = manifest,
-                                            isRefreshing = false,
-                                            errorMessage = null,
+                    result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                    currentCoroutineContext().ensureActive()
+                    val failureMessage = result.exceptionOrNull()?.let { it.message ?: getString(Res.string.addon_load_manifest_failed) }
+                    synchronized(refreshJobsLock) {
+                        if (activeRefreshJobs[manifestUrl] !== refreshJob) return@launch
+
+                        _uiState.update { current ->
+                            current.copy(
+                                addons = current.addons.map { addon ->
+                                    if (addon.manifestUrl != manifestUrl) {
+                                        addon
+                                    } else {
+                                        result.fold(
+                                            onSuccess = { manifest ->
+                                                addon.copy(
+                                                    manifest = manifest,
+                                                    isRefreshing = false,
+                                                    errorMessage = null,
+                                                )
+                                            },
+                                            onFailure = { error ->
+                                                addon.copy(
+                                                    isRefreshing = false,
+                                                    errorMessage = failureMessage,
+                                                )
+                                            },
                                         )
-                                    },
-                                    onFailure = { error ->
-                                        addon.copy(
-                                            isRefreshing = false,
-                                            errorMessage = error.message ?: getString(Res.string.addon_load_manifest_failed),
-                                        )
-                                    },
-                                )
-                            }
-                        },
-                    )
-                }
-            } finally {
-                if (activeRefreshJobs[manifestUrl] === refreshJob) {
-                    activeRefreshJobs.remove(manifestUrl)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                } finally {
+                    synchronized(refreshJobsLock) {
+                        if (activeRefreshJobs[manifestUrl] === refreshJob) activeRefreshJobs.remove(manifestUrl)
+                    }
                 }
             }
+            activeRefreshJobs[manifestUrl] = refreshJob
+            refreshJob
         }
-        activeRefreshJobs[manifestUrl] = refreshJob
+        jobToStart?.start()
     }
 
     private fun pushToServer() {
@@ -415,7 +431,8 @@ object AddonRepository {
                     sortOrder = index,
                 )
             }
-        pushJobsByProfile[profileId]?.cancel()
+        val previousPush = synchronized(cloudPushLock) { pushJobsByProfile.remove(profileId) }
+        previousPush?.cancel()
         var pushJob: Job? = null
         pushJob = scope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -438,12 +455,12 @@ object AddonRepository {
             } catch (error: Throwable) {
                 log.e(error) { "pushToServer() — FAILED" }
             } finally {
-                if (pushJobsByProfile[profileId] === pushJob) {
-                    pushJobsByProfile.remove(profileId)
+                synchronized(cloudPushLock) {
+                    if (pushJobsByProfile[profileId] === pushJob) pushJobsByProfile.remove(profileId)
                 }
             }
         }
-        pushJobsByProfile[profileId] = pushJob
+        synchronized(cloudPushLock) { pushJobsByProfile[profileId] = pushJob }
         pushJob?.let { job ->
             synchronized(cloudPushLock) { inFlightCloudPushes.add(job) }
             job.invokeOnCompletion { synchronized(cloudPushLock) { inFlightCloudPushes.remove(job) } }
@@ -488,8 +505,11 @@ object AddonRepository {
             .mapKeys { (url, _) -> ensureManifestSuffix(url) }
 
     private fun cancelActiveRefreshes() {
-        activeRefreshJobs.values.forEach(Job::cancel)
-        activeRefreshJobs.clear()
+        val jobs = synchronized(refreshJobsLock) {
+            activeRefreshJobs.values.toList().also { activeRefreshJobs.clear() }
+        }
+        // Detach before cancellation: completion handlers can remove jobs immediately.
+        jobs.forEach(Job::cancel)
     }
 
     private fun resolveEffectiveProfileId(profileId: Int): Int {

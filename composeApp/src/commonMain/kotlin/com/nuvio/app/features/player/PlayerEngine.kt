@@ -15,6 +15,8 @@ interface PlayerEngineController {
     fun retry()
     fun setPlaybackSpeed(speed: Float)
     fun setMuted(muted: Boolean) {}
+    fun setRemoteVolume(level: Float) {}
+    fun getRemoteVolume(): Float = 1f
     fun getAudioTracks(): List<AudioTrack>
     fun getSubtitleTracks(): List<SubtitleTrack>
     fun getChapterStarts(): List<Double> = emptyList()
