@@ -1006,6 +1006,7 @@ private fun LazyListScope.streamSection(
                     !(debridEnabled && stream.isAddonDebridCandidate)
             StreamCard(
                 stream = stream,
+                inlineMetadata = isDesktop,
                 enabled = isSelectable || isUnsupportedTorrentStream,
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                 showFileSizeBadges = showFileSizeBadges,
