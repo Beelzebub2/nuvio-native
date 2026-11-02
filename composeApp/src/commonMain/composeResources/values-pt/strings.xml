@@ -518,6 +518,19 @@
     <string name="detail_trailers_title">Trailers</string>
     <string name="downloads_empty_episodes">Nenhum episódio concluído</string>
     <string name="downloads_empty_title">Ainda sem transferências</string>
+    <string name="downloads_mobile_empty_description">Escolhe um filme ou episódio e toca em Transferir para o guardares e veres sem ligação à Internet.</string>
+    <string name="downloads_mobile_library">Biblioteca offline</string>
+    <string name="downloads_mobile_storage_used">%1$s guardados neste dispositivo</string>
+    <string name="downloads_mobile_in_progress">Em curso</string>
+    <string name="downloads_mobile_ready">Prontos</string>
+    <string name="downloads_mobile_attention">Requer atenção</string>
+    <string name="downloads_mobile_paused">Em pausa</string>
+    <string name="downloads_mobile_select">Selecionar</string>
+    <string name="downloads_mobile_done">Concluído</string>
+    <string name="downloads_mobile_selected_count">%1$d selecionados</string>
+    <string name="downloads_mobile_parallel">Simultâneas: %1$d</string>
+    <string name="downloads_mobile_pause_all">Pausar tudo</string>
+    <string name="downloads_mobile_resume_all">Retomar tudo</string>
     <string name="downloads_auto_watch_later_title">Transferir automaticamente do Ver mais tarde</string>
     <string name="downloads_auto_watch_later_description">Adiciona automaticamente os novos filmes e episódios disponíveis à fila de transferências para veres offline. Os conteúdos já guardados não são afetados.</string>
     <string name="downloads_episode_count">Episódios transferidos: %1$d</string>
@@ -1494,6 +1507,7 @@
     <string name="details_videos">Vídeos</string>
     <string name="details_episode_badge_file">FICHEIRO</string>
     <string name="downloads_enqueue_missing_url">Nenhum link de stream direto disponível</string>
+    <string name="downloads_enqueue_p2p_disabled">Ativa o P2P nas Definições para transferir fontes torrent</string>
     <string name="downloads_enqueue_replaced">Substituiu a transferência anterior</string>
     <string name="downloads_enqueue_started">Transferência iniciada</string>
     <string name="downloads_enqueue_unsupported_format">Formato de stream não suportado para transferências</string>

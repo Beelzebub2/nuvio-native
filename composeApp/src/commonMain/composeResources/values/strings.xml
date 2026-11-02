@@ -673,6 +673,19 @@
     <string name="detail_trailers_title">Trailers</string>
     <string name="downloads_empty_episodes">No completed episodes</string>
     <string name="downloads_empty_title">No downloads yet</string>
+    <string name="downloads_mobile_empty_description">Choose a movie or episode and tap Download to save it for offline viewing.</string>
+    <string name="downloads_mobile_library">Your offline library</string>
+    <string name="downloads_mobile_storage_used">%1$s saved on this device</string>
+    <string name="downloads_mobile_in_progress">In progress</string>
+    <string name="downloads_mobile_ready">Ready</string>
+    <string name="downloads_mobile_attention">Needs attention</string>
+    <string name="downloads_mobile_paused">Paused</string>
+    <string name="downloads_mobile_select">Select</string>
+    <string name="downloads_mobile_done">Done</string>
+    <string name="downloads_mobile_selected_count">%1$d selected</string>
+    <string name="downloads_mobile_parallel">At once: %1$d</string>
+    <string name="downloads_mobile_pause_all">Pause all</string>
+    <string name="downloads_mobile_resume_all">Resume all</string>
     <string name="downloads_auto_watch_later_title">Auto-download Watch Later</string>
     <string name="downloads_auto_watch_later_description">Automatically queue newly saved movies and available episodes for offline viewing. Existing saves are unaffected.</string>
     <string name="downloads_episode_count">%1$d downloaded episode(s)</string>
@@ -1974,6 +1987,7 @@
     <string name="details_episode_badge_file">FILE</string>
     <string name="downloads_enqueue_already_added">Already in Downloads</string>
     <string name="downloads_enqueue_missing_url">No direct stream link available</string>
+    <string name="downloads_enqueue_p2p_disabled">Enable P2P in Settings to download torrent sources</string>
     <string name="downloads_enqueue_replaced">Replaced previous download</string>
     <string name="downloads_enqueue_started">Download started</string>
     <string name="downloads_enqueue_unsupported_format">Unsupported stream format for downloads</string>

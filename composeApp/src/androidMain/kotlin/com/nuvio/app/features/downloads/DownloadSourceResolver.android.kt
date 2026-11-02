@@ -5,6 +5,7 @@ import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.plugins.*
+import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.streams.*
 import kotlinx.coroutines.*
 
@@ -21,6 +22,12 @@ internal object DownloadQuality {
 internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
     delay(750L) // Bound repeated unavailable-episode lookups as well as successful transfers.
     val selection = checkNotNull(item.sourceSelection)
+    P2pSettingsRepository.ensureLoaded()
+    val allowTorrent = DownloadsPlatformDownloader.supportsTorrentDownloads &&
+        P2pSettingsRepository.isVisible && P2pSettingsRepository.uiState.value.p2pEnabled
+    if (selection.transport == "Torrents" && !allowTorrent) {
+        error("Enable P2P in Settings to download torrent sources.")
+    }
     val sources = buildList<suspend () -> List<StreamItem>> {
         // Embedded streams belong to whichever title is open now; only trust them for this task's title.
         if (MetaDetailsRepository.uiState.value.meta?.id == item.parentMetaId) {
@@ -53,16 +60,20 @@ internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
             }
         }
     }
-    return selectDownloadSource(selection, sources) { stream ->
-        if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
-            (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
-        } else stream
-    }
+    return selectDownloadSource(selection, sources,
+        include = { stream -> allowTorrent || stream.p2pInfoHash == null || stream.playableDirectUrl != null },
+        resolve = { stream ->
+            if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+                (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
+            } else stream
+        },
+    )
 }
 
 internal suspend fun selectDownloadSource(
     selection: DownloadSourceSelection,
     sources: List<suspend () -> List<StreamItem>>,
+    include: (StreamItem) -> Boolean = { true },
     resolve: suspend (StreamItem) -> StreamItem? = { it },
 ): StreamItem {
     val highest = selection.quality == DownloadQuality.Highest
@@ -71,16 +82,16 @@ internal suspend fun selectDownloadSource(
     val tried = mutableSetOf<StreamItem>()
     suspend fun firstUsable(streams: List<StreamItem>): StreamItem? {
         for (stream in streams) {
-            if (!tried.add(stream)) continue
+            if (!include(stream) || !tried.add(stream)) continue
             val resolved = resolve(stream) ?: continue
             // Quality was read from the listed stream; a resolved debrid link may not repeat it.
-            if (matchesDownloadSelection(resolved, selection.copy(quality = DownloadQuality.Any))) return resolved
+            if (include(resolved) && matchesDownloadSelection(resolved, selection.copy(quality = DownloadQuality.Any))) return resolved
         }
         return null
     }
     for (source in sources) {
         val eligible = source().filter { stream ->
-            (selection.providerId == null || selection.providerId == stream.addonId) &&
+            include(stream) && (selection.providerId == null || selection.providerId == stream.addonId) &&
                 (wanted == null || downloadStreamQuality(stream) == wanted)
         }
         if (highest) {

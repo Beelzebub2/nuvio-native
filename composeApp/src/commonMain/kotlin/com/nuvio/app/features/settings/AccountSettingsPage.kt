@@ -96,6 +96,7 @@ private fun AccountSettingsBody(
 
     if (isDesktop) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            com.nuvio.app.features.remote.DesktopRemoteSettingsButton()
             DesktopAccountCard(authState = authState, onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true })
             signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             LocalSettingsImportCard(authState)

@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.downloads_enqueue_already_added
 import nuvio.composeapp.generated.resources.downloads_enqueue_missing_url
+import nuvio.composeapp.generated.resources.downloads_enqueue_p2p_disabled
 import nuvio.composeapp.generated.resources.downloads_enqueue_replaced
 import nuvio.composeapp.generated.resources.downloads_enqueue_started
 import nuvio.composeapp.generated.resources.downloads_enqueue_unsupported_format
@@ -113,6 +114,7 @@ enum class DownloadEnqueueResult {
     Replaced,
     MissingUrl,
     UnsupportedFormat,
+    P2pDisabled,
     AlreadyAdded;
 
     fun toastMessage(): String = runBlocking {
@@ -121,6 +123,7 @@ enum class DownloadEnqueueResult {
             Replaced -> getString(Res.string.downloads_enqueue_replaced)
             MissingUrl -> getString(Res.string.downloads_enqueue_missing_url)
             UnsupportedFormat -> getString(Res.string.downloads_enqueue_unsupported_format)
+            P2pDisabled -> getString(Res.string.downloads_enqueue_p2p_disabled)
             AlreadyAdded -> getString(Res.string.downloads_enqueue_already_added)
         }
     }

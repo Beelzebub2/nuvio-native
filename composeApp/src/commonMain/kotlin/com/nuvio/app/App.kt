@@ -49,6 +49,7 @@ fun App(
     appGateController: AppGateController? = null,
 ) {
     AppEnvironment {
+        if (ownsAppRuntime) com.nuvio.app.features.remote.DesktopRemoteHost()
         AppGate(
             initialTab = initialTab,
             initialRoute = initialRoute,

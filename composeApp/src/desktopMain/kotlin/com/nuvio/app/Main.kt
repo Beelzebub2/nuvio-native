@@ -53,8 +53,26 @@ import javax.swing.JComponent
 private val NuvioDesktopNativeBackground = AwtColor(0x0D, 0x0D, 0x0D)
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
-@OptIn(ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
+    // Smoke-player harnesses are isolated diagnostic windows, not a second normal app.
+    val smokePlayerUrl = (System.getProperty("nuvio.desktop.smokePlayerUrl")
+        ?: System.getenv("NUVIO_DESKTOP_SMOKE_PLAYER_URL"))?.takeIf(String::isNotBlank)
+    if (smokePlayerUrl != null) {
+        runDesktopApplication(args, null)
+        return
+    }
+
+    val singleInstance = try {
+        DesktopSingleInstance.tryStart(args)
+    } catch (error: Exception) {
+        System.err.println("Unable to safely start Starlit: " + error.message)
+        return
+    } ?: return
+    singleInstance.use { runDesktopApplication(args, it) }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+private fun runDesktopApplication(args: Array<String>, singleInstance: DesktopSingleInstance?) {
     // On Linux, initialize GTK BEFORE AWT/Compose/Skia to prevent GdkDisplayManager
     // type registration conflict (Skiko partially loads GDK without full GTK init).
     if (System.getProperty("os.name", "").lowercase().contains("linux")) {
@@ -135,6 +153,23 @@ fun main(args: Array<String>) {
             icon = painterResource(appIconState.selected.transparentPreviewResource),
             init = ::configureMacosWindowBeforePeer,
         ) {
+            DisposableEffect(window, singleInstance) {
+                singleInstance?.setActivationHandler { urls ->
+                    javax.swing.SwingUtilities.invokeLater {
+                        if (window.isDisplayable) {
+                            windowState.isMinimized = false
+                            window.isVisible = true
+                            if (window is java.awt.Frame) {
+                                window.extendedState = window.extendedState and java.awt.Frame.ICONIFIED.inv()
+                            }
+                            window.toFront()
+                            window.requestFocus()
+                        }
+                        urls.forEach(::handleAppUrl)
+                    }
+                }
+                onDispose { singleInstance?.setActivationHandler(null) }
+            }
             SideEffect {
                 window.background = NuvioDesktopNativeBackground
                 window.rootPane.background = NuvioDesktopNativeBackground
@@ -289,6 +324,6 @@ private fun handleDesktopLaunchArgs(args: Array<String>) {
         .forEach(::handleAppUrl)
 }
 
-private fun isDesktopAppUrl(value: String): Boolean =
+internal fun isDesktopAppUrl(value: String): Boolean =
     value.startsWith("nuvio://", ignoreCase = true) ||
         value.startsWith("stremio://", ignoreCase = true)

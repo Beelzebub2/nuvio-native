@@ -1,3 +1,22 @@
+## Starlit 1.3.0
+
+### Features
+
+- **Control desktop playback from Android:** An Android phone signed in to the same Starlit account and server can discover and securely pair with the desktop app on the same local network. Compare the matching codes on both screens, then control play/pause, seek, volume/mute, intro and credits skipping, episodes, sources and subtitles. Open **Settings → Desktop remote** on Android to connect. This supports the built-in desktop player on private IPv4 networks; iOS and external players are not supported yet.
+
+### Fixes
+
+- **Only one desktop Starlit window:** Opening the app again now brings the running window to the foreground instead of starting a duplicate. Supported `nuvio://` and `stremio://` links are delivered to the existing window, including during startup.
+- **Readable source selection on 1080p displays:** Long source names no longer make the recommended-source card crowd out other results. The full metadata remains available in the source list, with usable layouts at common display scaling levels.
+
+## Starlit 1.2.4
+
+### Fixes
+
+- **Android torrent downloads:** Directly chosen torrent sources and automatically selected torrent episodes can now be downloaded for offline viewing when P2P is enabled in Settings. Android uses a separate native torrent engine for downloads so playback is not interrupted.
+- **Safer offline transfers:** Native torrent metadata identifies the correct video in multi-file torrents rather than trusting stale episode indexes. Resume state is tied to the exact torrent file, and invalid HTTP ranges are rejected instead of risking a corrupted saved episode. Native loopback requests do not forward provider credentials or follow redirects.
+- **Redesigned mobile Downloads:** Added an offline-library overview, artwork cards, clearer download states and progress, more readable errors, accessible pause/resume/retry/play controls, compact simultaneous-transfer settings, and selection mode for bulk removal. Updated English and Portuguese translations.
+
 ## Starlit 1.2.3
 
 ### Fixes

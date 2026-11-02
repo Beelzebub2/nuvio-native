@@ -61,6 +61,32 @@ class AndroidDownloadLifecycleTest {
     }
 
     @Test
+    fun torrentResumeProofIsKeptOnlyForTheSameImmutableSource() {
+        val store = AndroidDownloadStore(temporary.newFolder())
+        val hash = "0123456789abcdef0123456789abcdef01234567"
+        val original = downloadItem().copy(sourceUrl = "", torrentHash = hash)
+        val first = store.begin(original)
+        store.update(first.item.fileName, first.generation) {
+            it.copy(torrentIdentity = "$hash:1:100:episode.mkv",
+                item = it.item.copy(status = DownloadStatus.Paused))
+        }
+        val resumed = store.begin(original)
+        assertEquals("$hash:1:100:episode.mkv", resumed.torrentIdentity)
+
+        store.update(resumed.item.fileName, resumed.generation) {
+            it.copy(item = it.item.copy(status = DownloadStatus.Paused))
+        }
+        val changedHash = store.begin(original.copy(torrentHash = "f".repeat(40)))
+        assertEquals(null, changedHash.torrentIdentity)
+
+        store.update(changedHash.item.fileName, changedHash.generation) {
+            it.copy(item = it.item.copy(status = DownloadStatus.Paused))
+        }
+        val changedTransport = store.begin(original.copy(sourceUrl = "https://example.com/video.mkv", torrentHash = null))
+        assertEquals(null, changedTransport.torrentIdentity)
+    }
+
+    @Test
     fun missingSystemJobIsPausedInsteadOfSilentlyRescheduling() {
         val scheduler = AndroidDownloadScheduler(RuntimeEnvironment.getApplication())
         val transfer = scheduler.store.begin(downloadItem().copy(fileName = "stopped.mkv"))
