@@ -1,10 +1,12 @@
 package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.addons.*
+import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.plugins.*
+import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.streams.*
 import kotlinx.coroutines.*
 
@@ -18,13 +20,21 @@ internal object DownloadQuality {
 }
 
 /** Independent of both source-screen repositories: downloading cannot cancel playback searches. */
-internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
+internal suspend fun resolveDownloadSource(item: DownloadItem, excluded: Set<String> = emptySet(),
+    cachedSources: MutableMap<String, List<StreamItem>> = mutableMapOf()): StreamItem {
     delay(750L) // Bound repeated unavailable-episode lookups as well as successful transfers.
     val selection = checkNotNull(item.sourceSelection)
+    P2pSettingsRepository.ensureLoaded()
+    val allowTorrents = selection.transport == "Torrents" || P2pSettingsRepository.uiState.value.p2pEnabled
+    suspend fun cached(key: String, fetch: suspend () -> List<StreamItem>): List<StreamItem> =
+        cachedSources[key] ?: fetch().also { cachedSources[key] = it }
     val sources = buildList<suspend () -> List<StreamItem>> {
-        // Embedded streams belong to whichever title is open now; only trust them for this task's title.
-        if (MetaDetailsRepository.uiState.value.meta?.id == item.parentMetaId) {
-            add { MetaDetailsRepository.findEmbeddedStreams(item.videoId) }
+        // Each embedded video owns its streams; never flatten another episode's
+        // streams when a provider uses the parent title ID as the episode ID.
+        val meta = MetaDetailsRepository.uiState.value.meta
+        if (meta?.id == item.parentMetaId) {
+            val embedded = embeddedDownloadStreams(meta, item)
+            if (embedded.isNotEmpty()) add { embedded }
         }
         for (addon in AddonRepository.uiState.value.addons.enabledAddons()) {
             val manifest = addon.manifest ?: continue
@@ -32,37 +42,92 @@ internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
             if (selection.providerId != null && selection.providerId != id) continue
             if (!manifest.supportsStream(item.contentType, item.videoId)) continue
             add {
-                withTimeoutOrNull(20_000L) {
+                cached("addon:$id") { withTimeoutOrNull(20_000L) {
                     runCatchingUnlessCancelled {
                         StreamParser.parse(fetchAddonResponseText(buildAddonResourceUrl(
                             manifestUrl = manifest.transportUrl, resource = "stream", type = item.contentType, id = item.videoId)),
                             addon.displayTitle.ifBlank { manifest.name }, id, manifest.logoUrl)
                     }.getOrDefault(emptyList())
-                }.orEmpty()
+                }.orEmpty() }
             }
         }
         for (scraper in PluginRepository.getEnabledScrapersForType(item.contentType)) {
             if (selection.providerId != null && selection.providerId != "plugin:${scraper.id}") continue
             add {
-                withTimeoutOrNull(25_000L) {
+                cached("plugin:${scraper.id}") { withTimeoutOrNull(25_000L) {
                     PluginRepository.executeScraper(scraper = scraper,
                         tmdbId = pluginContentId(item.videoId, item.seasonNumber, item.episodeNumber),
                         mediaType = item.contentType, season = item.seasonNumber, episode = item.episodeNumber, respectSearchPause = false)
                         .getOrNull()?.map { it.toStreamItem(scraper) }
-                }.orEmpty()
+                }.orEmpty() }
             }
         }
     }
-    return selectDownloadSource(selection, sources) { stream ->
-        if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
-            (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
-        } else stream
+    return selectDownloadSource(selection, sources,
+        resolve = { stream ->
+            if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+                (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
+            } else stream
+        },
+        include = { stream -> downloadSourceIdentity(stream) !in excluded &&
+            (allowTorrents || stream.playableDirectUrl != null || !stream.isTorrentStream) },
+    )
+}
+
+internal fun embeddedDownloadStreams(meta: MetaDetails, item: DownloadItem): List<StreamItem> {
+    val withStreams = meta.videos.filter { it.streams.isNotEmpty() }
+    if (item.seasonNumber != null && item.episodeNumber != null) {
+        withStreams.filter { it.season == item.seasonNumber && it.episode == item.episodeNumber }.singleOrNull()
+            ?.let { return it.streams }
     }
+    withStreams.filter { it.id == item.videoId }.singleOrNull()?.let { return it.streams }
+    withStreams.filter { it.id.startsWith("${item.videoId}:") }.singleOrNull()?.let { return it.streams }
+    if (item.videoId == meta.id && withStreams.size == 1) return withStreams.single().streams
+    return emptyList()
+}
+
+/** Stable across independent add-on queries, so a rejected torrent is not chosen again. */
+internal fun downloadSourceIdentity(stream: StreamItem): String = listOf(
+    stream.addonId, stream.p2pInfoHash.orEmpty().lowercase(), stream.playableDirectUrl.orEmpty(),
+    stream.p2pFileIdx?.toString().orEmpty(), stream.downloadTorrentFilenameHints().joinToString("|"),
+).joinToString("\u0000")
+
+/** A bad file hint is a source-specific error. Retry other eligible sources before failing the task. */
+internal suspend fun <T> downloadUsingAlternativeSources(
+    choose: suspend (Set<String>) -> StreamItem,
+    download: suspend (StreamItem) -> T,
+    maxCandidates: Int = 4,
+): T {
+    require(maxCandidates > 0)
+    val excluded = linkedSetOf<String>()
+    var lastMismatch: DownloadTorrentFileSelectionException? = null
+    repeat(maxCandidates) {
+        val stream = try {
+            choose(excluded)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: IllegalStateException) {
+            if (lastMismatch != null) throw DownloadTorrentFileSelectionException(
+                "Available torrent sources do not identify this episode. Choose a different provider or source.",
+            )
+            throw error
+        }
+        try {
+            return download(stream)
+        } catch (mismatch: DownloadTorrentFileSelectionException) {
+            if (!excluded.add(downloadSourceIdentity(stream))) throw mismatch
+            lastMismatch = mismatch
+        }
+    }
+    throw DownloadTorrentFileSelectionException(
+        "Tried $maxCandidates torrent sources without a unique episode file. Choose another provider or source.",
+    )
 }
 
 internal suspend fun selectDownloadSource(
     selection: DownloadSourceSelection,
     sources: List<suspend () -> List<StreamItem>>,
+    include: (StreamItem) -> Boolean = { true },
     resolve: suspend (StreamItem) -> StreamItem? = { it },
 ): StreamItem {
     val highest = selection.quality == DownloadQuality.Highest
@@ -71,7 +136,7 @@ internal suspend fun selectDownloadSource(
     val tried = mutableSetOf<StreamItem>()
     suspend fun firstUsable(streams: List<StreamItem>): StreamItem? {
         for (stream in streams) {
-            if (!tried.add(stream)) continue
+            if (!include(stream) || !tried.add(stream)) continue
             val resolved = resolve(stream) ?: continue
             // Quality was read from the listed stream; a resolved debrid link may not repeat it.
             if (matchesDownloadSelection(resolved, selection.copy(quality = DownloadQuality.Any))) return resolved
@@ -80,7 +145,7 @@ internal suspend fun selectDownloadSource(
     }
     for (source in sources) {
         val eligible = source().filter { stream ->
-            (selection.providerId == null || selection.providerId == stream.addonId) &&
+            include(stream) && (selection.providerId == null || selection.providerId == stream.addonId) &&
                 (wanted == null || downloadStreamQuality(stream) == wanted)
         }
         if (highest) {
