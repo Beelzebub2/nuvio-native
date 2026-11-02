@@ -26,6 +26,7 @@ import kotlin.test.assertTrue
 class GoogleOAuthColdStartTest {
     @Test
     fun verifiedCallbackRestoresIntentAfterRestartWithoutSelectingACachedAccount() = runBlocking {
+        checkNotNull(System.getProperty("nuvio.dataDir")) { "This test requires isolated app storage" }
         val guestId = "86e37ca2-76e5-46b1-9fd5-b6f721aeaaab"
         val accountId = "9b16ea29-436d-4b73-aa8d-63dbf78c5ef1"
         val user = """{"id":"$accountId","aud":"authenticated","email":"approved@example.com","app_metadata":{},"user_metadata":{},"created_at":"2026-01-01T00:00:00Z"}"""
@@ -70,6 +71,7 @@ class GoogleOAuthColdStartTest {
             AuthRepository.reinitialize()
             assertTrue((AuthRepository.state.value as AuthState.Authenticated).isAnonymous)
             client.auth.codeVerifierCache.saveCodeVerifier("persisted-pkce-verifier")
+            AuthRepository.clearError()
 
             AuthRepository.handleGoogleOAuthCallback("nuvio://auth?code=invalid-code")
             withTimeout(5_000) { AuthRepository.error.first { it != null } }
