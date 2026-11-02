@@ -11,6 +11,18 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class PasskeyRepositoryTest {
     @Test
+    fun passesRequireExplicitOfficialCapability() {
+        val endpoint = "https://starlit-api.rrmtools.uk"
+        assertTrue(isPasskeyAdvertised("""{"backend_url":"$endpoint","capabilities":{"passkey_login":true}}"""))
+        for (document in listOf("{}", "not-json", """{"backend_url":"$endpoint","capabilities":{}}""",
+            """{"backend_url":"$endpoint","capabilities":{"passkey_login":false}}""",
+            """{"backend_url":"$endpoint","capabilities":{"passkey_login":"true"}}""",
+            """{"backend_url":"https://attacker.test","capabilities":{"passkey_login":true}}""")) {
+            assertFalse(isPasskeyAdvertised(document), "Unexpected passkey capability: $document")
+        }
+    }
+
+    @Test
     fun onlyTheExactOfficialHttpsRelyingPartyCanBeUsed() {
         assertTrue(isTrustedPasskeyOrigin("https://starlit-api.rrmtools.uk"))
         assertTrue(isTrustedPasskeyOrigin("https://starlit-api.rrmtools.uk/"))

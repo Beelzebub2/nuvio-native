@@ -224,6 +224,12 @@ private fun PasskeySecurityCard(authState: AuthState) {
     val ceremony = rememberPasskeyCeremony() ?: return
     if (account.isAnonymous || !PasskeyRepository.canUseOnActiveServer()) return
 
+    var serverPasskeysEnabled by remember(account.userId) { mutableStateOf(false) }
+    LaunchedEffect(account.userId) {
+        serverPasskeysEnabled = PasskeyRepository.isEnabledOnActiveServer()
+    }
+    if (!serverPasskeysEnabled) return
+
     val scope = rememberCoroutineScope()
     var keys by remember(account.userId) { mutableStateOf<List<RegisteredPasskey>>(emptyList()) }
     var showPasswordConfirm by remember(account.userId) { mutableStateOf(false) }

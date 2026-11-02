@@ -16,8 +16,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -39,6 +41,13 @@ private const val STARLIT_RP_ORIGIN = "https://starlit-api.rrmtools.uk"
 /** Do not offer credentials to arbitrary/custom servers pretending to be the Starlit RP. */
 internal fun isTrustedPasskeyOrigin(url: String): Boolean =
     url.trimEnd('/') == STARLIT_RP_ORIGIN
+
+/** Treat the capability as false unless the official backend explicitly enabled it. */
+internal fun isPasskeyAdvertised(document: String): Boolean = runCatching {
+    val doc = Json.parseToJsonElement(document).jsonObject
+    doc["backend_url"]?.jsonPrimitive?.content == STARLIT_RP_ORIGIN &&
+        doc["capabilities"]?.jsonObject?.get("passkey_login")?.jsonPrimitive?.booleanOrNull == true
+}.getOrDefault(false)
 
 internal data class PasskeyOptions(val challengeId: String, val optionsJson: String)
 
@@ -73,6 +82,18 @@ internal fun passkeyVerificationBody(challengeId: String, credentialJson: String
 object PasskeyRepository {
     fun canUseOnActiveServer(): Boolean =
         isTrustedPasskeyOrigin(ServerConfigurationRepository.active.value.backendUrl)
+
+    suspend fun isEnabledOnActiveServer(): Boolean {
+        if (!canUseOnActiveServer()) return false
+        return try {
+            val response = http.get("$STARLIT_RP_ORIGIN/.well-known/nuvio")
+            response.status.value == 200 && isPasskeyAdvertised(response.bodyAsText())
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     private val http by lazy {
         HttpClient {
@@ -176,7 +197,8 @@ object PasskeyRepository {
         val challenge = parsePasskeyOptions(post("registration/options", "{}", token))
         val credential = ceremony.create(challenge.optionsJson)
         check(ServerConfigurationRepository.active.value.backendUrl == serverAtStart &&
-            AuthRepository.state.value == state && auth.currentSessionOrNull()?.accessToken == token) {
+            auth.currentSessionOrNull()?.user?.id == state.userId &&
+            auth.currentSessionOrNull()?.accessToken == token) {
             "The signed-in account changed while creating the passkey"
         }
         post("registration/verify", passkeyVerificationBody(challenge.challengeId, credential), token)

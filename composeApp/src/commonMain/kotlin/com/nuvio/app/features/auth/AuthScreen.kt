@@ -204,7 +204,12 @@ fun AuthScreen(
     val backendUrl = serverConnectionState.activeServer.backendUrl
     val isStarlitServer = !serverConnectionState.activeServer.supportsNuvioAccountFeatures
     val passkeyCeremony = rememberPasskeyCeremony()
-    val passkeyEnabled = isStarlitServer && passkeyCeremony != null && PasskeyRepository.canUseOnActiveServer()
+    var serverPasskeysEnabled by remember(backendUrl) { mutableStateOf(false) }
+    LaunchedEffect(backendUrl) {
+        serverPasskeysEnabled = passkeyCeremony != null && PasskeyRepository.isEnabledOnActiveServer()
+    }
+    val passkeyEnabled = isStarlitServer && passkeyCeremony != null && serverPasskeysEnabled &&
+        PasskeyRepository.canUseOnActiveServer()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var isSignUp by rememberSaveable { mutableStateOf(false) }
