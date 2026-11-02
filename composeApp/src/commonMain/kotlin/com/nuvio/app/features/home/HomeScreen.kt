@@ -864,7 +864,7 @@ fun HomeScreen(
     val hasActiveAddons = enabledAddons.any { it.manifest != null }
     val addonManifestsLoading = enabledAddons.any { it.isRefreshing }
     val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
-    val isResolvingHeroSources = addonManifestsLoading || homeUiState.isLoading
+    val isResolvingHeroSources = addonManifestsLoading || homeUiState.isLoading || homeUiState.heroFallbackLoading
     var firstCatalogReported by remember { mutableStateOf(false) }
 
     LaunchedEffect(homeUiState.sections.firstOrNull()?.key, onFirstCatalogRendered) {

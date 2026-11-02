@@ -17,6 +17,7 @@ import com.nuvio.app.features.collection.TmdbCollectionSourceResolver
 import com.nuvio.app.features.collection.catalogRouteKey
 import com.nuvio.app.features.collection.findCollectionCatalog
 import com.nuvio.app.features.trakt.TraktPublicListSourceResolver
+import com.nuvio.app.features.tmdb.TmdbMetadataService
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import com.nuvio.app.isDesktop
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,7 @@ object HomeRepository {
     private var currentDefinitions: List<HomeCatalogDefinition> = emptyList()
     private var cachedSections: Map<String, HomeCatalogSection> = emptyMap()
     private var cachedCollectionHeroItems: List<MetaPreview> = emptyList()
+    private var heroFallbackLoading = false
     private var collectionHeroJob: Job? = null
     private var collectionHeroRequestKey: String? = null
     private var lastPublishedCatalogHeroEmpty: Boolean = true
@@ -168,6 +170,7 @@ object HomeRepository {
         currentDefinitions = emptyList()
         cachedSections = emptyMap()
         cachedCollectionHeroItems = emptyList()
+        heroFallbackLoading = false
         collectionHeroJob?.cancel()
         collectionHeroJob = null
         collectionHeroRequestKey = null
@@ -229,6 +232,7 @@ object HomeRepository {
 
         val nextState = HomeUiState(
             isLoading = isLoading,
+            heroFallbackLoading = heroFallbackLoading,
             heroItems = heroItems,
             sections = sections,
             errorMessage = if (sections.isEmpty()) lastErrorMessage else null,
@@ -321,11 +325,18 @@ object HomeRepository {
         refreshSources: Boolean,
         requestKey: String?,
     ) {
-        if (!lastPublishedCatalogHeroEmpty) return
+        if (!lastPublishedCatalogHeroEmpty) {
+            collectionHeroJob?.cancel()
+            heroFallbackLoading = false
+            if (_uiState.value.heroFallbackLoading) {
+                publishCurrentState(isLoading = _uiState.value.isLoading, requestKey = requestKey)
+            }
+            return
+        }
         val snapshot = HomeCatalogSettingsRepository.snapshot()
         if (!snapshot.heroEnabled) return
         val collections = enabledCollectionsForHero(snapshot)
-        if (collections.isEmpty()) {
+        if (collections.isEmpty() && isDesktop) {
             cachedCollectionHeroItems = emptyList()
             collectionHeroRequestKey = null
             return
@@ -342,6 +353,7 @@ object HomeRepository {
         collectionHeroJob?.cancel()
         collectionHeroRequestKey = nextRequestKey
         cachedCollectionHeroItems = emptyList()
+        heroFallbackLoading = true
         publishCurrentState(
             isLoading = _uiState.value.isLoading,
             requestKey = requestKey,
@@ -360,10 +372,26 @@ object HomeRepository {
                 }
             }.awaitAll()
             val random = Random((nextRequestKey.hashCode()).absoluteValue + 7)
-            cachedCollectionHeroItems = roundRobinCollectionHeroItems(sourceResults)
+            val fromCollections = roundRobinCollectionHeroItems(sourceResults)
                 .distinctBy { item -> item.stableKey() }
                 .shuffled(random)
                 .take(HOME_HERO_ITEM_LIMIT)
+            // On mobile, the carousel must have a real content source even for
+            // fresh installs with no addons and no personal collections.
+            val fallback = if (!isDesktop && fromCollections.isEmpty()) {
+                try { TmdbMetadataService.fetchTrendingHeroItems() }
+                catch (cancel: CancellationException) { throw cancel }
+                catch (_: Exception) { emptyList() }
+            } else emptyList()
+            val builtIn = if (!isDesktop && fromCollections.isEmpty() && fallback.isEmpty() &&
+                snapshot.showBuiltInAiring) {
+                try { platformHomeHeroFallbackItems(includeUpcoming = !snapshot.hideUnreleasedContent) }
+                catch (cancel: CancellationException) { throw cancel }
+                catch (_: Exception) { emptyList() }
+            } else emptyList()
+            if (collectionHeroRequestKey != nextRequestKey) return@launch
+            cachedCollectionHeroItems = fromCollections.ifEmpty { fallback.ifEmpty { builtIn } }
+            heroFallbackLoading = false
             publishCurrentState(
                 isLoading = _uiState.value.isLoading,
                 requestKey = requestKey,

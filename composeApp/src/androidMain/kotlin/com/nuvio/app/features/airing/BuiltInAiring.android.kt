@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,11 +46,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,8 +81,10 @@ import nuvio.composeapp.generated.resources.airing_settings_zone
 import nuvio.composeapp.generated.resources.airing_show_all_again
 import org.jetbrains.compose.resources.stringResource
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 internal actual fun BuiltInAiringSection(
@@ -123,15 +129,15 @@ private fun MobileAiringBrowser(
     val recent = remember(state.snapshot, state.settings, state.now) {
         selectAiringEvents(state.snapshot.events, state.settings, state.now, AiringWindow.Now)
     }
-    val coming = remember(state.snapshot, state.settings, state.now) {
-        filterAiringContent(state.snapshot.events, state.settings)
-            .filter {
-                it.airingAt > state.now.epochSecond && it.airingAt <= state.now.plusSeconds(7 * 86400L).epochSecond &&
-                    !it.isBreak && it.airType == state.settings.airType &&
-                    (state.settings.includeEstimated || !it.estimated) &&
-                    it.mediaId !in state.settings.hiddenMediaIds
-            }
-            .sortedBy { it.airingAt }.distinctBy { "${it.mediaId}:${it.episode}" }.take(30)
+    val today = remember(state.now, state.settings.zone) {
+        state.now.atZone(ZoneId.of(state.settings.zone)).toLocalDate()
+    }
+    // Null selects the recently aired feed in the full page. The Home row opens on today.
+    var selectedDate by rememberSaveable(expanded, state.settings.zone, today.toString()) {
+        mutableStateOf(if (expanded) null else today.toString())
+    }
+    val displayed = remember(state.snapshot, state.settings, state.now, selectedDate) {
+        mobileAiringVisibleEvents(state.snapshot, state.settings, state.now, selectedDate)
     }
     ScreenActivityEffect(repository) { active -> if (active) repository.refresh() }
     val title = stringResource(if (expanded) Res.string.airing_now_title else Res.string.airing_recent_title)
@@ -149,10 +155,12 @@ private fun MobileAiringBrowser(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(Res.string.action_back))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(Res.string.action_back),
+                    tint = MaterialTheme.colorScheme.onSurface)
             }
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(title, style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
                 Text(
                     "${if (state.settings.airType == "broadcast") "AniList" else "Tsuzuki"} · ${state.settings.zone}",
                     style = MaterialTheme.typography.bodySmall,
@@ -163,10 +171,12 @@ private fun MobileAiringBrowser(
                 Text(stringResource(Res.string.airing_action_browse))
             }
             IconButton(onClick = { editing = true }) {
-                Icon(Icons.Rounded.Settings, stringResource(Res.string.airing_action_settings))
+                Icon(Icons.Rounded.Settings, stringResource(Res.string.airing_action_settings),
+                    tint = MaterialTheme.colorScheme.onSurface)
             }
             IconButton(onClick = { scope.launch { repository.refresh(force = true) } }, enabled = !state.loading) {
-                Icon(Icons.Rounded.Refresh, stringResource(Res.string.airing_action_refresh))
+                Icon(Icons.Rounded.Refresh, stringResource(Res.string.airing_action_refresh),
+                    tint = MaterialTheme.colorScheme.onSurface)
             }
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -179,22 +189,36 @@ private fun MobileAiringBrowser(
                     }
                 }
             } else if (!state.loading) {
-                Text("No recently aired episodes for this period.", style = MaterialTheme.typography.bodyMedium)
+                Text("No recently aired episodes for this period.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
             HorizontalDivider()
-            Text(stringResource(Res.string.airing_coming_up), style = MaterialTheme.typography.titleMedium)
-            if (coming.isNotEmpty()) {
+            Text(stringResource(Res.string.airing_coming_up), style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface)
+            MobileAiringDaySelector(
+                today = today, selectedDate = selectedDate, includeRecent = false,
+                onSelect = { selectedDate = it },
+            )
+            if (displayed.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(coming, key = { "${it.mediaId}:${it.episode}" }) { event ->
+                    items(displayed, key = { "${it.mediaId}:${it.episode}" }) { event ->
                         MobileAiringPoster(event, state.settings.zone, onPosterClick, onPosterLongClick, hide)
                     }
                 }
             } else if (!state.loading) {
-                Text("No upcoming episodes found.", style = MaterialTheme.typography.bodyMedium)
+                Text("No episodes scheduled for this day.", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium)
             }
         } else {
-            if (recent.isEmpty() && !state.loading) {
-                Text("No recently aired episodes for this period.", style = MaterialTheme.typography.bodyMedium)
+            MobileAiringDaySelector(
+                today = today, selectedDate = selectedDate, includeRecent = true,
+                onSelect = { selectedDate = it },
+            )
+            if (displayed.isEmpty() && !state.loading) {
+                Text(if (selectedDate == null) "No recently aired episodes for this period."
+                    else "No episodes scheduled for this day.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium)
             }
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 126.dp),
@@ -202,7 +226,7 @@ private fun MobileAiringBrowser(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                gridItems(recent, key = { it.mediaId }) { event ->
+                gridItems(displayed, key = { "${it.mediaId}:${it.episode}" }) { event ->
                     MobileAiringPoster(event, state.settings.zone, onPosterClick, onPosterLongClick, hide)
                 }
             }
@@ -216,6 +240,54 @@ private fun MobileAiringBrowser(
         },
     )
 }
+
+/** Mobile's touch-friendly version of the desktop Today + next six days schedule. */
+@Composable
+private fun MobileAiringDaySelector(
+    today: LocalDate,
+    selectedDate: String?,
+    includeRecent: Boolean,
+    onSelect: (String?) -> Unit,
+) {
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val colors = FilterChipDefaults.filterChipColors(
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        labelColor = MaterialTheme.colorScheme.onSurface,
+        selectedContainerColor = selectedColor,
+        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+    )
+    val labelFormat = remember { DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()) }
+    val todayLabel = stringResource(Res.string.airing_today)
+    val recentLabel = stringResource(Res.string.airing_recent_title)
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (includeRecent) item(key = "recent") {
+            FilterChip(selected = selectedDate == null, onClick = { onSelect(null) },
+                colors = colors, label = { Text(recentLabel) })
+        }
+        items(mobileAiringScheduleDays(today), key = { it.toString() }) { date ->
+            val offset = java.time.temporal.ChronoUnit.DAYS.between(today, date).toInt()
+            FilterChip(
+                selected = selectedDate == date.toString(),
+                onClick = { onSelect(date.toString()) },
+                colors = colors,
+                label = { Text(if (offset == 0) todayLabel else date.format(labelFormat)) },
+            )
+        }
+    }
+}
+
+internal fun mobileAiringScheduleDays(today: LocalDate): List<LocalDate> =
+    (0L..6L).map(today::plusDays)
+
+/** The full page switches between recent releases and the selected calendar day. */
+internal fun mobileAiringVisibleEvents(
+    snapshot: AiringSnapshot, settings: AiringSettings, now: Instant, selectedDate: String?,
+): List<AiringEvent> = selectedDate?.let {
+    selectScheduledEvents(snapshot.events, settings, LocalDate.parse(it))
+} ?: selectAiringEvents(snapshot.events, settings, now, AiringWindow.Now)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -232,17 +304,20 @@ private fun MobileAiringPoster(
     ), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box {
             Card(Modifier.fillMaxWidth().height(184.dp)) {
-                if (event.poster != null) NuvioAsyncImage(
-                    model = event.poster, contentDescription = event.name,
+                if (event.poster != null || event.banner != null) NuvioAsyncImage(
+                    model = event.poster ?: event.banner, contentDescription = event.name,
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                 )
             }
-            IconButton(onClick = { onHide(event) }, modifier = Modifier.align(Alignment.TopEnd).size(36.dp)) {
+            IconButton(onClick = { onHide(event) },
+                modifier = Modifier.align(Alignment.TopEnd).size(36.dp)
+                    .clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))) {
                 Icon(Icons.Rounded.VisibilityOff, "Hide ${event.name}",
                     tint = androidx.compose.ui.graphics.Color.White)
             }
         }
-        Text(event.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+        Text(event.name, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelMedium)
         val whenText = remember(event.airingAt, zone) {
             runCatching {
                 DateTimeFormatter.ofPattern("EEE HH:mm").withZone(ZoneId.of(zone))
