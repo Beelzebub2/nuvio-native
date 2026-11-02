@@ -171,6 +171,22 @@ class AndroidDownloadTransferTest {
     }
 
     @Test
+    fun unknownRangeTotalDoesNotBecomeACompletedVideo(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/*").setBody(" world"))
+            val directory = temporary.newFolder()
+            val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
+            assertFailsWith<IOException> {
+                transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+                    validator = "\"version-1\"", onHeaders = { _, _ -> }, onProgress = { _, _ -> })
+            }
+            assertEquals("hello", partial.readText())
+            assertFalse(File(directory, "video.mkv").exists())
+        }
+    }
+
+    @Test
     fun truncatedResponseNeverBecomesCompletedFile(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("abcdefghij").setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))

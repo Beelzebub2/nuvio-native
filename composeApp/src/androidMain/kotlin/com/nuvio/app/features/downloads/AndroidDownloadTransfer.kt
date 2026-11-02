@@ -83,6 +83,9 @@ internal suspend fun transferAndroidDownload(
                     if (resumed && expectedBytes != null && range?.total != expectedBytes) {
                         throw IOException("Torrent HTTP range does not match the selected video size")
                     }
+                    if (resumed && range?.total == null && expectedBytes == null) {
+                        throw IOException("Cannot safely complete a download with an unknown range total")
+                    }
                     val startingBytes = if (resumed) offset else 0L
                     val body = response.body ?: throw IOException("Download response is empty")
                     val contentLength = body.contentLength().takeIf { it >= 0L }
