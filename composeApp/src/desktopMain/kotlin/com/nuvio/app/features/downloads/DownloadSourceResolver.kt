@@ -2,6 +2,7 @@ package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.addons.*
 import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.plugins.*
@@ -22,10 +23,11 @@ internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
     delay(750L) // Bound repeated unavailable-episode lookups as well as successful transfers.
     val selection = checkNotNull(item.sourceSelection)
     val sources = buildList<suspend () -> List<StreamItem>> {
-        // Embedded streams belong to whichever title is open now; only trust them for this task's title.
-        if (MetaDetailsRepository.uiState.value.meta?.id == item.parentMetaId) {
-            add { MetaDetailsRepository.findEmbeddedStreams(item.videoId) }
-        }
+        // An automatic download may start from Watch Later without opening a details page.
+        // The per-title metadata cache also carries streams embedded in video entries.
+        val metadata = MetaDetailsRepository.peek(item.contentType, item.parentMetaId)
+        val embedded = embeddedDownloadStreams(metadata, item)
+        if (embedded.isNotEmpty()) add { embedded }
         for (addon in AddonRepository.uiState.value.addons.enabledAddons()) {
             val manifest = addon.manifest ?: continue
             val id = addon.streamAddonInstanceId(manifest.id)
@@ -52,12 +54,44 @@ internal suspend fun resolveDownloadSource(item: DownloadItem): StreamItem {
                 }.orEmpty()
             }
         }
+        if (metadata == null && selection.providerId == null) {
+            // Restored queue items survive restart, while the metadata cache does not.
+            // Skip this lookup for cached titles that are known to have no embedded sources.
+            add {
+                val fetched = withTimeoutOrNull(15_000L) {
+                    runCatchingUnlessCancelled {
+                        MetaDetailsRepository.fetch(item.contentType, item.parentMetaId, forceRefresh = true)
+                    }.getOrNull()
+                }
+                embeddedDownloadStreams(fetched, item)
+            }
+        }
     }
     return selectDownloadSource(selection, sources) { stream ->
         if (!stream.isTorrentStream && DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
             (DirectDebridPlaybackResolver.resolveToPlayableStream(stream, item.seasonNumber, item.episodeNumber) as? DirectDebridPlayableResult.Success)?.stream
         } else stream
     }
+}
+
+internal fun embeddedDownloadStreams(meta: MetaDetails?, item: DownloadItem): List<StreamItem> {
+    val candidates = meta?.videos?.filter { it.streams.isNotEmpty() }.orEmpty()
+    val exact = candidates.filter { it.id == item.videoId }
+    if (exact.size == 1) return exact.single().streams
+    if (item.seasonNumber != null && item.episodeNumber != null) {
+        val episodeMatches = candidates.filter { it.season == item.seasonNumber && it.episode == item.episodeNumber }
+        if (episodeMatches.size == 1) return episodeMatches.single().streams
+    }
+    val prefixed = candidates.filter { it.id.startsWith("${item.videoId}:") }
+    if (prefixed.size == 1 &&
+        (item.seasonNumber == null || prefixed.single().season == item.seasonNumber) &&
+        (item.episodeNumber == null || prefixed.single().episode == item.episodeNumber)
+    ) return prefixed.single().streams
+    // A title ID cannot identify an episode in a season pack. Never merge unrelated
+    // episodes' embedded streams into one automatic-download source list.
+    if (meta != null && item.contentType == "movie" && item.videoId == meta.id && candidates.size == 1)
+        return candidates.single().streams
+    return emptyList()
 }
 
 internal suspend fun selectDownloadSource(

@@ -223,8 +223,12 @@ object DownloadsRepository {
     }
 
     internal fun enqueueBatch(meta: com.nuvio.app.features.details.MetaDetails,
-        episodes: List<com.nuvio.app.features.details.MetaVideo>, selection: DownloadSourceSelection): Int = synchronized(lock) {
+        episodes: List<com.nuvio.app.features.details.MetaVideo>, selection: DownloadSourceSelection,
+        retryFailed: Boolean = true, expectedProfileId: Int? = null): Int = synchronized(lock) {
+        if (expectedProfileId != null && expectedProfileId !=
+            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) return@synchronized 0
         ensureLoaded()
+        if (expectedProfileId != null && loadedProfile != expectedProfileId) return@synchronized 0
         val items = episodes.map { episode ->
             newItem(meta.type, episode.id, meta.id, meta.type, meta.name, meta.logo, meta.poster, meta.background,
                 episode.season, episode.episode, episode.title, episode.thumbnail, "", "Automatic selection", "", selection.providerId)
@@ -232,11 +236,37 @@ object DownloadsRepository {
         }
         // Queuing a season again retries its failed episodes with the new source preferences.
         val keys = items.map { it.logicalContentKey }.toSet()
-        _uiState.value.items.filter { it.logicalContentKey in keys && it.status == DownloadStatus.Failed }.forEach(::removeItem)
+        if (retryFailed) _uiState.value.items.filter {
+            it.logicalContentKey in keys && it.status == DownloadStatus.Failed
+        }.forEach(::removeItem)
         val existingKeys = _uiState.value.items.map { it.logicalContentKey }.toSet()
         val fresh = items.filter { it.logicalContentKey !in existingKeys }.distinctBy { it.logicalContentKey }
         addItems(fresh)
         fresh.size
+    }
+
+    /** Retry a failed automatic-source task in place, without deleting a manually selected file. */
+    internal fun retryFailedAutomatic(
+        meta: com.nuvio.app.features.details.MetaDetails,
+        video: com.nuvio.app.features.details.MetaVideo,
+        expectedProfileId: Int,
+    ): Boolean = synchronized(lock) {
+        if (com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized false
+        ensureLoaded()
+        if (loadedProfile != expectedProfileId) return@synchronized false
+        val failed = _uiState.value.items.firstOrNull { item ->
+            item.parentMetaId == meta.id.trim() && item.parentMetaType == meta.type &&
+                (if (video.season != null && video.episode != null) {
+                    item.seasonNumber == video.season && item.episodeNumber == video.episode
+                } else item.videoId == video.id) &&
+                item.status == DownloadStatus.Failed && item.sourceSelection != null
+        } ?: return@synchronized false
+        mutateItem(failed.id) {
+            it.copy(status = DownloadStatus.Downloading, phase = if (isDesktop) "Queued" else null,
+                errorMessage = null, localFileUri = null)
+        }
+        pumpQueue()
+        true
     }
 
     private fun newItem(type: String, videoId: String, parentId: String, parentType: String, title: String,

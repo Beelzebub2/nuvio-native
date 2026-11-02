@@ -229,7 +229,7 @@ object MetaDetailsRepository {
         _uiState.value = MetaDetailsUiState()
     }
 
-    suspend fun fetch(type: String, id: String, cacheResult: Boolean = true): MetaDetails? {
+    suspend fun fetch(type: String, id: String, cacheResult: Boolean = true, forceRefresh: Boolean = false): MetaDetails? {
         val requestKey = "$type:$id"
         if (id.startsWith(NATIVE_AIRING_PREFIX)) {
             val generation = nativeAiringGeneration
@@ -239,7 +239,7 @@ object MetaDetailsRepository {
             else if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = meta)
             return meta
         }
-        cachedMetaByRequestKey[requestKey]?.let { return it.baseMeta }
+        if (!forceRefresh) cachedMetaByRequestKey[requestKey]?.let { return it.baseMeta }
 
         val metaLookupId = resolveMetaLookupId(itemId = id, itemType = type)
         val manifests = findReadyMetaManifests(type = type, id = metaLookupId)
