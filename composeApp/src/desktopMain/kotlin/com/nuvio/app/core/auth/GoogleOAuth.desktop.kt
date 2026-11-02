@@ -1,6 +1,5 @@
 package com.nuvio.app.core.auth
 
-import com.nuvio.app.core.network.SupabaseProvider
 import com.sun.net.httpserver.HttpServer
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -20,14 +19,7 @@ internal actual suspend fun launchGoogleOAuth(client: SupabaseClient) {
         authorize = { client.auth.getOAuthUrl(Google, redirectUrl = it) },
         open = { Desktop.getDesktop().browse(it) },
     )
-    check(GoogleOAuthAvailability.isOfficialServer() && SupabaseProvider.client === client) {
-        "The account server changed during Google sign-in"
-    }
-    val session = client.auth.exchangeCodeForSession(code, saveSession = false)
-    check(GoogleOAuthAvailability.isOfficialServer() && SupabaseProvider.client === client) {
-        "The account server changed during Google verification"
-    }
-    client.auth.importSession(session)
+    AuthRepository.completeGoogleOAuth(client, code)
 }
 
 /** Use a private loopback listener; never accept implicit access/refresh tokens. */

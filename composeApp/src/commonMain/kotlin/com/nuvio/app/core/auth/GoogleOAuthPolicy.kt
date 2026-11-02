@@ -26,7 +26,7 @@ internal fun isStarlitOAuthCallback(url: String): Boolean = runCatching {
     val parsed = Url(url)
     parsed.protocol.name == "nuvio" && parsed.host == "auth" &&
         parsed.encodedPath in listOf("", "/") && parsed.fragment.isEmpty() &&
-        parsed.parameters["code"]?.isNotBlank() == true
+        parsed.parameters.getAll("code")?.singleOrNull()?.let { it.isNotBlank() && it.length <= 4096 } == true
 }.getOrDefault(false)
 
 internal object GoogleOAuthAvailability {

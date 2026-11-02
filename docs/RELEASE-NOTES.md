@@ -1,4 +1,4 @@
-## Starlit 1.4.0
+## Starlit 1.4.1
 
 ### Authentication support
 
@@ -9,6 +9,10 @@
 
 - Google sign-in uses PKCE authorization codes. Desktop callbacks bind only to the local loopback interface on a random port and path; token injection, duplicate codes, and unrelated callback paths are rejected. Mobile callbacks accept codes only for the official server.
 - Neither authentication method is activated by installing this release. Existing email/password login remains available.
+
+### Fixes
+
+- Google sign-in can complete after the mobile app restarts while its browser is open. The guest workspace is preserved until the authorization code is verified, then the approved account can be selected safely.
 
 ## Starlit 1.3.0
 

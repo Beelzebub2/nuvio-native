@@ -6,6 +6,8 @@ import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.storage.AnonymousWorkspaceStorage
 import com.nuvio.app.core.storage.LocalAccountDataCleaner
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.SupabaseClient
+import io.ktor.http.Url
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -265,8 +267,6 @@ object AuthRepository {
         _error.value = null
         _notice.value = null
         check(GoogleOAuthAvailability.isEnabled()) { "Google sign-in is not enabled on this server" }
-        // Preserve anonymous settings before importing the new Google session.
-        expectRemoteSession()
         launchGoogleOAuth(SupabaseProvider.client)
     }.onFailure { e ->
         cancelRemoteSessionRequest()
@@ -274,6 +274,44 @@ object AuthRepository {
         // Provider errors can contain callback URLs; keep them out of logs.
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_google_sign_in_failed)
+    }
+
+    internal fun handleGoogleOAuthCallback(url: String) {
+        if (!GoogleOAuthAvailability.isOfficialServer() || !isStarlitOAuthCallback(url)) return
+        val client = SupabaseProvider.client
+        val code = Url(url).parameters.getAll("code")!!.single()
+        scope.launch {
+            try {
+                completeGoogleOAuth(client, code)
+            } catch (error: CancellationException) {
+                cancelRemoteSessionRequest()
+                throw error
+            } catch (_: Exception) {
+                cancelRemoteSessionRequest()
+                _error.value = getString(Res.string.auth_google_sign_in_failed)
+            }
+        }
+    }
+
+    internal suspend fun completeGoogleOAuth(client: SupabaseClient, code: String) {
+        check(GoogleOAuthAvailability.isOfficialServer() && SupabaseProvider.client === client) {
+            "The account server changed during Google sign-in"
+        }
+        client.auth.awaitInitialization()
+        val session = client.auth.exchangeCodeForSession(code, saveSession = false)
+        check(GoogleOAuthAvailability.isOfficialServer() && SupabaseProvider.client === client) {
+            "The account server changed during Google verification"
+        }
+        // Restore intent after PKCE verification, including a callback after process restart.
+        // Cached remote sessions must remain isolated from the guest workspace until then.
+        _error.value = null
+        expectRemoteSession()
+        try {
+            client.auth.importSession(session)
+        } catch (error: Throwable) {
+            cancelRemoteSessionRequest()
+            throw error
+        }
     }
 
     suspend fun signInWithPasskey(ceremony: PasskeyCeremony): Result<Unit> {

@@ -20,7 +20,7 @@ class GoogleOAuthPolicyTest {
         assertTrue(isStarlitOAuthCallback("nuvio://auth?code=authorization-code"))
         assertTrue(isStarlitOAuthCallback("nuvio://auth/?code=authorization-code"))
         for (url in listOf("nuvio://auth#access_token=injected", "nuvio://auth?access_token=injected",
-            "nuvio://auth?code=", "nuvio://auth.evil?code=abc", "https://auth?code=abc",
+            "nuvio://auth?code=", "nuvio://auth?code=one&code=two", "nuvio://auth.evil?code=abc", "https://auth?code=abc",
             "nuvio://auth/path?code=abc", "nuvio://auth?code=abc#access_token=injected", "invalid")) {
             assertFalse(isStarlitOAuthCallback(url), url)
         }
