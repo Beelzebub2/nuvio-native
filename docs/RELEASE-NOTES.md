@@ -1,3 +1,11 @@
+## Starlit 1.2.4
+
+### Fixes
+
+- **Android torrent downloads:** Directly chosen torrent sources and automatically selected torrent episodes can now be downloaded for offline viewing when P2P is enabled in Settings. Android uses a separate native torrent engine for downloads so playback is not interrupted.
+- **Safer offline transfers:** Native torrent metadata identifies the correct video in multi-file torrents rather than trusting stale episode indexes. Resume state is tied to the exact torrent file, and invalid HTTP ranges are rejected instead of risking a corrupted saved episode. Native loopback requests do not forward provider credentials or follow redirects.
+- **Redesigned mobile Downloads:** Added an offline-library overview, artwork cards, clearer download states and progress, more readable errors, accessible pause/resume/retry/play controls, compact simultaneous-transfer settings, and selection mode for bulk removal. Updated English and Portuguese translations.
+
 ## Starlit 1.2.3
 
 ### Fixes
