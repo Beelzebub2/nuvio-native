@@ -1,3 +1,15 @@
+## Starlit 1.4.0
+
+### Authentication support
+
+- **Android passkeys:** Added sign-in, registration, listing, and password-confirmed removal for approved accounts on the official Starlit server. These controls stay hidden until server activation and signed Android device verification are complete. Desktop, iOS, and custom servers do not offer passkeys.
+- **Google sign-in and access requests:** Added client support on Windows, Android, and iOS, preserving guest settings and owner-approved registration. Controls appear only after the official server explicitly enables Google. Production Google login remains disabled until a real Google Web OAuth client is configured and tested.
+
+### Security
+
+- Google sign-in uses PKCE authorization codes. Desktop callbacks bind only to the local loopback interface on a random port and path; token injection, duplicate codes, and unrelated callback paths are rejected. Mobile callbacks accept codes only for the official server.
+- Neither authentication method is activated by installing this release. Existing email/password login remains available.
+
 ## Starlit 1.3.0
 
 ### Features
