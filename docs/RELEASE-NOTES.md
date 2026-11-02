@@ -1,3 +1,14 @@
+## Starlit 1.3.0
+
+### Features
+
+- **Control desktop playback from Android:** An Android phone signed in to the same Starlit account and server can discover and securely pair with the desktop app on the same local network. Compare the matching codes on both screens, then control play/pause, seek, volume/mute, intro and credits skipping, episodes, sources and subtitles. Open **Settings → Desktop remote** on Android to connect. This supports the built-in desktop player on private IPv4 networks; iOS and external players are not supported yet.
+
+### Fixes
+
+- **Only one desktop Starlit window:** Opening the app again now brings the running window to the foreground instead of starting a duplicate. Supported `nuvio://` and `stremio://` links are delivered to the existing window, including during startup.
+- **Readable source selection on 1080p displays:** Long source names no longer make the recommended-source card crowd out other results. The full metadata remains available in the source list, with usable layouts at common display scaling levels.
+
 ## Starlit 1.2.4
 
 ### Fixes
