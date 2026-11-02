@@ -100,11 +100,16 @@ internal object AndroidP2pDownload {
                     "The native torrent engine returned an invalid local stream address"
                 }
                 val client = downloadHttpClient.newBuilder()
+                    // The route is an app-owned loopback endpoint, not the
+                    // source provider. Do not forward its credentials or
+                    // follow a redirect to an arbitrary network host.
+                    .followRedirects(false)
+                    .followSslRedirects(false)
                     .readTimeout(180L, TimeUnit.SECONDS)
                     .connectTimeout(60L, TimeUnit.SECONDS)
                     .build()
                 val result = transferAndroidDownload(
-                    item = item.copy(sourceUrl = route.url),
+                    item = item.copy(sourceUrl = route.url, sourceHeaders = emptyMap()),
                     directory = directory,
                     validator = null,
                     client = client,
