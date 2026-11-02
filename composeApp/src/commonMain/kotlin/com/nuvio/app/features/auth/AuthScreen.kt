@@ -83,6 +83,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.auth.GoogleOAuthAvailability
+import com.nuvio.app.core.auth.STARLIT_GOOGLE_ORIGIN
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.PasskeyRepository
 import com.nuvio.app.core.auth.rememberPasskeyCeremony
@@ -97,6 +99,8 @@ import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.auth_request_account
+import nuvio.composeapp.generated.resources.auth_google_request_access
+import nuvio.composeapp.generated.resources.auth_google_sign_in
 import nuvio.composeapp.generated.resources.auth_request_account_subtitle
 import nuvio.composeapp.generated.resources.auth_request_password_minimum
 import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
@@ -110,8 +114,8 @@ import nuvio.composeapp.generated.resources.compose_auth_dont_have_account
 import nuvio.composeapp.generated.resources.compose_auth_email
 import nuvio.composeapp.generated.resources.compose_auth_or_separator
 import nuvio.composeapp.generated.resources.compose_auth_password
-import nuvio.composeapp.generated.resources.auth_sign_in_with_passkey
 import nuvio.composeapp.generated.resources.compose_auth_sign_in
+import nuvio.composeapp.generated.resources.auth_sign_in_with_passkey
 import nuvio.composeapp.generated.resources.compose_auth_sign_in_subtitle
 import nuvio.composeapp.generated.resources.compose_auth_sign_up
 import nuvio.composeapp.generated.resources.compose_auth_sign_up_subtitle
@@ -212,6 +216,9 @@ fun AuthScreen(
         PasskeyRepository.canUseOnActiveServer()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val uriHandler = LocalUriHandler.current
+    var googleEnabled by remember(backendUrl) { mutableStateOf(false) }
+    LaunchedEffect(backendUrl) { googleEnabled = GoogleOAuthAvailability.isEnabled() }
     var isSignUp by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -260,6 +267,42 @@ fun AuthScreen(
         }
     }
 
+    fun startPasskeySignIn() {
+        val ceremony = passkeyCeremony ?: return
+        if (isLoading || isSignUp || isRequestPending || !passkeyEnabled) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithPasskey(ceremony)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun signInWithGoogle() {
+        if (isLoading || isRequestPending || !googleEnabled) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithGoogle()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun requestAccessWithGoogle() {
+        if (isLoading || isRequestPending || !googleEnabled) return
+        focusManager.clearFocus(force = true)
+        AuthRepository.clearError()
+        uriHandler.openUri("$STARLIT_GOOGLE_ORIGIN/auth/google/request")
+    }
+
     fun toggleAuthMode() {
         if (isLoading) return
         DeviceLinkAuthRepository.cancel()
@@ -281,21 +324,6 @@ fun AuthScreen(
         focusManager.clearFocus(force = true)
         AuthRepository.clearError()
         DeviceLinkAuthRepository.start()
-    }
-
-    fun startPasskeySignIn() {
-        val ceremony = passkeyCeremony ?: return
-        if (isLoading || isSignUp || isRequestPending || !passkeyEnabled) return
-        DeviceLinkAuthRepository.cancel()
-        focusManager.clearFocus(force = true)
-        isLoading = true
-        scope.launch {
-            try {
-                AuthRepository.signInWithPasskey(ceremony)
-            } finally {
-                isLoading = false
-            }
-        }
     }
 
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -365,6 +393,7 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        googleEnabled = googleEnabled,
                         passkeyEnabled = passkeyEnabled,
                         formPaneWidth = if (compactLargeScreen) 460.dp else formPaneWidth,
                         brandHorizontalPadding = brandHorizontalPadding,
@@ -390,7 +419,9 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
                         onPasskeySignIn = ::startPasskeySignIn,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -408,6 +439,7 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        googleEnabled = googleEnabled,
                         passkeyEnabled = passkeyEnabled,
                         statusBarTop = statusBarTop,
                         onEmailChange = {
@@ -429,7 +461,9 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
                         onPasskeySignIn = ::startPasskeySignIn,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -512,6 +546,7 @@ private fun AuthMobileLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
     passkeyEnabled: Boolean,
     statusBarTop: Dp,
     onEmailChange: (String) -> Unit,
@@ -522,7 +557,9 @@ private fun AuthMobileLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -581,7 +618,8 @@ private fun AuthMobileLayout(
                 authError = authError,
                 deviceLinkAuthState = deviceLinkAuthState,
                 deviceLinkEnabled = deviceLinkEnabled,
-                passkeyEnabled = passkeyEnabled,
+                googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                 metrics = MobileAuthFormMetrics,
                 onEmailChange = onEmailChange,
                 onPasswordChange = onPasswordChange,
@@ -591,7 +629,9 @@ private fun AuthMobileLayout(
                 onReturnToSignIn = onReturnToSignIn,
                 onContinueWithoutAccount = onContinueWithoutAccount,
                 onStartDeviceLink = onStartDeviceLink,
-                onPasskeySignIn = onPasskeySignIn,
+                onGoogleSignIn = onGoogleSignIn,
+                    onPasskeySignIn = onPasskeySignIn,
+                onGoogleRequest = onGoogleRequest,
                 onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
@@ -614,6 +654,7 @@ private fun AuthLargeLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
     passkeyEnabled: Boolean,
     formPaneWidth: Dp,
     brandHorizontalPadding: Dp,
@@ -628,7 +669,9 @@ private fun AuthLargeLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -726,7 +769,8 @@ private fun AuthLargeLayout(
                     authError = authError,
                     deviceLinkAuthState = deviceLinkAuthState,
                     deviceLinkEnabled = deviceLinkEnabled,
-                    passkeyEnabled = passkeyEnabled,
+                googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                     metrics = formMetrics,
                     scale = scale,
                     onEmailChange = onEmailChange,
@@ -737,7 +781,9 @@ private fun AuthLargeLayout(
                     onReturnToSignIn = onReturnToSignIn,
                     onContinueWithoutAccount = onContinueWithoutAccount,
                     onStartDeviceLink = onStartDeviceLink,
+                    onGoogleSignIn = onGoogleSignIn,
                     onPasskeySignIn = onPasskeySignIn,
+                    onGoogleRequest = onGoogleRequest,
                     onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
@@ -833,6 +879,7 @@ private fun AuthForm(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
     passkeyEnabled: Boolean,
     metrics: AuthFormMetrics,
     scale: Float = 1f,
@@ -844,7 +891,9 @@ private fun AuthForm(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -983,6 +1032,25 @@ private fun AuthForm(
                 height = metrics.secondaryHeight,
                 scale = scale,
                 onClick = onPasskeySignIn,
+            )
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
+
+        if (googleEnabled) {
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_google_sign_in),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onGoogleSignIn,
+            )
+            Spacer(modifier = Modifier.height(12.dp * scale))
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_google_request_access),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onGoogleRequest,
             )
             Spacer(modifier = Modifier.height(14.dp * scale))
         }

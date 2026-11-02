@@ -260,6 +260,22 @@ object AuthRepository {
             ?: getString(Res.string.auth_sign_in_failed)
     }
 
+    /** Approved Google identities only. GoTrue signup is disabled on the Starlit server. */
+    suspend fun signInWithGoogle(): Result<Unit> = runCatching {
+        _error.value = null
+        _notice.value = null
+        check(GoogleOAuthAvailability.isEnabled()) { "Google sign-in is not enabled on this server" }
+        // Preserve anonymous settings before importing the new Google session.
+        expectRemoteSession()
+        launchGoogleOAuth(SupabaseProvider.client)
+    }.onFailure { e ->
+        cancelRemoteSessionRequest()
+        if (e is CancellationException) throw e
+        // Provider errors can contain callback URLs; keep them out of logs.
+        _error.value = e.safeAuthErrorDescription()
+            ?: getString(Res.string.auth_google_sign_in_failed)
+    }
+
     suspend fun signInWithPasskey(ceremony: PasskeyCeremony): Result<Unit> {
         _error.value = null
         _notice.value = null
@@ -271,7 +287,6 @@ object AuthRepository {
             throw error
         } catch (error: Throwable) {
             cancelRemoteSessionRequest()
-            // WebAuthn responses are sensitive: never log the platform's raw credential JSON.
             _error.value = error.message?.takeIf { it.length <= 180 }
                 ?: "Couldn't sign in with your passkey. Try again."
             Result.failure(error)
