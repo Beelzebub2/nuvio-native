@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -709,6 +710,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
     val handoffSentText = stringResource(Res.string.remote_handoff_sent)
     val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
     var showPlaybackDiagnostics by remember { mutableStateOf(false) }
+    val showCastHelp = remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -825,6 +827,9 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                 }
             } else null,
             onDiagnosticsClick = { showPlaybackDiagnostics = true },
+            onCastInfoClick = if (!isDesktop && !isIos) {
+                { showCastHelp.value = true }
+            } else null,
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -846,6 +851,18 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
         PlaybackDiagnosticsDialog(
             snapshot = playbackSnapshot,
             onDismiss = { showPlaybackDiagnostics = false },
+        )
+    }
+    if (showCastHelp.value) {
+        CastCompatibilityDialog(
+            eligibility = assessCastCompatibility(
+                sourceUrl = activeSourceUrl,
+                sourceHeaders = activeSourceHeaders,
+                isPeerToPeer = !activeTorrentInfoHash.isNullOrBlank() ||
+                    activeStreamType.orEmpty().contains("torrent", ignoreCase = true),
+                hasSeparateAudio = !activeSourceAudioUrl.isNullOrBlank(),
+            ),
+            onDismiss = { showCastHelp.value = false },
         )
     }
 }

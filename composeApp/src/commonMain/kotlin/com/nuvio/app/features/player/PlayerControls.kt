@@ -114,6 +114,7 @@ internal fun PlayerControlsShell(
     onSubmitIntroClick: (() -> Unit)? = null,
     onHandoffClick: (() -> Unit)? = null,
     onDiagnosticsClick: (() -> Unit)? = null,
+    onCastInfoClick: (() -> Unit)? = null,
     controlToggles: List<PlayerControlToggle> = emptyList(),
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
@@ -314,6 +315,7 @@ internal fun PlayerControlsShell(
                         onSubmitIntroClick = onSubmitIntroClick,
                         onHandoffClick = onHandoffClick,
                         onDiagnosticsClick = onDiagnosticsClick,
+                        onCastInfoClick = onCastInfoClick,
                         onInteraction = onInteraction,
                         toggles = controlToggles,
                     )
