@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
@@ -124,6 +125,17 @@ private fun AccountSettingsBody(
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
     val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled &&
         ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures && authState is AuthState.Authenticated
+    val namedAccount = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
+    var googleLinkAvailable by remember(namedAccount?.userId) { mutableStateOf(false) }
+    LaunchedEffect(namedAccount?.userId) {
+        googleLinkAvailable = if (
+            namedAccount != null && !isDesktop && !isIos && GoogleOAuthAvailability.isOfficialServer()
+        ) {
+            GoogleOAuthAvailability.isEnabled()
+        } else {
+            false
+        }
+    }
 
     if (isDesktop) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -144,12 +156,10 @@ private fun AccountSettingsBody(
             }
         }
     } else {
-        val namedAccount = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
         val canImportLocal = namedAccount != null && LocalSettingsImport.isAvailable
         val hasSignInMethods = namedAccount != null && (
-            (!isIos && GoogleOAuthAvailability.isOfficialServer()) ||
-                PasskeyRepository.canUseOnActiveServer()
-            )
+            googleLinkAvailable || PasskeyRepository.canUseOnActiveServer()
+        )
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -159,7 +169,7 @@ private fun AccountSettingsBody(
 
             if (hasSignInMethods) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
-                GoogleAccountLinkCard(authState)
+                if (googleLinkAvailable) GoogleAccountLinkCard(authState, isAvailable = true)
                 PasskeySecurityCard(authState)
             }
 
@@ -378,15 +388,11 @@ private fun MobileAccountSectionHeading(title: String) {
 
 /** Google linking is distinct from Google login: it never replaces the current account. */
 @Composable
-private fun GoogleAccountLinkCard(authState: AuthState) {
+private fun GoogleAccountLinkCard(authState: AuthState, isAvailable: Boolean = false) {
     // The Android external-browser callback is the verified implementation for linking.
-    if (isDesktop || isIos) return
+    if (isDesktop || isIos || !isAvailable) return
     val account = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous } ?: return
     if (!GoogleOAuthAvailability.isOfficialServer()) return
-
-    var enabled by remember(account.userId) { mutableStateOf(false) }
-    LaunchedEffect(account.userId) { enabled = GoogleOAuthAvailability.isEnabled() }
-    if (!enabled) return
 
     val feedback by AuthRepository.googleLinkFeedback.collectAsStateWithLifecycle()
     val accountFeedback = feedback?.takeIf { it.userId == account.userId }
