@@ -18,12 +18,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -69,6 +70,27 @@ internal fun isPasskeyAdvertised(document: String): Boolean = runCatching {
 internal data class PasskeyOptions(val challengeId: String, val optionsJson: String)
 
 data class RegisteredPasskey(val id: String, val name: String, val createdAt: String)
+
+enum class PasskeyRegistrationStep { WAITING_FOR_MANAGER, VERIFYING_WITH_SERVER }
+
+/** A bad or unexpected server response must never masquerade as an empty passkey list. */
+internal fun parseRegisteredPasskeys(body: String): List<RegisteredPasskey> {
+    val response = Json.parseToJsonElement(body)
+    val entries = when (response) {
+        is JsonArray -> response
+        is JsonObject -> (response["passkeys"] ?: response["credentials"]) as? JsonArray
+        else -> null
+    } ?: error("Invalid passkey list response")
+    return entries.map { item ->
+        val key = item.jsonObject
+        RegisteredPasskey(
+            id = key["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: error("Invalid registered passkey"),
+            name = key["friendly_name"]?.jsonPrimitive?.contentOrNull.orEmpty().ifBlank { "Passkey" },
+            createdAt = key["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+        )
+    }
+}
 
 /** The server generates/consumes its own one-use challenge. No client-generated challenges. */
 internal fun parsePasskeyOptions(body: String): PasskeyOptions {
@@ -201,7 +223,11 @@ object PasskeyRepository {
         }
     }
 
-    suspend fun register(ceremony: PasskeyCeremony, password: String) {
+    suspend fun register(
+        ceremony: PasskeyCeremony,
+        password: String,
+        onStep: (PasskeyRegistrationStep) -> Unit = {},
+    ) {
         val serverAtStart = ServerConfigurationRepository.active.value.backendUrl
         require(isTrustedPasskeyOrigin(serverAtStart)) { "Passkeys are not available for this server" }
         val state = AuthRepository.state.value as? AuthState.Authenticated
@@ -212,32 +238,35 @@ object PasskeyRepository {
         val token = session.accessToken
         // The server ties this challenge to the authenticated user, not a supplied email/id.
         val challenge = parsePasskeyOptions(post("registration/options", "{}", token))
+        onStep(PasskeyRegistrationStep.WAITING_FOR_MANAGER)
         val credential = ceremony.create(challenge.optionsJson)
         check(ServerConfigurationRepository.active.value.backendUrl == serverAtStart &&
             auth.currentSessionOrNull()?.user?.id == state.userId &&
             auth.currentSessionOrNull()?.accessToken == token) {
             "The signed-in account changed while creating the passkey"
         }
+        onStep(PasskeyRegistrationStep.VERIFYING_WITH_SERVER)
         post("registration/verify", passkeyVerificationBody(challenge.challengeId, credential), token)
     }
 
     suspend fun list(): List<RegisteredPasskey> {
         val config = ServerConfigurationRepository.active.value
         require(isTrustedPasskeyOrigin(config.backendUrl)) { "Passkeys are not available on this server" }
-        val token = requireNotNull(SupabaseProvider.client.auth.currentSessionOrNull()?.accessToken)
+        val auth = SupabaseProvider.client.auth
+        val session = requireNotNull(auth.currentSessionOrNull()) { "Sign in again to view your passkeys" }
+        val token = session.accessToken
+        val accountId = requireNotNull(session.user?.id) { "Sign in again to view your passkeys" }
         val response = http.get("$STARLIT_RP_ORIGIN/auth/v1/passkeys") {
             header("apikey", config.publishableKey)
             header(HttpHeaders.Authorization, "Bearer $token")
         }
         check(response.status.value in 200..299) { "Couldn't load passkeys" }
-        return Json.parseToJsonElement(response.bodyAsText()).jsonArray.map { item ->
-            val entry = item.jsonObject
-            RegisteredPasskey(
-                id = entry.getValue("id").jsonPrimitive.content,
-                name = entry["friendly_name"]?.jsonPrimitive?.content.orEmpty().ifBlank { "Passkey" },
-                createdAt = entry["created_at"]?.jsonPrimitive?.content.orEmpty(),
-            )
+        val passkeys = parseRegisteredPasskeys(response.bodyAsText())
+        check(config.backendUrl == ServerConfigurationRepository.active.value.backendUrl &&
+            auth.currentSessionOrNull()?.user?.id == accountId) {
+            "The signed-in account changed while loading passkeys"
         }
+        return passkeys
     }
 
     suspend fun revoke(id: String, password: String) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -45,6 +46,7 @@ import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.GoogleOAuthAvailability
 import com.nuvio.app.core.auth.LocalSettingsImport
 import com.nuvio.app.core.auth.PasskeyRepository
+import com.nuvio.app.core.auth.PasskeyRegistrationStep
 import com.nuvio.app.core.auth.RegisteredPasskey
 import com.nuvio.app.core.auth.rememberPasskeyCeremony
 import com.nuvio.app.core.build.AppFeaturePolicy
@@ -365,32 +367,61 @@ private fun GoogleAccountLinkCard(authState: AuthState) {
     }
 }
 
-/** Passkey management never appears on guest/custom/upstream servers. */
+private data class PasskeyActionFeedback(val title: String, val message: String, val success: Boolean)
+
+/** Passkeys belong to the account, not the current device or its chosen passkey provider. */
 @Composable
 private fun PasskeySecurityCard(authState: AuthState) {
     val account = authState as? AuthState.Authenticated ?: return
-    val ceremony = rememberPasskeyCeremony() ?: return
-    if (!ceremony.supportsRegistration) return
     if (account.isAnonymous || !PasskeyRepository.canUseOnActiveServer()) return
+    val ceremony = rememberPasskeyCeremony()
+    val canRegister = ceremony?.supportsRegistration == true
+    val scope = rememberCoroutineScope()
 
-    var serverPasskeysEnabled by remember(account.userId) { mutableStateOf(false) }
-    LaunchedEffect(account.userId) {
+    var serverPasskeysEnabled by remember(account.userId) { mutableStateOf<Boolean?>(null) }
+    var capabilityRetry by remember(account.userId) { mutableStateOf(0) }
+    LaunchedEffect(account.userId, capabilityRetry) {
+        serverPasskeysEnabled = null
         serverPasskeysEnabled = PasskeyRepository.isEnabledOnActiveServer()
     }
-    if (!serverPasskeysEnabled) return
 
-    val scope = rememberCoroutineScope()
-    var keys by remember(account.userId) { mutableStateOf<List<RegisteredPasskey>>(emptyList()) }
+    var keys by remember(account.userId) { mutableStateOf<List<RegisteredPasskey>?>(null) }
+    var refreshingKeys by remember(account.userId) { mutableStateOf(false) }
+    var listError by remember(account.userId) { mutableStateOf(false) }
+    var listRefresh by remember(account.userId) { mutableStateOf(0) }
     var showPasswordConfirm by remember(account.userId) { mutableStateOf(false) }
     var removing by remember(account.userId) { mutableStateOf<RegisteredPasskey?>(null) }
-    var password by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var password by remember(account.userId) { mutableStateOf("") }
+    var busy by remember(account.userId) { mutableStateOf(false) }
+    var operationStage by remember(account.userId) { mutableStateOf("") }
+    var feedback by remember(account.userId) { mutableStateOf<PasskeyActionFeedback?>(null) }
+    var showResultModal by remember(account.userId) { mutableStateOf(false) }
     val added = stringResource(Res.string.auth_passkey_added)
     val removed = stringResource(Res.string.auth_passkey_removed)
+    val addSuccessTitle = stringResource(Res.string.auth_passkey_added_title)
+    val removeSuccessTitle = stringResource(Res.string.auth_passkey_removed_title)
+    val addFailureTitle = stringResource(Res.string.auth_passkey_add_failed_title)
+    val removeFailureTitle = stringResource(Res.string.auth_passkey_remove_failed_title)
+    val failureFallback = stringResource(Res.string.auth_passkey_operation_failed)
+    val confirmingAccount = stringResource(Res.string.auth_passkey_confirming_account)
+    val verifying = stringResource(Res.string.auth_passkey_verifying)
+    val waitingForManager = stringResource(Res.string.auth_passkey_waiting_for_manager)
+    val removingProgress = stringResource(Res.string.auth_passkey_removing)
 
-    LaunchedEffect(account.userId) {
-        keys = runCatching { PasskeyRepository.list() }.getOrDefault(emptyList())
+    LaunchedEffect(account.userId, serverPasskeysEnabled, listRefresh) {
+        if (serverPasskeysEnabled != true) return@LaunchedEffect
+        refreshingKeys = true
+        try {
+            keys = PasskeyRepository.list()
+            listError = false
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Keep an old list if present, but never pretend a failed request means zero keys.
+            listError = true
+        } finally {
+            refreshingKeys = false
+        }
     }
 
     NuvioSurfaceCard {
@@ -401,59 +432,163 @@ private fun PasskeySecurityCard(authState: AuthState) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Passkeys let you sign in using your device lock, fingerprint or face instead of a password.",
+            text = stringResource(Res.string.auth_passkey_description),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        keys.forEach { key ->
+        if (serverPasskeysEnabled == null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(stringResource(Res.string.auth_passkey_loading), style = MaterialTheme.typography.bodySmall)
+            }
+        } else if (serverPasskeysEnabled == false) {
+            Text(
+                stringResource(Res.string.auth_passkey_unavailable),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(onClick = { capabilityRetry++ }) {
+                Text(stringResource(Res.string.auth_passkey_retry))
+            }
+        } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(key.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = {
-                    removing = key
-                    showPasswordConfirm = true
-                    message = null
-                }, enabled = !busy) {
-                    Text(stringResource(Res.string.auth_passkey_remove))
+                Text(
+                    stringResource(Res.string.auth_passkey_registered),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                TextButton(onClick = { listRefresh++ }, enabled = !refreshingKeys && !busy) {
+                    Text(stringResource(Res.string.auth_passkey_refresh))
                 }
             }
-        }
-        NuvioPrimaryButton(
-            text = stringResource(Res.string.auth_add_passkey),
-            onClick = {
-                removing = null
-                password = ""
-                message = null
-                showPasswordConfirm = true
-            },
-        )
-        message?.let { status ->
+            if (refreshingKeys) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(stringResource(Res.string.auth_passkey_loading), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (listError) {
+                Text(
+                    stringResource(Res.string.auth_passkey_list_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            keys?.let { registered ->
+                if (registered.isEmpty() && !refreshingKeys && !listError) {
+                    Text(
+                        stringResource(Res.string.auth_passkey_none),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (registered.isNotEmpty()) {
+                    Text(
+                        stringResource(Res.string.auth_passkey_count, registered.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    registered.forEach { key ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    key.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (key.createdAt.isNotBlank()) {
+                                    Text(
+                                        stringResource(Res.string.auth_passkey_created_at, key.createdAt.take(10)),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            TextButton(onClick = {
+                                removing = key
+                                password = ""
+                                feedback = null
+                                showPasswordConfirm = true
+                            }, enabled = !busy) {
+                                Text(stringResource(Res.string.auth_passkey_remove))
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(status, style = MaterialTheme.typography.bodySmall)
+            if (canRegister) {
+                NuvioPrimaryButton(
+                    text = stringResource(Res.string.auth_add_passkey),
+                    enabled = !busy,
+                    onClick = {
+                        removing = null
+                        password = ""
+                        feedback = null
+                        showPasswordConfirm = true
+                    },
+                )
+            } else {
+                Text(
+                    stringResource(Res.string.auth_passkey_register_on_android),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            feedback?.let { result ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    result.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 
     if (showPasswordConfirm) {
         AlertDialog(
             onDismissRequest = {
-                if (!busy) { password = ""; showPasswordConfirm = false }
+                if (!busy) { password = ""; showPasswordConfirm = false; removing = null }
             },
-            title = { Text(stringResource(Res.string.auth_passkey_manage)) },
+            title = { Text(stringResource(if (removing == null) Res.string.auth_add_passkey else Res.string.auth_passkey_remove)) },
             text = {
                 Column {
-                    Text(stringResource(Res.string.auth_passkey_confirm_password))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        label = { Text(stringResource(Res.string.compose_auth_password)) },
-                    )
+                    if (busy) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            Text(operationStage, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else {
+                        Text(stringResource(if (removing == null)
+                            Res.string.auth_passkey_confirm_password else Res.string.auth_passkey_remove_confirm))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            label = { Text(stringResource(Res.string.compose_auth_password)) },
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -463,23 +598,41 @@ private fun PasskeySecurityCard(authState: AuthState) {
                     val secret = password
                     password = ""
                     val selectedKey = removing
+                    operationStage = if (selectedKey == null) confirmingAccount else removingProgress
                     scope.launch {
                         try {
-                            if (selectedKey == null) PasskeyRepository.register(ceremony, secret)
-                            else PasskeyRepository.revoke(selectedKey.id, secret)
-                            keys = PasskeyRepository.list()
-                            message = if (selectedKey == null) added else removed
-                            showPasswordConfirm = false
-                            removing = null
+                            if (selectedKey == null) {
+                                PasskeyRepository.register(requireNotNull(ceremony), secret) { step ->
+                                    operationStage = when (step) {
+                                        PasskeyRegistrationStep.WAITING_FOR_MANAGER -> waitingForManager
+                                        PasskeyRegistrationStep.VERIFYING_WITH_SERVER -> verifying
+                                    }
+                                }
+                            } else {
+                                PasskeyRepository.revoke(selectedKey.id, secret)
+                            }
+                            feedback = PasskeyActionFeedback(
+                                if (selectedKey == null) addSuccessTitle else removeSuccessTitle,
+                                if (selectedKey == null) added else removed,
+                                success = true,
+                            )
+                            // Verification succeeded. Refresh independently so a list/network
+                            // failure can never turn a successful registration into "failed".
+                            listRefresh++
                         } catch (error: CancellationException) {
                             throw error
-                        } catch (error: Throwable) {
-                            message = error.message?.takeIf { it.length <= 180 }
-                                ?: "Unable to update passkeys. Try again."
-                            showPasswordConfirm = false
+                        } catch (error: Exception) {
+                            feedback = PasskeyActionFeedback(
+                                if (selectedKey == null) addFailureTitle else removeFailureTitle,
+                                error.message?.takeIf { it.length in 1..180 } ?: failureFallback,
+                                success = false,
+                            )
                         } finally {
                             busy = false
+                            showPasswordConfirm = false
+                            removing = null
                         }
+                        showResultModal = true
                     }
                 }, enabled = !busy && password.isNotBlank()) {
                     Text(if (removing == null) stringResource(Res.string.auth_add_passkey)
@@ -487,10 +640,18 @@ private fun PasskeySecurityCard(authState: AuthState) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { password = ""; showPasswordConfirm = false }, enabled = !busy) {
+                TextButton(onClick = { password = ""; showPasswordConfirm = false; removing = null }, enabled = !busy) {
                     Text(stringResource(Res.string.action_cancel))
                 }
             },
+        )
+    }
+    feedback?.let { result ->
+        NuvioStatusModal(
+            title = result.title,
+            message = result.message,
+            isVisible = showResultModal,
+            onConfirm = { showResultModal = false },
         )
     }
 }
