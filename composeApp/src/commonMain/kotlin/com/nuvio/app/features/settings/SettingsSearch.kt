@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Favorite
@@ -58,6 +59,7 @@ internal sealed class SettingsSearchTarget {
     object SwitchProfile : SettingsSearchTarget()
     object CheckForUpdates : SettingsSearchTarget()
     object Changelog : SettingsSearchTarget()
+    object DesktopRemote : SettingsSearchTarget()
 }
 
 internal data class SettingsSearchEntry(
@@ -207,6 +209,18 @@ internal fun settingsSearchEntries(
         category = accountCategory,
         icon = Icons.Rounded.AccountCircle,
     )
+    if (!isDesktop) {
+        add(
+            key = "pc-controller",
+            title = stringResource(Res.string.remote_pc_controller_title),
+            description = stringResource(Res.string.remote_pc_controller_description),
+            page = accountPage,
+            section = stringResource(Res.string.compose_settings_root_account_section),
+            category = accountCategory,
+            icon = Icons.Rounded.DesktopWindows,
+            target = SettingsSearchTarget.DesktopRemote,
+        )
+    }
     addPage(
         page = SettingsPage.TraktAuthentication,
         key = "tracking",
