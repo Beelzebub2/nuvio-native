@@ -1,3 +1,13 @@
+## Starlit 1.7.2
+
+### Fixes
+
+- **Torrent engine starts reliably after an interrupted Windows shutdown:** A TorrServer process left running by an earlier Starlit session no longer prevents the new session from opening its own engine state. Each desktop engine launch uses a separate runtime configuration directory while keeping saved app preferences and torrent piece cache intact.
+
+### Validation
+
+- Reproduced the failed torrent engine startup in Starlit 1.7.1 on Windows 11 with a surviving old TorrServer process, then verified recovery after removing the orphan. Desktop integration tests passed, including a new regression test that runs old and new torrent engines with independent state directories. Windows installer and signed Android release builds are verified by the release workflow.
+
 ## Starlit 1.7.1
 
 ### Fixes
