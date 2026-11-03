@@ -256,10 +256,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     }
     val playerControlsState = PlayerControlsState(
         title = title,
-        episodeText = episodeText,
+        episodeText = if (hasPlaybackStarted) episodeText else "",
         streamTitle = activeStreamTitle,
         providerName = activeProviderName,
-        pauseOverlayEnabled = playerSettingsUiState.pauseOverlayEnabled,
+        pauseOverlayEnabled = playerSettingsUiState.pauseOverlayEnabled && hasPlaybackStarted,
         pauseOverlayWatchingLabel = stringResource(Res.string.compose_player_youre_watching),
         pauseOverlayLogo = logo,
         pauseOverlayEpisodeInfo = if (seasonNumber != null && episodeNumber != null) {
@@ -382,6 +382,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         themeBorderDefaultColor = themeColors.borderDefault.toCssColorString(),
         isPlaying = playbackSnapshot.isPlaying,
         isLoading = playbackSnapshot.isLoading,
+        hasPlaybackStarted = hasPlaybackStarted,
         isLocked = playerControlsLocked,
         lockedOverlayVisible = lockedOverlayVisible,
         controlsVisible = controlsVisible && !playerControlsLocked,
@@ -596,7 +597,12 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
 
         AnimatedVisibility(
-            visible = playerSettingsUiState.pauseOverlayEnabled && pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPip,
+            visible = pauseMetadataEligible(
+                enabled = playerSettingsUiState.pauseOverlayEnabled,
+                hasPlaybackStarted = hasPlaybackStarted,
+                snapshot = playbackSnapshot,
+                hasError = errorMessage != null,
+            ) && pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPip,
             enter = fadeIn(animationSpec = tween(durationMillis = 220)),
             exit = fadeOut(animationSpec = tween(durationMillis = 180)),
         ) {
@@ -714,7 +720,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             showRemainingTime = showRemainingTime,
             onRuntimeClick = { showRemainingTime = !showRemainingTime },
             releaseInfo = metaUiState.meta?.takeIf { it.id == parentMetaId }?.releaseInfo,
-            hideDetails = activeSkipInterval != null && !skipIntervalDismissed,
+            hideDetails = !hasPlaybackStarted || (activeSkipInterval != null && !skipIntervalDismissed),
+            showMetadata = hasPlaybackStarted,
             onNextEpisodeClick = if (nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null) {
                 {
                     playNextEpisode()

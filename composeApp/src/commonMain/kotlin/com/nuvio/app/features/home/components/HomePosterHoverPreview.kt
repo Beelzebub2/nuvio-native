@@ -77,6 +77,7 @@ import com.nuvio.app.core.ui.NuvioAsyncImage
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.PosterZoomOverlayCoordinator
+import com.nuvio.app.core.ui.PosterCardStyleUiState
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.secondaryClick
@@ -123,6 +124,7 @@ internal fun HomePosterHoverPreview(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    styleOverride: PosterCardStyleUiState? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
     if (!isDesktop) {
@@ -130,7 +132,7 @@ internal fun HomePosterHoverPreview(
         return
     }
 
-    val posterCardStyle = rememberPosterCardStyleUiState()
+    val posterCardStyle = styleOverride ?: rememberPosterCardStyleUiState()
     val trailerPlaybackEnabled = AppFeaturePolicy.trailerPlaybackMode == TrailerPlaybackMode.IN_APP &&
         posterCardStyle.hoverPreviewTrailerEnabled
     if (!posterCardStyle.hoverPreviewEnabled) {

@@ -198,6 +198,7 @@ data class PlayerControlsState(
     val themeBorderDefaultColor: String = "rgba(255, 255, 255, .12)",
     val isPlaying: Boolean = false,
     val isLoading: Boolean = false,
+    val hasPlaybackStarted: Boolean = false,
     val isLocked: Boolean = false,
     val lockedOverlayVisible: Boolean = false,
     val controlsVisible: Boolean = true,

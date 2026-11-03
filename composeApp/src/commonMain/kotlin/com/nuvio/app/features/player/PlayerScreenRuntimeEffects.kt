@@ -96,6 +96,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         credentialRefreshJob = null
         credentialRefreshAttemptedSourceUrl = null
         initialLoadCompleted = false
+        hasPlaybackStarted = false
         lastProgressPersistEpochMs = 0L
         previousIsPlaying = false
         pendingSeekScrobbleRestart = false
@@ -398,17 +399,15 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
         lockedOverlayVisible = false
     }
 
-    LaunchedEffect(
-        playerSettingsUiState.pauseOverlayEnabled,
-        playbackSnapshot.isPlaying,
-        playbackSnapshot.isLoading,
-        playbackSnapshot.durationMs,
-        errorMessage,
-    ) {
+    val pauseMetadataEligible = pauseMetadataEligible(
+        enabled = playerSettingsUiState.pauseOverlayEnabled,
+        hasPlaybackStarted = hasPlaybackStarted,
+        snapshot = playbackSnapshot,
+        hasError = errorMessage != null,
+    )
+    LaunchedEffect(pauseMetadataEligible) {
         pausedOverlayVisible = false
-        if (!playerSettingsUiState.pauseOverlayEnabled || playbackSnapshot.isPlaying || playbackSnapshot.isLoading || playbackSnapshot.durationMs <= 0L || errorMessage != null) {
-            return@LaunchedEffect
-        }
+        if (!pauseMetadataEligible) return@LaunchedEffect
         delay(5000)
         pausedOverlayVisible = true
     }
