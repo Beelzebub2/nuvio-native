@@ -620,6 +620,7 @@
     <string name="settings_account_email">E-mail</string>
     <string name="settings_account_guest_profile">Conta de visitante</string>
     <string name="settings_account_not_signed_in">Não conectado</string>
+    <string name="settings_account_loading">Verificando login…</string>
     <string name="settings_account_profile_name">Conta Starlit</string>
     <string name="settings_account_section_actions">GESTÃO DA CONTA</string>
     <string name="settings_account_section_data">DADOS E SINCRONIZAÇÃO</string>
