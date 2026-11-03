@@ -288,7 +288,7 @@ object AuthRepository {
      * Return the provider URL rather than allowing the SDK to import a session
      * before we have verified the account identity on the PKCE callback.
      */
-    suspend fun prepareGoogleAccountLink(password: String): Result<String> = runCatching {
+    internal suspend fun prepareGoogleAccountLink(password: String, redirectUrl: String = "nuvio://auth"): Result<String> = runCatching {
         val account = requireNotNull(_state.value as? AuthState.Authenticated)
         require(!account.isAnonymous) { "Sign in to your approved account first" }
         check(pendingGoogleLink == null) { "Complete or cancel the current Google linking request first" }
@@ -306,7 +306,7 @@ object AuthRepository {
         check(client.auth.retrieveUserForCurrentSession(false).identities.orEmpty().none { it.provider == "google" }) {
             "This account already has Google linked"
         }
-        val url = requireNotNull(client.auth.linkIdentity(Google, redirectUrl = "nuvio://auth") {
+        val url = requireNotNull(client.auth.linkIdentity(Google, redirectUrl = redirectUrl) {
             automaticallyOpenUrl = false
         }) { "Google did not return an authorization URL" }
         check(isTrustedGoogleAuthorizationUrl(url)) { "Google returned an untrusted authorization address" }

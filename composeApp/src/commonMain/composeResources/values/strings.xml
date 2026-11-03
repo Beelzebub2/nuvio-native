@@ -2694,4 +2694,19 @@
     <string name="settings_import_progress_complete">Your workspace is ready</string>
     <string name="settings_import_progress_pending">Saved locally. Retry account sync when connected.</string>
     <string name="settings_import_progress_failed">Import could not finish. Your saved workspace is safe.</string>
+    <string name="remote_qr_devices_heading">Devices</string>
+    <string name="remote_qr_phone_remote">Phone remote</string>
+    <string name="remote_qr_connected">A phone is connected to this desktop.</string>
+    <string name="remote_qr_account_description">Control playback from your Android phone. Pair on the same network with your Starlit account.</string>
+    <string name="remote_qr_manage">Manage connection</string>
+    <string name="remote_qr_show">Connect phone</string>
+    <string name="remote_qr_instructions">On your Android phone, open Starlit → Settings → PC controller → Scan desktop QR code. Choose this PC, then compare and confirm the codes on both devices. Use the same account and server on the same network.</string>
+    <string name="remote_qr_image_description">Desktop pairing QR code for %1$s</string>
+    <string name="remote_qr_change_network">Choose network address</string>
+    <string name="remote_qr_scan">Scan desktop QR code</string>
+    <string name="remote_qr_scan_failed">Couldn’t read a Starlit desktop QR code. Try again, update Google Play services, or enter the PC’s local IP below.</string>
+    <string name="settings_account_loading">Loading account…</string>
+    <string name="settings_account_server_detail">Server: %1$s</string>
+    <string name="auth_google_link_status_failed">Couldn’t check your Google connection. Try again.</string>
+    <string name="remote_qr_sign_in_required">Sign in to your Starlit account to connect your phone.</string>
 </resources>

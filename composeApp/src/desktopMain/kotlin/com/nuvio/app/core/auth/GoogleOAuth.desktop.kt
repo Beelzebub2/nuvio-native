@@ -22,9 +22,23 @@ internal actual suspend fun launchGoogleOAuth(client: SupabaseClient) {
     AuthRepository.completeGoogleOAuth(client, code)
 }
 
+internal actual suspend fun launchGoogleAccountLink(password: String, openUrl: (String) -> Unit) {
+    val client = com.nuvio.app.core.network.SupabaseProvider.client
+    try {
+        val code = awaitGoogleAuthorization(
+            authorize = { AuthRepository.prepareGoogleAccountLink(password, it).getOrThrow() },
+            open = { openUrl(it.toString()) },
+        )
+        AuthRepository.completeGoogleOAuth(client, code)
+    } catch (error: Throwable) {
+        AuthRepository.cancelGoogleAccountLink()
+        throw error
+    }
+}
+
 /** Use a private loopback listener; never accept implicit access/refresh tokens. */
 internal suspend fun awaitGoogleAuthorization(
-    authorize: (String) -> String,
+    authorize: suspend (String) -> String,
     open: (URI) -> Unit,
 ): String = withContext(Dispatchers.IO) {
     val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)

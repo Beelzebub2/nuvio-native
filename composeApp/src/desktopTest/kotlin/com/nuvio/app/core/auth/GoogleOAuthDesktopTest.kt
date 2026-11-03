@@ -1,14 +1,33 @@
 package com.nuvio.app.core.auth
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 class GoogleOAuthDesktopTest {
+    @Test
+    fun cancelingAuthorizationClosesItsPrivateListener() = runBlocking {
+        val opened = CompletableDeferred<URI>()
+        val request = launch {
+            awaitGoogleAuthorization(authorize = { redirect -> delay(1); redirect }, open = { opened.complete(it) })
+        }
+        val redirect = opened.await()
+        request.cancelAndJoin()
+        assertFails {
+            HttpClient.newHttpClient().send(HttpRequest.newBuilder(redirect).GET().build(),
+                HttpResponse.BodyHandlers.discarding())
+        }
+    }
+
     @Test
     fun loopbackCallbackRejectsTokensDuplicateCodesAndOtherPaths() = runBlocking {
         val http = HttpClient.newHttpClient()

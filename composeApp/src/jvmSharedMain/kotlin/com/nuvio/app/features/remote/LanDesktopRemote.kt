@@ -104,6 +104,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     }
 
     override fun stop() {
+        DesktopRemote.hostAddresses.value = emptyList()
         scope?.cancel()
         scope = null
         account = null
@@ -289,6 +290,11 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 soTimeout = 1000
             }.also { udpSocket = it; discovery = it }
             currentCoroutineContext().ensureActive()
+            withContext(Dispatchers.Main) {
+                check(scope === ownerScope)
+                DesktopRemote.hostAddresses.value = localAddresses()
+                DesktopRemote.status.value = "Ready to pair with your phone on this local network."
+            }
             coroutineScope {
                 launch {
                     while (isActive) {
@@ -335,6 +341,9 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
         } finally {
             runCatching { listener?.close() }
             runCatching { udpSocket?.close() }
+            withContext(NonCancellable + Dispatchers.Main) {
+                if (scope === ownerScope) DesktopRemote.hostAddresses.value = emptyList()
+            }
         }
     }
 

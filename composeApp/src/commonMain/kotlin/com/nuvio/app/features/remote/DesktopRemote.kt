@@ -71,6 +71,7 @@ internal object DesktopRemote {
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
     val scanning = MutableStateFlow(false)
+    val hostAddresses = MutableStateFlow<List<String>>(emptyList())
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
@@ -121,6 +122,9 @@ internal object DesktopRemote {
     // Opening the controller never depends on a discovered PC. Users can always
     // reach its manual LAN scan and troubleshooting state from Settings.
     fun open() {
+        if (isDesktop && hostAddresses.value.isNotEmpty()) {
+            hostAddresses.value = transport.localAddresses()
+        }
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value) {
             transport.discover()

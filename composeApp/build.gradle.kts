@@ -1228,6 +1228,7 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.appcompat)
                 implementation(libs.androidx.activity.compose)
+                implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
                 implementation(libs.androidx.credentials.core)
                 implementation(libs.androidx.credentials.play.services.auth)
                 implementation(libs.androidx.core.splashscreen)
@@ -1272,6 +1273,7 @@ kotlin {
             resources.srcDir(desktopSentryResourceDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation("com.google.zxing:core:3.5.4")
                 if (!isWindowsHost) {
                     implementation(project(":composeMediaPlayer"))
                 }

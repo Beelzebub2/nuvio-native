@@ -2016,4 +2016,19 @@
     <string name="movie_status_rumored">Com rumores</string>
     <string name="movie_status_in_production">Em produção</string>
     <string name="movie_status_post_production">Pós-produção</string>
+    <string name="remote_qr_devices_heading">Dispositivos</string>
+    <string name="remote_qr_phone_remote">Controlo pelo telemóvel</string>
+    <string name="remote_qr_connected">Um telemóvel está ligado a este computador.</string>
+    <string name="remote_qr_account_description">Controle a reprodução pelo seu telemóvel Android. Emparelhe na mesma rede com a sua conta Starlit.</string>
+    <string name="remote_qr_manage">Gerir ligação</string>
+    <string name="remote_qr_show">Ligar telemóvel</string>
+    <string name="remote_qr_instructions">No telemóvel Android, abra Starlit → Definições → Controlador do PC → Ler código QR do computador. Escolha este PC e compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
+    <string name="remote_qr_image_description">Código QR de emparelhamento do computador %1$s</string>
+    <string name="remote_qr_change_network">Escolher endereço de rede</string>
+    <string name="remote_qr_scan">Ler código QR do computador</string>
+    <string name="remote_qr_scan_failed">Não foi possível ler um código QR do Starlit. Tente novamente, atualize os serviços Google Play ou introduza o IP local do PC abaixo.</string>
+    <string name="settings_account_loading">A carregar conta…</string>
+    <string name="settings_account_server_detail">Servidor: %1$s</string>
+    <string name="auth_google_link_status_failed">Não foi possível verificar a ligação ao Google. Tente novamente.</string>
+    <string name="remote_qr_sign_in_required">Inicie sessão na sua conta Starlit para ligar o telemóvel.</string>
 </resources>
