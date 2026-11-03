@@ -224,12 +224,29 @@ internal fun PlayerScreenRuntime.refreshTracks() {
     val selectedAudio = audioTracks.firstOrNull { it.isSelected }
     if (selectedAudio != null) selectedAudioIndex = selectedAudio.index
     val selectedSub = subtitleTracks.firstOrNull { it.isSelected }
-    if (selectedSub != null && !useCustomSubtitles) {
-        if (isSubtitleOffSelected) {
-            // Native track events can report an old selection after Off was requested.
-            ctrl.selectSubtitleTrack(-1)
-        } else {
-            selectedSubtitleIndex = selectedSub.index
+    if (!useCustomSubtitles) {
+        when {
+            isSubtitleOffSelected && selectedSub != null -> {
+                // Native track events can report an old selection after Off was requested.
+                ctrl.selectSubtitleTrack(-1)
+            }
+            isUserExplicitSubtitleSelection && selectedSubtitleIndex >= 0 -> {
+                // A track refresh may still report the previously selected native track.
+                // Keep the user's choice authoritative, and remap its saved identity if
+                // the playback engine has reordered the available tracks.
+                val savedTrack = PlayerTrackPreferenceStorage.load(parentMetaId)
+                    ?.takeIf { it.subtitleType == PersistedSubtitleSelectionType.INTERNAL }
+                val desiredIndex = savedTrack?.let {
+                    findPersistedSubtitleTrackIndex(subtitleTracks, it)
+                } ?: selectedSubtitleIndex
+                if (subtitleTracks.any { it.index == desiredIndex }) {
+                    selectedSubtitleIndex = desiredIndex
+                    if (selectedSub?.index != desiredIndex) {
+                        ctrl.selectSubtitleTrack(desiredIndex)
+                    }
+                }
+            }
+            selectedSub != null -> selectedSubtitleIndex = selectedSub.index
         }
     }
     if (!playbackSnapshot.isLoading) {
