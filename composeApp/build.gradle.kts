@@ -1276,6 +1276,7 @@ kotlin {
                     implementation(project(":composeMediaPlayer"))
                 }
                 implementation(libs.kotlinx.coroutines.swing)
+                implementation("net.java.dev.jna:jna:5.19.1")
                 implementation(libs.ktor.client.cio)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.quickjs.kt)

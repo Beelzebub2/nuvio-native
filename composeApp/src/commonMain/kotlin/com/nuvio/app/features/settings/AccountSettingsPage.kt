@@ -223,6 +223,7 @@ private fun AccountSettingsBody(
 private fun PasskeySecurityCard(authState: AuthState) {
     val account = authState as? AuthState.Authenticated ?: return
     val ceremony = rememberPasskeyCeremony() ?: return
+    if (!ceremony.supportsRegistration) return
     if (account.isAnonymous || !PasskeyRepository.canUseOnActiveServer()) return
 
     var serverPasskeysEnabled by remember(account.userId) { mutableStateOf(false) }

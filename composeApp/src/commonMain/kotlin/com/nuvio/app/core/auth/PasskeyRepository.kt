@@ -29,6 +29,7 @@ import kotlinx.serialization.json.put
 
 /** Platform-bound, interactive WebAuthn ceremonies. Private keys never enter app code. */
 interface PasskeyCeremony {
+    val supportsRegistration: Boolean get() = true
     suspend fun create(optionsJson: String): String
     suspend fun get(optionsJson: String): String
 }
