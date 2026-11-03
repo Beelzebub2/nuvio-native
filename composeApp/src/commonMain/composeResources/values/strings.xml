@@ -719,6 +719,17 @@
     <string name="remote_handoff_approve_description">A paired phone requested this title. Only accept if you recognize the request. Starlit will open the normal source picker on this PC; the phone cannot supply a stream or bypass source restrictions.</string>
     <string name="remote_handoff_approve">Choose source on PC</string>
     <string name="remote_handoff_reject">Reject</string>
+    <string name="downloads_storage_heading">Storage management</string>
+    <string name="downloads_storage_recorded">Tracked offline data: %1$s</string>
+    <string name="downloads_storage_available">Space available on this drive: %1$s</string>
+    <string name="downloads_storage_above_target">Tracked downloads exceed your storage target. Review old completed downloads to free space.</string>
+    <string name="downloads_storage_target_button">Storage target: %1$s</string>
+    <string name="downloads_storage_no_target">No target</string>
+    <string name="downloads_storage_target_note">The target is a warning, not a hard download limit. Starlit never deletes offline media automatically.</string>
+    <string name="downloads_storage_review">Review cleanup</string>
+    <string name="downloads_storage_safety_notice">Select completed offline copies to remove. Only verified files in Starlit-owned storage are eligible; active transfers, unverified and externally managed files are preserved. Files cannot be recovered after removal.</string>
+    <string name="downloads_storage_none_eligible">No verified Starlit-owned completed downloads are eligible for cleanup.</string>
+    <string name="downloads_storage_remove_selected">Remove %1$d selected</string>
     <string name="downloads_mobile_in_progress">In progress</string>
     <string name="downloads_mobile_ready">Ready</string>
     <string name="downloads_mobile_attention">Needs attention</string>

@@ -518,6 +518,17 @@
     <string name="remote_handoff_approve_description">Um celular pareado solicitou este título. Aceite somente se reconhecer o pedido. O Starlit abrirá o seletor normal de fontes no PC; o celular não pode fornecer uma fonte nem contornar restrições.</string>
     <string name="remote_handoff_approve">Escolher fonte no PC</string>
     <string name="remote_handoff_reject">Rejeitar</string>
+    <string name="downloads_storage_heading">Gerenciamento de armazenamento</string>
+    <string name="downloads_storage_recorded">Dados offline registrados: %1$s</string>
+    <string name="downloads_storage_available">Espaço disponível nesta unidade: %1$s</string>
+    <string name="downloads_storage_above_target">Os downloads ultrapassaram a meta de armazenamento. Revise os downloads concluídos para liberar espaço.</string>
+    <string name="downloads_storage_target_button">Meta de armazenamento: %1$s</string>
+    <string name="downloads_storage_no_target">Sem meta</string>
+    <string name="downloads_storage_target_note">A meta mostra avisos e não impede novos downloads. O Starlit nunca apaga conteúdo offline automaticamente.</string>
+    <string name="downloads_storage_review">Revisar limpeza</string>
+    <string name="downloads_storage_safety_notice">Selecione cópias offline concluídas para remover. Apenas arquivos verificados e pertencentes ao Starlit são elegíveis; transferências ativas e arquivos externos são preservados. Não é possível recuperar arquivos removidos.</string>
+    <string name="downloads_storage_none_eligible">Não há downloads concluídos e verificados elegíveis para limpeza.</string>
+    <string name="downloads_storage_remove_selected">Remover %1$d selecionados</string>
     <string name="downloads_mobile_in_progress">Em andamento</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Precisam de atenção</string>
