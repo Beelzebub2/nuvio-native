@@ -34,7 +34,14 @@ internal data class RemotePlayback(
 )
 
 @Serializable
-internal data class RemoteCommand(val type: String = "state", val value: Double = 0.0, val id: String = "", val playbackId: String = "")
+internal data class RemoteCommand(
+    val type: String = "state",
+    val value: Double = 0.0,
+    val id: String = "",
+    val playbackId: String = "",
+    val profileId: Int? = null,
+    val handoff: RemotePlaybackHandoff? = null,
+)
 
 internal data class RemoteDesktop(val address: String, val port: Int, val name: String)
 internal data class RemotePairing(val code: String, val peer: String)
@@ -62,9 +69,41 @@ internal object DesktopRemote {
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val visible = MutableStateFlow(false)
+    val pendingHandoff = MutableStateFlow<RemotePlaybackHandoff?>(null)
     // Accessed only on the UI dispatcher, including dispatch from the transport.
     var playback = RemotePlayback()
     var dispatch: ((RemoteCommand) -> Unit)? = null
+    // Only the active desktop content navigator can accept a pending request.
+    var onAcceptedHandoff: ((RemotePlaybackHandoff) -> Unit)? = null
+    var handoffAccount: RemoteAccount? = null
+
+    fun requestHandoff(handoff: RemotePlaybackHandoff): Boolean {
+        if (isDesktop || !transport.supported || !connected.value ||
+            handoff.profileId != com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) return false
+        val safe = handoff.copy(
+            title = handoff.title.take(160).map { if (it < ' ' || it == '\u007f') ' ' else it }
+                .joinToString("").trim(),
+        )
+        if (!safe.isAllowed()) return false
+        transport.send(RemoteCommand(
+            type = "handoffRequest",
+            playbackId = remotePlayback.value.playbackId,
+            profileId = safe.profileId,
+            handoff = safe,
+        ))
+        return true
+    }
+
+    fun acceptPendingHandoff() {
+        val request = pendingHandoff.value ?: return
+        pendingHandoff.value = null
+        val account = handoffAccount ?: return
+        if (!isDesktop || !connected.value ||
+            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != request.profileId ||
+            !request.isAllowed()) return
+        if (runCatching { currentRemoteAccessToken(account) }.isFailure) return
+        onAcceptedHandoff?.invoke(request)
+    }
 
     fun command(type: String, value: Double = 0.0, id: String = "") {
         transport.send(RemoteCommand(type, value, id, remotePlayback.value.playbackId))
@@ -78,11 +117,19 @@ internal fun DesktopRemoteHost() {
     DisposableEffect(auth, server.backendUrl, server.publishableKey) {
         val account = auth as? AuthState.Authenticated
         if (account != null && !account.isAnonymous && server.backendUrl.startsWith("https://")) {
-            DesktopRemote.transport.start(RemoteAccount(account.userId, server.backendUrl.trimEnd('/'), server.publishableKey), isDesktop)
+            val remoteAccount = RemoteAccount(account.userId, server.backendUrl.trimEnd('/'), server.publishableKey)
+            DesktopRemote.handoffAccount = remoteAccount
+            DesktopRemote.transport.start(remoteAccount, isDesktop)
         } else {
+            DesktopRemote.handoffAccount = null
+            DesktopRemote.pendingHandoff.value = null
             DesktopRemote.status.value = "Sign in to the same account and server on both devices to use Desktop remote."
         }
-        onDispose { DesktopRemote.transport.stop() }
+        onDispose {
+            DesktopRemote.transport.stop()
+            DesktopRemote.handoffAccount = null
+            DesktopRemote.pendingHandoff.value = null
+        }
     }
     DesktopRemoteDialogs()
 }

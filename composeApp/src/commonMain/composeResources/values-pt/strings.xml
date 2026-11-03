@@ -558,6 +558,13 @@
     <string name="downloads_mobile_empty_description">Escolhe um filme ou episódio e toca em Transferir para o guardares e veres sem ligação à Internet.</string>
     <string name="downloads_mobile_library">Biblioteca offline</string>
     <string name="downloads_mobile_storage_used">%1$s guardados neste dispositivo</string>
+    <string name="remote_handoff_send">Reproduzir no PC Starlit</string>
+    <string name="remote_handoff_sent">Pedido enviado. Aceita-o no PC e escolhe uma fonte nesse dispositivo.</string>
+    <string name="remote_handoff_unavailable">Não foi possível enviar para o PC. Confirma o emparelhamento, perfil e identificação do conteúdo.</string>
+    <string name="remote_handoff_approve_title">Reproduzir neste PC?</string>
+    <string name="remote_handoff_approve_description">Um telemóvel emparelhado pediu este título. Aceita apenas se reconheceres o pedido. O Starlit vai abrir a seleção normal de fontes neste PC; o telemóvel não pode fornecer uma fonte nem contornar restrições.</string>
+    <string name="remote_handoff_approve">Escolher fonte no PC</string>
+    <string name="remote_handoff_reject">Rejeitar</string>
     <string name="downloads_mobile_in_progress">Em curso</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Requer atenção</string>

@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
+import nuvio.composeapp.generated.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun DesktopRemoteSettingsButton() {
@@ -22,6 +24,7 @@ internal fun DesktopRemoteSettingsButton() {
 @Composable
 internal fun DesktopRemoteDialogs() {
     val pairing by DesktopRemote.pairing.collectAsState()
+    val pendingHandoff by DesktopRemote.pendingHandoff.collectAsState()
     val visible by DesktopRemote.visible.collectAsState()
     val status by DesktopRemote.status.collectAsState()
     val connected by DesktopRemote.connected.collectAsState()
@@ -43,6 +46,32 @@ internal fun DesktopRemoteDialogs() {
                 DesktopRemote.transport.confirmPairing()
             }) { Text("Codes match") } },
             dismissButton = { TextButton(onClick = { DesktopRemote.transport.disconnect() }) { Text("Reject") } },
+        )
+    } else if (isDesktop && pendingHandoff != null) {
+        // A paired phone cannot navigate or start playback without this PC's
+        // explicit approval. The actual source is resolved on the desktop.
+        AlertDialog(
+            onDismissRequest = { DesktopRemote.pendingHandoff.value = null },
+            title = { Text(stringResource(Res.string.remote_handoff_approve_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        stringResource(Res.string.remote_handoff_approve_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(pendingHandoff!!.title, style = MaterialTheme.typography.titleMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { DesktopRemote.acceptPendingHandoff() }) {
+                    Text(stringResource(Res.string.remote_handoff_approve))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { DesktopRemote.pendingHandoff.value = null }) {
+                    Text(stringResource(Res.string.remote_handoff_reject))
+                }
+            },
         )
     } else if (visible) {
         AlertDialog(

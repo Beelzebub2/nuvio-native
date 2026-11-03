@@ -707,6 +707,13 @@
     <string name="downloads_mobile_empty_description">Choose a movie or episode and tap Download to save it for offline viewing.</string>
     <string name="downloads_mobile_library">Your offline library</string>
     <string name="downloads_mobile_storage_used">%1$s saved on this device</string>
+    <string name="remote_handoff_send">Play on Starlit PC</string>
+    <string name="remote_handoff_sent">Playback request sent. Approve it on your PC and choose a source there.</string>
+    <string name="remote_handoff_unavailable">Cannot send to PC. Check pairing, profile and content identifiers.</string>
+    <string name="remote_handoff_approve_title">Play on this PC?</string>
+    <string name="remote_handoff_approve_description">A paired phone requested this title. Only accept if you recognize the request. Starlit will open the normal source picker on this PC; the phone cannot supply a stream or bypass source restrictions.</string>
+    <string name="remote_handoff_approve">Choose source on PC</string>
+    <string name="remote_handoff_reject">Reject</string>
     <string name="downloads_mobile_in_progress">In progress</string>
     <string name="downloads_mobile_ready">Ready</string>
     <string name="downloads_mobile_attention">Needs attention</string>

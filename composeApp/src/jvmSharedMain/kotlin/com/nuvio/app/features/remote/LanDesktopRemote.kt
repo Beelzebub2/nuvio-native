@@ -21,6 +21,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.nuvio.app.features.profiles.ProfileRepository
 
 private const val DISCOVERY_PORT = 47788
 private const val PAIRING_TIMEOUT = 90_000L
@@ -60,6 +61,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     @Volatile private var confirmation: CompletableDeferred<Unit>? = null
     private var commands = Channel<RemoteCommand>(32)
     private val sessionEpoch = AtomicLong()
+    private val lastHandoffAtNanos = AtomicLong(0L)
 
     override fun start(account: RemoteAccount, host: Boolean) {
         stop()
@@ -87,6 +89,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
 
     override fun disconnect() {
         sessionEpoch.incrementAndGet()
+        DesktopRemote.pendingHandoff.value = null
         connection?.cancel()
         connection = null
         confirmation?.cancel()
@@ -289,6 +292,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                     confirmation = null
                     DesktopRemote.pairing.value = null
                     DesktopRemote.connected.value = false
+                    DesktopRemote.pendingHandoff.value = null
                 }
             }
         }
@@ -318,7 +322,22 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 val snapshot = withContext(Dispatchers.Main) {
                     check(sessionEpoch.get() == epoch)
                     currentRemoteAccessToken(expected)
-                    if (command.type != "state" && command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
+                    if (command.type == "handoffRequest") {
+                        val intent = command.acceptableHandoff(
+                            ProfileRepository.activeProfileId, DesktopRemote.playback.playbackId,
+                        )
+                        if (intent != null && DesktopRemote.pendingHandoff.value == null) {
+                            val now = System.nanoTime()
+                            val previous = lastHandoffAtNanos.get()
+                            // Prevent an otherwise authorized phone from flooding
+                            // the desktop with navigation prompts.
+                            if (previous == 0L || now - previous !in 0 until 20_000_000_000L) {
+                                lastHandoffAtNanos.set(now)
+                                DesktopRemote.pendingHandoff.value = intent
+                            }
+                        }
+                    } else if (command.type != "state" &&
+                        command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
                         DesktopRemote.dispatch?.invoke(command)
                     }
                     DesktopRemote.playback
