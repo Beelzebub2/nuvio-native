@@ -411,9 +411,15 @@ internal class DesktopP2pSession(
     }
 
     private suspend fun fail(currentIntent: Long, error: Exception) {
-        withContext(NonCancellable) { backend.stop() }
+        val stopFailure = withContext(NonCancellable) { runCatching { backend.stop() }.exceptionOrNull() }
         activeHash = null
-        publish(currentIntent, P2pStreamingState.Error(error.message ?: localizedP2pUnknownTorrentError()))
+        if (stopFailure != null) log.w(stopFailure) { "Torrent engine cleanup failed after playback error" }
+        // A failed child termination must stay tracked by its backend, but it
+        // cannot prevent the UI from reporting the failure to the viewer.
+        publish(currentIntent, P2pStreamingState.Error(
+            stopFailure?.message?.takeIf { it.isNotBlank() }
+                ?: error.message ?: localizedP2pUnknownTorrentError(),
+        ))
     }
 
     private fun updateStats(currentIntent: Long, stats: TorrServerStats) = synchronized(intentLock) {
