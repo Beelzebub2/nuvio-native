@@ -1,3 +1,16 @@
+## Starlit 1.6.1
+
+### Fixes
+
+- **Clear Android passkey registration results:** Account settings now report registration, verification and removal progress explicitly. Registered passkeys have visible names, dates, refresh controls and errors instead of an empty or ambiguous list; existing credentials remain manageable even when new passkeys cannot be created.
+- **Google linking updates immediately:** Returning to Starlit after browser-based Google consent refreshes the current account's linked identity without having to navigate away and back. Feedback stays scoped to the correct signed-in account.
+- **Recognisable Google sign-in controls:** The compact Google sign-in option and the existing-account Link Google control now display the multicolour Google mark instead of a plain letter.
+
+### Security and compatibility
+
+- The existing password-confirmed Google account linking, server approval and passkey verification requirements are unchanged. The account server's branded browser return page is a separate backend deployment and does not claim the link succeeded until the app verifies it.
+- Automated desktop authentication tests passed. Android and iOS build checks are required to pass before publishing; physical-device Google linking and Bitwarden passkey registration should also be confirmed on real devices.
+
 ## Starlit 1.6.0
 
 ### Features
