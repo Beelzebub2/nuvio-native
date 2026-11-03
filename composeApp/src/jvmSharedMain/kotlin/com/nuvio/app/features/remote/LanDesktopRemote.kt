@@ -106,11 +106,18 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     }
 
     override fun discover() {
-        val currentScope = scope ?: return
-        val expected = account ?: return
+        // Manual search must explain why it cannot start (rather than silently
+        // doing nothing when the phone has not signed into an account).
         if (host || DesktopRemote.scanning.value) return
+        val currentScope = scope
+        val expected = account
+        if (currentScope == null || expected == null) {
+            DesktopRemote.status.value = "Sign in to the same account and server on your phone and PC before searching."
+            return
+        }
         DesktopRemote.scanning.value = true
         DesktopRemote.desktops.value = emptyList()
+        DesktopRemote.status.value = "Searching the local network for Starlit PCs…"
         currentScope.launch {
             try {
                 DatagramSocket().use { socket ->
