@@ -244,8 +244,9 @@ fun NuvioPosterCard(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onMiddleClick: (() -> Unit)? = null,
+    styleOverride: PosterCardStyleUiState? = null,
 ) {
-    val posterCardStyle = rememberPosterCardStyleUiState()
+    val posterCardStyle = styleOverride ?: rememberPosterCardStyleUiState()
     val tokens = MaterialTheme.nuvio
     val effectiveBasePosterWidthDp = basePosterWidthDp ?: posterCardStyle.widthDp
     val cardWidth = shape.cardWidth(basePosterWidthDp = effectiveBasePosterWidthDp)

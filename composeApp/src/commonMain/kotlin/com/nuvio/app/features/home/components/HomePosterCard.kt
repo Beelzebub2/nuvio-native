@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioPosterCard
 import com.nuvio.app.core.ui.NuvioPosterShape
+import com.nuvio.app.core.ui.PosterCardStyleUiState
 import com.nuvio.app.core.ui.desktopCatalogShelfPosterBaseWidthDp
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.home.MetaPreview
@@ -19,8 +20,9 @@ fun HomePosterCard(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     showLandscapeOverlay: Boolean = true,
+    styleOverride: PosterCardStyleUiState? = null,
 ) {
-    val posterCardStyle = rememberPosterCardStyleUiState()
+    val posterCardStyle = styleOverride ?: rememberPosterCardStyleUiState()
     val isLandscapeMode = useLandscapeBackdropMode || posterCardStyle.catalogLandscapeModeEnabled
     val effectiveLandscapePoster = if (posterCardStyle.alwaysShowLandscapeClearlogo) null else item.landscapePoster
     val imageUrl = if (isLandscapeMode) {
@@ -38,6 +40,7 @@ fun HomePosterCard(
         isWatched = isWatched,
         onClick = onClick,
         onLongClick = onLongClick,
+        styleOverride = posterCardStyle,
     ) { hoverModifier ->
         NuvioPosterCard(
             title = item.name,
@@ -53,6 +56,7 @@ fun HomePosterCard(
             isWatched = isWatched,
             onClick = onClick,
             onLongClick = onLongClick,
+            styleOverride = posterCardStyle,
         )
     }
 }

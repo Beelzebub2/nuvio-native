@@ -189,6 +189,7 @@ let state = {
   streamTitle: "",
   providerName: "",
   pauseOverlayEnabled: false,
+  hasPlaybackStarted: false,
   pauseOverlayWatchingLabel: "You're watching",
   pauseOverlayLogo: "",
   pauseOverlayEpisodeInfo: "",
@@ -947,7 +948,7 @@ const resetPauseMetadataTimer = () => {
 
 const syncPauseMetadataTimer = showOpening => {
   const durationMs = Math.max(0, Number(state.durationMs) || 0);
-  const eligible = Boolean(!state.isPlaying && !state.isLoading && durationMs > 0 && !showOpening);
+  const eligible = Boolean(state.pauseOverlayEnabled && !state.isPlaying && !state.isLoading && durationMs > 0 && !showOpening);
   const key = eligible ? `${Math.round(durationMs)}:${state.title || ""}:${state.pauseOverlayEpisodeInfo || ""}` : "";
   if (!eligible) {
     resetPauseMetadataTimer();
@@ -2456,10 +2457,14 @@ const renderChrome = () => {
   root.classList.toggle("pip-mode", Boolean(state.isInPip));
   if (!state.isInPip && isPipLocked) setPipLocked(false);
   root.classList.toggle("chrome-hidden", Boolean(showError || !state.controlsVisible));
-  root.classList.toggle("source-visible", Boolean(!showError && !isPlaying && !state.isLoading && (state.streamTitle || state.providerName)));
+  root.classList.toggle("source-visible", Boolean(!showError && state.hasPlaybackStarted && !isPlaying && !state.isLoading && (state.streamTitle || state.providerName)));
   syncHiddenCursor();
   const showOpening = renderOpeningOverlay(showError);
-  if (state.pauseOverlayEnabled || showError) renderPauseMetadataOverlay(showOpening || showError);
+  // Also clear a previous overlay/timer if playback changed before the next frame.
+  if (state.pauseOverlayEnabled || showError || pauseMetadataReady || pauseMetadataEligibilityKey ||
+      pauseMetadataOverlay.classList.contains("visible")) {
+    renderPauseMetadataOverlay(showOpening || showError);
+  }
   syncParentalGuide(showOpening || showError);
 
   title.textContent = state.title || "";

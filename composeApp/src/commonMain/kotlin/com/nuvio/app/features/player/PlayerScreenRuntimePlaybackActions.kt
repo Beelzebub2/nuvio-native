@@ -38,6 +38,7 @@ internal fun PlayerScreenRuntime.updatePlaybackSnapshot(
         current
     }
     playbackSnapshotKey = playbackKey
+    hasPlaybackStarted = playbackHasStarted(hasPlaybackStarted, playbackSnapshot)
     val targetPositionMs = scrubbingPositionMs ?: return true
     if (!isScrubbingTimeline && (
             !snapshot.isLoading || snapshot.isEnded ||
