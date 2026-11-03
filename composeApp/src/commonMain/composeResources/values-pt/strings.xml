@@ -558,6 +558,17 @@
     <string name="downloads_mobile_empty_description">Escolhe um filme ou episódio e toca em Transferir para o guardares e veres sem ligação à Internet.</string>
     <string name="downloads_mobile_library">Biblioteca offline</string>
     <string name="downloads_mobile_storage_used">%1$s guardados neste dispositivo</string>
+    <string name="downloads_storage_heading">Gestão do armazenamento</string>
+    <string name="downloads_storage_recorded">Dados offline registados: %1$s</string>
+    <string name="downloads_storage_available">Espaço disponível nesta unidade: %1$s</string>
+    <string name="downloads_storage_above_target">As transferências ultrapassam o limite de referência. Revê as transferências concluídas para libertar espaço.</string>
+    <string name="downloads_storage_target_button">Objetivo de espaço: %1$s</string>
+    <string name="downloads_storage_no_target">Sem objetivo</string>
+    <string name="downloads_storage_target_note">Este objetivo apenas mostra avisos, não impõe um limite. O Starlit nunca apaga conteúdos offline automaticamente.</string>
+    <string name="downloads_storage_review">Rever limpeza</string>
+    <string name="downloads_storage_safety_notice">Seleciona as cópias offline concluídas a remover. Apenas ficheiros verificados do Starlit são elegíveis; transferências ativas e ficheiros externos são preservados. Não é possível recuperar os ficheiros removidos.</string>
+    <string name="downloads_storage_none_eligible">Não há transferências concluídas e verificadas elegíveis para limpeza.</string>
+    <string name="downloads_storage_remove_selected">Remover %1$d selecionadas</string>
     <string name="downloads_mobile_in_progress">Em curso</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Requer atenção</string>
