@@ -31,10 +31,18 @@ internal data class RemotePlayback(
     val subtitles: List<RemoteChoice> = emptyList(),
     val sources: List<RemoteChoice> = emptyList(),
     val message: String = "",
+    val downloadProfileId: Int? = null,
+    val downloads: List<RemoteDownloadStatus> = emptyList(),
 )
 
 @Serializable
-internal data class RemoteCommand(val type: String = "state", val value: Double = 0.0, val id: String = "", val playbackId: String = "")
+internal data class RemoteCommand(
+    val type: String = "state",
+    val value: Double = 0.0,
+    val id: String = "",
+    val playbackId: String = "",
+    val profileId: Int? = null,
+)
 
 internal data class RemoteDesktop(val address: String, val port: Int, val name: String)
 internal data class RemotePairing(val code: String, val peer: String)
@@ -115,7 +123,21 @@ internal object DesktopRemote {
     }
 
     fun command(type: String, value: Double = 0.0, id: String = "") {
-        transport.send(RemoteCommand(type, value, id, remotePlayback.value.playbackId))
+        transport.send(RemoteCommand(
+            type = type, value = value, id = id,
+            playbackId = remotePlayback.value.playbackId,
+            profileId = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId,
+        ))
+    }
+
+    fun downloadCommand(type: String, downloadId: String) {
+        if (type != "downloadPause" && type != "downloadResume") return
+        transport.send(RemoteCommand(
+            type = type,
+            id = downloadId,
+            playbackId = remotePlayback.value.playbackId,
+            profileId = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId,
+        ))
     }
 }
 

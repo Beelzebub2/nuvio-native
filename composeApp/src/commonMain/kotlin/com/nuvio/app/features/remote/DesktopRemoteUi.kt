@@ -12,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.formatDownloadBytes
+import com.nuvio.app.features.profiles.ProfileRepository
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -194,6 +197,7 @@ internal fun DesktopRemoteDialogs() {
                         }
                         if (connected) {
                             RemotePlaybackControls(playback)
+                            RemoteDownloadControls(playback)
                         }
                     }
                     if (connected) {
@@ -210,6 +214,52 @@ internal fun DesktopRemoteDialogs() {
                 TextButton(onClick = { DesktopRemote.visible.value = false }) { Text("Close") }
             },
         )
+    }
+}
+
+@Composable
+private fun RemoteDownloadControls(playback: RemotePlayback) {
+    Text(
+        stringResource(Res.string.remote_downloads_title),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    if (playback.downloadProfileId == null ||
+        playback.downloadProfileId != ProfileRepository.activeProfileId) {
+        Text(stringResource(Res.string.remote_downloads_profile_mismatch),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    if (playback.downloads.isEmpty()) {
+        Text(stringResource(Res.string.remote_downloads_empty),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    playback.downloads.forEach { task ->
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(task.title, style = MaterialTheme.typography.bodyMedium)
+            val size = task.totalBytes?.let {
+                "${formatDownloadBytes(task.downloadedBytes)} / ${formatDownloadBytes(it)}"
+            } ?: formatDownloadBytes(task.downloadedBytes)
+            Text("${task.state} · $size", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (task.totalBytes != null && task.totalBytes > 0L) {
+                LinearProgressIndicator(
+                    progress = { (task.downloadedBytes.toFloat() / task.totalBytes).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            when (task.state) {
+                DownloadStatus.Downloading -> TextButton(
+                    onClick = { DesktopRemote.downloadCommand("downloadPause", task.id) },
+                ) { Text(stringResource(Res.string.remote_downloads_pause)) }
+                DownloadStatus.Paused -> TextButton(
+                    onClick = { DesktopRemote.downloadCommand("downloadResume", task.id) },
+                ) { Text(stringResource(Res.string.remote_downloads_resume)) }
+                else -> Unit
+            }
+        }
     }
 }
 

@@ -21,6 +21,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.nuvio.app.features.downloads.DownloadsRepository
+import com.nuvio.app.features.profiles.ProfileRepository
 
 private const val DISCOVERY_PORT = 47788
 private const val PAIRING_TIMEOUT = 90_000L
@@ -410,6 +412,15 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     private suspend fun pairedLoop(channel: RemoteCipherChannel, socket: Socket, expected: RemoteAccount, peerToken: String?, epoch: Long) {
         currentCoroutineContext().ensureActive()
         check(sessionEpoch.get() == epoch)
+        if (peerToken != null) {
+            // Load the desktop's active profile queue only after encrypted,
+            // two-device approved account verification, not at app startup.
+            withContext(Dispatchers.Main) {
+                check(sessionEpoch.get() == epoch)
+                currentRemoteAccessToken(expected)
+                DownloadsRepository.ensureLoaded()
+            }
+        }
         publish(epoch) {
             DesktopRemote.pairing.value = null
             DesktopRemote.connected.value = true
@@ -440,15 +451,33 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 val snapshot = withContext(Dispatchers.Main) {
                     check(sessionEpoch.get() == epoch)
                     currentRemoteAccessToken(expected)
-                    if (command.type != "state" && command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
+                    if (command.type == "downloadPause" || command.type == "downloadResume") {
+                        val profileId = ProfileRepository.activeProfileId
+                        val task = command.allowedDownloadTask(
+                            DownloadsRepository.uiState.value, profileId, DesktopRemote.playback.playbackId,
+                        )
+                        if (task != null) {
+                            if (command.type == "downloadPause") DownloadsRepository.pauseDownload(task.id)
+                            else DownloadsRepository.resumeDownload(task.id)
+                        }
+                    } else if (command.type != "state" &&
+                        command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
                         DesktopRemote.dispatch?.invoke(command)
                     }
-                    DesktopRemote.playback
+                    val profileId = ProfileRepository.activeProfileId
+                    DesktopRemote.playback.copy(
+                        downloadProfileId = profileId,
+                        downloads = if (command.profileId == profileId)
+                            remoteDownloadSnapshot(DownloadsRepository.uiState.value, profileId)
+                        else emptyList(),
+                    )
                 }
                 channel.send(snapshot.toRemoteWireJson())
                 delay(50) // Bound even an authenticated client's request rate.
             } else {
-                val command = commands.tryReceive().getOrNull() ?: RemoteCommand()
+                val command = commands.tryReceive().getOrNull() ?: RemoteCommand(
+                    profileId = ProfileRepository.activeProfileId,
+                )
                 channel.send(wireJson.encodeToString(RemoteRequest(command, currentToken)))
                 val snapshot = wireJson.decodeFromString<RemotePlayback>(channel.receive())
                 publish(epoch) { DesktopRemote.remotePlayback.value = snapshot }

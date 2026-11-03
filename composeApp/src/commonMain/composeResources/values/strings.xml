@@ -707,6 +707,11 @@
     <string name="downloads_mobile_empty_description">Choose a movie or episode and tap Download to save it for offline viewing.</string>
     <string name="downloads_mobile_library">Your offline library</string>
     <string name="downloads_mobile_storage_used">%1$s saved on this device</string>
+    <string name="remote_downloads_title">Desktop downloads</string>
+    <string name="remote_downloads_profile_mismatch">Open the same profile on your PC and phone to manage its downloads.</string>
+    <string name="remote_downloads_empty">No downloads available from the current desktop profile.</string>
+    <string name="remote_downloads_pause">Pause on PC</string>
+    <string name="remote_downloads_resume">Resume on PC</string>
     <string name="downloads_mobile_in_progress">In progress</string>
     <string name="downloads_mobile_ready">Ready</string>
     <string name="downloads_mobile_attention">Needs attention</string>

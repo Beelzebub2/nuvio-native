@@ -9,6 +9,12 @@ Closing the phone's remote dialog keeps the session connected. Reopen it from Se
 
 If no PC appears after searching, verify that both apps are signed into the **same non-guest account and account server**, the desktop app is open, and the phone and PC can reach each other on the local network. Press **Search local network** again after changing Wi-Fi or the PC's firewall settings; the button remains accessible even when already connected to another PC. A scan cannot proceed before account sign-in. iOS shows the controller entry with an unsupported notice, but scanning is currently available only on Android.
 
+## Safe desktop download management
+
+After the encrypted session has been **approved on both devices** and the same Starlit HTTPS account has been verified, Android may view the status of up to 30 existing desktop downloads and pause/resume only tasks belonging to the desktop's **currently selected profile**. Open the same profile on the phone to receive the list. The desktop rechecks both the local profile and task state for each command.
+
+The remote deliberately **does not** accept new download URLs, magnets, stream links, file paths, destination changes, cancellation, deletion, account settings, provider credentials, DRM workarounds or source selections. It cannot bypass content licensing or network protections. The phone receives bounded title/status/progress only; desktop paths, signed URLs, headers and credentials never enter this protocol payload. A new pairing and account verification are required after reconnecting. The desktop remains authoritative for the current queue, account and profile.
+
 Allow Starlit through the desktop firewall on **private networks**. Discovery uses UDP port **47788**, and the desktop opens one dynamic TCP port for its encrypted session. No port forwarding is needed. Guest Wi-Fi/client isolation, VPN routing, and restricted corporate networks can prevent discovery. Keep both apps foregrounded during pairing; account verification also needs internet access to the configured HTTPS account server. Multiple desktop processes on one computer can contend for discovery; use one running instance.
 
 ### Manual PC address, saved PCs and Wake-on-LAN (Android)
