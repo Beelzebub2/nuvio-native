@@ -1,3 +1,19 @@
+## Starlit 1.6.2
+
+### Fixes
+
+- **Startup loading screen stays clear:** The "Continue where you left off" episode card now waits until the Starlit logo and loading animation have completely disappeared, including their fade-out, instead of overlapping the startup screen. The splash also stays above floating app prompts.
+- **Subtitle choices stay selected:** Manually selecting a subtitle track no longer silently reverts when the player refreshes its available tracks.
+- **Episode information appears at the right time:** Video-player metadata and the paused-episode overlay now wait until playback has actually started, avoiding episode titles over a prepared but still blank player.
+
+### Performance
+
+- **Smoother Home catalog scrolling:** Poster appearance settings are observed once per shelf instead of once per card, and lazy-list item keys are reused to reduce repeated work during recomposition and scrolling.
+
+### Validation
+
+- Automated Android Full, Android Play Store, iOS Kotlin and security checks passed for the underlying fixes. Startup splash regression tests cover loading, fade-out, profile switching and no-splash launches.
+
 ## Starlit 1.6.1
 
 ### Fixes
