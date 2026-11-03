@@ -45,5 +45,8 @@ internal actual object AnonymousWorkspaceStorage {
         return userId
     }
 
-    private val excludedFiles = setOf("nuvio_auth.properties", "server_configuration.properties", "nuvio_sync_client_identity.properties")
+    private val excludedFiles = setOf(
+        "nuvio_auth.properties", "nuvio_remote_session.properties",
+        "server_configuration.properties", "nuvio_sync_client_identity.properties",
+    )
 }
