@@ -29,6 +29,18 @@ internal fun isStarlitOAuthCallback(url: String): Boolean = runCatching {
         parsed.parameters.getAll("code")?.singleOrNull()?.let { it.isNotBlank() && it.length <= 4096 } == true
 }.getOrDefault(false)
 
+/** Never send account-linking authorization URLs to a lookalike or non-Google host. */
+internal fun isTrustedGoogleAuthorizationUrl(url: String): Boolean = runCatching {
+    val parsed = Url(url)
+    parsed.protocol.name == "https" && parsed.host == "accounts.google.com" &&
+        parsed.encodedPath in listOf("/o/oauth2/v2/auth", "/o/oauth2/auth") &&
+        parsed.fragment.isEmpty()
+}.getOrDefault(false)
+
+/** A linked identity must resolve to the original signed-in account on the original server. */
+internal fun isValidGoogleLinkResult(expectedUser: String, signedInUser: String?, returnedUser: String?, sameServer: Boolean) =
+    sameServer && expectedUser.isNotBlank() && signedInUser == expectedUser && returnedUser == expectedUser
+
 internal object GoogleOAuthAvailability {
     fun isOfficialServer(): Boolean =
         ServerConfigurationRepository.active.value.backendUrl.trimEnd('/') == STARLIT_GOOGLE_ORIGIN

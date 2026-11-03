@@ -11,26 +11,41 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
+import androidx.credentials.exceptions.CreateCredentialException
+import androidx.credentials.exceptions.GetCredentialException
+import kotlinx.coroutines.CancellationException
 
 private class AndroidPasskeyCeremony(private val context: Context) : PasskeyCeremony {
     private val manager = CredentialManager.create(context)
 
     override suspend fun create(optionsJson: String): String {
-        val response = manager.createCredential(
-            context = context,
-            request = CreatePublicKeyCredentialRequest(requestJson = optionsJson),
-        )
-        return (response as? CreatePublicKeyCredentialResponse)?.registrationResponseJson
-            ?: error("The device did not create a passkey")
+        try {
+            val response = manager.createCredential(
+                context = context,
+                request = CreatePublicKeyCredentialRequest(requestJson = optionsJson),
+            )
+            return (response as? CreatePublicKeyCredentialResponse)?.registrationResponseJson
+                ?: error("The device did not create a passkey")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: CreateCredentialException) {
+            throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = true), error)
+        }
     }
 
     override suspend fun get(optionsJson: String): String {
-        val response = manager.getCredential(
-            context = context,
-            request = GetCredentialRequest(listOf(GetPublicKeyCredentialOption(requestJson = optionsJson))),
-        )
-        return (response.credential as? PublicKeyCredential)?.authenticationResponseJson
-            ?: error("No passkey was selected")
+        try {
+            val response = manager.getCredential(
+                context = context,
+                request = GetCredentialRequest(listOf(GetPublicKeyCredentialOption(requestJson = optionsJson))),
+            )
+            return (response.credential as? PublicKeyCredential)?.authenticationResponseJson
+                ?: error("No passkey was selected")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: GetCredentialException) {
+            throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = false), error)
+        }
     }
 }
 

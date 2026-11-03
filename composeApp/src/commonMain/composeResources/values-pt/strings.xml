@@ -1,4 +1,13 @@
 <resources>
+    <string name="auth_google_sign_in">Iniciar sessão com o Google</string>
+    <string name="auth_google_sign_up">Registar com o Google</string>
+    <string name="auth_google_approval_notice">As novas contas continuam a precisar de aprovação.</string>
+    <string name="auth_google_request_access">Pedir acesso com o Google (sujeito a aprovação)</string>
+    <string name="auth_google_link_title">Conta Google</string>
+    <string name="auth_google_link_description">Associa o Google à tua conta Starlit para iniciares sessão sem perderes a biblioteca nem o histórico.</string>
+    <string name="auth_google_link_button">Associar Google</string>
+    <string name="auth_google_link_connected">O Google está associado a esta conta Starlit.</string>
+    <string name="auth_google_link_password_prompt">Confirma a palavra-passe da conta antes de associares um novo método de início de sessão.</string>
     <string name="auth_request_account">Pedir conta</string>
     <string name="auth_request_account_subtitle">Escolhe uma palavra-passe para pedires uma conta. O proprietário do servidor tem de aprovar o pedido antes de poderes iniciar sessão.</string>
     <string name="auth_request_password_minimum">A palavra-passe tem de ter, pelo menos, 12 caracteres.</string>

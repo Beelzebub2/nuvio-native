@@ -11,6 +11,23 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class PasskeyRepositoryTest {
     @Test
+    fun providerAssociationErrorsOfferSafeAlternativeWithoutDisablingVerification() {
+        for (message in listOf(
+            "Passkeys not supported for this app",
+            "Passkey operation failed because of missing asset links",
+            "app not supported",
+        )) {
+            val result = passkeyProviderErrorMessage(message, registration = true)
+            assertTrue(result.contains("Bitwarden"))
+            assertTrue(result.contains("Google Password Manager"))
+            assertTrue(result.contains("cannot bypass"))
+            assertFalse(result.contains("missing asset links"))
+        }
+        assertTrue(passkeyProviderErrorMessage("No provider configuration", true).contains("Enable one"))
+        assertEquals("Passkey operation canceled.", passkeyProviderErrorMessage("user canceled", false))
+    }
+
+    @Test
     fun passesRequireExplicitOfficialCapability() {
         val endpoint = "https://starlit-api.rrmtools.uk"
         assertTrue(isPasskeyAdvertised("""{"backend_url":"$endpoint","capabilities":{"passkey_login":true}}"""))
