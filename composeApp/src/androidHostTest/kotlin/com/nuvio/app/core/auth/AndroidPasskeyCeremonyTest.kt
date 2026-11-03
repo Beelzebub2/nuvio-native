@@ -15,17 +15,31 @@ import kotlin.test.assertTrue
 @Config(sdk = [34], application = Application::class)
 class AndroidPasskeyCeremonyTest {
     @Test
-    fun accountScreenDoesNotInitializeAnUnavailablePasskeyProvider() = runBlocking {
+    fun loginAndAccountScreensDoNotInitializeAnUnavailablePasskeyProvider() = runBlocking {
         var providerAttempts = 0
         val ceremony = AndroidPasskeyCeremony(RuntimeEnvironment.getApplication()) {
             providerAttempts++
             throw IllegalStateException("No provider configuration")
         }
 
-        // Simply composing the Account screen must not require a passkey
+        // Composing either the login or Account screen must not require a passkey
         // provider. Failure is only surfaced when the user requests one.
         assertEquals(0, providerAttempts)
         val failure = assertFailsWith<IllegalStateException> { ceremony.create("{}") }
+        assertEquals(1, providerAttempts)
+        assertTrue(failure.message.orEmpty().contains("No compatible passkey manager"))
+    }
+
+    @Test
+    fun loginScreenReportsUnavailableProviderWhenPasskeySignInIsRequested() = runBlocking {
+        var providerAttempts = 0
+        val ceremony = AndroidPasskeyCeremony(RuntimeEnvironment.getApplication()) {
+            providerAttempts++
+            throw IllegalStateException("No provider configuration")
+        }
+
+        assertEquals(0, providerAttempts)
+        val failure = assertFailsWith<IllegalStateException> { ceremony.get("{}") }
         assertEquals(1, providerAttempts)
         assertTrue(failure.message.orEmpty().contains("No compatible passkey manager"))
     }

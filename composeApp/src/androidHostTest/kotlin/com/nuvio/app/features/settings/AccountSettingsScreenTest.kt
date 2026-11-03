@@ -1,7 +1,6 @@
 package com.nuvio.app.features.settings
 
 import android.app.Application
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import com.nuvio.app.core.auth.AuthRepository

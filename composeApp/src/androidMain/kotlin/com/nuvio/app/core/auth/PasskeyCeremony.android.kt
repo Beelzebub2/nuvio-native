@@ -20,7 +20,7 @@ internal class AndroidPasskeyCeremony(
     providerFactory: () -> CredentialManager = { CredentialManager.create(context) },
 ) : PasskeyCeremony {
     // A passkey provider is optional. Constructing CredentialManager while the
-    // Account screen composes can throw on devices without a working provider,
+    // Account or login screen composes can throw on devices without a working provider,
     // taking down the entire app before the user even taps Add passkey.
     // Delay provider initialization until an actual credential operation.
     private val manager by lazy(providerFactory)
