@@ -11,6 +11,38 @@ import kotlin.test.*
 
 class DesktopRemoteProtocolTest {
     @Test
+    fun controllerOpensEvenWhenNoDesktopsHaveBeenDiscovered() {
+        val wasVisible = DesktopRemote.visible.value
+        val previousDesktops = DesktopRemote.desktops.value
+        val previousStatus = DesktopRemote.status.value
+        try {
+            DesktopRemote.visible.value = false
+            DesktopRemote.desktops.value = emptyList()
+            DesktopRemote.open()
+            assertTrue(DesktopRemote.visible.value)
+            assertTrue(DesktopRemote.desktops.value.isEmpty())
+        } finally {
+            DesktopRemote.visible.value = wasVisible
+            DesktopRemote.desktops.value = previousDesktops
+            DesktopRemote.status.value = previousStatus
+        }
+    }
+
+    @Test
+    fun manualSearchWithoutSignedInAccountShowsAnActionableMessage() {
+        val previousStatus = DesktopRemote.status.value
+        try {
+            val freshPhoneTransport = LanDesktopRemote()
+            DesktopRemote.status.value = "Not searching"
+            freshPhoneTransport.discover()
+            assertTrue(DesktopRemote.status.value.contains("Sign in"))
+            assertFalse(DesktopRemote.scanning.value)
+        } finally {
+            DesktopRemote.status.value = previousStatus
+        }
+    }
+
+    @Test
     fun socketPeersRequireBothApprovalsAndVerifyBothAccountTokensBeforeCommands() = runBlocking {
         withPeers { host, phone ->
             assertEquals(host.code, phone.code)
