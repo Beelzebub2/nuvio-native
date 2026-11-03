@@ -590,6 +590,12 @@
     <string name="home_view_all">Ver tudo</string>
     <string name="play_manually">Reproduzir manualmente</string>
     <string name="poster_logo_content_description">Logótipo de %1$s</string>
+    <string name="remote_pc_controller_title">Controlar PC</string>
+    <string name="remote_pc_controller_description">Procura e controla PCs com Starlit na tua rede local.</string>
+    <string name="remote_pc_search_local_network">Procurar na rede local</string>
+    <string name="remote_pc_no_devices_hint">Não aparecem PCs? Mantém o Starlit aberto no PC e confirma que ambos usam a mesma conta, rede Wi-Fi e que a firewall permite ligações privadas.</string>
+    <string name="remote_pc_unsupported">O controlo do PC só está disponível no Android. Ainda não é possível procurar neste dispositivo.</string>
+    <string name="remote_pc_found_devices">PCs na tua rede</string>
     <string name="settings_account">Conta</string>
     <string name="settings_account_delete_account">Eliminar conta</string>
     <string name="settings_account_delete_account_description">Isto irá eliminar permanentemente a tua conta e todos os dados associados.</string>
@@ -600,12 +606,6 @@
     <string name="settings_account_sign_out">Terminar sessão</string>
     <string name="settings_account_sign_out_confirm_message">Irás regressar à página de início de sessão.</string>
     <string name="settings_account_sign_out_confirm_title">Terminar sessão?</string>
-    <string name="remote_pc_controller_title">Controlar PC</string>
-    <string name="remote_pc_controller_description">Procura e controla PCs com Starlit na tua rede local.</string>
-    <string name="remote_pc_search_local_network">Procurar na rede local</string>
-    <string name="remote_pc_no_devices_hint">Não aparecem PCs? Mantém o Starlit aberto no PC e confirma que ambos usam a mesma conta, rede Wi-Fi e que a firewall permite ligações privadas.</string>
-    <string name="remote_pc_unsupported">O controlo do PC só está disponível no Android. Ainda não é possível procurar neste dispositivo.</string>
-    <string name="remote_pc_found_devices">PCs na tua rede</string>
     <string name="settings_account_status">Estado</string>
     <string name="settings_account_status_anonymous">Anónimo</string>
     <string name="settings_account_status_signed_in">Sessão iniciada</string>
