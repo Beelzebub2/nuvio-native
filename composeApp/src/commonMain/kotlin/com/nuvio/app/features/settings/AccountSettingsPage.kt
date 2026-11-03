@@ -1,11 +1,14 @@
 package com.nuvio.app.features.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
@@ -13,6 +16,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,8 +33,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Logout
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +73,7 @@ import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.GoogleBrandMark
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.NuvioSectionLabel
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import kotlinx.coroutines.launch
@@ -109,6 +125,17 @@ private fun AccountSettingsBody(
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
     val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled &&
         ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures && authState is AuthState.Authenticated
+    val namedAccount = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
+    var googleLinkAvailable by remember(namedAccount?.userId) { mutableStateOf(false) }
+    LaunchedEffect(namedAccount?.userId) {
+        googleLinkAvailable = if (
+            namedAccount != null && !isDesktop && !isIos && GoogleOAuthAvailability.isOfficialServer()
+        ) {
+            GoogleOAuthAvailability.isEnabled()
+        } else {
+            false
+        }
+    }
 
     if (isDesktop) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -128,62 +155,80 @@ private fun AccountSettingsBody(
                 )
             }
         }
-    } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        NuvioSurfaceCard {
-            Text(
-                text = stringResource(Res.string.compose_settings_page_account),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(14.dp))
+    } else {
+        val canImportLocal = namedAccount != null && LocalSettingsImport.isAvailable
+        val hasSignInMethods = namedAccount != null && (
+            googleLinkAvailable || PasskeyRepository.canUseOnActiveServer()
+        )
 
-            when (val state = authState) {
-                is AuthState.Authenticated -> {
-                    AccountInfoRow(
-                        label = stringResource(Res.string.settings_account_status),
-                        value = if (state.isAnonymous) {
-                            stringResource(Res.string.settings_account_status_anonymous)
-                        } else {
-                            stringResource(Res.string.settings_account_status_signed_in)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(if (isTablet) 16.dp else 12.dp),
+        ) {
+            MobileAccountOverview(authState)
+
+            if (hasSignInMethods) {
+                MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
+                if (googleLinkAvailable) GoogleAccountLinkCard(authState, isAvailable = true)
+                PasskeySecurityCard(authState)
+            }
+
+            if (canImportLocal) {
+                MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_data))
+                LocalSettingsImportCard(authState)
+            }
+
+            if (authState is AuthState.Authenticated) {
+                MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_actions))
+                NuvioSurfaceCard {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Logout,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = stringResource(Res.string.settings_account_sign_out_description),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    OutlinedButton(
+                        onClick = {
+                            signOutErrorMessage = null
+                            showSignOutConfirm = true
                         },
-                        valueColor = MaterialTheme.colorScheme.primary,
-                    )
-                    state.email?.takeUnless { state.isAnonymous }?.let { email ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        AccountInfoRow(
-                            label = stringResource(Res.string.settings_account_email),
-                            value = email,
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                            .testTag("account-sign-out-button"),
+                        shape = MaterialTheme.nuvio.shapes.button,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    ) {
+                        Text(
+                            stringResource(Res.string.settings_account_sign_out),
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
                 }
-                else -> {
-                    Text(
-                        text = stringResource(Res.string.settings_account_not_signed_in),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                signOutErrorMessage?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                if (canDeleteAccount) {
+                    DeleteAccountCard(
+                        errorMessage = deleteErrorMessage,
+                        onDeleteClick = {
+                            deleteErrorMessage = null
+                            showDeleteConfirm = true
+                        },
                     )
                 }
             }
-        }
-
-        NuvioPrimaryButton(
-            text = stringResource(Res.string.settings_account_sign_out),
-            onClick = { signOutErrorMessage = null; showSignOutConfirm = true },
-        )
-
-        signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        LocalSettingsImportCard(authState)
-        GoogleAccountLinkCard(authState)
-        PasskeySecurityCard(authState)
-        if (canDeleteAccount) {
-            DeleteAccountCard(
-                errorMessage = deleteErrorMessage,
-                onDeleteClick = {
-                    deleteErrorMessage = null
-                    showDeleteConfirm = true
-                },
-            )
         }
     }
 
@@ -236,17 +281,118 @@ private fun AccountSettingsBody(
     )
 }
 
+@Composable
+private fun MobileAccountOverview(authState: AuthState) {
+    val account = authState as? AuthState.Authenticated
+    val accountDetail = when {
+        account == null -> stringResource(Res.string.settings_account_not_signed_in)
+        account.isAnonymous -> stringResource(Res.string.settings_account_guest_profile)
+        else -> account.email ?: stringResource(Res.string.settings_account_status_signed_in)
+    }
+    val status = when {
+        account == null -> stringResource(Res.string.settings_account_not_signed_in)
+        account.isAnonymous -> stringResource(Res.string.settings_account_status_anonymous)
+        else -> stringResource(Res.string.settings_account_status_signed_in)
+    }
+    val colors = MaterialTheme.colorScheme
+    val badgeColor = if (account != null && !account.isAnonymous) colors.primary else colors.onSurfaceVariant
+
+    NuvioSurfaceCard(modifier = Modifier.testTag("account-overview-card")) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(60.dp).background(
+                    color = colors.primary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(18.dp),
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Person,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(Res.string.settings_account_profile_name),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurface,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = accountDetail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.55f))
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(Res.string.settings_account_status),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+            )
+            Surface(
+                shape = RoundedCornerShape(50.dp),
+                color = badgeColor.copy(alpha = 0.12f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = if (account != null && !account.isAnonymous) {
+                            Icons.Rounded.CheckCircle
+                        } else {
+                            Icons.Rounded.PersonOutline
+                        },
+                        contentDescription = null,
+                        tint = badgeColor,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = badgeColor,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileAccountSectionHeading(title: String) {
+    NuvioSectionLabel(
+        text = title,
+        modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 2.dp),
+    )
+}
+
 /** Google linking is distinct from Google login: it never replaces the current account. */
 @Composable
-private fun GoogleAccountLinkCard(authState: AuthState) {
+private fun GoogleAccountLinkCard(authState: AuthState, isAvailable: Boolean = false) {
     // The Android external-browser callback is the verified implementation for linking.
-    if (isDesktop || isIos) return
+    if (isDesktop || isIos || !isAvailable) return
     val account = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous } ?: return
     if (!GoogleOAuthAvailability.isOfficialServer()) return
-
-    var enabled by remember(account.userId) { mutableStateOf(false) }
-    LaunchedEffect(account.userId) { enabled = GoogleOAuthAvailability.isEnabled() }
-    if (!enabled) return
 
     val feedback by AuthRepository.googleLinkFeedback.collectAsStateWithLifecycle()
     val accountFeedback = feedback?.takeIf { it.userId == account.userId }
@@ -276,11 +422,26 @@ private fun GoogleAccountLinkCard(authState: AuthState) {
     val uriHandler = LocalUriHandler.current
 
     NuvioSurfaceCard {
-        Text(
-            text = stringResource(Res.string.auth_google_link_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            GoogleBrandMark(modifier = Modifier.size(24.dp))
+            Text(
+                text = stringResource(Res.string.auth_google_link_title),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (linked == true || accountFeedback?.completed == true) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = when {
@@ -425,11 +586,24 @@ private fun PasskeySecurityCard(authState: AuthState) {
     }
 
     NuvioSurfaceCard {
-        Text(
-            text = stringResource(Res.string.auth_passkey_manage),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (!isDesktop) {
+                Icon(
+                    imageVector = Icons.Rounded.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Text(
+                text = stringResource(Res.string.auth_passkey_manage),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(Res.string.auth_passkey_description),
@@ -664,12 +838,23 @@ private fun DeleteAccountCard(
     val tokens = MaterialTheme.nuvio
 
     NuvioSurfaceCard {
-        Text(
-            text = stringResource(Res.string.settings_account_delete_account),
-            style = MaterialTheme.typography.titleMedium,
-            color = tokens.colors.textPrimary,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.WarningAmber,
+                contentDescription = null,
+                tint = tokens.colors.danger,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = stringResource(Res.string.settings_account_delete_account),
+                style = MaterialTheme.typography.titleMedium,
+                color = tokens.colors.danger,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(Res.string.settings_account_delete_account_description),
@@ -706,35 +891,6 @@ private fun DeleteAccountCard(
 }
 
 @Composable
-private fun AccountInfoRow(
-    label: String,
-    value: String,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            color = valueColor,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 private fun LocalSettingsImportCard(authState: AuthState) {
     val signedIn = authState as? AuthState.Authenticated ?: return
     if (signedIn.isAnonymous || !LocalSettingsImport.isAvailable) return
@@ -746,7 +902,24 @@ private fun LocalSettingsImportCard(authState: AuthState) {
     val pending = LocalSettingsImport.hasPendingImport()
     val damaged = LocalSettingsImport.hasDamagedPendingImport()
     NuvioSurfaceCard {
-        Text(stringResource(Res.string.settings_account_import_local), style = MaterialTheme.typography.titleMedium)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (!isDesktop) {
+                Icon(
+                    imageVector = Icons.Rounded.Sync,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Text(
+                stringResource(Res.string.settings_account_import_local),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(stringResource(Res.string.settings_account_import_description), style = MaterialTheme.typography.bodyMedium)
         val message = when {

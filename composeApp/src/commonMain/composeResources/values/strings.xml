@@ -778,10 +778,16 @@
     <string name="settings_account_delete_confirm_message">This action cannot be undone. All your data, profiles, and sync history will be permanently removed.</string>
     <string name="settings_account_delete_confirm_title">Delete Account?</string>
     <string name="settings_account_email">Email</string>
+    <string name="settings_account_guest_profile">Guest account</string>
     <string name="settings_account_not_signed_in">Not signed in</string>
+    <string name="settings_account_profile_name">Starlit account</string>
+    <string name="settings_account_section_actions">ACCOUNT MANAGEMENT</string>
+    <string name="settings_account_section_data">DATA &amp; SYNC</string>
+    <string name="settings_account_section_security">SIGN-IN &amp; SECURITY</string>
     <string name="settings_account_sign_out">Sign Out</string>
     <string name="settings_account_sign_out_confirm_message">You will be returned to the login screen.</string>
     <string name="settings_account_sign_out_confirm_title">Sign Out?</string>
+    <string name="settings_account_sign_out_description">End the current session on this device.</string>
     <string name="settings_account_status">Status</string>
     <string name="settings_account_status_anonymous">Anonymous</string>
     <string name="settings_account_status_signed_in">Signed in</string>
