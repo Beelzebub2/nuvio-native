@@ -48,6 +48,7 @@ class DesktopP2pSessionTest {
         var startupFailures = 0
         var metadata = true
         var files = listOf(TorrServerFile(1, "sample.mp4", 100))
+        val metadataSnapshots = mutableListOf<List<TorrServerFile>>()
         var startGate: CompletableDeferred<Unit>? = null
         val requests = mutableListOf<String>()
         private var callsSinceStart = 0
@@ -82,8 +83,9 @@ class DesktopP2pSessionTest {
                 failures = (failures - 1).coerceAtLeast(0)
                 throw DesktopTorrentEngineUnavailable("Status unavailable", httpStatusCode = statusHttpCode)
             }
+            val availableFiles = if (metadataSnapshots.isNotEmpty()) metadataSnapshots.removeAt(0) else files
             return TorrServerStats(downloadSpeed, 0, peers, 0, 10, 20, 100,
-                if (metadata) files else emptyList())
+                if (metadata) availableFiles else emptyList())
         }
         override suspend fun isHealthy(): Boolean {
             healthChecks++
@@ -102,6 +104,21 @@ class DesktopP2pSessionTest {
     private fun TestScope.engine(backend: Backend, environment: Environment = Environment()) = DesktopP2pSession(
         backend, backgroundScope, { P2pSettingsUiState(p2pEnabled = true) }, { environment.read(testScheduler.currentTime) },
     )
+
+    @Test fun streamingWaitsForIncompleteTorrentFileMetadata() = runTest {
+        val backend = Backend().apply {
+            metadataSnapshots += listOf(TorrServerFile(1, "", 0L))
+            metadataSnapshots += listOf(TorrServerFile(1, "sample.mp4", 0L))
+        }
+        val engine = engine(backend)
+        try {
+            assertTrue(engine.startStream(request).endsWith("index=1"))
+            assertTrue(testScheduler.currentTime >= 2_000L, "Incomplete file metadata must be polled before playback")
+            assertEquals(1, backend.starts, "Waiting for metadata must not restart a healthy engine")
+        } finally {
+            engine.shutdown().join()
+        }
+    }
 
     @Test fun selectingAnEpisodeSourceFromTheSamePackChangesTheActualTorrentFile() = runTest {
         P2pSettingsRepository.ensureLoaded()
