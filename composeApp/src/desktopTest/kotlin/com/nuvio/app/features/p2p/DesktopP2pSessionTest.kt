@@ -35,6 +35,7 @@ class DesktopP2pSessionTest {
     private class Backend : DesktopTorrentBackend {
         var starts = 0
         var stops = 0
+        var stopFailure: Exception? = null
         var running = false
         var failures = 0
         var failAfterMetadata = false
@@ -70,7 +71,11 @@ class DesktopP2pSessionTest {
             running = true
             preparedSettings = settings
         }
-        override suspend fun stop() { stops += 1; running = false }
+        override suspend fun stop() {
+            stops += 1
+            stopFailure?.let { throw it }
+            running = false
+        }
         override suspend fun addTorrent(magnetLink: String): String {
             requests += magnetLink
             return magnetLink.substringAfter("btih:").substringBefore('&')
@@ -102,6 +107,24 @@ class DesktopP2pSessionTest {
     private fun TestScope.engine(backend: Backend, environment: Environment = Environment()) = DesktopP2pSession(
         backend, backgroundScope, { P2pSettingsUiState(p2pEnabled = true) }, { environment.read(testScheduler.currentTime) },
     )
+
+    @Test fun failedEngineShutdownStillPublishesPlaybackError() = runTest {
+        val backend = Backend().apply {
+            files = listOf(TorrServerFile(1, "first.mp4", 100), TorrServerFile(2, "second.mp4", 100))
+            stopFailure = DesktopTorrentEngineUnavailable("TorrServer child is still running")
+        }
+        val engine = engine(backend)
+        try {
+            assertFailsWith<P2pStreamingException> {
+                engine.startStream(request.copy(filename = null))
+            }
+            val state = assertIs<P2pStreamingState.Error>(engine.state.value)
+            assertTrue(state.message.contains("TorrServer child is still running"))
+        } finally {
+            backend.stopFailure = null
+            engine.shutdown().join()
+        }
+    }
 
     @Test fun selectingAnEpisodeSourceFromTheSamePackChangesTheActualTorrentFile() = runTest {
         P2pSettingsRepository.ensureLoaded()
