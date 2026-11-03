@@ -18,4 +18,14 @@ class DownloadsCodecTest {
         }
         assertTrue(DownloadsCodec.isValid("""{"items":[]}"""))
     }
+
+    @Test
+    fun playlistAndTorrentUrlsWithFragmentsAreNotDirectDownloads() {
+        for (extension in listOf("m3u8", "mpd", "torrent")) {
+            assertFalse("https://cdn.example/video.$extension#chapter".isSupportedDownloadUrl())
+            assertFalse("https://cdn.example/video.$extension?token=abc#chapter".isSupportedDownloadUrl())
+        }
+        assertTrue("https://cdn.example/video.mp4?token=abc#chapter".isSupportedDownloadUrl())
+        assertFalse("magnet:?xt=urn:btih:abc".isSupportedDownloadUrl())
+    }
 }
