@@ -26,6 +26,7 @@ class GoogleOAuthDesktopTest {
             HttpClient.newHttpClient().send(HttpRequest.newBuilder(redirect).GET().build(),
                 HttpResponse.BodyHandlers.discarding())
         }
+        Unit
     }
 
     @Test

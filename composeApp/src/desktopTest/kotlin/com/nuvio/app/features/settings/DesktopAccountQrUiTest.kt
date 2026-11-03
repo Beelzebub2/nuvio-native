@@ -44,9 +44,9 @@ class DesktopAccountQrUiTest {
             NuvioTheme {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.nuvio.colors.background).padding(40.dp)) {
                     Column(Modifier.widthIn(max = 800.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("Account", style = MaterialTheme.typography.headlineSmall)
+                        Text("Account", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.nuvio.colors.textPrimary)
                         DesktopAccountCard(state, onSignOutClick = {})
-                        Text("Devices", style = MaterialTheme.typography.titleMedium)
+                        Text("Devices", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                         DesktopPhoneConnectionCard(state)
                     }
                 }
@@ -73,16 +73,16 @@ class DesktopAccountQrUiTest {
                             Box(Modifier.fillMaxSize().background(MaterialTheme.nuvio.colors.background).padding(40.dp)) {
                                 Column(Modifier.widthIn(max = 800.dp).verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Text("Account", style = MaterialTheme.typography.headlineSmall)
+                                    Text("Account", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.nuvio.colors.textPrimary)
                                     DesktopAccountCard(namedAccount, onSignOutClick = {})
-                                    Text("Sign-in & security", style = MaterialTheme.typography.titleMedium)
+                                    Text("Sign-in & security", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                                     GoogleAccountLinkCard(namedAccount, isAvailable = true, loadIdentity = { false })
                                     PasskeySecurityCard(namedAccount, loadCapability = { true }, loadPasskeys = {
                                         listOf(RegisteredPasskey("fixture-key", "Windows Hello", "2026-11-03"))
                                     })
-                                    Text("Data & sync", style = MaterialTheme.typography.titleMedium)
+                                    Text("Data & sync", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                                     LocalSettingsImportCard(namedAccount, isAvailable = true)
-                                    Text("Devices", style = MaterialTheme.typography.titleMedium)
+                                    Text("Devices", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                                     DesktopPhoneConnectionCard(namedAccount)
                                 }
                             }

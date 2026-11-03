@@ -45,6 +45,7 @@ jobs:
           "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT"
           --tests '*GoogleOAuth*' --tests '*PasskeyRepositoryTest*'
           --tests '*RemotePairingQrTest*' --tests '*RemoteQrEncodingTest*'
+          --tests '*DesktopRemoteProtocolTest*'
           --tests '*DesktopAccountQrUiTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
