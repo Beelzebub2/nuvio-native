@@ -112,6 +112,7 @@ internal fun PlayerControlsShell(
     onEpisodesClick: (() -> Unit)? = null,
     onOpenInExternalPlayer: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onDiagnosticsClick: (() -> Unit)? = null,
     controlToggles: List<PlayerControlToggle> = emptyList(),
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
@@ -310,6 +311,7 @@ internal fun PlayerControlsShell(
                         onVideoSettingsClick = onVideoSettingsClick,
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onSubmitIntroClick = onSubmitIntroClick,
+                        onDiagnosticsClick = onDiagnosticsClick,
                         onInteraction = onInteraction,
                         toggles = controlToggles,
                     )

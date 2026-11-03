@@ -15,7 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
@@ -699,6 +702,7 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
 private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
     val isInPip = rememberIsInPictureInPicture()
     val controlToggles = playerControlToggles()
+    var showPlaybackDiagnostics by remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -797,6 +801,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            onDiagnosticsClick = { showPlaybackDiagnostics = true },
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -812,6 +817,12 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+    if (showPlaybackDiagnostics) {
+        PlaybackDiagnosticsDialog(
+            snapshot = playbackSnapshot,
+            onDismiss = { showPlaybackDiagnostics = false },
         )
     }
 }
