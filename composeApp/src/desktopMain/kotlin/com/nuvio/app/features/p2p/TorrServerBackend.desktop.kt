@@ -232,17 +232,29 @@ private class TorrServerBinary(
         }
 
     fun stop() {
-        process?.let { proc ->
-            try {
-                proc.destroy()
-                if (!proc.waitFor(3_000L, TimeUnit.MILLISECONDS) && isProcessAlive(proc)) {
-                    proc.destroyForcibly().waitFor(3_000L, TimeUnit.MILLISECONDS)
-                }
-            } catch (_: Exception) {
+        val proc = process ?: return
+        try {
+            proc.destroy()
+            if (!proc.waitFor(3_000L, TimeUnit.MILLISECONDS) && isProcessAlive(proc)) {
                 proc.destroyForcibly()
+                if (!proc.waitFor(3_000L, TimeUnit.MILLISECONDS)) {
+                    throw DesktopTorrentEngineUnavailable("TorrServer child did not exit after forced termination")
+                }
             }
+        } catch (e: DesktopTorrentEngineUnavailable) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            runCatching { proc.destroyForcibly() }
+            throw DesktopTorrentEngineUnavailable("Interrupted while stopping TorrServer child", e)
+        } catch (e: Exception) {
+            runCatching { proc.destroyForcibly() }
+            throw DesktopTorrentEngineUnavailable("Could not stop TorrServer child", e)
+        } finally {
+            // Download cache retirement must never run while the child still owns its files.
+            if (!isProcessAlive(proc)) process = null
         }
-        process = null
+        if (isProcessAlive(proc)) throw DesktopTorrentEngineUnavailable("TorrServer child is still running")
         log.d { "TorrServer stopped" }
     }
 

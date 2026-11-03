@@ -2,6 +2,8 @@ package com.nuvio.app.features.p2p
 
 import com.sun.net.httpserver.HttpServer
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.DatagramSocket
@@ -29,11 +31,46 @@ import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertContentEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class TorrServerRecoveryIntegrationTest {
+    private class UnstoppableProcess : Process() {
+        var canExit = false
+        var forcedStops = 0
+        override fun getOutputStream() = ByteArrayOutputStream()
+        override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+        override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+        override fun waitFor(): Int = if (canExit) 0 else throw IllegalThreadStateException("still running")
+        override fun waitFor(timeout: Long, unit: TimeUnit): Boolean = canExit
+        override fun exitValue(): Int = waitFor()
+        override fun destroy() = Unit
+        override fun destroyForcibly(): Process { forcedStops += 1; return this }
+        override fun isAlive(): Boolean = !canExit
+    }
+
+    @Test fun failedStopDoesNotForgetAnUnterminatedTorrentChild() = runBlocking {
+        val root = Files.createTempDirectory("nuvio-torrserver-stuck-stop").toFile()
+        try {
+            val backend = TorrServerBackend(File(root, "config"), File(root, "pieces"))
+            val binary = backend.javaClass.getDeclaredField("binary").apply { isAccessible = true }.get(backend)
+            val processField = binary.javaClass.getDeclaredField("process").apply { isAccessible = true }
+            val child = UnstoppableProcess()
+            processField.set(binary, child)
+
+            assertFailsWith<DesktopTorrentEngineUnavailable> { backend.stop() }
+            assertSame(child, processField.get(binary), "A live child must remain tracked so cleanup cannot claim its cache")
+            assertEquals(1, child.forcedStops)
+
+            child.canExit = true
+            backend.stop()
+            assertNull(processField.get(binary), "A confirmed dead child can release its ownership")
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun aNewAppLaunchUsesIndependentTorrentState() = runBlocking {
         assumeTrue(System.getProperty("os.name").startsWith("Windows"))
         val root = File(System.getProperty("user.dir"))
