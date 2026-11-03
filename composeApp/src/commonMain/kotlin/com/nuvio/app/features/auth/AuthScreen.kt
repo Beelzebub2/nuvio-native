@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.GoogleBrandMark
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -1065,12 +1066,8 @@ private fun AuthForm(
                         disabledContainerColor = Color.White.copy(alpha = 0.5f),
                     ),
                 ) {
-                    Text(
-                        text = "G",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontSize = (29f * scale).sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
+                    GoogleBrandMark(
+                        modifier = Modifier.size(30.dp * scale),
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp * scale))
