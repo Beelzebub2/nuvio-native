@@ -1,3 +1,19 @@
+## Starlit 1.6.0
+
+### Features
+
+- **Link Google to an existing Android account:** Approved users on the official Starlit server can open Account settings and securely link their Google identity to the same account after confirming their password. The callback checks the original Starlit account and server before accepting the new sign-in method, preserving the account's library and history.
+- **Compact Google sign-in and sign-up requests:** Login and account-request screens now offer a small circular Google sign-in option. The sign-up action still sends a request for owner approval; it does not automatically create or approve an account.
+
+### Fixes
+
+- **Bitwarden Android passkey registration:** The official server now publishes the additional Android Digital Asset Links permission required by Bitwarden for Starlit's signed APK. Credential Manager errors now explain how to update or change providers without disabling any verification.
+
+### Security and compatibility
+
+- Google account linking is offered only to approved users of the official server on Android, and only when Google OAuth is enabled. Existing email/password login and owner approval remain unchanged.
+- Automated Android, desktop-auth, iOS Kotlin and security checks passed. A physical-device Bitwarden passkey retry and a real Google account-linking round trip remain to be verified on a user device; provider association caches can delay a Bitwarden retry after the server fix.
+
 ## Starlit 1.5.0
 
 ### Features
