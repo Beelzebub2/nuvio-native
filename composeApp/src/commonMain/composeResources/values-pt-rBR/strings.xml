@@ -506,6 +506,11 @@
     <string name="downloads_mobile_empty_description">Escolha um filme ou episódio e toque em Baixar para assistir sem internet.</string>
     <string name="downloads_mobile_library">Biblioteca offline</string>
     <string name="downloads_mobile_storage_used">%1$s salvos neste dispositivo</string>
+    <string name="remote_downloads_title">Downloads do PC</string>
+    <string name="remote_downloads_profile_mismatch">Abra o mesmo perfil no PC e no celular para gerenciar os downloads.</string>
+    <string name="remote_downloads_empty">Nenhum download disponível no perfil atual do PC.</string>
+    <string name="remote_downloads_pause">Pausar no PC</string>
+    <string name="remote_downloads_resume">Retomar no PC</string>
     <string name="downloads_mobile_in_progress">Em andamento</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Precisam de atenção</string>

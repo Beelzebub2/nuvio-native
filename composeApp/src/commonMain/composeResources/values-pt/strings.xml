@@ -558,6 +558,11 @@
     <string name="downloads_mobile_empty_description">Escolhe um filme ou episódio e toca em Transferir para o guardares e veres sem ligação à Internet.</string>
     <string name="downloads_mobile_library">Biblioteca offline</string>
     <string name="downloads_mobile_storage_used">%1$s guardados neste dispositivo</string>
+    <string name="remote_downloads_title">Transferências do PC</string>
+    <string name="remote_downloads_profile_mismatch">Abre o mesmo perfil no PC e no telemóvel para gerir as transferências.</string>
+    <string name="remote_downloads_empty">Não há transferências no perfil atual do PC.</string>
+    <string name="remote_downloads_pause">Pausar no PC</string>
+    <string name="remote_downloads_resume">Retomar no PC</string>
     <string name="downloads_mobile_in_progress">Em curso</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Requer atenção</string>
