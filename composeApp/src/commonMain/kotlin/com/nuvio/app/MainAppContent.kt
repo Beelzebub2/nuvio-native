@@ -71,6 +71,7 @@ import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioFloatingPrompt
 import com.nuvio.app.core.ui.NuvioPosterZoomActionOverlay
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioToastHost
 import com.nuvio.app.core.ui.PosterZoomAnchor
@@ -510,6 +511,12 @@ internal fun MainAppContent(
         )
     }
     launchOverlayState.targetState = launchOverlayVisible
+    val resumePromptLaunchReady = isStartupResumePromptReady(
+        rootContentReady = rootContentReady,
+        splashCurrentState = launchOverlayState.currentState,
+        splashTargetState = launchOverlayState.targetState,
+        splashIsIdle = launchOverlayState.isIdle,
+    )
 
     LaunchedEffect(
         rootContentReady,
@@ -712,13 +719,13 @@ internal fun MainAppContent(
     val continueWatchingPreferencesUiState by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(
-        initialHomeReady,
-        profileSwitchLoading,
+        resumePromptLaunchReady,
         profileState.activeProfile?.profileIndex,
         continueWatchingPreferencesUiState.showResumePromptOnLaunch,
     ) {
         if (!ownsAppRuntime) return@LaunchedEffect
-        if (!initialHomeReady || profileSwitchLoading) return@LaunchedEffect
+        // The home can be ready while the branded splash is still fading away.
+        if (!resumePromptLaunchReady) return@LaunchedEffect
         if (resumePromptItem != null) return@LaunchedEffect
         if (continueWatchingPreferencesUiState.showResumePromptOnLaunch) {
             resumePromptItem = ResumePromptRepository.consumeResumePrompt()
@@ -2060,6 +2067,9 @@ internal fun MainAppContent(
                 visibleState = launchOverlayState,
                 enter = fadeIn(),
                 exit = fadeOut(androidx.compose.animation.core.tween(400)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(NuvioTokens.Z.launchOverlay),
             ) {
                 AppLaunchOverlay(
                     profile = launchOverlayProfile,
@@ -2068,7 +2078,7 @@ internal fun MainAppContent(
             }
 
             NuvioFloatingPrompt(
-                visible = resumePromptItem != null,
+                visible = resumePromptLaunchReady && resumePromptItem != null,
                 imageUrl = resumePromptItem?.poster ?: resumePromptItem?.imageUrl,
                 title = resumePromptItem?.title.orEmpty(),
                 subtitle = resumePromptItem?.let { localizedContinueWatchingSubtitle(it) }.orEmpty(),

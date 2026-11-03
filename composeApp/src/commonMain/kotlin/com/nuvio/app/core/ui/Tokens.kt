@@ -180,6 +180,7 @@ object NuvioTokens {
         const val dialog = 10f
         const val playerOverlay = 12f
         const val toast = 16f
+        const val launchOverlay = 20f
     }
 }
 
