@@ -1,3 +1,17 @@
+## Starlit 1.7.3
+
+### Fixes
+
+- **Desktop torrents wait for usable episode metadata:** The player waits for complete video names and sizes instead of trying to select an episode from TorrServer's temporary incomplete entries.
+- **Safer torrent engine shutdown and recovery:** An engine process that refuses to exit remains tracked, preventing its download cache from being cleaned up while still in use. Playback shows a useful error if shutdown also fails during recovery.
+- **Android login stays usable after activity recreation:** Rotating the phone or recreating the login screen during a sign-in request no longer leaves the login controls permanently disabled.
+- **Correct offline download source validation:** HLS playlists, DASH manifests and torrent files are rejected as direct video downloads even when their URLs contain fragments or query parameters.
+- **Bounded provider cooldowns in gateway source:** The gateway now interprets rate-limit reset timestamps in seconds or milliseconds and caps provider-wide cooldowns at one hour. Deploying the gateway on the VPS is a separate server update.
+
+### Validation
+
+- Targeted Windows desktop regression tests passed for downloaded URL filtering, incomplete torrent metadata, TorrServer shutdown ownership and playback error recovery. Gateway tests and local account/sync backend tests also passed. The existing release workflow verifies and signs the Windows installer and Android APKs before publication.
+
 ## Starlit 1.7.2
 
 ### Fixes
