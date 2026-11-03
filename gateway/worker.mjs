@@ -75,6 +75,21 @@ function json(payload, status = 200, headers = {}) {
   return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
 }
 
+function providerCooldownSeconds(headers) {
+  const now = Date.now();
+  const retryAfter = headers.get('Retry-After');
+  const numericRetry = Number(retryAfter);
+  const dateRetry = Math.ceil((Date.parse(retryAfter || '') - now) / 1000);
+  const retrySeconds = Number.isFinite(numericRetry) ? numericRetry : dateRetry;
+  const resetAt = Number(headers.get('X-RateLimit-Reset'));
+  // Some providers report Unix milliseconds, while others use Unix seconds.
+  const resetSeconds = resetAt > 100_000_000_000 ? (resetAt - now) / 1000 : resetAt - now / 1000;
+  // Malformed or excessively distant provider dates must not block every route forever.
+  return Math.min(3600, Math.ceil(Math.max(60,
+    Number.isFinite(retrySeconds) ? retrySeconds : 0,
+    Number.isFinite(resetSeconds) ? resetSeconds : 0)));
+}
+
 export async function handleRequest(request, ctx, { fetcher = fetch, cache = caches.default, tmdbToken = '' } = {}) {
   const url = new URL(request.url);
   if (request.method !== 'GET') return json({ error: 'Only GET requests are supported' }, 405, { Allow: 'GET' });
@@ -98,9 +113,7 @@ export async function handleRequest(request, ctx, { fetcher = fetch, cache = cac
   const staleKey = new Request(key.url + '&stale=1');
   const cooldownKey = new Request(new URL(`/cooldown/v1/${new URL(target.url).hostname}`, url.origin));
   async function unavailable(status, headers = new Headers(), recordCooldown = true) {
-    const seconds = Math.max(60, Number(headers.get('Retry-After')) ||
-      Math.ceil((Date.parse(headers.get('Retry-After')) - Date.now()) / 1000) || 0,
-      (Number(headers.get('X-RateLimit-Reset')) || 0) - Math.floor(Date.now() / 1000));
+    const seconds = providerCooldownSeconds(headers);
     if ((status === 429 || status === 403 || status >= 500) && recordCooldown) {
       // Keep the provider cooldown separate from successful response cache entries.
       await cache.put(cooldownKey, json({ until: Date.now() + seconds * 1000, status }, 200,
