@@ -33,6 +33,7 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.time.Duration
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
@@ -87,8 +88,20 @@ internal suspend fun sendTorrServerRequest(client: HttpClient, request: HttpRequ
         throw DesktopTorrentEngineUnavailable("Torrent engine is not responding", e)
     }
 
+/** TorrServer also stores an open SQLite database at --path. A child left running after a
+ * crashed app can prevent the next launch from starting if both share that directory.
+ * Keep process state in a unique local-cache directory; playback preferences are supplied
+ * by P2pSettingsRepository on every start and the torrent piece cache stays separate.
+ */
+internal fun desktopTorrServerSessionDirectory(
+    cacheDirectory: File = DesktopStorage.cacheDir.toFile(),
+): File = File(
+    cacheDirectory,
+    "torrserver-runtime/${ProcessHandle.current().pid()}-${UUID.randomUUID()}",
+)
+
 internal class TorrServerBackend(
-    private val configurationDirectory: File = DesktopStorage.rootDir.resolve("torrserver").toFile(),
+    private val configurationDirectory: File = desktopTorrServerSessionDirectory(),
     private val cacheDirectory: File = DesktopStorage.cacheDir.resolve("torrents").toFile(),
     binaryFile: File? = null,
 ) : DesktopTorrentBackend {

@@ -34,6 +34,34 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class TorrServerRecoveryIntegrationTest {
+    @Test fun aNewAppLaunchUsesIndependentTorrentState() = runBlocking {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val root = File(System.getProperty("user.dir"))
+        val binary = listOf(
+            File(root, "src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe"),
+            File(root, "composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe"),
+        ).firstOrNull { it.isFile && it.length() > 1_000_000 } ?: error("Bundled engine missing")
+        val dir = Files.createTempDirectory("nuvio-orphan-recovery-test").toFile()
+        val oldDirectory = File(dir, "torrserver")
+        val newDirectory = desktopTorrServerSessionDirectory(File(dir, "cache"))
+        val old = TorrServerBackend(oldDirectory, File(dir, "old-pieces"), binary)
+        val fresh = TorrServerBackend(newDirectory, File(dir, "new-pieces"), binary)
+        val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
+        try {
+            assertFalse(newDirectory.canonicalPath.startsWith(oldDirectory.canonicalPath + File.separator))
+            old.restart(settings)
+            val oldPid = assertNotNull(old.processId)
+            fresh.restart(settings)
+            assertNotEquals(oldPid, fresh.processId)
+            assertTrue(old.isHealthy(), "The previous engine remains independent")
+            assertTrue(fresh.isHealthy(), "A new launch must not share the previous engine's database")
+        } finally {
+            fresh.stop()
+            old.stop()
+            dir.deleteRecursively()
+        }
+    }
+
     @Test fun portSelectionSkipsAnOccupiedUdpPortAndBoundsFailures() {
         DatagramSocket(0).use { occupied ->
             var tries = 0
