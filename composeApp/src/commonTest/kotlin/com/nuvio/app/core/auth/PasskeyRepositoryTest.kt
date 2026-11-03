@@ -84,4 +84,33 @@ class PasskeyRepositoryTest {
         assertFailsWith<Exception> { passkeyVerificationBody("abc", "{}") }
         assertFailsWith<Exception> { passkeyVerificationBody("abc", "invalid") }
     }
+
+    @Test
+    fun registeredPasskeysAreReadFromListAndWrappedResponsesWithoutLosingMetadata() {
+        val passkey = """{"id":"73a4ea39-8f72-47aa-b324-5522c8d53e10","friendly_name":"Bitwarden",
+            "created_at":"2026-11-03T09:20:00Z"}"""
+        for (body in listOf("[$passkey]", """{"passkeys":[$passkey]}""", """{"credentials":[$passkey]}""")) {
+            val keys = parseRegisteredPasskeys(body)
+            assertEquals(1, keys.size)
+            assertEquals("73a4ea39-8f72-47aa-b324-5522c8d53e10", keys.single().id)
+            assertEquals("Bitwarden", keys.single().name)
+            assertEquals("2026-11-03T09:20:00Z", keys.single().createdAt)
+        }
+        assertEquals(emptyList(), parseRegisteredPasskeys("[]"))
+        assertEquals(emptyList(), parseRegisteredPasskeys("""{"passkeys":[]}"""))
+        assertEquals("Passkey", parseRegisteredPasskeys("""[{"id":"abc","friendly_name":null}]""").single().name)
+    }
+
+    @Test
+    fun malformedPasskeyListNeverLooksLikeAnEmptyAccount() {
+        for (body in listOf(
+            "", "not-json", "null", "{}", """{"passkeys":{}}""",
+            """{"credentials":null}""", """{"passkeys":[{}]}""",
+            """{"passkeys":[{"id":null}]}""", """{"passkeys":[{"id":""}]}""",
+        )) {
+            assertFailsWith<Exception>("Unexpectedly treated $body as an empty passkey list") {
+                parseRegisteredPasskeys(body)
+            }
+        }
+    }
 }
