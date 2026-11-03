@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -18,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,12 +29,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import com.nuvio.app.core.auth.AuthRepository
@@ -49,6 +55,7 @@ import com.nuvio.app.core.network.SupabaseProvider
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.CancellationException
 import com.nuvio.app.core.ui.NuvioPrimaryButton
+import com.nuvio.app.core.ui.GoogleBrandMark
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.NuvioTokens
@@ -242,8 +249,20 @@ private fun GoogleAccountLinkCard(authState: AuthState) {
     if (!enabled) return
 
     val feedback by AuthRepository.googleLinkFeedback.collectAsStateWithLifecycle()
+    val accountFeedback = feedback?.takeIf { it.userId == account.userId }
     var linked by remember(account.userId) { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(account.userId, feedback?.completed) {
+    // The Google consent screen is in a separate browser. Returning to Settings must
+    // refresh the linked identities even if the app missed its callback while paused.
+    var resumeCount by remember(account.userId) { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, account.userId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) resumeCount++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(account.userId, resumeCount, accountFeedback?.completed) {
         linked = runCatching {
             SupabaseProvider.client.auth.retrieveUserForCurrentSession(false).identities.orEmpty()
                 .any { it.provider == "google" }
@@ -265,22 +284,32 @@ private fun GoogleAccountLinkCard(authState: AuthState) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = when {
-                linked == true || feedback?.takeIf { it.userId == account.userId }?.completed == true ->
+                linked == true || accountFeedback?.completed == true ->
                     stringResource(Res.string.auth_google_link_connected)
                 else -> stringResource(Res.string.auth_google_link_description)
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (linked == false && feedback?.takeIf { it.userId == account.userId }?.completed != true) {
+        if (linked == false && accountFeedback?.completed != true) {
             Spacer(modifier = Modifier.height(14.dp))
-            NuvioPrimaryButton(
-                text = stringResource(Res.string.auth_google_link_button),
+            Button(
                 enabled = !busy,
                 onClick = { if (!busy) { password = ""; showPasswordConfirm = true } },
-            )
+                modifier = Modifier.fillMaxWidth().height(NuvioTokens.Space.s48 + NuvioTokens.Space.s4)
+                    .testTag("account-link-google-button"),
+                shape = MaterialTheme.nuvio.shapes.button,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.nuvio.colors.accent,
+                    contentColor = MaterialTheme.nuvio.colors.onAccent,
+                ),
+            ) {
+                GoogleBrandMark(modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(stringResource(Res.string.auth_google_link_button), style = MaterialTheme.typography.titleMedium)
+            }
         }
-        feedback?.takeIf { it.userId == account.userId }?.let { status ->
+        accountFeedback?.let { status ->
             Spacer(modifier = Modifier.height(10.dp))
             Text(status.message, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall)
