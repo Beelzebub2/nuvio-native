@@ -15,8 +15,15 @@ import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import kotlinx.coroutines.CancellationException
 
-private class AndroidPasskeyCeremony(private val context: Context) : PasskeyCeremony {
-    private val manager = CredentialManager.create(context)
+internal class AndroidPasskeyCeremony(
+    private val context: Context,
+    providerFactory: () -> CredentialManager = { CredentialManager.create(context) },
+) : PasskeyCeremony {
+    // A passkey provider is optional. Constructing CredentialManager while the
+    // Account or login screen composes can throw on devices without a working provider,
+    // taking down the entire app before the user even taps Add passkey.
+    // Delay provider initialization until an actual credential operation.
+    private val manager by lazy(providerFactory)
 
     override suspend fun create(optionsJson: String): String {
         try {
@@ -29,6 +36,10 @@ private class AndroidPasskeyCeremony(private val context: Context) : PasskeyCere
         } catch (error: CancellationException) {
             throw error
         } catch (error: CreateCredentialException) {
+            throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = true), error)
+        } catch (error: Exception) {
+            // Missing/broken platform components must be reported as an action
+            // error, not as an uncaught crash from lazy provider initialization.
             throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = true), error)
         }
     }
@@ -44,6 +55,8 @@ private class AndroidPasskeyCeremony(private val context: Context) : PasskeyCere
         } catch (error: CancellationException) {
             throw error
         } catch (error: GetCredentialException) {
+            throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = false), error)
+        } catch (error: Exception) {
             throw IllegalStateException(passkeyProviderErrorMessage(error.message, registration = false), error)
         }
     }
