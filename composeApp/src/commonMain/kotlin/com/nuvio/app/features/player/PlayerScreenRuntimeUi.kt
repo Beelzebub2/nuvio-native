@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import com.nuvio.app.features.remote.DesktopRemote
@@ -699,6 +700,7 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
 private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
     val isInPip = rememberIsInPictureInPicture()
     val controlToggles = playerControlToggles()
+    val showCastHelp = remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -797,6 +799,9 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            onCastInfoClick = if (!isDesktop && !isIos) {
+                { showCastHelp.value = true }
+            } else null,
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -812,6 +817,18 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+    if (showCastHelp.value) {
+        CastCompatibilityDialog(
+            eligibility = assessCastCompatibility(
+                sourceUrl = activeSourceUrl,
+                sourceHeaders = activeSourceHeaders,
+                isPeerToPeer = !activeTorrentInfoHash.isNullOrBlank() ||
+                    activeStreamType.orEmpty().contains("torrent", ignoreCase = true),
+                hasSeparateAudio = !activeSourceAudioUrl.isNullOrBlank(),
+            ),
+            onDismiss = { showCastHelp.value = false },
         )
     }
 }
