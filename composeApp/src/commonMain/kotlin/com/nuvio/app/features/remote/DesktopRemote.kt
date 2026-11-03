@@ -66,6 +66,15 @@ internal object DesktopRemote {
     var playback = RemotePlayback()
     var dispatch: ((RemoteCommand) -> Unit)? = null
 
+    // Opening the controller never depends on a discovered PC. Users can always
+    // reach its manual LAN scan and troubleshooting state from Settings.
+    fun open() {
+        visible.value = true
+        if (!isDesktop && transport.supported && !connected.value && !scanning.value) {
+            transport.discover()
+        }
+    }
+
     fun command(type: String, value: Double = 0.0, id: String = "") {
         transport.send(RemoteCommand(type, value, id, remotePlayback.value.playbackId))
     }
