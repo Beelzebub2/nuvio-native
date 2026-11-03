@@ -1,3 +1,14 @@
+## Starlit 1.7.1
+
+### Fixes
+
+- **Safer Android login and Account Settings startup:** Initializing a passkey provider is no longer required just to open either screen. Devices whose credential manager is unavailable can continue to the normal email/password login or account settings without the provider being started unexpectedly.
+- **Recoverable passkey provider errors:** When a user explicitly requests a passkey operation, unavailable or misconfigured credential managers now report a normal passkey error instead of failing while the screen is being created. Passkey verification and account approval requirements are unchanged.
+
+### Validation
+
+- Added Android-host regression tests for opening the login screen, opening signed-in and signed-out Account Settings, and handling provider initialization failures during both registration and sign-in. Physical-device verification of the reported crashes still requires a device crash log or reproduction.
+
 ## Starlit 1.7.0
 
 ### Features
