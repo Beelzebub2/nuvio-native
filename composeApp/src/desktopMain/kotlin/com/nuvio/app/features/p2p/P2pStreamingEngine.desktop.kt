@@ -462,6 +462,7 @@ internal class DesktopP2pSession(
         val filename = request.filename
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90)
         var files: List<TorrServerFile> = emptyList()
+        var metadataReady = false
 
         while (true) {
             ensureCurrent(intent)
@@ -483,12 +484,21 @@ internal class DesktopP2pSession(
                 delay(1_000L)
                 continue
             }
-            if (files.isNotEmpty()) break
+            // TorrServer may expose placeholder file_stats before torrent metadata has
+            // supplied the video names and sizes. Selecting from that partial list can
+            // fail a healthy stream before the real episode is discoverable.
+            val videos = files.filter { file ->
+                file.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS
+            }
+            metadataReady = files.isNotEmpty() && videos.none { it.length <= 0L } &&
+                files.none { it.path.isBlank() && it.length > 0L } &&
+                (videos.isNotEmpty() || files.all { it.path.isNotBlank() })
+            if (metadataReady) break
             log.d { "Waiting for torrent metadata..." }
             delay(1_000L)
         }
 
-        if (files.isEmpty()) {
+        if (!metadataReady) {
             throw P2pStreamingException("Torrent metadata timed out after 90 seconds. Check peers or choose another source.")
         }
 
