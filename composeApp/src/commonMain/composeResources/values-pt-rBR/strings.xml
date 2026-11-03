@@ -1,4 +1,13 @@
 <resources>
+    <string name="auth_google_sign_in">Entrar com o Google</string>
+    <string name="auth_google_sign_up">Cadastrar com o Google</string>
+    <string name="auth_google_approval_notice">Novas contas ainda precisam de aprovação.</string>
+    <string name="auth_google_request_access">Solicitar acesso com o Google (sujeito a aprovação)</string>
+    <string name="auth_google_link_title">Conta Google</string>
+    <string name="auth_google_link_description">Vincule o Google à sua conta Starlit para entrar sem perder sua biblioteca ou histórico.</string>
+    <string name="auth_google_link_button">Vincular Google</string>
+    <string name="auth_google_link_connected">O Google está vinculado a esta conta Starlit.</string>
+    <string name="auth_google_link_password_prompt">Confirme a senha da conta antes de vincular um novo método de login.</string>
     <string name="auth_owner_created_accounts">As contas são criadas pelo proprietário do servidor.</string>
     <string name="about_licenses_attributions_subtitle">Fontes de dados, agradecimentos e licenças da plataforma</string>
     <string name="about_supporters_contributors_subtitle">Reconhecimento aberto e créditos do projeto</string>

@@ -10,6 +10,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.ktor.http.Url
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.functions.functions
@@ -26,6 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
+
+data class GoogleLinkFeedback(val userId: String, val message: String, val completed: Boolean)
 
 object AuthRepository {
     private const val pendingAccountCleanupKey = "account_cleanup_required"
@@ -48,6 +51,10 @@ object AuthRepository {
     private var initialized = false
     private var sessionStatusJob: Job? = null
     private var validatedRemoteUserId: String? = null
+    private data class PendingGoogleLink(val accountId: String, val serverUrl: String, val client: SupabaseClient)
+    private var pendingGoogleLink: PendingGoogleLink? = null
+    private val _googleLinkFeedback = MutableStateFlow<GoogleLinkFeedback?>(null)
+    val googleLinkFeedback: StateFlow<GoogleLinkFeedback?> = _googleLinkFeedback.asStateFlow()
 
     fun initialize() {
         if (initialized) return
@@ -276,6 +283,57 @@ object AuthRepository {
             ?: getString(Res.string.auth_google_sign_in_failed)
     }
 
+    /**
+     * Linking is an authenticated, password-confirmed operation, not Google sign-in.
+     * Return the provider URL rather than allowing the SDK to import a session
+     * before we have verified the account identity on the PKCE callback.
+     */
+    suspend fun prepareGoogleAccountLink(password: String): Result<String> = runCatching {
+        val account = requireNotNull(_state.value as? AuthState.Authenticated)
+        require(!account.isAnonymous) { "Sign in to your approved account first" }
+        check(pendingGoogleLink == null) { "Complete or cancel the current Google linking request first" }
+        check(GoogleOAuthAvailability.isEnabled()) { "Google linking is not enabled on this server" }
+        val client = SupabaseProvider.client
+        val serverUrl = ServerConfigurationRepository.active.value.backendUrl
+        require(GoogleOAuthAvailability.isOfficialServer()) { "Google linking requires the official Starlit server" }
+        check(client.auth.currentSessionOrNull()?.user?.id == account.userId) { "Sign in again before linking Google" }
+        PasskeyRepository.reauthenticate(password)
+        check(ServerConfigurationRepository.active.value.backendUrl == serverUrl &&
+            SupabaseProvider.client === client &&
+            client.auth.currentSessionOrNull()?.user?.id == account.userId) {
+            "The signed-in account changed during password confirmation"
+        }
+        check(client.auth.retrieveUserForCurrentSession(false).identities.orEmpty().none { it.provider == "google" }) {
+            "This account already has Google linked"
+        }
+        val url = requireNotNull(client.auth.linkIdentity(Google, redirectUrl = "nuvio://auth") {
+            automaticallyOpenUrl = false
+        }) { "Google did not return an authorization URL" }
+        check(isTrustedGoogleAuthorizationUrl(url)) { "Google returned an untrusted authorization address" }
+        pendingGoogleLink = PendingGoogleLink(account.userId, serverUrl, client)
+        _googleLinkFeedback.value = GoogleLinkFeedback(
+            account.userId, "Complete the Google account link in your browser.", completed = false,
+        )
+        url
+    }.onFailure { error ->
+        if (error is CancellationException) throw error
+        val account = _state.value as? AuthState.Authenticated
+        if (account != null && !account.isAnonymous) {
+            _googleLinkFeedback.value = GoogleLinkFeedback(
+                account.userId, "Couldn't start Google linking. Check your password and server settings.",
+                completed = false,
+            )
+        }
+    }
+
+    fun cancelGoogleAccountLink() {
+        val accountId = pendingGoogleLink?.accountId
+        pendingGoogleLink = null
+        if (accountId != null) {
+            _googleLinkFeedback.value = GoogleLinkFeedback(accountId, "Google linking was canceled.", completed = false)
+        }
+    }
+
     internal fun handleGoogleOAuthCallback(url: String) {
         if (!GoogleOAuthAvailability.isOfficialServer() || !isStarlitOAuthCallback(url)) return
         val client = SupabaseProvider.client
@@ -284,11 +342,20 @@ object AuthRepository {
             try {
                 completeGoogleOAuth(client, code)
             } catch (error: CancellationException) {
-                cancelRemoteSessionRequest()
+                if (pendingGoogleLink != null) cancelGoogleAccountLink()
+                else cancelRemoteSessionRequest()
                 throw error
             } catch (_: Exception) {
-                cancelRemoteSessionRequest()
-                _error.value = getString(Res.string.auth_google_sign_in_failed)
+                val link = pendingGoogleLink
+                if (link != null) {
+                    pendingGoogleLink = null
+                    _googleLinkFeedback.value = GoogleLinkFeedback(
+                        link.accountId, "Google could not be linked. The account was not changed.", completed = false,
+                    )
+                } else {
+                    cancelRemoteSessionRequest()
+                    _error.value = getString(Res.string.auth_google_sign_in_failed)
+                }
             }
         }
     }
@@ -301,6 +368,27 @@ object AuthRepository {
         val session = client.auth.exchangeCodeForSession(code, saveSession = false)
         check(GoogleOAuthAvailability.isOfficialServer() && SupabaseProvider.client === client) {
             "The account server changed during Google verification"
+        }
+        val link = pendingGoogleLink
+        if (link != null) {
+            val currentAccount = (_state.value as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
+            val linkedAccountId = session.user?.id ?: client.auth.retrieveUser(session.accessToken).id
+            check(link.client === client && link.serverUrl == ServerConfigurationRepository.active.value.backendUrl &&
+                isValidGoogleLinkResult(link.accountId, currentAccount?.userId, linkedAccountId,
+                    GoogleOAuthAvailability.isOfficialServer()) &&
+                client.auth.currentSessionOrNull()?.user?.id == link.accountId) {
+                "Google linking cannot replace the signed-in Starlit account"
+            }
+            client.auth.importSession(session)
+            pendingGoogleLink = null
+            _googleLinkFeedback.value = GoogleLinkFeedback(
+                link.accountId, "Your Google account is now linked.", completed = true,
+            )
+            return
+        }
+        // A Google sign-in callback must never silently replace an already signed-in account.
+        check((_state.value as? AuthState.Authenticated)?.isAnonymous != false) {
+            "Unsolicited Google sign-in while another account is active"
         }
         // Restore intent after PKCE verification, including a callback after process restart.
         // Cached remote sessions must remain isolated from the guest workspace until then.
@@ -333,6 +421,8 @@ object AuthRepository {
 
     suspend fun signOut(): Result<Unit> {
         _error.value = null
+        pendingGoogleLink = null
+        _googleLinkFeedback.value = null
         val anonymousRead = runCatching { AuthStorage.loadAnonymousUserId() }
         val wasAnonymous = anonymousRead.getOrNull() != null
         if (wasAnonymous) {

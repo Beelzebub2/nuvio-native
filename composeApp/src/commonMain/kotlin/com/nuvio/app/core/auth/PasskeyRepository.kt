@@ -34,6 +34,22 @@ interface PasskeyCeremony {
     suspend fun get(optionsJson: String): String
 }
 
+/** Native providers (including Bitwarden) can reject Android app verification independently of GoTrue. */
+internal fun passkeyProviderErrorMessage(description: String?, registration: Boolean): String {
+    val lower = description.orEmpty().lowercase()
+    val action = if (registration) "create" else "use"
+    return when {
+        "cancel" in lower -> "Passkey operation canceled."
+        "asset link" in lower || "app not supported" in lower || "not supported for this app" in lower ||
+            "app not found" in lower ->
+            "Your passkey manager couldn't verify this app. If you're using Bitwarden, update it and retry, " +
+                "or select Google Password Manager in Android settings. Starlit cannot bypass provider verification."
+        "no provider" in lower || "provider configuration" in lower ->
+            "No compatible passkey manager is available. Enable one in Android's password/passkey settings and retry."
+        else -> "Couldn't $action a passkey with the selected manager. Update it or try another passkey provider."
+    }
+}
+
 @androidx.compose.runtime.Composable
 expect fun rememberPasskeyCeremony(): PasskeyCeremony?
 
@@ -134,7 +150,7 @@ object PasskeyRepository {
     }
 
     /** A fresh password sign-in is required before any durable credential mutation. */
-    private suspend fun reauthenticate(password: String) {
+    internal suspend fun reauthenticate(password: String) {
         require(password.isNotBlank()) { "Enter your account password to continue" }
         val state = requireNotNull(AuthRepository.state.value as? AuthState.Authenticated)
         require(!state.isAnonymous && !state.email.isNullOrBlank()) { "An approved account is required" }

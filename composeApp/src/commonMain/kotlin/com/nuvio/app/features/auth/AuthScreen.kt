@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -72,6 +73,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -101,6 +105,8 @@ import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.auth_request_account
 import nuvio.composeapp.generated.resources.auth_google_request_access
 import nuvio.composeapp.generated.resources.auth_google_sign_in
+import nuvio.composeapp.generated.resources.auth_google_sign_up
+import nuvio.composeapp.generated.resources.auth_google_approval_notice
 import nuvio.composeapp.generated.resources.auth_request_account_subtitle
 import nuvio.composeapp.generated.resources.auth_request_password_minimum
 import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
@@ -1037,21 +1043,64 @@ private fun AuthForm(
         }
 
         if (googleEnabled) {
-            AuthSecondaryButton(
-                text = stringResource(Res.string.auth_google_sign_in),
-                enabled = !isLoading,
-                height = metrics.secondaryHeight,
-                scale = scale,
-                onClick = onGoogleSignIn,
-            )
-            Spacer(modifier = Modifier.height(12.dp * scale))
-            AuthSecondaryButton(
-                text = stringResource(Res.string.auth_google_request_access),
-                enabled = !isLoading,
-                height = metrics.secondaryHeight,
-                scale = scale,
-                onClick = onGoogleRequest,
-            )
+            val googleActionLabel = stringResource(if (isSignUp) Res.string.auth_google_sign_up
+                else Res.string.auth_google_sign_in)
+            val googleAction = if (isSignUp) onGoogleRequest else onGoogleSignIn
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Button(
+                    onClick = googleAction,
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .size(60.dp * scale)
+                        .testTag("auth-google-circle")
+                        .semantics { contentDescription = googleActionLabel },
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF4285F4),
+                        disabledContainerColor = Color.White.copy(alpha = 0.5f),
+                    ),
+                ) {
+                    Text(
+                        text = "G",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = (29f * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp * scale))
+                Text(
+                    text = googleActionLabel,
+                    modifier = Modifier.clickable(enabled = !isLoading, onClick = googleAction),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = AuthTextPrimary,
+                        fontSize = (13f * scale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp * scale))
+                if (isSignUp) {
+                    Text(
+                        text = stringResource(Res.string.auth_google_approval_notice),
+                        color = AuthTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(Res.string.auth_google_request_access),
+                        modifier = Modifier.clickable(enabled = !isLoading, onClick = onGoogleRequest),
+                        color = AuthTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(14.dp * scale))
         }
 
