@@ -46,6 +46,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +81,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.RemotePlaybackHandoff
+import com.nuvio.app.features.remote.isAllowed
 import com.nuvio.app.core.build.TrailerPlaybackMode
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.network.NetworkCondition
@@ -217,6 +221,9 @@ fun MetaDetailsScreen(
     modifier: Modifier = Modifier,
 ) {
     val playbackAvailability = rememberPlaybackAvailability()
+    val pcRemoteConnected by DesktopRemote.connected.collectAsStateWithLifecycle()
+    val pcHandoffSent = stringResource(Res.string.remote_handoff_sent)
+    val pcHandoffUnavailable = stringResource(Res.string.remote_handoff_unavailable)
     val shuffleProfile by remember {
         EpisodeShuffleRepository.ensureLoaded()
         EpisodeShuffleRepository.uiState
@@ -1541,6 +1548,42 @@ fun MetaDetailsScreen(
                                     }
                                 }
 
+                                if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos && pcRemoteConnected &&
+                                    meta.type in setOf("movie", "series")) {
+                                    item(key = "detail-play-on-pc") {
+                                        val primaryHandoff = RemotePlaybackHandoff(
+                                            contentType = meta.type,
+                                            videoId = if (meta.type == "series")
+                                                (seriesStreamVideoId ?: seriesAction?.videoId).orEmpty() else meta.id,
+                                            parentMetaId = meta.id,
+                                            title = meta.name,
+                                            profileId = ProfileRepository.activeProfileId,
+                                            season = if (meta.type == "series") seriesAction?.seasonNumber else null,
+                                            episode = if (meta.type == "series") seriesAction?.episodeNumber else null,
+                                            resumePositionMs = (
+                                                if (meta.type == "series") seriesAction?.resumePositionMs
+                                                else movieProgress?.lastPositionMs
+                                            )?.coerceIn(0L, 43_200_000L) ?: 0L,
+                                        )
+                                        if (primaryHandoff.isAllowed()) {
+                                            OutlinedButton(
+                                                modifier = Modifier.padding(
+                                                    horizontal = contentHorizontalPadding,
+                                                    vertical = 6.dp,
+                                                ),
+                                                onClick = {
+                                                    val sent = DesktopRemote.requestHandoff(primaryHandoff)
+                                                    NuvioToastController.show(
+                                                        if (sent) pcHandoffSent else pcHandoffUnavailable,
+                                                    )
+                                                },
+                                            ) {
+                                                Text(stringResource(Res.string.remote_handoff_send))
+                                            }
+                                        }
+                                    }
+                                }
+
                                 configuredMetaSectionItems(
                                     settings = if (useTabletLayout) {
                                         metaScreenSettingsUiState.copy(
@@ -2202,6 +2245,38 @@ fun MetaDetailsScreen(
                                 },
                             ),
                         )
+                    }
+                    if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos && pcRemoteConnected &&
+                        meta.type == "series") {
+                        add(PosterZoomOverlayAction(
+                            icon = Icons.Default.PlayArrow,
+                            label = stringResource(Res.string.remote_handoff_send),
+                            onSelected = {
+                                val streamId = selectedEpisode.id.ifBlank {
+                                    buildPlaybackVideoId(
+                                        parentMetaId = meta.id,
+                                        seasonNumber = selectedEpisode.season,
+                                        episodeNumber = selectedEpisode.episode,
+                                        fallbackVideoId = selectedEpisode.id,
+                                    )
+                                }
+                                val request = RemotePlaybackHandoff(
+                                    contentType = meta.type,
+                                    videoId = streamId,
+                                    parentMetaId = meta.id,
+                                    title = meta.name,
+                                    profileId = ProfileRepository.activeProfileId,
+                                    season = selectedEpisode.season,
+                                    episode = selectedEpisode.episode,
+                                    resumePositionMs = progressByVideoId[streamId]
+                                        ?.lastPositionMs?.coerceIn(0L, 43_200_000L) ?: 0L,
+                                )
+                                val sent = DesktopRemote.requestHandoff(request)
+                                NuvioToastController.show(
+                                    if (sent) pcHandoffSent else pcHandoffUnavailable,
+                                )
+                            },
+                        ))
                     }
                 },
                 hazeState = episodeOverlayHazeState,

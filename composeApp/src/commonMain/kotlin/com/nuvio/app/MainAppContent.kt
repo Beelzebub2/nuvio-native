@@ -29,6 +29,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -138,6 +139,7 @@ import com.nuvio.app.features.player.LockPlayerToLandscape
 import com.nuvio.app.features.player.HidePlayerSystemBars
 import com.nuvio.app.features.player.rememberExternalPlayerLauncher
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.settings.AccountSettingsScreen
 import com.nuvio.app.features.settings.AddonsSettingsScreen
 import com.nuvio.app.features.settings.ContinueWatchingSettingsScreen
@@ -1093,6 +1095,39 @@ internal fun MainAppContent(
                     startFromBeginning = false,
                 )
             }
+
+        // The desktop never opens a phone-supplied URL. After the PC user
+        // explicitly accepts a metadata-only handoff, open the normal desktop
+        // source picker, including existing addon/rights/P2P-consent checks.
+        val latestOnPlayManually by rememberUpdatedState(onPlayManually)
+        DisposableEffect(isDesktop, activePlaybackProfileId) {
+            if (isDesktop) {
+                DesktopRemote.onAcceptedHandoff = { handoff ->
+                    if (handoff.profileId == ProfileRepository.activeProfileId &&
+                        handoff.profileId == activePlaybackProfileId) {
+                        latestOnPlayManually(
+                            handoff.contentType,
+                            handoff.videoId,
+                            handoff.parentMetaId,
+                            handoff.contentType,
+                            handoff.title,
+                            null,
+                            null,
+                            null,
+                            handoff.season,
+                            handoff.episode,
+                            null,
+                            null,
+                            null,
+                            handoff.resumePositionMs,
+                        )
+                    }
+                }
+            }
+            onDispose {
+                if (isDesktop) DesktopRemote.onAcceptedHandoff = null
+            }
+        }
 
         val onCatalogClick: (HomeCatalogSection) -> Unit = { section ->
             val launchId = CatalogLaunchStore.put(

@@ -15,6 +15,12 @@ After the encrypted session has been **approved on both devices** and the same S
 
 The remote deliberately **does not** accept new download URLs, magnets, stream links, file paths, destination changes, cancellation, deletion, account settings, provider credentials, DRM workarounds or source selections. It cannot bypass content licensing or network protections. The phone receives bounded title/status/progress only; desktop paths, signed URLs, headers and credentials never enter this protocol payload. A new pairing and account verification are required after reconnecting. The desktop remains authoritative for the current queue, account and profile.
 
+## Phone-to-PC playback handoff
+
+With Android and desktop paired, tap **Play on Starlit PC** from an eligible movie/series details page, from a selected episode's poster actions, or from the Android player controls. For a series' main details action, the currently recommended episode is requested. The request carries only a bounded media identifier, content type, title, profile identifier and resume position, inside the already authenticated encrypted remote channel. The phone never sends playback URLs, torrents, files, headers, tokens or DRM material.
+
+On the desktop, a separate prompt **Play on this PC?** names the requested title. The PC user must explicitly approve it. After approval, the existing Starlit desktop playback path opens its own source picker with the same account/profile checks, provider source restrictions and P2P consent flow it would use for a normal local play. Handoff does not auto-select a source or play media without approval. Both devices must use the same active profile; requests for stale or unrecognized IDs are rejected. Closing the pairing session, changing profiles or declining a prompt stops that request. This is an opt-in metadata handoff, not streaming from the phone or an unrestricted network receiver.
+
 Allow Starlit through the desktop firewall on **private networks**. Discovery uses UDP port **47788**, and the desktop opens one dynamic TCP port for its encrypted session. No port forwarding is needed. Guest Wi-Fi/client isolation, VPN routing, and restricted corporate networks can prevent discovery. Keep both apps foregrounded during pairing; account verification also needs internet access to the configured HTTPS account server. Multiple desktop processes on one computer can contend for discovery; use one running instance.
 
 ### Manual PC address, saved PCs and Wake-on-LAN (Android)

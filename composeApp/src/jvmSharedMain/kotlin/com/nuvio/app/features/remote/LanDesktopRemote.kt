@@ -92,6 +92,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     private var commands = Channel<RemoteCommand>(32)
     private val sessionEpoch = AtomicLong()
     private val lastWakeNanos = AtomicLong(0L)
+    private val lastHandoffAtNanos = AtomicLong(0L)
 
     override fun start(account: RemoteAccount, host: Boolean) {
         stop()
@@ -120,6 +121,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     override fun disconnect() {
         sessionEpoch.incrementAndGet()
         selectedDesktop = null
+        DesktopRemote.pendingHandoff.value = null
         connection?.cancel()
         connection = null
         confirmation?.cancel()
@@ -404,6 +406,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                     confirmation = null
                     DesktopRemote.pairing.value = null
                     DesktopRemote.connected.value = false
+                    DesktopRemote.pendingHandoff.value = null
                 }
             }
         }
@@ -451,7 +454,21 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 val snapshot = withContext(Dispatchers.Main) {
                     check(sessionEpoch.get() == epoch)
                     currentRemoteAccessToken(expected)
-                    if (command.type == "downloadPause" || command.type == "downloadResume") {
+                    if (command.type == "handoffRequest") {
+                        val intent = command.acceptableHandoff(
+                            ProfileRepository.activeProfileId, DesktopRemote.playback.playbackId,
+                        )
+                        if (intent != null && DesktopRemote.pendingHandoff.value == null) {
+                            val now = System.nanoTime()
+                            val previous = lastHandoffAtNanos.get()
+                            // Prevent an otherwise authorized phone from flooding
+                            // the desktop with navigation prompts.
+                            if (previous == 0L || now - previous !in 0 until 20_000_000_000L) {
+                                lastHandoffAtNanos.set(now)
+                                DesktopRemote.pendingHandoff.value = intent
+                            }
+                        }
+                    } else if (command.type == "downloadPause" || command.type == "downloadResume") {
                         val profileId = ProfileRepository.activeProfileId
                         val task = command.allowedDownloadTask(
                             DownloadsRepository.uiState.value, profileId, DesktopRemote.playback.playbackId,

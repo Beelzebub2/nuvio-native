@@ -563,6 +563,13 @@
     <string name="remote_downloads_empty">Não há transferências no perfil atual do PC.</string>
     <string name="remote_downloads_pause">Pausar no PC</string>
     <string name="remote_downloads_resume">Retomar no PC</string>
+    <string name="remote_handoff_send">Reproduzir no PC Starlit</string>
+    <string name="remote_handoff_sent">Pedido enviado. Aceita-o no PC e escolhe uma fonte nesse dispositivo.</string>
+    <string name="remote_handoff_unavailable">Não foi possível enviar para o PC. Confirma o emparelhamento, perfil e identificação do conteúdo.</string>
+    <string name="remote_handoff_approve_title">Reproduzir neste PC?</string>
+    <string name="remote_handoff_approve_description">Um telemóvel emparelhado pediu este título. Aceita apenas se reconheceres o pedido. O Starlit vai abrir a seleção normal de fontes neste PC; o telemóvel não pode fornecer uma fonte nem contornar restrições.</string>
+    <string name="remote_handoff_approve">Escolher fonte no PC</string>
+    <string name="remote_handoff_reject">Rejeitar</string>
     <string name="downloads_mobile_in_progress">Em curso</string>
     <string name="downloads_mobile_ready">Prontos</string>
     <string name="downloads_mobile_attention">Requer atenção</string>
