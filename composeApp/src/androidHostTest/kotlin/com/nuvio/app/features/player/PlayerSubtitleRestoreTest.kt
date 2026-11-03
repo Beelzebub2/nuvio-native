@@ -190,6 +190,55 @@ class PlayerSubtitleRestoreTest {
     }
 
     @Test
+    fun manualBuiltInSubtitleSurvivesStaleNativeSelection() {
+        val runtime = runtime()
+        val controller = runtime.playerController as RecordingController
+        val english = SubtitleTrack(0, "english", "English", "en", isSelected = true)
+        val french = SubtitleTrack(1, "french", "French", "fr")
+        controller.subtitles = listOf(english, french)
+        runtime.subtitleTracks = controller.subtitles
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false)
+
+        runtime.selectUserSubtitleTrack(1)
+        runtime.refreshTracks()
+
+        assertEquals(1, runtime.selectedSubtitleIndex)
+        assertTrue(runtime.isUserExplicitSubtitleSelection)
+        assertEquals(listOf(1, 1), controller.subtitleSelections)
+        assertEquals("french", PlayerTrackPreferenceStorage.load("tt2026")?.subtitleTrackId)
+
+        // Once the engine acknowledges the request, refreshing must not issue it again.
+        controller.subtitles = listOf(english.copy(isSelected = false), french.copy(isSelected = true))
+        runtime.refreshTracks()
+
+        assertEquals(1, runtime.selectedSubtitleIndex)
+        assertEquals(listOf(1, 1), controller.subtitleSelections)
+    }
+
+    @Test
+    fun manualBuiltInSubtitleFollowsTrackIdentityWhenNativeTracksReorder() {
+        val runtime = runtime()
+        val controller = runtime.playerController as RecordingController
+        val english = SubtitleTrack(0, "english", "English", "en", isSelected = true)
+        val french = SubtitleTrack(1, "french", "French", "fr")
+        controller.subtitles = listOf(english, french)
+        runtime.subtitleTracks = controller.subtitles
+
+        runtime.selectUserSubtitleTrack(1)
+
+        // The old selection is still reported, but the requested track moved to index 0.
+        controller.subtitles = listOf(
+            french.copy(index = 0),
+            english.copy(index = 1),
+        )
+        runtime.refreshTracks()
+
+        assertEquals(0, runtime.selectedSubtitleIndex)
+        assertEquals(listOf(1, 0), controller.subtitleSelections)
+        assertEquals("french", PlayerTrackPreferenceStorage.load("tt2026")?.subtitleTrackId)
+    }
+
+    @Test
     fun nativeSubtitleOffSurvivesStaleSelectedTracksAndPersists() {
         val runtime = runtime()
         val controller = runtime.playerController as RecordingController
