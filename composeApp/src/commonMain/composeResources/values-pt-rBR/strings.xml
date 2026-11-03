@@ -548,6 +548,12 @@
     <string name="settings_account_sign_out">Sair</string>
     <string name="settings_account_sign_out_confirm_message">Você será retornado à tela de login.</string>
     <string name="settings_account_sign_out_confirm_title">Sair?</string>
+    <string name="remote_pc_controller_title">Controle do PC</string>
+    <string name="remote_pc_controller_description">Encontre e controle PCs com Starlit na sua rede local.</string>
+    <string name="remote_pc_search_local_network">Procurar na rede local</string>
+    <string name="remote_pc_no_devices_hint">Nenhum PC encontrado? Mantenha o Starlit aberto no PC e verifique a mesma conta, a rede Wi-Fi e a permissão no firewall para redes privadas.</string>
+    <string name="remote_pc_unsupported">O controle do PC está disponível no Android. Ainda não é possível procurar neste dispositivo.</string>
+    <string name="remote_pc_found_devices">PCs na sua rede</string>
     <string name="settings_account_status">Status</string>
     <string name="settings_account_status_anonymous">Anônimo</string>
     <string name="settings_account_status_signed_in">Conectado</string>
