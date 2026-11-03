@@ -751,6 +751,12 @@
     <string name="settings_account_sign_out">Sign Out</string>
     <string name="settings_account_sign_out_confirm_message">You will be returned to the login screen.</string>
     <string name="settings_account_sign_out_confirm_title">Sign Out?</string>
+    <string name="remote_pc_controller_title">PC controller</string>
+    <string name="remote_pc_controller_description">Find and control Starlit PCs on your local network.</string>
+    <string name="remote_pc_search_local_network">Search local network</string>
+    <string name="remote_pc_no_devices_hint">No PCs listed? Keep Starlit open on your PC and check the same account, Wi-Fi, and private-network firewall.</string>
+    <string name="remote_pc_unsupported">PC controller is currently supported on Android. Searching is not available on this device yet.</string>
+    <string name="remote_pc_found_devices">PCs on your network</string>
     <string name="settings_account_status">Status</string>
     <string name="settings_account_status_anonymous">Anonymous</string>
     <string name="settings_account_status_signed_in">Signed in</string>
