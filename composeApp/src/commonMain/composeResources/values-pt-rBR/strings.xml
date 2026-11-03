@@ -1536,4 +1536,5 @@
     <string name="settings_account_server_detail">Servidor: %1$s</string>
     <string name="auth_google_link_status_failed">Não foi possível verificar a conexão com o Google. Tente novamente.</string>
     <string name="remote_qr_sign_in_required">Entre na sua conta Starlit para conectar o celular.</string>
+    <string name="remote_qr_no_network">Conecte este PC ao Wi-Fi ou Ethernet e reabra Controle pelo celular para mostrar um QR code.</string>
 </resources>

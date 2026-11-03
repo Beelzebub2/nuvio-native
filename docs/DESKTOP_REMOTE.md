@@ -11,7 +11,7 @@ If no PC appears after searching, verify that both apps are signed into the **sa
 
 ## Pair with a QR code
 
-On desktop, open **Settings → Account → Devices → Connect phone**. Once the local listener is ready, Starlit shows a QR code and its selected local IPv4 address. If the PC has multiple network adapters, use **Choose network address** to select the address shared with your phone.
+On desktop, open **Settings → Account → Devices → Connect phone**. Once the local listener is ready, Starlit shows a QR code and its selected local IPv4 address. If the PC has multiple network adapters, use **Choose network address** to select the address shared with your phone. After changing Wi-Fi or the PC’s IP address, close and reopen Phone remote to refresh both the QR code and manual-IP addresses. If the PC has no local network yet, connect it and reopen the dialog; no account restart is needed.
 
 On Android, open **Settings → PC controller → Scan desktop QR code** inside Starlit. Wait for any current network search to finish before scanning. Select the discovered PC and compare and approve the fresh codes on both devices. The QR code contains only a versioned private IPv4 discovery hint, never credentials, account information or an approval. It does not open a website or run commands. The phone still probes the same subnet and verifies the account through the existing encrypted handshake.
 

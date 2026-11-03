@@ -28,7 +28,7 @@ internal fun DesktopRemoteSettingsButton() {
 }
 
 @Composable
-internal fun DesktopRemoteDialogs() {
+internal fun DesktopRemoteDialogs(localAddresses: () -> List<String> = { DesktopRemote.transport.localAddresses() }) {
     val pairing by DesktopRemote.pairing.collectAsState()
     val pendingHandoff by DesktopRemote.pendingHandoff.collectAsState()
     val visible by DesktopRemote.visible.collectAsState()
@@ -38,7 +38,11 @@ internal fun DesktopRemoteDialogs() {
     val desktops by DesktopRemote.desktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val playback by DesktopRemote.remotePlayback.collectAsState()
-    val hostAddresses by DesktopRemote.hostAddresses.collectAsState()
+    val hostReady by DesktopRemote.hostReady.collectAsState()
+    // Reopening after Wi-Fi/DHCP changes refreshes both the QR and its manual-IP fallback.
+    val hostAddresses = remember(visible, hostReady) {
+        if (isDesktop && visible) localAddresses() else emptyList()
+    }
     var manualIp by rememberSaveable { mutableStateOf("") }
     var qrError by remember { mutableStateOf(false) }
     val qrScanner = rememberRemoteQrScanner { payload ->
@@ -106,12 +110,12 @@ internal fun DesktopRemoteDialogs() {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (isDesktop) {
-                        Text(status)
-                        if (hostAddresses.isNotEmpty()) {
+                        Text(if (hostReady && hostAddresses.isEmpty()) stringResource(Res.string.remote_qr_no_network) else status)
+                        if (hostReady && hostAddresses.isNotEmpty()) {
                             Text(stringResource(Res.string.remote_qr_instructions))
                             DesktopPairingQr(hostAddresses)
                         }
-                        DesktopRemote.transport.localAddresses().takeIf { it.isNotEmpty() }?.let { addresses ->
+                        hostAddresses.takeIf { it.isNotEmpty() }?.let { addresses ->
                             Text(
                                 stringResource(Res.string.remote_pc_desktop_addresses, addresses.joinToString(", ")),
                                 style = MaterialTheme.typography.bodySmall,

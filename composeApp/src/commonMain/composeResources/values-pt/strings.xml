@@ -2031,4 +2031,5 @@
     <string name="settings_account_server_detail">Servidor: %1$s</string>
     <string name="auth_google_link_status_failed">Não foi possível verificar a ligação ao Google. Tente novamente.</string>
     <string name="remote_qr_sign_in_required">Inicie sessão na sua conta Starlit para ligar o telemóvel.</string>
+    <string name="remote_qr_no_network">Ligue este PC a uma rede Wi-Fi ou Ethernet e volte a abrir Controlo pelo telemóvel para mostrar um código QR.</string>
 </resources>

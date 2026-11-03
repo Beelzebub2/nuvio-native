@@ -39,7 +39,7 @@ class DesktopAccountQrUiTest {
     private val namedAccount = AuthState.Authenticated("fixture-account",
         "ricardo.with.a.long.account.address@example.com", false)
 
-    private fun ComposeUiTest.account(state: AuthState) {
+    private fun ComposeUiTest.account(state: AuthState, addresses: () -> List<String> = { listOf("192.168.1.50", "10.0.0.2") }) {
         setContent {
             NuvioTheme {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.nuvio.colors.background).padding(40.dp)) {
@@ -50,7 +50,7 @@ class DesktopAccountQrUiTest {
                         DesktopPhoneConnectionCard(state)
                     }
                 }
-                DesktopRemoteDialogs()
+                DesktopRemoteDialogs(localAddresses = addresses)
             }
         }
     }
@@ -137,14 +137,13 @@ class DesktopAccountQrUiTest {
 
     @Test
     fun phoneConnectionOpensTheActualQrDialog() = runDesktopComposeUiTest(width = 1000, height = 900) {
-        val previousAddresses = DesktopRemote.hostAddresses.value
+        val previousReady = DesktopRemote.hostReady.value
         val previousStatus = DesktopRemote.status.value
         try {
-            DesktopRemote.hostAddresses.value = listOf("192.168.1.50", "10.0.0.2")
+            DesktopRemote.hostReady.value = true
             DesktopRemote.status.value = "Ready to pair with your phone on this local network."
             account(namedAccount)
             onNodeWithText("Connect phone").performClick()
-            runOnIdle { DesktopRemote.hostAddresses.value = listOf("192.168.1.50", "10.0.0.2") }
             onNodeWithTag("desktop-pairing-qr").assertIsDisplayed()
             // Capture the code actually drawn by Compose, including desktop scaling.
             val image = onNodeWithTag("desktop-pairing-qr").captureToImage().toAwtImage()
@@ -157,10 +156,37 @@ class DesktopAccountQrUiTest {
             onNodeWithText("Close").performClick()
         } finally {
             DesktopRemote.visible.value = false
-            DesktopRemote.hostAddresses.value = previousAddresses
+            DesktopRemote.hostReady.value = previousReady
             DesktopRemote.status.value = previousStatus
         }
     }
+
+    @Test
+    fun reopeningAfterJoiningOrChangingNetworksUsesFreshAddressesWithoutRestartingTheListener() =
+        runDesktopComposeUiTest(width = 1000, height = 900) {
+            val previousReady = DesktopRemote.hostReady.value
+            var addresses = emptyList<String>()
+            try {
+                DesktopRemote.hostReady.value = true
+                account(namedAccount, addresses = { addresses })
+                onNodeWithText("Connect phone").performClick()
+                onNodeWithTag("desktop-pairing-qr").assertDoesNotExist()
+                onNodeWithText("Connect this PC to Wi-Fi or Ethernet, then reopen Phone remote to show a QR code.").assertIsDisplayed()
+                onNodeWithText("Close").performClick()
+                runOnIdle { addresses = listOf("192.168.1.50") }
+                onNodeWithText("Connect phone").performClick()
+                onNodeWithContentDescription("Desktop pairing QR code for 192.168.1.50").assertIsDisplayed()
+                onNodeWithText("Local PC address: 192.168.1.50").assertIsDisplayed()
+                onNodeWithText("Close").performClick()
+                runOnIdle { addresses = listOf("10.0.0.2") }
+                onNodeWithText("Connect phone").performClick()
+                onNodeWithContentDescription("Desktop pairing QR code for 10.0.0.2").assertIsDisplayed()
+                onNodeWithText("Local PC address: 10.0.0.2").assertIsDisplayed()
+            } finally {
+                DesktopRemote.visible.value = false
+                DesktopRemote.hostReady.value = previousReady
+            }
+        }
 
     @Test
     fun qrStillDecodesAtFractionalDesktopDensityAndNetworkSelectionWorks() =

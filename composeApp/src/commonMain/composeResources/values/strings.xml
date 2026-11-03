@@ -2709,4 +2709,5 @@
     <string name="settings_account_server_detail">Server: %1$s</string>
     <string name="auth_google_link_status_failed">Couldn’t check your Google connection. Try again.</string>
     <string name="remote_qr_sign_in_required">Sign in to your Starlit account to connect your phone.</string>
+    <string name="remote_qr_no_network">Connect this PC to Wi-Fi or Ethernet, then reopen Phone remote to show a QR code.</string>
 </resources>
