@@ -626,6 +626,7 @@ private fun MobileSettingsScreen(
                 SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
                 SettingsSearchTarget.CheckForUpdates -> onCheckForUpdatesClick?.invoke()
                 SettingsSearchTarget.Changelog -> onChangelogClick()
+                SettingsSearchTarget.DesktopRemote -> com.nuvio.app.features.remote.DesktopRemote.open()
             }
         }
 
@@ -1147,6 +1148,7 @@ private fun TabletSettingsScreen(
                         SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
                         SettingsSearchTarget.CheckForUpdates -> onCheckForUpdatesClick?.invoke()
                         SettingsSearchTarget.Changelog -> onChangelogClick()
+                        SettingsSearchTarget.DesktopRemote -> com.nuvio.app.features.remote.DesktopRemote.open()
                     }
                 }
 
