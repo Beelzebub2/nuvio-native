@@ -191,6 +191,14 @@ class DesktopRemoteProtocolTest {
     }
 
     @Test
+    fun discoveryIncludesLimitedBroadcastWhenWifiOmitsAnInterfaceBroadcast() {
+        val limited = InetAddress.getByName("255.255.255.255")
+        val directed = InetAddress.getByName("192.168.1.255")
+        assertEquals(listOf(limited), remoteBroadcastTargets(emptyList()))
+        assertEquals(listOf(directed, limited), remoteBroadcastTargets(listOf(directed, directed)))
+    }
+
+    @Test
     fun privateAddressMustMatchTheActualInterfaceSubnet() {
         fun ip(value: String) = InetAddress.getByName(value).address
         assertTrue(sameRemoteSubnet(ip("192.168.1.80"), ip("192.168.1.2"), 24))
