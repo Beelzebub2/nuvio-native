@@ -278,7 +278,10 @@ internal fun DesktopAccountCard(
 @Composable
 internal fun DesktopPhoneConnectionCard(authState: AuthState) {
     val connected by com.nuvio.app.features.remote.DesktopRemote.connected.collectAsState()
+    val server by ServerConfigurationRepository.active.collectAsState()
     val signedIn = (authState as? AuthState.Authenticated)?.isAnonymous == false
+    // Keep this gate aligned with DesktopRemoteHost, which cannot start for HTTP servers.
+    val canHostRemote = signedIn && server.backendUrl.startsWith("https://")
     NuvioSurfaceCard(modifier = Modifier.testTag("desktop-account-phone-connection")) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val narrow = maxWidth < 480.dp
@@ -287,9 +290,10 @@ internal fun DesktopPhoneConnectionCard(authState: AuthState) {
                 Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(Res.string.remote_qr_phone_remote),
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(if (!signedIn) Res.string.remote_qr_sign_in_required
-                        else if (connected) Res.string.remote_qr_connected
-                        else Res.string.remote_qr_account_description),
+                    Text(if (!signedIn) stringResource(Res.string.remote_qr_sign_in_required)
+                        else if (!canHostRemote) stringResource(Res.string.remote_qr_https_required)
+                        else stringResource(if (connected) Res.string.remote_qr_connected
+                            else Res.string.remote_qr_account_description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.nuvio.colors.textSecondary)
                 }
@@ -300,7 +304,7 @@ internal fun DesktopPhoneConnectionCard(authState: AuthState) {
                     label = stringResource(if (connected) Res.string.remote_qr_manage else Res.string.remote_qr_show),
                     icon = null,
                     onClick = { com.nuvio.app.features.remote.DesktopRemote.open() },
-                    enabled = signedIn,
+                    enabled = canHostRemote,
                     tone = NuvioCompactActionTone.Secondary,
                     size = NuvioActionSize.Small,
                 )

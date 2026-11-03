@@ -39,6 +39,18 @@ class DesktopAccountQrUiTest {
     private val namedAccount = AuthState.Authenticated("fixture-account",
         "ricardo.with.a.long.account.address@example.com", false)
 
+    private fun withHttpsServer(block: () -> Unit) {
+        val original = ServerConfigurationRepository.active.value
+        try {
+            assertTrue(ServerConfigurationRepository.saveCustom(ServerConfiguration(
+                STARLIT_GOOGLE_ORIGIN, "sb_publishable_fixture", ServerCapabilities(true, false), true)))
+            block()
+        } finally {
+            if (original.isCustom) ServerConfigurationRepository.saveCustom(original)
+            else ServerConfigurationRepository.useOfficial()
+        }
+    }
+
     private fun ComposeUiTest.account(state: AuthState, addresses: () -> List<String> = { listOf("192.168.1.50", "10.0.0.2") }) {
         setContent {
             NuvioTheme {
@@ -103,7 +115,7 @@ class DesktopAccountQrUiTest {
     }
 
     @Test
-    fun namedAccountKeepsItsIdentityAndConnectionActionAtDesktopWidths() {
+    fun namedAccountKeepsItsIdentityAndConnectionActionAtDesktopWidths() = withHttpsServer {
         listOf(1000, 520).forEach { width ->
             runDesktopComposeUiTest(width = width, height = 720) {
                 account(namedAccount)
@@ -136,7 +148,43 @@ class DesktopAccountQrUiTest {
         }
 
     @Test
-    fun phoneConnectionOpensTheActualQrDialog() = runDesktopComposeUiTest(width = 1000, height = 900) {
+    fun localHttpServerDisablesPhoneConnectionAndHttpsServerReenablesIt() {
+        val original = ServerConfigurationRepository.active.value
+        try {
+            assertTrue(ServerConfigurationRepository.saveCustom(ServerConfiguration(
+                "http://localhost:54321", "sb_publishable_fixture", ServerCapabilities(true, false), true)))
+            runDesktopComposeUiTest(width = 520, height = 720) {
+                account(namedAccount)
+                onNodeWithText("Connect phone").assertIsNotEnabled()
+                onNodeWithText("Phone remote requires an HTTPS account server. Switch to an HTTPS server to connect your phone.")
+                    .assertIsDisplayed()
+                onNodeWithTag("desktop-pairing-qr").assertDoesNotExist()
+
+                runOnIdle {
+                    assertTrue(ServerConfigurationRepository.saveCustom(ServerConfiguration(
+                        "https://example.com", "sb_publishable_fixture", ServerCapabilities(true, false), true)))
+                }
+                onNodeWithText("Connect phone").assertIsEnabled()
+                onNodeWithText("Phone remote requires an HTTPS account server. Switch to an HTTPS server to connect your phone.")
+                    .assertDoesNotExist()
+
+                runOnIdle { assertTrue(ServerConfigurationRepository.useOfficial()) }
+                // CI builds may not have official backend secrets configured.
+                if (ServerConfigurationRepository.active.value.backendUrl.startsWith("https://")) {
+                    onNodeWithText("Connect phone").assertIsEnabled()
+                } else {
+                    onNodeWithText("Connect phone").assertIsNotEnabled()
+                }
+            }
+        } finally {
+            if (original.isCustom) ServerConfigurationRepository.saveCustom(original)
+            else ServerConfigurationRepository.useOfficial()
+        }
+    }
+
+    @Test
+    fun phoneConnectionOpensTheActualQrDialog() = withHttpsServer {
+        runDesktopComposeUiTest(width = 1000, height = 900) {
         val previousReady = DesktopRemote.hostReady.value
         val previousStatus = DesktopRemote.status.value
         try {
@@ -159,10 +207,12 @@ class DesktopAccountQrUiTest {
             DesktopRemote.hostReady.value = previousReady
             DesktopRemote.status.value = previousStatus
         }
+        }
     }
 
     @Test
     fun reopeningAfterJoiningOrChangingNetworksUsesFreshAddressesWithoutRestartingTheListener() =
+        withHttpsServer {
         runDesktopComposeUiTest(width = 1000, height = 900) {
             val previousReady = DesktopRemote.hostReady.value
             var addresses = emptyList<String>()
@@ -186,6 +236,7 @@ class DesktopAccountQrUiTest {
                 DesktopRemote.visible.value = false
                 DesktopRemote.hostReady.value = previousReady
             }
+        }
         }
 
     @Test

@@ -8,6 +8,10 @@
     <string name="auth_google_link_button">Vincular Google</string>
     <string name="auth_google_link_connected">O Google está vinculado a esta conta Starlit.</string>
     <string name="auth_google_link_password_prompt">Confirme a senha da conta antes de vincular um novo método de login.</string>
+    <string name="auth_google_link_unavailable">A vinculação com a conta Google não está disponível no momento. Verifique a conexão ou tente novamente.</string>
+    <string name="auth_google_link_checking">Verificando a disponibilidade da vinculação com a conta Google…</string>
+    <string name="auth_google_link_browser_pending">A vinculação com a conta Google está aguardando autorização no navegador. Conclua a autorização ou cancele esta solicitação.</string>
+    <string name="remote_qr_https_required">O controle remoto pelo celular requer um servidor de conta HTTPS. Mude para um servidor HTTPS para conectar o celular.</string>
     <string name="auth_sign_in_with_passkey">Entrar com chave de acesso</string>
     <string name="auth_add_passkey">Adicionar chave de acesso</string>
     <string name="auth_passkey_confirm_password">Confirme sua senha para adicionar uma chave de acesso a esta conta.</string>

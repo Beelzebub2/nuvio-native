@@ -117,6 +117,8 @@ private fun AccountSettingsBody(
     isTablet: Boolean,
 ) {
     val authState by AuthRepository.state.collectAsStateWithLifecycle()
+    val desktopGoogleLinkBusy by AuthRepository.desktopGoogleLinkInProgress.collectAsStateWithLifecycle()
+    val activeServer by ServerConfigurationRepository.active.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -126,27 +128,29 @@ private fun AccountSettingsBody(
     var deleteErrorMessage by remember { mutableStateOf<String?>(null) }
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
     val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled &&
-        ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures &&
+        activeServer.supportsNuvioAccountFeatures &&
         (authState as? AuthState.Authenticated)?.isAnonymous == false
     val namedAccount = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
-    var googleLinkAvailable by remember(namedAccount?.userId) { mutableStateOf(false) }
-    LaunchedEffect(namedAccount?.userId) {
-        googleLinkAvailable = if (
-            namedAccount != null && !isIos && GoogleOAuthAvailability.isOfficialServer()
-        ) {
-            GoogleOAuthAvailability.isEnabled()
-        } else {
-            false
-        }
+    val canCheckGoogle = namedAccount != null && !isIos && GoogleOAuthAvailability.isOfficialServer()
+    var googleRetry by remember(namedAccount?.userId, activeServer) { mutableStateOf(0) }
+    var googleLinkAvailable by remember(namedAccount?.userId, activeServer) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(namedAccount?.userId, activeServer, googleRetry) {
+        googleLinkAvailable = if (canCheckGoogle) GoogleOAuthAvailability.isEnabled() else false
     }
 
     if (isDesktop) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DesktopAccountCard(authState = authState, onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true })
             signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            if (namedAccount != null && (googleLinkAvailable || PasskeyRepository.canUseOnActiveServer())) {
+            if (namedAccount != null && (canCheckGoogle || PasskeyRepository.canUseOnActiveServer())) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
-                if (googleLinkAvailable) GoogleAccountLinkCard(authState, isAvailable = true)
+                if (canCheckGoogle) {
+                    when (googleLinkAvailable) {
+                        true -> GoogleAccountLinkCard(authState, isAvailable = true)
+                        false -> GoogleLinkAvailabilityRetry(isChecking = false, linkPending = desktopGoogleLinkBusy) { googleRetry++ }
+                        null -> GoogleLinkAvailabilityRetry(isChecking = true, linkPending = desktopGoogleLinkBusy) { googleRetry++ }
+                    }
+                }
                 PasskeySecurityCard(authState)
             }
             if (namedAccount != null && LocalSettingsImport.isAvailable) {
@@ -169,7 +173,7 @@ private fun AccountSettingsBody(
     } else {
         val canImportLocal = namedAccount != null && LocalSettingsImport.isAvailable
         val hasSignInMethods = namedAccount != null && (
-            googleLinkAvailable || PasskeyRepository.canUseOnActiveServer()
+            canCheckGoogle || PasskeyRepository.canUseOnActiveServer()
         )
 
         Column(
@@ -180,7 +184,13 @@ private fun AccountSettingsBody(
 
             if (hasSignInMethods) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
-                if (googleLinkAvailable) GoogleAccountLinkCard(authState, isAvailable = true)
+                if (canCheckGoogle) {
+                    when (googleLinkAvailable) {
+                        true -> GoogleAccountLinkCard(authState, isAvailable = true)
+                        false -> GoogleLinkAvailabilityRetry(isChecking = false, linkPending = desktopGoogleLinkBusy) { googleRetry++ }
+                        null -> GoogleLinkAvailabilityRetry(isChecking = true, linkPending = desktopGoogleLinkBusy) { googleRetry++ }
+                    }
+                }
                 PasskeySecurityCard(authState)
             }
 
@@ -397,6 +407,37 @@ private fun MobileAccountSectionHeading(title: String) {
     )
 }
 
+@Composable
+private fun GoogleLinkAvailabilityRetry(isChecking: Boolean, linkPending: Boolean, onRetry: () -> Unit) {
+    NuvioSurfaceCard {
+        when {
+            isDesktop && linkPending -> {
+                Text(stringResource(Res.string.auth_google_link_browser_pending),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { AuthRepository.cancelDesktopGoogleAccountLink() }) {
+                    Text(stringResource(Res.string.action_cancel))
+                }
+            }
+            isChecking -> {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(stringResource(Res.string.auth_google_link_checking),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            else -> {
+                Text(stringResource(Res.string.auth_google_link_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = onRetry) { Text(stringResource(Res.string.auth_passkey_retry)) }
+            }
+        }
+    }
+}
+
 /** Google linking is distinct from Google login: it never replaces the current account. */
 @Composable
 internal fun GoogleAccountLinkCard(
@@ -442,8 +483,10 @@ internal fun GoogleAccountLinkCard(
 
     var showPasswordConfirm by remember(account.userId) { mutableStateOf(false) }
     var password by remember(account.userId) { mutableStateOf("") }
-    var busy by remember(account.userId) { mutableStateOf(false) }
+    var localBusy by remember(account.userId) { mutableStateOf(false) }
     var linkJob by remember(account.userId) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val desktopLinkBusy by AuthRepository.desktopGoogleLinkInProgress.collectAsStateWithLifecycle()
+    val busy = if (isDesktop) desktopLinkBusy else localBusy
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
 
@@ -506,7 +549,9 @@ internal fun GoogleAccountLinkCard(
             TextButton(onClick = { identityRetry++ }) { Text(stringResource(Res.string.auth_passkey_retry)) }
         }
         if (busy && isDesktop) {
-            TextButton(onClick = { linkJob?.cancel() }) { Text(stringResource(Res.string.action_cancel)) }
+            TextButton(onClick = { AuthRepository.cancelDesktopGoogleAccountLink() }) {
+                Text(stringResource(Res.string.action_cancel))
+            }
         }
         accountFeedback?.let { status ->
             Spacer(modifier = Modifier.height(10.dp))
@@ -539,19 +584,24 @@ internal fun GoogleAccountLinkCard(
                         if (busy || password.isBlank()) return@TextButton
                         val confirmationPassword = password
                         password = ""
-                        busy = true
                         showPasswordConfirm = false
-                        linkJob = scope.launch {
-                            try {
-                                launchGoogleAccountLink(confirmationPassword) { uriHandler.openUri(it) }
-                            } catch (error: CancellationException) {
-                                AuthRepository.cancelGoogleAccountLink()
-                                throw error
-                            } catch (_: Exception) {
-                                AuthRepository.cancelGoogleAccountLink()
-                            } finally {
-                                busy = false
-                                showPasswordConfirm = false
+                        if (isDesktop) {
+                            // Browser consent may outlive this screen; the repository owns the callback job.
+                            AuthRepository.beginDesktopGoogleAccountLink(confirmationPassword) { uriHandler.openUri(it) }
+                        } else {
+                            localBusy = true
+                            linkJob = scope.launch {
+                                try {
+                                    launchGoogleAccountLink(confirmationPassword) { uriHandler.openUri(it) }
+                                } catch (error: CancellationException) {
+                                    AuthRepository.cancelGoogleAccountLink()
+                                    throw error
+                                } catch (_: Exception) {
+                                    AuthRepository.cancelGoogleAccountLink()
+                                } finally {
+                                    localBusy = false
+                                    showPasswordConfirm = false
+                                }
                             }
                         }
                     },

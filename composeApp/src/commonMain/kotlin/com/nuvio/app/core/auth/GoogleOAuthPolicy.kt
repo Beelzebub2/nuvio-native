@@ -17,6 +17,9 @@ internal expect suspend fun launchGoogleOAuth(client: SupabaseClient)
 
 internal expect suspend fun launchGoogleAccountLink(password: String, openUrl: (String) -> Unit)
 
+/** Only predefined, sanitized browser authorization failures may be shown to the user. */
+internal class GoogleAuthorizationFailure(message: String) : IllegalStateException(message)
+
 internal fun isGoogleLoginAdvertised(document: String): Boolean = runCatching {
     val payload = Json.parseToJsonElement(document).jsonObject
     payload["backend_url"]?.jsonPrimitive?.content == STARLIT_GOOGLE_ORIGIN &&

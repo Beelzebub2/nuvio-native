@@ -423,6 +423,9 @@
     <string name="auth_google_link_button">Link Google</string>
     <string name="auth_google_link_connected">Google is connected to this Starlit account.</string>
     <string name="auth_google_link_password_prompt">Confirm your account password before linking a new sign-in method.</string>
+    <string name="auth_google_link_unavailable">Google linking is unavailable right now. Check your connection or try again.</string>
+    <string name="auth_google_link_checking">Checking Google linking availability…</string>
+    <string name="auth_google_link_browser_pending">Google linking is waiting for authorization in your browser. Finish there or cancel this request.</string>
     <string name="auth_request_account_subtitle">Choose a password to request an account. The server owner must approve it before you can sign in.</string>
     <string name="auth_request_password_minimum">Password must be at least 12 characters.</string>
     <string name="auth_request_submitted_title">Request submitted</string>
@@ -2709,5 +2712,6 @@
     <string name="settings_account_server_detail">Server: %1$s</string>
     <string name="auth_google_link_status_failed">Couldn’t check your Google connection. Try again.</string>
     <string name="remote_qr_sign_in_required">Sign in to your Starlit account to connect your phone.</string>
+    <string name="remote_qr_https_required">Phone remote requires an HTTPS account server. Switch to an HTTPS server to connect your phone.</string>
     <string name="remote_qr_no_network">Connect this PC to Wi-Fi or Ethernet, then reopen Phone remote to show a QR code.</string>
 </resources>
