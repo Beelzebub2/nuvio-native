@@ -16,7 +16,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
@@ -705,6 +708,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
     val remoteConnected = DesktopRemote.connected.collectAsState().value
     val handoffSentText = stringResource(Res.string.remote_handoff_sent)
     val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
+    var showPlaybackDiagnostics by remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -820,6 +824,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                     NuvioToastController.show(if (sent) handoffSentText else handoffUnavailableText)
                 }
             } else null,
+            onDiagnosticsClick = { showPlaybackDiagnostics = true },
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -835,6 +840,12 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+    if (showPlaybackDiagnostics) {
+        PlaybackDiagnosticsDialog(
+            snapshot = playbackSnapshot,
+            onDismiss = { showPlaybackDiagnostics = false },
         )
     }
 }
