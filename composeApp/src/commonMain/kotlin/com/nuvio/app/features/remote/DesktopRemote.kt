@@ -44,7 +44,10 @@ internal interface DesktopRemoteTransport {
     val supported: Boolean
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
-    fun discover()
+    /** A supplied literal IP sends one bounded unicast probe; null broadcasts on the LAN. */
+    fun discover(localIp: String? = null)
+    fun localAddresses(): List<String> = emptyList()
+    fun wake(address: String, mac: String) {}
     fun connect(desktop: RemoteDesktop)
     fun confirmPairing()
     fun disconnect()
@@ -61,10 +64,46 @@ internal object DesktopRemote {
     val scanning = MutableStateFlow(false)
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
+    val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
     val visible = MutableStateFlow(false)
     // Accessed only on the UI dispatcher, including dispatch from the transport.
     var playback = RemotePlayback()
     var dispatch: ((RemoteCommand) -> Unit)? = null
+    private var activeAccount: RemoteAccount? = null
+
+    /** Changing the account/server replaces remembered devices, never merges trust domains. */
+    fun accountChanged(account: RemoteAccount?) {
+        activeAccount = account
+        remembered.value = account?.let(RememberedRemoteDeviceStore::read).orEmpty()
+    }
+
+    /** Called only after the encrypted session and both human approvals succeed. */
+    fun pairedWith(account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long) {
+        if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
+        val list = rememberRemoteDevice(remembered.value, desktop.name, desktop.address, nowEpochMs)
+        RememberedRemoteDeviceStore.write(account, list)
+        remembered.value = list
+    }
+
+    fun forget(address: String) {
+        val current = activeAccount ?: return
+        val next = remembered.value.filterNot { it.address == address }
+        RememberedRemoteDeviceStore.write(current, next)
+        remembered.value = next
+    }
+
+    fun saveWakeAddress(address: String, mac: String): Boolean {
+        val current = activeAccount ?: return false
+        val validated = normalizedWakeMac(mac) ?: return false
+        if (remembered.value.none { it.address == address }) return false
+        val next = remembered.value.map {
+            if (it.address == address) it.copy(wakeMac = validated) else it
+        }
+        return runCatching {
+            RememberedRemoteDeviceStore.write(current, next)
+            remembered.value = next
+        }.isSuccess
+    }
 
     // Opening the controller never depends on a discovered PC. Users can always
     // reach its manual LAN scan and troubleshooting state from Settings.
@@ -87,11 +126,17 @@ internal fun DesktopRemoteHost() {
     DisposableEffect(auth, server.backendUrl, server.publishableKey) {
         val account = auth as? AuthState.Authenticated
         if (account != null && !account.isAnonymous && server.backendUrl.startsWith("https://")) {
-            DesktopRemote.transport.start(RemoteAccount(account.userId, server.backendUrl.trimEnd('/'), server.publishableKey), isDesktop)
+            val remoteAccount = RemoteAccount(account.userId, server.backendUrl.trimEnd('/'), server.publishableKey)
+            DesktopRemote.accountChanged(remoteAccount)
+            DesktopRemote.transport.start(remoteAccount, isDesktop)
         } else {
+            DesktopRemote.accountChanged(null)
             DesktopRemote.status.value = "Sign in to the same account and server on both devices to use Desktop remote."
         }
-        onDispose { DesktopRemote.transport.stop() }
+        onDispose {
+            DesktopRemote.transport.stop()
+            DesktopRemote.accountChanged(null)
+        }
     }
     DesktopRemoteDialogs()
 }

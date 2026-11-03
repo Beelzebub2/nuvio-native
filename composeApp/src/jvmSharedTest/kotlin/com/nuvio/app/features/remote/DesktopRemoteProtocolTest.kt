@@ -208,6 +208,47 @@ class DesktopRemoteProtocolTest {
         assertFalse(sameRemoteSubnet(ip("192.168.1.80"), ip("192.168.1.2"), 0))
     }
 
+    @Test
+    fun manualDiscoveryParsesOnlyBoundedNumericIpv4WithoutDns() {
+        assertEquals("192.168.10.20", strictRemoteIpv4("192.168.10.20")?.hostAddress)
+        assertEquals("10.1.2.3", strictRemoteIpv4(" 10.1.2.3 ")?.hostAddress)
+        listOf(
+            "", "localhost", "host.local", "https://192.168.1.2", "192.168.1.2:47788",
+            "192.168.1", "192.168.1.2.3", "192.168.1.-2", "192.168.256.1",
+            "192.168.1.%32", "192.168..1", "2001:db8::1", "８.８.８.８",
+        ).forEach { value -> assertNull(strictRemoteIpv4(value), value) }
+    }
+
+    @Test
+    fun rememberedPcIsOnlyAddressMetadataAndKeepsWakeConfigAfterRePairing() {
+        val first = rememberRemoteDevice(emptyList(), "Family PC", "192.168.1.20", 100)
+        assertEquals(1, first.size)
+        assertNull(first.single().wakeMac)
+        val configured = first.map { it.copy(wakeMac = "02:12:34:56:78:9A") }
+        val second = rememberRemoteDevice(configured, "Renamed|PC", "192.168.1.20", 200)
+        assertEquals(1, second.size)
+        assertEquals("Renamed PC", second.single().name)
+        assertEquals("02:12:34:56:78:9A", second.single().wakeMac)
+        assertEquals(200, second.single().lastSeenEpochMs)
+        assertTrue(rememberRemoteDevice(first, "bad", "attacker.example", 300) == first)
+    }
+
+    @Test
+    fun wakePacketUsesOnlyUnicastMacAndStandard102ByteLayout() {
+        assertEquals("02:12:34:56:78:9A", normalizedWakeMac("02-12-34-56-78-9a"))
+        val packet = requireNotNull(wakeMagicPacket("02:12:34:56:78:9A"))
+        val mac = byteArrayOf(2, 18, 52, 86, 120, -102)
+        assertEquals(102, packet.size)
+        assertContentEquals(ByteArray(6) { -1 }, packet.copyOfRange(0, 6))
+        repeat(16) { round ->
+            assertContentEquals(mac, packet.copyOfRange(6 + round * 6, 12 + round * 6))
+        }
+        listOf("", "AA:BB:CC", "01:02:03:04:05:06", "FF:FF:FF:FF:FF:FF",
+            "00:00:00:00:00:00", "GG:01:02:03:04:05").forEach {
+            assertNull(wakeMagicPacket(it), it)
+        }
+    }
+
     private suspend fun withPeers(block: suspend CoroutineScope.(RemotePairingChannel, RemotePairingChannel) -> Unit) = coroutineScope {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { listener ->
             Socket("127.0.0.1", listener.localPort).use { phone ->

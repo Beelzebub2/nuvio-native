@@ -11,6 +11,14 @@ If no PC appears after searching, verify that both apps are signed into the **sa
 
 Allow Starlit through the desktop firewall on **private networks**. Discovery uses UDP port **47788**, and the desktop opens one dynamic TCP port for its encrypted session. No port forwarding is needed. Guest Wi-Fi/client isolation, VPN routing, and restricted corporate networks can prevent discovery. Keep both apps foregrounded during pairing; account verification also needs internet access to the configured HTTPS account server. Multiple desktop processes on one computer can contend for discovery; use one running instance.
 
+### Manual PC address, saved PCs and Wake-on-LAN (Android)
+
+When broadcast discovery fails, open **Settings → PC controller → PC local IPv4 address**. The desktop dialog lists its local IPv4 addresses; enter one and tap **Find PC at this address**. The phone sends a single bounded discovery probe directly to that same-subnet private address. The desktop responds with its current TCP port only if it recognizes the account-bound discovery challenge. No cloud relay, arbitrary hostname, public IP, manual port or router forwarding is accepted. Compare the new pairing code on both devices as usual.
+
+After a successful two-sided pairing and HTTPS account verification, Android remembers only that PC's sanitized name, local IP and last-seen time. **Previously paired PCs** can be probed again or forgotten. Saving a PC does **not** remember an approval, trust certificate, credentials or keys; every new connection still requires fresh two-device code confirmation.
+
+For compatible hardware only, configure **Wake-on-LAN settings** under a previously paired PC. Enter its Ethernet adapter's MAC manually and enable WoL in the desktop BIOS/UEFI, driver and operating system. **Wake PC** sends an opt-in magic packet through the active local interface to UDP port 9, with a repeat guard. This does not automatically wake any machine, reach the internet or authenticate the PC. The status reports that a packet was sent, **not** that the PC woke up. Sleep/hibernation behavior depends on hardware and router configuration.
+
 This feature currently supports Android phones and the built-in desktop player on Windows, macOS, and Linux. iOS and external desktop players are not supported. Very large episode/subtitle/source lists are shortened to keep network messages bounded; the phone displays a notice when this occurs.
 
 ## Protocol and trust boundary

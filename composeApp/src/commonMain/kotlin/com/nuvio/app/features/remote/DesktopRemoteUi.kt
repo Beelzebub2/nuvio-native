@@ -7,16 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
-import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.remote_pc_controller_title
-import nuvio.composeapp.generated.resources.remote_pc_search_local_network
-import nuvio.composeapp.generated.resources.remote_pc_no_devices_hint
-import nuvio.composeapp.generated.resources.remote_pc_unsupported
-import nuvio.composeapp.generated.resources.remote_pc_found_devices
+import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -36,7 +32,12 @@ internal fun DesktopRemoteDialogs() {
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
     val desktops by DesktopRemote.desktops.collectAsState()
+    val savedPcs by DesktopRemote.remembered.collectAsState()
     val playback by DesktopRemote.remotePlayback.collectAsState()
+    var manualIp by rememberSaveable { mutableStateOf("") }
+    var editingWakeFor by remember { mutableStateOf<String?>(null) }
+    var wakeMacDraft by remember { mutableStateOf("") }
+    var wakeMacError by remember { mutableStateOf(false) }
     var confirmed by remember(pairing) { mutableStateOf(false) }
     if (pairing != null) {
         AlertDialog(
@@ -67,6 +68,13 @@ internal fun DesktopRemoteDialogs() {
                     if (isDesktop) {
                         Text(status)
                         Text("On your Android phone open Settings → PC controller. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
+                        DesktopRemote.transport.localAddresses().takeIf { it.isNotEmpty() }?.let { addresses ->
+                            Text(
+                                stringResource(Res.string.remote_pc_desktop_addresses, addresses.joinToString(", ")),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     } else if (!DesktopRemote.transport.supported) {
                         Text(stringResource(Res.string.remote_pc_unsupported))
                     } else {
@@ -82,6 +90,84 @@ internal fun DesktopRemoteDialogs() {
                             Icon(Icons.Rounded.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(Res.string.remote_pc_search_local_network))
+                        }
+                        Text(
+                            stringResource(Res.string.remote_pc_manual_ip_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = manualIp,
+                            onValueChange = { manualIp = it.take(45) },
+                            label = { Text(stringResource(Res.string.remote_pc_manual_ip_label)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("desktop-remote-manual-ip"),
+                        )
+                        TextButton(
+                            enabled = !scanning && manualIp.isNotBlank(),
+                            onClick = { DesktopRemote.transport.discover(manualIp.trim()) },
+                        ) { Text(stringResource(Res.string.remote_pc_check_ip)) }
+                        if (savedPcs.isNotEmpty()) {
+                            Text(
+                                stringResource(Res.string.remote_pc_saved_devices),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                stringResource(Res.string.remote_pc_saved_notice),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            savedPcs.forEach { saved ->
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                    ) {
+                                        OutlinedButton(
+                                            enabled = !scanning,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { DesktopRemote.transport.discover(saved.address) },
+                                        ) { Text("${saved.name} (${saved.address})", maxLines = 2) }
+                                        TextButton(onClick = { DesktopRemote.forget(saved.address) }) {
+                                            Text(stringResource(Res.string.remote_pc_forget))
+                                        }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        saved.wakeMac?.let { mac ->
+                                            TextButton(onClick = { DesktopRemote.transport.wake(saved.address, mac) }) {
+                                                Text(stringResource(Res.string.remote_pc_wake))
+                                            }
+                                        }
+                                        TextButton(onClick = {
+                                            editingWakeFor = if (editingWakeFor == saved.address) null else saved.address
+                                            wakeMacDraft = saved.wakeMac.orEmpty()
+                                            wakeMacError = false
+                                        }) { Text(stringResource(Res.string.remote_pc_set_wake_mac)) }
+                                    }
+                                    if (editingWakeFor == saved.address) {
+                                        Text(stringResource(Res.string.remote_pc_mac_help),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        OutlinedTextField(
+                                            value = wakeMacDraft,
+                                            onValueChange = { wakeMacDraft = it.take(20); wakeMacError = false },
+                                            singleLine = true,
+                                            label = { Text(stringResource(Res.string.remote_pc_mac_label)) },
+                                            isError = wakeMacError,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        TextButton(onClick = {
+                                            if (DesktopRemote.saveWakeAddress(saved.address, wakeMacDraft)) {
+                                                editingWakeFor = null
+                                                wakeMacError = false
+                                            } else wakeMacError = true
+                                        }) { Text(stringResource(Res.string.remote_pc_save_mac)) }
+                                        if (wakeMacError) Text(stringResource(Res.string.remote_pc_invalid_mac),
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
                         }
                         if (scanning) {
                             LinearProgressIndicator(Modifier.fillMaxWidth())
