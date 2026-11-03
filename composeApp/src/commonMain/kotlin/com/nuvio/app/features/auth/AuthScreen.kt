@@ -230,7 +230,10 @@ fun AuthScreen(
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var isLoading by rememberSaveable { mutableStateOf(false) }
+    // A sign-in coroutine belongs to the current screen instance. Restoring its
+    // busy flag after activity recreation can leave every sign-in action disabled
+    // even though the original request was cancelled with the old composition.
+    var isLoading by remember { mutableStateOf(false) }
     var isRequestPending by rememberSaveable(backendUrl) { mutableStateOf(false) }
     var passwordTooShort by rememberSaveable(backendUrl) { mutableStateOf(false) }
     var lastBackendUrl by remember { mutableStateOf(backendUrl) }
