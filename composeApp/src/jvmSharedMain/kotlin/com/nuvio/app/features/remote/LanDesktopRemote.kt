@@ -46,6 +46,12 @@ private fun localInterfaces() = Collections.list(NetworkInterface.getNetworkInte
 internal fun isRemoteLanPeer(address: InetAddress): Boolean = address is Inet4Address && address.isSiteLocalAddress &&
     localInterfaces().any { sameRemoteSubnet(address.address, it.address.address, it.networkPrefixLength.toInt()) }
 
+// Some Android Wi-Fi interfaces report no directed broadcast address. A single
+// limited-broadcast fallback keeps discovery usable without broadening the peer
+// subnet checks or exposing any privileged remote commands.
+internal fun remoteBroadcastTargets(interfaceBroadcasts: List<InetAddress>): List<InetAddress> =
+    (interfaceBroadcasts + InetAddress.getByName("255.255.255.255")).distinct()
+
 /** No HTTP listener: all LAN payloads after the committed handshake use AES-GCM. */
 internal class LanDesktopRemote : DesktopRemoteTransport {
     override val supported = true
@@ -129,9 +135,19 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                     socket.soTimeout = 300
                     val challenge = randomRemoteBytes().joinToString("") { "%02x".format(it) }
                     val request = "$REMOTE_PROTOCOL $challenge ${discoveryAccountHint(expected, challenge)}".toByteArray()
-                    localInterfaces().mapNotNull { it.broadcast }.distinct().forEach {
-                        socket.send(DatagramPacket(request, request.size, it, DISCOVERY_PORT))
+                    val broadcasts = remoteBroadcastTargets(localInterfaces().mapNotNull { it.broadcast })
+                    var sent = false
+                    // Retry once for packet loss or a desktop listener starting up,
+                    // while retaining the existing three-second bounded scan.
+                    repeat(2) { attempt ->
+                        broadcasts.forEach { destination ->
+                            if (runCatching {
+                                socket.send(DatagramPacket(request, request.size, destination, DISCOVERY_PORT))
+                            }.isSuccess) sent = true
+                        }
+                        if (attempt == 0) delay(250)
                     }
+                    check(sent) { "No LAN broadcast path available." }
                     val end = System.nanoTime() + 3_000_000_000L
                     while (System.nanoTime() < end && currentCoroutineContext().isActive) {
                         val packet = DatagramPacket(ByteArray(512), 512)
