@@ -1,3 +1,15 @@
+## Starlit 1.5.0
+
+### Features
+
+- **Windows phone-passkey sign-in:** On Windows devices with WebAuthn API 6 or later, approved Starlit accounts can use the native Windows Security picker to sign in using an existing passkey registered on an Android phone, including the phone/QR option. Passkey registration and removal still take place on Android.
+- **Native passkey security:** The Windows ceremony binds its reply to the official Starlit relying party and the server's original challenge, requires user presence and verification, and cancels native operations when sign-in is canceled or times out.
+
+### Availability and compatibility
+
+- Passkey sign-in is available only after the official server enables it. It remains unavailable for custom account servers, macOS, Linux, and iOS; existing email/password sign-in is unaffected.
+- Automated Windows API, build, and authentication tests passed. Scanning the QR code and unlocking with a physical phone have not yet been confirmed by an end-to-end device test.
+
 ## Starlit 1.4.1
 
 ### Authentication support
