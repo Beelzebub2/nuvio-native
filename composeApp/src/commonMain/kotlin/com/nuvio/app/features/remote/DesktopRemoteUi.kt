@@ -3,19 +3,29 @@ package com.nuvio.app.features.remote
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.WifiFind
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.remote_pc_controller_title
+import nuvio.composeapp.generated.resources.remote_pc_search_local_network
+import nuvio.composeapp.generated.resources.remote_pc_no_devices_hint
+import nuvio.composeapp.generated.resources.remote_pc_unsupported
+import nuvio.composeapp.generated.resources.remote_pc_found_devices
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun DesktopRemoteSettingsButton() {
     if (DesktopRemote.transport.supported) {
-        TextButton(onClick = {
-            DesktopRemote.visible.value = true
-            if (!isDesktop && !DesktopRemote.connected.value) DesktopRemote.transport.discover()
-        }) { Text(if (isDesktop) "Phone remote" else "Desktop remote") }
+        TextButton(onClick = { DesktopRemote.open() }) {
+            Text(if (isDesktop) "Phone remote" else stringResource(Res.string.remote_pc_controller_title))
+        }
     }
 }
 
@@ -47,28 +57,73 @@ internal fun DesktopRemoteDialogs() {
     } else if (visible) {
         AlertDialog(
             onDismissRequest = { DesktopRemote.visible.value = false },
-            title = { Text(if (isDesktop) "Phone remote" else "Desktop remote") },
-            text = { Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(status)
-                if (isDesktop) {
-                    Text("On your Android phone open Settings → Desktop remote. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
-                } else if (connected) {
-                    RemotePlaybackControls(playback)
-                } else {
-                    if (scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    desktops.forEach { desktop ->
-                        OutlinedButton(onClick = { DesktopRemote.transport.connect(desktop) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("${desktop.name} (${desktop.address})")
+            title = {
+                Text(if (isDesktop) "Phone remote" else stringResource(Res.string.remote_pc_controller_title))
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (isDesktop) {
+                        Text(status)
+                        Text("On your Android phone open Settings → PC controller. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
+                    } else if (!DesktopRemote.transport.supported) {
+                        Text(stringResource(Res.string.remote_pc_unsupported))
+                    } else {
+                        Text(status)
+                        // The manual scan stays accessible with an empty list, after failed
+                        // discovery, or while connected to an existing desktop.
+                        OutlinedButton(
+                            onClick = { DesktopRemote.transport.discover() },
+                            enabled = !scanning,
+                            modifier = Modifier.fillMaxWidth()
+                                .testTag("desktop-remote-search-local-network"),
+                        ) {
+                            Icon(Icons.Rounded.WifiFind, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(Res.string.remote_pc_search_local_network))
+                        }
+                        if (scanning) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
+                        if (desktops.isNotEmpty()) {
+                            Text(
+                                text = stringResource(Res.string.remote_pc_found_devices),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            desktops.forEach { desktop ->
+                                OutlinedButton(
+                                    onClick = { DesktopRemote.transport.connect(desktop) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("${desktop.name} (${desktop.address})")
+                                }
+                            }
+                        } else if (!scanning && !connected) {
+                            Text(
+                                text = stringResource(Res.string.remote_pc_no_devices_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (connected) {
+                            RemotePlaybackControls(playback)
                         }
                     }
-                    TextButton(enabled = !scanning, onClick = { DesktopRemote.transport.discover() }) { Text("Search again") }
+                    if (connected) {
+                        TextButton(
+                            onClick = {
+                                DesktopRemote.transport.disconnect()
+                                DesktopRemote.status.value = "Disconnected. Search the local network to pair again."
+                            },
+                        ) { Text("Disconnect") }
+                    }
                 }
-                if (connected) TextButton(onClick = {
-                    DesktopRemote.transport.disconnect()
-                    DesktopRemote.status.value = "Disconnected. Select a desktop to pair again."
-                }) { Text("Disconnect") }
-            } },
-            confirmButton = { TextButton(onClick = { DesktopRemote.visible.value = false }) { Text("Close") } },
+            },
+            confirmButton = {
+                TextButton(onClick = { DesktopRemote.visible.value = false }) { Text("Close") }
+            },
         )
     }
 }
