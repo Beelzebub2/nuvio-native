@@ -197,6 +197,28 @@ test('429 preserves provider cooldown across routes without repeatedly contactin
   assert.equal(calls, 1);
 });
 
+test('provider cooldown handles millisecond reset timestamps and caps excessive retry times', async () => {
+  let calls = 0;
+  const resetAt = Date.now() + 120_000;
+  const env = environment(async () => {
+    calls++;
+    return new Response('rate limited', { status: 429, headers: { 'X-RateLimit-Reset': String(resetAt) } });
+  });
+  const first = await handleRequest(new Request(schedule), ctx, env);
+  assert.equal(first.status, 429);
+  assert.ok(Number(first.headers.get('Retry-After')) >= 110);
+  assert.ok(Number(first.headers.get('Retry-After')) <= 120);
+  const second = await handleRequest(new Request('https://gateway.test/media?id=21'), ctx, env);
+  assert.equal(second.status, 429);
+  assert.equal(calls, 1);
+
+  const excessive = environment(async () => new Response('rate limited', { status: 429,
+    headers: { 'Retry-After': '9999999999' } }));
+  const limited = await handleRequest(new Request(schedule), ctx, excessive);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get('Retry-After'), '3600');
+});
+
 test('retained stale JSON is served during provider limits and fresh cache remains separate', async () => {
   let calls = 0;
   const env = environment(async () => {
