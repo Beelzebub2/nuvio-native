@@ -4,11 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.WifiFind
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
@@ -80,7 +79,7 @@ internal fun DesktopRemoteDialogs() {
                             modifier = Modifier.fillMaxWidth()
                                 .testTag("desktop-remote-search-local-network"),
                         ) {
-                            Icon(Icons.Rounded.WifiFind, contentDescription = null)
+                            Icon(Icons.Rounded.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(Res.string.remote_pc_search_local_network))
                         }
