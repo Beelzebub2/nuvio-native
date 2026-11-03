@@ -158,6 +158,10 @@ fun DownloadsScreen(
             )
         }
 
+        if (selectedShowId == null && canManage && profileId != null) {
+            item { DownloadStorageManagementCard(uiState.items, profileId) }
+        }
+
         if (isDesktop) {
             desktopDownloadsContent(
                 uiState = uiState,

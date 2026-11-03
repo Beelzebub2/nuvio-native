@@ -14,11 +14,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
+import com.nuvio.app.features.remote.RemotePlaybackHandoff
 import com.nuvio.app.features.remote.newRemotePlaybackId
 import com.nuvio.app.features.remote.isAllowedFor
 import androidx.compose.ui.graphics.Color
@@ -37,6 +43,7 @@ import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.p2p.P2pSettingsRepository
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
@@ -699,6 +706,11 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
 private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
     val isInPip = rememberIsInPictureInPicture()
     val controlToggles = playerControlToggles()
+    val remoteConnected = DesktopRemote.connected.collectAsState().value
+    val handoffSentText = stringResource(Res.string.remote_handoff_sent)
+    val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
+    var showPlaybackDiagnostics by remember { mutableStateOf(false) }
+    val showCastHelp = remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -797,6 +809,27 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            onHandoffClick = if (!isDesktop && !isIos && remoteConnected &&
+                !activeVideoId.isNullOrBlank() && contentType in setOf("movie", "series")) {
+                {
+                    val request = RemotePlaybackHandoff(
+                        contentType = contentType.orEmpty(),
+                        videoId = activeVideoId.orEmpty(),
+                        parentMetaId = parentMetaId,
+                        title = title,
+                        profileId = ProfileRepository.activeProfileId,
+                        season = activeSeasonNumber,
+                        episode = activeEpisodeNumber,
+                        resumePositionMs = playbackSnapshot.positionMs.coerceIn(0L, 43_200_000L),
+                    )
+                    val sent = DesktopRemote.requestHandoff(request)
+                    NuvioToastController.show(if (sent) handoffSentText else handoffUnavailableText)
+                }
+            } else null,
+            onDiagnosticsClick = { showPlaybackDiagnostics = true },
+            onCastInfoClick = if (!isDesktop && !isIos) {
+                { showCastHelp.value = true }
+            } else null,
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -812,6 +845,24 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+    if (showPlaybackDiagnostics) {
+        PlaybackDiagnosticsDialog(
+            snapshot = playbackSnapshot,
+            onDismiss = { showPlaybackDiagnostics = false },
+        )
+    }
+    if (showCastHelp.value) {
+        CastCompatibilityDialog(
+            eligibility = assessCastCompatibility(
+                sourceUrl = activeSourceUrl,
+                sourceHeaders = activeSourceHeaders,
+                isPeerToPeer = !activeTorrentInfoHash.isNullOrBlank() ||
+                    activeStreamType.orEmpty().contains("torrent", ignoreCase = true),
+                hasSeparateAudio = !activeSourceAudioUrl.isNullOrBlank(),
+            ),
+            onDismiss = { showCastHelp.value = false },
         )
     }
 }

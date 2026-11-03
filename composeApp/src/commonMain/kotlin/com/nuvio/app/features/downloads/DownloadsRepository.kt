@@ -356,6 +356,24 @@ object DownloadsRepository {
         removeItems(_uiState.value.items.filter { it.id in downloadIds })
     }
 
+    /**
+     * A storage preview is not authority to delete a file. Recheck the live
+     * profile, status, active handles and owned file path while holding the
+     * queue lock after the user confirms the exact selection.
+     */
+    internal fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        synchronized(lock) {
+            if (!hasLoaded || loadedProfile != expectedProfileId ||
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId)
+                return@synchronized 0
+            val safe = _uiState.value.items.filter { item ->
+                item.id in downloadIds && item.id !in activeHandles &&
+                    item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+            }
+            removeItems(safe)
+            safe.size
+        }
+
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
 
     private fun removeItems(items: List<DownloadItem>) {

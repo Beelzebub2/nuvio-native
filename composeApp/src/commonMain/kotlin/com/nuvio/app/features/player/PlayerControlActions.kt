@@ -22,7 +22,10 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.SkipNext
@@ -107,6 +110,9 @@ internal fun PlayerControlActions(
     onVideoSettingsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onSubmitIntroClick: (() -> Unit)?,
+    onHandoffClick: (() -> Unit)? = null,
+    onDiagnosticsClick: (() -> Unit)? = null,
+    onCastInfoClick: (() -> Unit)? = null,
     onInteraction: () -> Unit,
     toggles: List<PlayerControlToggle> = emptyList(),
 ) {
@@ -161,6 +167,24 @@ internal fun PlayerControlActions(
             PlayerControlAction(
                 stringResource(Res.string.submit_intro_action), it,
                 icon = Icons.Rounded.Flag,
+            )
+        },
+        onHandoffClick?.let {
+            PlayerControlAction(
+                stringResource(Res.string.remote_handoff_send), it,
+                icon = Icons.Rounded.DesktopWindows,
+            )
+        },
+        onDiagnosticsClick?.let {
+            PlayerControlAction(
+                stringResource(Res.string.player_diagnostics_title), it,
+                icon = Icons.Rounded.Info,
+            )
+        },
+        onCastInfoClick?.let {
+            PlayerControlAction(
+                stringResource(Res.string.player_cast_availability_title), it,
+                icon = Icons.Rounded.Cast,
             )
         },
     )

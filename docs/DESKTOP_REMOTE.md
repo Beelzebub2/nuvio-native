@@ -1,13 +1,35 @@
 # Control desktop playback from Android
 
 1. Open Starlit on your desktop and Android phone. Sign in to the **same account on the same account server** on both devices. Guest accounts cannot use the remote.
-2. Connect both devices to the same IPv4 Wi-Fi/Ethernet network. On Android open **Settings → Desktop remote** and select the discovered desktop.
+2. Connect both devices to the same IPv4 Wi-Fi/Ethernet network. On Android open **Settings → PC controller**. This entry stays visible even when no PCs were detected. Tap **Search local network** to retry discovery, then select the desktop. The Settings search can also open the controller.
 3. Compare the six-digit code shown on both screens. Choose **Codes match on both devices** only when they agree. Reject unexpected requests or different codes.
 4. Start a video on the desktop. The phone shows live playback state and controls for play/pause, seeking, volume/mute, subtitles, skipping the current intro/credits segment, and previous/next/selected episodes. Choosing an episode can require selecting its source in **Episode sources**, following the desktop's existing playback settings. **Find addon subtitles** loads available addon subtitles. P2P consent must still be confirmed on the desktop.
 
 Closing the phone's remote dialog keeps the session connected. Reopen it from Settings. Use **Disconnect** to end it; on desktop this is under **Settings → Account → Phone remote**. Reconnect and compare a new code after disconnection, app restart, leaving the desktop player, or phone background/network interruptions. Normal episode/source switches and account-token refreshes keep the connection. Signing out or changing account server stops discovery and disconnects the local session. Remote account sessions are revalidated at least once per minute; a server-revoked phone session is rejected on the next validation. Refreshed phone tokens are sent only inside the encrypted connection and are verified against the same account before any further command is accepted.
 
+If no PC appears after searching, verify that both apps are signed into the **same non-guest account and account server**, the desktop app is open, and the phone and PC can reach each other on the local network. Press **Search local network** again after changing Wi-Fi or the PC's firewall settings; the button remains accessible even when already connected to another PC. A scan cannot proceed before account sign-in. iOS shows the controller entry with an unsupported notice, but scanning is currently available only on Android.
+
+## Safe desktop download management
+
+After the encrypted session has been **approved on both devices** and the same Starlit HTTPS account has been verified, Android may view the status of up to 30 existing desktop downloads and pause/resume only tasks belonging to the desktop's **currently selected profile**. Open the same profile on the phone to receive the list. The desktop rechecks both the local profile and task state for each command.
+
+The remote deliberately **does not** accept new download URLs, magnets, stream links, file paths, destination changes, cancellation, deletion, account settings, provider credentials, DRM workarounds or source selections. It cannot bypass content licensing or network protections. The phone receives bounded title/status/progress only; desktop paths, signed URLs, headers and credentials never enter this protocol payload. A new pairing and account verification are required after reconnecting. The desktop remains authoritative for the current queue, account and profile.
+
+## Phone-to-PC playback handoff
+
+With Android and desktop paired, tap **Play on Starlit PC** from an eligible movie/series details page, from a selected episode's poster actions, or from the Android player controls. For a series' main details action, the currently recommended episode is requested. The request carries only a bounded media identifier, content type, title, profile identifier and resume position, inside the already authenticated encrypted remote channel. The phone never sends playback URLs, torrents, files, headers, tokens or DRM material.
+
+On the desktop, a separate prompt **Play on this PC?** names the requested title. The PC user must explicitly approve it. After approval, the existing Starlit desktop playback path opens its own source picker with the same account/profile checks, provider source restrictions and P2P consent flow it would use for a normal local play. Handoff does not auto-select a source or play media without approval. Both devices must use the same active profile; requests for stale or unrecognized IDs are rejected. Closing the pairing session, changing profiles or declining a prompt stops that request. This is an opt-in metadata handoff, not streaming from the phone or an unrestricted network receiver.
+
 Allow Starlit through the desktop firewall on **private networks**. Discovery uses UDP port **47788**, and the desktop opens one dynamic TCP port for its encrypted session. No port forwarding is needed. Guest Wi-Fi/client isolation, VPN routing, and restricted corporate networks can prevent discovery. Keep both apps foregrounded during pairing; account verification also needs internet access to the configured HTTPS account server. Multiple desktop processes on one computer can contend for discovery; use one running instance.
+
+### Manual PC address, saved PCs and Wake-on-LAN (Android)
+
+When broadcast discovery fails, open **Settings → PC controller → PC local IPv4 address**. The desktop dialog lists its local IPv4 addresses; enter one and tap **Find PC at this address**. The phone sends a single bounded discovery probe directly to that same-subnet private address. The desktop responds with its current TCP port only if it recognizes the account-bound discovery challenge. No cloud relay, arbitrary hostname, public IP, manual port or router forwarding is accepted. Compare the new pairing code on both devices as usual.
+
+After a successful two-sided pairing and HTTPS account verification, Android remembers only that PC's sanitized name, local IP and last-seen time. **Previously paired PCs** can be probed again or forgotten. Saving a PC does **not** remember an approval, trust certificate, credentials or keys; every new connection still requires fresh two-device code confirmation.
+
+For compatible hardware only, configure **Wake-on-LAN settings** under a previously paired PC. Enter its Ethernet adapter's MAC manually and enable WoL in the desktop BIOS/UEFI, driver and operating system. **Wake PC** sends an opt-in magic packet through the active local interface to UDP port 9, with a repeat guard. This does not automatically wake any machine, reach the internet or authenticate the PC. The status reports that a packet was sent, **not** that the PC woke up. Sleep/hibernation behavior depends on hardware and router configuration.
 
 This feature currently supports Android phones and the built-in desktop player on Windows, macOS, and Linux. iOS and external desktop players are not supported. Very large episode/subtitle/source lists are shortened to keep network messages bounded; the phone displays a notice when this occurs.
 

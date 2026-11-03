@@ -3,31 +3,45 @@ package com.nuvio.app.features.remote
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.isDesktop
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.formatDownloadBytes
+import com.nuvio.app.features.profiles.ProfileRepository
+import nuvio.composeapp.generated.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun DesktopRemoteSettingsButton() {
     if (DesktopRemote.transport.supported) {
-        TextButton(onClick = {
-            DesktopRemote.visible.value = true
-            if (!isDesktop && !DesktopRemote.connected.value) DesktopRemote.transport.discover()
-        }) { Text(if (isDesktop) "Phone remote" else "Desktop remote") }
+        TextButton(onClick = { DesktopRemote.open() }) {
+            Text(if (isDesktop) "Phone remote" else stringResource(Res.string.remote_pc_controller_title))
+        }
     }
 }
 
 @Composable
 internal fun DesktopRemoteDialogs() {
     val pairing by DesktopRemote.pairing.collectAsState()
+    val pendingHandoff by DesktopRemote.pendingHandoff.collectAsState()
     val visible by DesktopRemote.visible.collectAsState()
     val status by DesktopRemote.status.collectAsState()
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
     val desktops by DesktopRemote.desktops.collectAsState()
+    val savedPcs by DesktopRemote.remembered.collectAsState()
     val playback by DesktopRemote.remotePlayback.collectAsState()
+    var manualIp by rememberSaveable { mutableStateOf("") }
+    var editingWakeFor by remember { mutableStateOf<String?>(null) }
+    var wakeMacDraft by remember { mutableStateOf("") }
+    var wakeMacError by remember { mutableStateOf(false) }
     var confirmed by remember(pairing) { mutableStateOf(false) }
     if (pairing != null) {
         AlertDialog(
@@ -44,32 +58,235 @@ internal fun DesktopRemoteDialogs() {
             }) { Text("Codes match") } },
             dismissButton = { TextButton(onClick = { DesktopRemote.transport.disconnect() }) { Text("Reject") } },
         )
+    } else if (isDesktop && pendingHandoff != null) {
+        // A paired phone cannot navigate or start playback without this PC's
+        // explicit approval. The actual source is resolved on the desktop.
+        AlertDialog(
+            onDismissRequest = { DesktopRemote.pendingHandoff.value = null },
+            title = { Text(stringResource(Res.string.remote_handoff_approve_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        stringResource(Res.string.remote_handoff_approve_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(pendingHandoff!!.title, style = MaterialTheme.typography.titleMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { DesktopRemote.acceptPendingHandoff() }) {
+                    Text(stringResource(Res.string.remote_handoff_approve))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { DesktopRemote.pendingHandoff.value = null }) {
+                    Text(stringResource(Res.string.remote_handoff_reject))
+                }
+            },
+        )
     } else if (visible) {
         AlertDialog(
             onDismissRequest = { DesktopRemote.visible.value = false },
-            title = { Text(if (isDesktop) "Phone remote" else "Desktop remote") },
-            text = { Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(status)
-                if (isDesktop) {
-                    Text("On your Android phone open Settings → Desktop remote. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
-                } else if (connected) {
-                    RemotePlaybackControls(playback)
-                } else {
-                    if (scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    desktops.forEach { desktop ->
-                        OutlinedButton(onClick = { DesktopRemote.transport.connect(desktop) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("${desktop.name} (${desktop.address})")
+            title = {
+                Text(if (isDesktop) "Phone remote" else stringResource(Res.string.remote_pc_controller_title))
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (isDesktop) {
+                        Text(status)
+                        Text("On your Android phone open Settings → PC controller. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
+                        DesktopRemote.transport.localAddresses().takeIf { it.isNotEmpty() }?.let { addresses ->
+                            Text(
+                                stringResource(Res.string.remote_pc_desktop_addresses, addresses.joinToString(", ")),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else if (!DesktopRemote.transport.supported) {
+                        Text(stringResource(Res.string.remote_pc_unsupported))
+                    } else {
+                        Text(status)
+                        // The manual scan stays accessible with an empty list, after failed
+                        // discovery, or while connected to an existing desktop.
+                        OutlinedButton(
+                            onClick = { DesktopRemote.transport.discover() },
+                            enabled = !scanning,
+                            modifier = Modifier.fillMaxWidth()
+                                .testTag("desktop-remote-search-local-network"),
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(Res.string.remote_pc_search_local_network))
+                        }
+                        Text(
+                            stringResource(Res.string.remote_pc_manual_ip_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = manualIp,
+                            onValueChange = { manualIp = it.take(45) },
+                            label = { Text(stringResource(Res.string.remote_pc_manual_ip_label)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("desktop-remote-manual-ip"),
+                        )
+                        TextButton(
+                            enabled = !scanning && manualIp.isNotBlank(),
+                            onClick = { DesktopRemote.transport.discover(manualIp.trim()) },
+                        ) { Text(stringResource(Res.string.remote_pc_check_ip)) }
+                        if (savedPcs.isNotEmpty()) {
+                            Text(
+                                stringResource(Res.string.remote_pc_saved_devices),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                stringResource(Res.string.remote_pc_saved_notice),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            savedPcs.forEach { saved ->
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                    ) {
+                                        OutlinedButton(
+                                            enabled = !scanning,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { DesktopRemote.transport.discover(saved.address) },
+                                        ) { Text("${saved.name} (${saved.address})", maxLines = 2) }
+                                        TextButton(onClick = { DesktopRemote.forget(saved.address) }) {
+                                            Text(stringResource(Res.string.remote_pc_forget))
+                                        }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        saved.wakeMac?.let { mac ->
+                                            TextButton(onClick = { DesktopRemote.transport.wake(saved.address, mac) }) {
+                                                Text(stringResource(Res.string.remote_pc_wake))
+                                            }
+                                        }
+                                        TextButton(onClick = {
+                                            editingWakeFor = if (editingWakeFor == saved.address) null else saved.address
+                                            wakeMacDraft = saved.wakeMac.orEmpty()
+                                            wakeMacError = false
+                                        }) { Text(stringResource(Res.string.remote_pc_set_wake_mac)) }
+                                    }
+                                    if (editingWakeFor == saved.address) {
+                                        Text(stringResource(Res.string.remote_pc_mac_help),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        OutlinedTextField(
+                                            value = wakeMacDraft,
+                                            onValueChange = { wakeMacDraft = it.take(20); wakeMacError = false },
+                                            singleLine = true,
+                                            label = { Text(stringResource(Res.string.remote_pc_mac_label)) },
+                                            isError = wakeMacError,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        TextButton(onClick = {
+                                            if (DesktopRemote.saveWakeAddress(saved.address, wakeMacDraft)) {
+                                                editingWakeFor = null
+                                                wakeMacError = false
+                                            } else wakeMacError = true
+                                        }) { Text(stringResource(Res.string.remote_pc_save_mac)) }
+                                        if (wakeMacError) Text(stringResource(Res.string.remote_pc_invalid_mac),
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                        if (scanning) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
+                        if (desktops.isNotEmpty()) {
+                            Text(
+                                text = stringResource(Res.string.remote_pc_found_devices),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            desktops.forEach { desktop ->
+                                OutlinedButton(
+                                    onClick = { DesktopRemote.transport.connect(desktop) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("${desktop.name} (${desktop.address})")
+                                }
+                            }
+                        } else if (!scanning && !connected) {
+                            Text(
+                                text = stringResource(Res.string.remote_pc_no_devices_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (connected) {
+                            RemotePlaybackControls(playback)
+                            RemoteDownloadControls(playback)
                         }
                     }
-                    TextButton(enabled = !scanning, onClick = { DesktopRemote.transport.discover() }) { Text("Search again") }
+                    if (connected) {
+                        TextButton(
+                            onClick = {
+                                DesktopRemote.transport.disconnect()
+                                DesktopRemote.status.value = "Disconnected. Search the local network to pair again."
+                            },
+                        ) { Text("Disconnect") }
+                    }
                 }
-                if (connected) TextButton(onClick = {
-                    DesktopRemote.transport.disconnect()
-                    DesktopRemote.status.value = "Disconnected. Select a desktop to pair again."
-                }) { Text("Disconnect") }
-            } },
-            confirmButton = { TextButton(onClick = { DesktopRemote.visible.value = false }) { Text("Close") } },
+            },
+            confirmButton = {
+                TextButton(onClick = { DesktopRemote.visible.value = false }) { Text("Close") }
+            },
         )
+    }
+}
+
+@Composable
+private fun RemoteDownloadControls(playback: RemotePlayback) {
+    Text(
+        stringResource(Res.string.remote_downloads_title),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    if (playback.downloadProfileId == null ||
+        playback.downloadProfileId != ProfileRepository.activeProfileId) {
+        Text(stringResource(Res.string.remote_downloads_profile_mismatch),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    if (playback.downloads.isEmpty()) {
+        Text(stringResource(Res.string.remote_downloads_empty),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    playback.downloads.forEach { task ->
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(task.title, style = MaterialTheme.typography.bodyMedium)
+            val size = task.totalBytes?.let {
+                "${formatDownloadBytes(task.downloadedBytes)} / ${formatDownloadBytes(it)}"
+            } ?: formatDownloadBytes(task.downloadedBytes)
+            Text("${task.state} · $size", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (task.totalBytes != null && task.totalBytes > 0L) {
+                LinearProgressIndicator(
+                    progress = { (task.downloadedBytes.toFloat() / task.totalBytes).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            when (task.state) {
+                DownloadStatus.Downloading -> TextButton(
+                    onClick = { DesktopRemote.downloadCommand("downloadPause", task.id) },
+                ) { Text(stringResource(Res.string.remote_downloads_pause)) }
+                DownloadStatus.Paused -> TextButton(
+                    onClick = { DesktopRemote.downloadCommand("downloadResume", task.id) },
+                ) { Text(stringResource(Res.string.remote_downloads_resume)) }
+                else -> Unit
+            }
+        }
     }
 }
 

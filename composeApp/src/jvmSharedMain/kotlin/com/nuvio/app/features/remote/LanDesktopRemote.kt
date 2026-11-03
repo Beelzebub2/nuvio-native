@@ -21,6 +21,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.nuvio.app.features.downloads.DownloadsRepository
+import com.nuvio.app.features.profiles.ProfileRepository
 
 private const val DISCOVERY_PORT = 47788
 private const val PAIRING_TIMEOUT = 90_000L
@@ -39,6 +41,15 @@ internal fun sameRemoteSubnet(peer: ByteArray, local: ByteArray, prefix: Int): B
     }
 }
 
+/** Parse only numeric IPv4 literals; DNS names/URLs must never initiate LAN pairing. */
+internal fun strictRemoteIpv4(value: String): Inet4Address? {
+    val parts = value.trim().split('.')
+    if (parts.size != 4 || parts.any { it.isEmpty() || it.length > 3 ||
+            it.any { digit -> digit !in '0'..'9' } }) return null
+    val octets = parts.map { it.toIntOrNull()?.takeIf { octet -> octet in 0..255 } ?: return null }
+    return InetAddress.getByAddress(octets.map(Int::toByte).toByteArray()) as? Inet4Address
+}
+
 private fun localInterfaces() = Collections.list(NetworkInterface.getNetworkInterfaces()).filter {
     it.isUp && !it.isLoopback && !it.isVirtual
 }.flatMap { it.interfaceAddresses }.filter { it.address is Inet4Address && it.address.isSiteLocalAddress }
@@ -46,9 +57,28 @@ private fun localInterfaces() = Collections.list(NetworkInterface.getNetworkInte
 internal fun isRemoteLanPeer(address: InetAddress): Boolean = address is Inet4Address && address.isSiteLocalAddress &&
     localInterfaces().any { sameRemoteSubnet(address.address, it.address.address, it.networkPrefixLength.toInt()) }
 
+// Some Android Wi-Fi interfaces report no directed broadcast address. A single
+// limited-broadcast fallback keeps discovery usable without broadening the peer
+// subnet checks or exposing any privileged remote commands.
+internal fun remoteBroadcastTargets(interfaceBroadcasts: List<InetAddress>): List<InetAddress> =
+    (interfaceBroadcasts + InetAddress.getByName("255.255.255.255")).distinct()
+
+/** Standard Wake-on-LAN magic packet, prepared only for a validated unicast NIC MAC. */
+internal fun wakeMagicPacket(mac: String): ByteArray? {
+    val canonical = normalizedWakeMac(mac) ?: return null
+    val bytes = canonical.split(':').map { it.toInt(16).toByte() }
+    return ByteArray(102).also { packet ->
+        packet.fill(0xff.toByte(), 0, 6)
+        repeat(16) { round -> bytes.forEachIndexed { i, byte -> packet[6 + round * 6 + i] = byte } }
+    }
+}
+
 /** No HTTP listener: all LAN payloads after the committed handshake use AES-GCM. */
 internal class LanDesktopRemote : DesktopRemoteTransport {
     override val supported = true
+    override fun localAddresses(): List<String> =
+        runCatching { localInterfaces().mapNotNull { it.address.hostAddress }.distinct().sorted() }
+            .getOrDefault(emptyList())
     @Volatile private var scope: CoroutineScope? = null
     private var account: RemoteAccount? = null
     private var host = false
@@ -57,9 +87,12 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     @Volatile private var discovery: DatagramSocket? = null
     @Volatile private var scanSocket: DatagramSocket? = null
     @Volatile private var connection: Job? = null
+    @Volatile private var selectedDesktop: RemoteDesktop? = null
     @Volatile private var confirmation: CompletableDeferred<Unit>? = null
     private var commands = Channel<RemoteCommand>(32)
     private val sessionEpoch = AtomicLong()
+    private val lastWakeNanos = AtomicLong(0L)
+    private val lastHandoffAtNanos = AtomicLong(0L)
 
     override fun start(account: RemoteAccount, host: Boolean) {
         stop()
@@ -87,6 +120,8 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
 
     override fun disconnect() {
         sessionEpoch.incrementAndGet()
+        selectedDesktop = null
+        DesktopRemote.pendingHandoff.value = null
         connection?.cancel()
         connection = null
         confirmation?.cancel()
@@ -101,16 +136,81 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     }
 
     override fun confirmPairing() { confirmation?.complete(Unit) }
+
+    override fun wake(address: String, mac: String) {
+        val currentScope = scope ?: return
+        if (host) return
+        // A wake request must name a user-configured MAC on a previously paired
+        // PC. Wake addresses are hints, never an authorization shortcut.
+        if (DesktopRemote.remembered.value.none { it.address == address && it.wakeMac == normalizedWakeMac(mac) }) {
+            DesktopRemote.status.value = "Save the PC's network adapter MAC address first."
+            return
+        }
+        val target = strictRemoteIpv4(address)
+        val bytes = wakeMagicPacket(mac)
+        if (target == null || !isRemoteLanPeer(target) || bytes == null) {
+            DesktopRemote.status.value = "Wake-on-LAN is only available for a saved PC on this local network."
+            return
+        }
+        val now = System.nanoTime()
+        val previous = lastWakeNanos.get()
+        if (previous != 0L && now - previous in 0 until 10_000_000_000L) {
+            DesktopRemote.status.value = "Wake request already sent. Wait before trying again."
+            return
+        }
+        lastWakeNanos.set(now)
+        currentScope.launch {
+            try {
+                val broadcasts = localInterfaces().filter {
+                    sameRemoteSubnet(target.address, it.address.address, it.networkPrefixLength.toInt())
+                }.mapNotNull { it.broadcast }.distinct()
+                check(broadcasts.isNotEmpty()) { "No usable local interface broadcast address." }
+                DatagramSocket().use { socket ->
+                    socket.broadcast = true
+                    currentCoroutineContext().ensureActive()
+                    broadcasts.forEach { destination ->
+                        socket.send(DatagramPacket(bytes, bytes.size, destination, 9))
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    if (scope === currentScope) DesktopRemote.status.value =
+                        "Wake-on-LAN packet sent. Check your PC and search the LAN again; waking is not guaranteed."
+                }
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (_: Exception) {
+                withContext(NonCancellable + Dispatchers.Main) {
+                    if (scope === currentScope) DesktopRemote.status.value =
+                        "Could not send Wake-on-LAN. Check Wi-Fi, adapter MAC and router broadcast support."
+                }
+            }
+        }
+    }
     override fun send(command: RemoteCommand) {
         if (!commands.trySend(command).isSuccess) DesktopRemote.status.value = "Remote is busy. Please try again."
     }
 
-    override fun discover() {
-        val currentScope = scope ?: return
-        val expected = account ?: return
+    override fun discover(localIp: String?) {
+        // Manual search must explain why it cannot start (rather than silently
+        // doing nothing when the phone has not signed into an account).
         if (host || DesktopRemote.scanning.value) return
+        val currentScope = scope
+        val expected = account
+        if (currentScope == null || expected == null) {
+            DesktopRemote.status.value = "Sign in to the same account and server on your phone and PC before searching."
+            return
+        }
+        val targetAddress = if (localIp == null) null else {
+            val address = strictRemoteIpv4(localIp)
+            if (address == null || !isRemoteLanPeer(address)) {
+                DesktopRemote.status.value = "Enter a private IPv4 address on your current local subnet. No public IPs, hostnames or port forwarding."
+                return
+            }
+            address
+        }
         DesktopRemote.scanning.value = true
         DesktopRemote.desktops.value = emptyList()
+        DesktopRemote.status.value = if (targetAddress != null)
+            "Checking Starlit on ${targetAddress.hostAddress}…" else "Searching the local network for Starlit PCs…"
         currentScope.launch {
             try {
                 DatagramSocket().use { socket ->
@@ -118,18 +218,31 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                         check(scope === currentScope)
                         scanSocket = socket
                     }
-                    socket.broadcast = true
+                    socket.broadcast = targetAddress == null
                     socket.soTimeout = 300
                     val challenge = randomRemoteBytes().joinToString("") { "%02x".format(it) }
                     val request = "$REMOTE_PROTOCOL $challenge ${discoveryAccountHint(expected, challenge)}".toByteArray()
-                    localInterfaces().mapNotNull { it.broadcast }.distinct().forEach {
-                        socket.send(DatagramPacket(request, request.size, it, DISCOVERY_PORT))
+                    val broadcasts = if (targetAddress == null)
+                        remoteBroadcastTargets(localInterfaces().mapNotNull { it.broadcast })
+                    else listOf(targetAddress)
+                    var sent = false
+                    // Retry once for packet loss or a desktop listener starting up,
+                    // while retaining the existing three-second bounded scan.
+                    repeat(2) { attempt ->
+                        broadcasts.forEach { destination ->
+                            if (runCatching {
+                                socket.send(DatagramPacket(request, request.size, destination, DISCOVERY_PORT))
+                            }.isSuccess) sent = true
+                        }
+                        if (attempt == 0) delay(250)
                     }
+                    check(sent) { "No LAN broadcast path available." }
                     val end = System.nanoTime() + 3_000_000_000L
                     while (System.nanoTime() < end && currentCoroutineContext().isActive) {
                         val packet = DatagramPacket(ByteArray(512), 512)
                         try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
-                        if (!isRemoteLanPeer(packet.address)) continue
+                        if (!isRemoteLanPeer(packet.address) ||
+                            (targetAddress != null && packet.address != targetAddress)) continue
                         val fields = String(packet.data, 0, packet.length, Charsets.UTF_8).split('|', limit = 4)
                         if (fields.size != 4 || fields[0] != REMOTE_PROTOCOL || fields[1] != challenge) continue
                         val port = fields[2].toIntOrNull()?.takeIf { it in 1024..65535 } ?: continue
@@ -142,8 +255,11 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 }
                 withContext(Dispatchers.Main) {
                     check(scope === currentScope)
-                    DesktopRemote.status.value = if (DesktopRemote.desktops.value.isEmpty())
-                        "No desktops found. Open Starlit on your PC, sign in, and allow it through the private-network firewall. Guest Wi-Fi may block discovery." else "Choose your desktop."
+                    DesktopRemote.status.value = if (DesktopRemote.desktops.value.isEmpty()) {
+                        if (targetAddress == null)
+                            "No desktops found. Open Starlit on your PC, sign in, and allow it through the private-network firewall. Guest Wi-Fi may block discovery."
+                        else "No Starlit PC replied at ${targetAddress.hostAddress}. Check the address, desktop firewall and account/server on both devices."
+                    } else "Choose your desktop."
                 }
             } catch (error: CancellationException) { throw error
             } catch (_: Exception) {
@@ -226,6 +342,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
         val currentScope = scope ?: return
         val expected = account ?: return
         disconnect()
+        selectedDesktop = desktop
         val epoch = sessionEpoch.get()
         connection = currentScope.launch {
             var ownedSocket: Socket? = null
@@ -289,6 +406,7 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                     confirmation = null
                     DesktopRemote.pairing.value = null
                     DesktopRemote.connected.value = false
+                    DesktopRemote.pendingHandoff.value = null
                 }
             }
         }
@@ -297,10 +415,28 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
     private suspend fun pairedLoop(channel: RemoteCipherChannel, socket: Socket, expected: RemoteAccount, peerToken: String?, epoch: Long) {
         currentCoroutineContext().ensureActive()
         check(sessionEpoch.get() == epoch)
+        if (peerToken != null) {
+            // Load the desktop's active profile queue only after encrypted,
+            // two-device approved account verification, not at app startup.
+            withContext(Dispatchers.Main) {
+                check(sessionEpoch.get() == epoch)
+                currentRemoteAccessToken(expected)
+                DownloadsRepository.ensureLoaded()
+            }
+        }
         publish(epoch) {
             DesktopRemote.pairing.value = null
             DesktopRemote.connected.value = true
             DesktopRemote.status.value = "Connected to ${socket.inetAddress.hostAddress}"
+            if (peerToken == null) {
+                // A device record is only a discovery shortcut. Pairing, both
+                // code confirmations and account verification already completed.
+                selectedDesktop?.let { desktop ->
+                    runCatching {
+                        DesktopRemote.pairedWith(expected, desktop, System.currentTimeMillis())
+                    }
+                }
+            }
         }
         socket.soTimeout = 15_000
         var lastVerification = System.nanoTime()
@@ -318,15 +454,47 @@ internal class LanDesktopRemote : DesktopRemoteTransport {
                 val snapshot = withContext(Dispatchers.Main) {
                     check(sessionEpoch.get() == epoch)
                     currentRemoteAccessToken(expected)
-                    if (command.type != "state" && command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
+                    if (command.type == "handoffRequest") {
+                        val intent = command.acceptableHandoff(
+                            ProfileRepository.activeProfileId, DesktopRemote.playback.playbackId,
+                        )
+                        if (intent != null && DesktopRemote.pendingHandoff.value == null) {
+                            val now = System.nanoTime()
+                            val previous = lastHandoffAtNanos.get()
+                            // Prevent an otherwise authorized phone from flooding
+                            // the desktop with navigation prompts.
+                            if (previous == 0L || now - previous !in 0 until 20_000_000_000L) {
+                                lastHandoffAtNanos.set(now)
+                                DesktopRemote.pendingHandoff.value = intent
+                            }
+                        }
+                    } else if (command.type == "downloadPause" || command.type == "downloadResume") {
+                        val profileId = ProfileRepository.activeProfileId
+                        val task = command.allowedDownloadTask(
+                            DownloadsRepository.uiState.value, profileId, DesktopRemote.playback.playbackId,
+                        )
+                        if (task != null) {
+                            if (command.type == "downloadPause") DownloadsRepository.pauseDownload(task.id)
+                            else DownloadsRepository.resumeDownload(task.id)
+                        }
+                    } else if (command.type != "state" &&
+                        command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
                         DesktopRemote.dispatch?.invoke(command)
                     }
-                    DesktopRemote.playback
+                    val profileId = ProfileRepository.activeProfileId
+                    DesktopRemote.playback.copy(
+                        downloadProfileId = profileId,
+                        downloads = if (command.profileId == profileId)
+                            remoteDownloadSnapshot(DownloadsRepository.uiState.value, profileId)
+                        else emptyList(),
+                    )
                 }
                 channel.send(snapshot.toRemoteWireJson())
                 delay(50) // Bound even an authenticated client's request rate.
             } else {
-                val command = commands.tryReceive().getOrNull() ?: RemoteCommand()
+                val command = commands.tryReceive().getOrNull() ?: RemoteCommand(
+                    profileId = ProfileRepository.activeProfileId,
+                )
                 channel.send(wireJson.encodeToString(RemoteRequest(command, currentToken)))
                 val snapshot = wireJson.decodeFromString<RemotePlayback>(channel.receive())
                 publish(epoch) { DesktopRemote.remotePlayback.value = snapshot }

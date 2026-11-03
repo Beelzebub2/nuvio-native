@@ -1,3 +1,25 @@
+## Starlit 1.7.0
+
+### Features
+
+- **PC controller is always accessible:** On Android, open **Settings → PC controller** and choose **Search local network** even when automatic discovery has found no computers. The option is searchable in Settings; unsigned-in users see why discovery is unavailable. iOS shows the entry but does not support pairing yet.
+- **Alternative local PC discovery:** When Wi-Fi broadcasting fails, enter a PC's private, same-subnet IPv4 address to request discovery. Previously paired PCs can be remembered and forgotten without storing credentials, security approvals, or reusable pairing keys. A matching six-digit code must still be approved on both devices for every new session.
+- **Optional Wake-on-LAN:** After explicitly configuring a previously paired PC's network-adapter address, Android can send a local wake packet. Waking requires compatible PC, BIOS and network settings and is not guaranteed; this feature does not expose an internet-facing receiver.
+- **Manage existing PC downloads from Android:** After secure pairing, view the current desktop profile's download progress and pause or resume its existing jobs. Commands cannot initiate downloads, inject links, access other profiles, delete files, or change destinations.
+- **Send playback to a paired PC:** Choose **Play on Starlit PC** from supported titles, episodes, or mobile player controls. The PC shows a separate approval prompt and opens its usual source picker; no torrent, stream URL, token, or private file is sent from the phone.
+- **Safe download storage tools:** See tracked offline storage and available space, set an informational storage target, and review verified Starlit-owned completed downloads for explicit, user-selected deletion. Targets do not stop transfers and no files are removed automatically.
+
+### Player and settings
+
+- **Playback diagnostics:** An optional player panel shows known playback state, resolution, buffer-ahead time, playback position, speed and app connectivity, with a copyable report containing only allowlisted metrics. Decoder and measured throughput remain unavailable until accurate platform metrics are supported.
+- **Clearer account settings on phones:** Login, account security, linked Google identity, passkeys, import and account actions are grouped into more useful sections.
+- **Casting compatibility information:** Android can explain why the current source cannot safely be sent to Chromecast or Android TV. **Actual Google Cast device selection and playback are not implemented in this release** and still require official sender/receiver integration.
+
+### Security and compatibility
+
+- Remote commands remain confined to the encrypted, same-account, same-server, private-LAN channel with independent device approval and profile/ownership checks. Local IP discovery, remembered PCs, Wake-on-LAN and playback handoff do not weaken this authentication.
+- No DRM, paywall, provider restriction, or account-approval bypass was introduced. Local network operation and wake packets require compatible networks and device configuration. QR-camera pairing, automatic storage cleanup and Google Cast reception are not part of this release.
+
 ## Starlit 1.6.2
 
 ### Fixes
