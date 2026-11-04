@@ -279,19 +279,15 @@ internal fun AppTabHost(
                     onConnectCloudClick = actions.onConnectCloudClick,
                     onDownloadsClick = actions.onDownloadsClick,
                     disintegrationRequest = state.libraryDisintegrationRequest,
-                    headerAccessory = if (isDesktop) {
-                        {
-                            com.nuvio.app.features.watchlater.LibraryViewSwitcher(
-                                selected = com.nuvio.app.features.watchlater.LibraryView.Library,
-                                onSelect = { view ->
-                                    if (view == com.nuvio.app.features.watchlater.LibraryView.WatchLater) {
-                                        actions.onTabSelected(AppScreenTab.WatchLater)
-                                    }
-                                },
-                            )
-                        }
-                    } else {
-                        null
+                    headerAccessory = {
+                        com.nuvio.app.features.watchlater.LibraryViewSwitcher(
+                            selected = com.nuvio.app.features.watchlater.LibraryView.Library,
+                            onSelect = { view ->
+                                if (view == com.nuvio.app.features.watchlater.LibraryView.WatchLater) {
+                                    actions.onTabSelected(AppScreenTab.WatchLater)
+                                }
+                            },
+                        )
                     },
                 )
             }

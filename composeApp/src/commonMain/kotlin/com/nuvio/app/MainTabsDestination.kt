@@ -255,7 +255,7 @@ internal fun MainTabsDestination(
                             contentDescription = stringResource(Res.string.compose_nav_search),
                         )
                         NavItem(
-                            selected = selectedTab == AppScreenTab.Library,
+                            selected = selectedTab == AppScreenTab.Library || selectedTab == AppScreenTab.WatchLater,
                             onClick = { onTabSelected(AppScreenTab.Library) },
                             icon = Res.drawable.sidebar_library,
                             contentDescription = stringResource(Res.string.compose_nav_library),
