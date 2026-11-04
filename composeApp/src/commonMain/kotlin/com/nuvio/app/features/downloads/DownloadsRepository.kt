@@ -363,16 +363,32 @@ object DownloadsRepository {
      */
     internal fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
         synchronized(lock) {
-            if (!hasLoaded || loadedProfile != expectedProfileId ||
-                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId)
-                return@synchronized 0
-            val safe = _uiState.value.items.filter { item ->
-                item.id in downloadIds && item.id !in activeHandles &&
-                    item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
-            }
-            removeItems(safe)
-            safe.size
+            removeVerifiedDownloadsLocked(downloadIds, expectedProfileId)
         }
+
+    /** Re-evaluate watched status and file ownership when the confirmation is accepted. */
+    internal fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        synchronized(lock) {
+            if (!hasLoaded || loadedProfile != expectedProfileId ||
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized 0
+            val watchedIds = watchedDownloadedEpisodeIds(
+                _uiState.value.items,
+                com.nuvio.app.features.watched.WatchedRepository.uiState.value.watchedKeys,
+                com.nuvio.app.features.watchprogress.WatchProgressRepository.uiState.value.entries,
+            )
+            removeVerifiedDownloadsLocked(downloadIds.intersect(watchedIds), expectedProfileId)
+        }
+
+    private fun removeVerifiedDownloadsLocked(downloadIds: Set<String>, expectedProfileId: Int): Int {
+        if (!hasLoaded || loadedProfile != expectedProfileId ||
+            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return 0
+        val safe = _uiState.value.items.filter { item ->
+            item.id in downloadIds && item.id !in activeHandles &&
+                item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+        }
+        removeItems(safe)
+        return safe.size
+    }
 
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
 

@@ -538,6 +538,9 @@
     <string name="downloads_storage_no_target">Sem meta</string>
     <string name="downloads_storage_target_note">A meta mostra avisos e não impede novos downloads. O Starlit nunca apaga conteúdo offline automaticamente.</string>
     <string name="downloads_storage_review">Revisar limpeza</string>
+    <string name="downloads_storage_remove_watched">Remover episódios assistidos</string>
+    <string name="downloads_storage_watched_notice">Os episódios concluídos marcados como assistidos ou reproduzidos até o fim ficam pré-selecionados. Desmarque os que quiser manter. O histórico de reprodução não será apagado.</string>
+    <string name="downloads_storage_no_watched_eligible">Não há episódios assistidos com arquivos verificados do Starlit disponíveis para remoção.</string>
     <string name="downloads_storage_safety_notice">Selecione cópias offline concluídas para remover. Apenas arquivos verificados e pertencentes ao Starlit são elegíveis; transferências ativas e arquivos externos são preservados. Não é possível recuperar arquivos removidos.</string>
     <string name="downloads_storage_none_eligible">Não há downloads concluídos e verificados elegíveis para limpeza.</string>
     <string name="downloads_storage_remove_selected">Remover %1$d selecionados</string>

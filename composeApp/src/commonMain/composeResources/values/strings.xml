@@ -738,6 +738,9 @@
     <string name="downloads_storage_no_target">No target</string>
     <string name="downloads_storage_target_note">The target is a warning, not a hard download limit. Starlit never deletes offline media automatically.</string>
     <string name="downloads_storage_review">Review cleanup</string>
+    <string name="downloads_storage_remove_watched">Remove watched episodes</string>
+    <string name="downloads_storage_watched_notice">Completed episodes marked as watched or played to completion are preselected. Uncheck anything you want to keep. Your watch history will not be deleted.</string>
+    <string name="downloads_storage_no_watched_eligible">No watched episodes have verified Starlit-owned files available for cleanup.</string>
     <string name="downloads_storage_safety_notice">Select completed offline copies to remove. Only verified files in Starlit-owned storage are eligible; active transfers, unverified and externally managed files are preserved. Files cannot be recovered after removal.</string>
     <string name="downloads_storage_none_eligible">No verified Starlit-owned completed downloads are eligible for cleanup.</string>
     <string name="downloads_storage_remove_selected">Remove %1$d selected</string>

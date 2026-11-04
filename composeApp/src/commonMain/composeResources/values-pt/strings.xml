@@ -590,6 +590,9 @@
     <string name="downloads_storage_no_target">Sem objetivo</string>
     <string name="downloads_storage_target_note">Este objetivo apenas mostra avisos, não impõe um limite. O Starlit nunca apaga conteúdos offline automaticamente.</string>
     <string name="downloads_storage_review">Rever limpeza</string>
+    <string name="downloads_storage_remove_watched">Remover episódios vistos</string>
+    <string name="downloads_storage_watched_notice">Os episódios concluídos marcados como vistos ou reproduzidos até ao fim ficam pré-selecionados. Desmarca os que quiseres manter. O histórico de visualização não será eliminado.</string>
+    <string name="downloads_storage_no_watched_eligible">Não existem episódios vistos com ficheiros verificados do Starlit disponíveis para remoção.</string>
     <string name="downloads_storage_safety_notice">Seleciona as cópias offline concluídas a remover. Apenas ficheiros verificados do Starlit são elegíveis; transferências ativas e ficheiros externos são preservados. Não é possível recuperar os ficheiros removidos.</string>
     <string name="downloads_storage_none_eligible">Não há transferências concluídas e verificadas elegíveis para limpeza.</string>
     <string name="downloads_storage_remove_selected">Remover %1$d selecionadas</string>
