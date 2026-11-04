@@ -21,11 +21,13 @@ class PasswordRecoveryRepositoryTest {
     @Test
     fun recoveryEmailValidationIsBoundedAndSafe() {
         assertEquals("person@example.com", normalizePasswordRecoveryEmail(" Person@Example.COM  "))
-        assertNull(normalizePasswordRecoveryEmail(""))
-        assertNull(normalizePasswordRecoveryEmail("not-an-email"))
-        assertNull(normalizePasswordRecoveryEmail("a@b"))
-        assertNull(normalizePasswordRecoveryEmail("a@.test"))
-        assertNull(normalizePasswordRecoveryEmail("a@example.com\r\nBcc:you@example.com"))
-        assertNull(normalizePasswordRecoveryEmail("a" + "x".repeat(254) + "@example.com"))
+        listOf(
+            "",
+            "not-an-email",
+            "a@b",
+            "a@.test",
+            "a@example.com\r\nBcc:you@example.com",
+            "a" + "x".repeat(254) + "@example.com",
+        ).forEach { value -> assertNull(normalizePasswordRecoveryEmail(value)) }
     }
 }
