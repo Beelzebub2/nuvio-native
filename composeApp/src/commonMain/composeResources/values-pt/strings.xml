@@ -43,6 +43,14 @@
     <string name="auth_request_account">Pedir conta</string>
     <string name="auth_request_account_subtitle">Escolhe uma palavra-passe para pedires uma conta. O proprietário do servidor tem de aprovar o pedido antes de poderes iniciar sessão.</string>
     <string name="auth_request_password_minimum">A palavra-passe tem de ter, pelo menos, 12 caracteres.</string>
+    <string name="auth_forgot_password">Esqueceste-te da palavra-passe?</string>
+    <string name="auth_password_recovery_title">Repor palavra-passe</string>
+    <string name="auth_password_recovery_description">Introduz o e-mail da tua conta. Se existir uma conta, enviamos-te uma ligação segura para repores a palavra-passe.</string>
+    <string name="auth_password_recovery_send">Enviar ligação</string>
+    <string name="auth_password_recovery_sent">Se existir uma conta associada a este endereço, vais receber um e-mail para repor a palavra-passe. Verifica também a pasta de spam.</string>
+    <string name="auth_password_recovery_invalid_email">Introduz um endereço de e-mail válido.</string>
+    <string name="auth_password_recovery_failed">Não foi possível pedir o e-mail de recuperação. Tenta novamente mais tarde.</string>
+    <string name="auth_password_recovery_unavailable">A recuperação de palavra-passe só está disponível no servidor oficial do Starlit.</string>
     <string name="auth_request_submitted_title">Pedido enviado</string>
     <string name="auth_request_submitted_subtitle">O teu pedido de conta está a aguardar aprovação do proprietário do servidor.</string>
     <string name="auth_request_submitted_detail">Depois de aprovado, inicia sessão com o e-mail e a palavra-passe que escolheste.</string>

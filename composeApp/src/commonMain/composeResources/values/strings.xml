@@ -428,6 +428,14 @@
     <string name="auth_google_link_browser_pending">Google linking is waiting for authorization in your browser. Finish there or cancel this request.</string>
     <string name="auth_request_account_subtitle">Choose a password to request an account. The server owner must approve it before you can sign in.</string>
     <string name="auth_request_password_minimum">Password must be at least 12 characters.</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_password_recovery_title">Reset your password</string>
+    <string name="auth_password_recovery_description">Enter your account email. If an account exists, we will send you a secure reset link.</string>
+    <string name="auth_password_recovery_send">Send reset link</string>
+    <string name="auth_password_recovery_sent">If an account exists for this address, a password reset email is on its way. Check your spam folder too.</string>
+    <string name="auth_password_recovery_invalid_email">Enter a valid email address.</string>
+    <string name="auth_password_recovery_failed">Could not request a reset email right now. Please try again later.</string>
+    <string name="auth_password_recovery_unavailable">Password recovery is only available on the official Starlit account server.</string>
     <string name="auth_request_submitted_title">Request submitted</string>
     <string name="auth_request_submitted_subtitle">Your account request is waiting for the server owner’s approval.</string>
     <string name="auth_request_submitted_detail">Once approved, sign in with the email and password you chose.</string>

@@ -1,4 +1,12 @@
 <resources>
+    <string name="auth_forgot_password">Esqueceu sua senha?</string>
+    <string name="auth_password_recovery_title">Redefinir senha</string>
+    <string name="auth_password_recovery_description">Digite o e-mail da conta. Se ela existir, enviaremos um link seguro para redefinir a senha.</string>
+    <string name="auth_password_recovery_send">Enviar link</string>
+    <string name="auth_password_recovery_sent">Se houver uma conta com esse endereço, você receberá um e-mail para redefinir a senha. Confira também a pasta de spam.</string>
+    <string name="auth_password_recovery_invalid_email">Digite um endereço de e-mail válido.</string>
+    <string name="auth_password_recovery_failed">Não foi possível solicitar o e-mail de recuperação. Tente novamente mais tarde.</string>
+    <string name="auth_password_recovery_unavailable">A recuperação de senha só está disponível no servidor oficial do Starlit.</string>
     <string name="auth_google_sign_in">Entrar com o Google</string>
     <string name="auth_google_sign_up">Cadastrar com o Google</string>
     <string name="auth_google_approval_notice">Novas contas ainda precisam de aprovação.</string>
