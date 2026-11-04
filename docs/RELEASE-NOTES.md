@@ -1,3 +1,16 @@
+## Starlit 1.9.0
+
+### Offline downloads
+
+- **Recover torrents that disappear from the local engine:** Desktop downloads now re-add a torrent when TorrServer temporarily loses its metadata entry or returns a missing-stream response. Recovery attempts are bounded and preserve the selected episode and existing verified partial download.
+- **Retry temporary download failures:** Interrupted HTTP requests, including asynchronous timeouts, now enter the resumable retry path. Temporary HTTP errors are retried, and P2P streams have more time to connect to peers before the first response times out. Unavailable sources can still require a different provider.
+- **Remove watched episodes to free storage:** In Downloads > Storage management, choose **Remove watched episodes** to review previously watched offline episodes, including manually selected and batch downloads. Files are preselected but never deleted automatically; users can deselect items before confirming. Only completed, verified Starlit-owned files are eligible, and watch history is retained.
+
+### Validation
+
+- The desktop download, queue, torrent resource and torrent file-selection suites passed 67 tests. The watched-cleanup and storage-management suites passed 6 targeted tests. The source/history security checks passed for both feature PRs.
+- The release workflow tests the Windows installer, builds signed Android APKs, verifies checksums and publishes only after its required jobs succeed.
+
 ## Starlit 1.8.3
 
 ### Account recovery and security
