@@ -2131,7 +2131,7 @@
     <string name="library_error_sort_failed">Couldn\'t load sort order. Showing provider order.</string>
     <string name="library_sort_title_desc">Title Z–A</string>
     <string name="library_sort_provider_order">Tracker order</string>
-    <string name="library_source_cloud">Cloud</string>
+    <string name="library_source_cloud">Cloud files</string>
     <string name="library_source_saved">Saved</string>
     <string name="library_title">Library</string>
     <string name="library_trakt_empty_message">Connect Trakt and save titles to your watchlist or personal lists.</string>
@@ -2142,12 +2142,12 @@
     <string name="library_simkl_empty_title">Your Simkl watchlist is empty</string>
     <string name="library_simkl_load_failed">Couldn’t load Simkl watchlist</string>
     <string name="library_simkl_title">Simkl Watchlist</string>
-    <string name="cloud_library_connect_action">Connect account</string>
-    <string name="cloud_library_connect_message">Connect an account in Connected Services settings to browse playable files from your cloud library.</string>
-    <string name="cloud_library_connect_title">No cloud account connected</string>
+    <string name="cloud_library_connect_action">Connect cloud service</string>
+    <string name="cloud_library_connect_message">Your Starlit library is under Saved. Cloud files are separate: connect TorBox or Premiumize in Connected Services to browse playable files here.</string>
+    <string name="cloud_library_connect_title">No cloud file service connected</string>
     <string name="cloud_library_disabled_action">Open Connected Services</string>
-    <string name="cloud_library_disabled_message">Turn on Cloud library in Connected Services settings to browse files from connected accounts.</string>
-    <string name="cloud_library_disabled_title">Cloud library is off</string>
+    <string name="cloud_library_disabled_message">Turn on Cloud library in Connected Services to browse files from TorBox or Premiumize.</string>
+    <string name="cloud_library_disabled_title">Cloud files are off</string>
     <string name="cloud_library_empty_message">No playable files were found in your connected cloud accounts.</string>
     <string name="cloud_library_empty_title">Nothing here yet</string>
     <string name="cloud_library_file_picker_title">Choose a file to play</string>
