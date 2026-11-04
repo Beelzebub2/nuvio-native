@@ -131,7 +131,7 @@ class DesktopAccountQrUiTest {
     fun loadingStateDoesNotOfferAReadyPhoneConnection() =
         runDesktopComposeUiTest(width = 520, height = 720) {
             account(AuthState.Loading)
-            onNodeWithText("Loading account…").assertIsDisplayed()
+            onNodeWithText("Checking sign-in…").assertIsDisplayed()
             onNodeWithText("Connect phone").assertIsNotEnabled()
             onNodeWithText("Sign Out").assertDoesNotExist()
             capture("account-loading")
