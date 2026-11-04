@@ -252,7 +252,7 @@ internal fun DesktopEpisodeRow(
         imdbRating?.takeIf { it > 0.0 && episodeRatingsVisibility.showRating(isWatched) }?.let(::formatEpisodeRating)
     }
     val formattedDate = remember(video.released) { video.released?.let(::formatReleaseDateForDisplay) }
-    val runtimeLabel = remember(video.runtime) { video.runtime?.takeIf { it > 0 }?.let(::formatRuntimeFromMinutes) }
+    val runtimeLabel = video.runtime?.takeIf { it > 0 }?.let { formatRuntimeFromMinutes(it) }
     val imdbLabel = stringResource(Res.string.source_imdb)
     val metaLine = listOfNotNull(runtimeLabel, formattedDate, ratingLabel?.let { "$imdbLabel $it" }).joinToString(" · ")
     val rowShape = RoundedCornerShape(NuvioTokens.Radius.lg)
