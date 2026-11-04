@@ -51,6 +51,7 @@ import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
 import nuvio.composeapp.generated.resources.changelog_description
 import nuvio.composeapp.generated.resources.changelog_title
+import nuvio.composeapp.generated.resources.compose_auth_sign_in
 import nuvio.composeapp.generated.resources.compose_settings_page_licenses_attributions
 import nuvio.composeapp.generated.resources.compose_settings_page_privacy_policy
 import nuvio.composeapp.generated.resources.compose_settings_page_supporters_contributors
@@ -58,6 +59,7 @@ import nuvio.composeapp.generated.resources.compose_settings_root_privacy_policy
 import nuvio.composeapp.generated.resources.settings_account_delete_account
 import nuvio.composeapp.generated.resources.settings_account_delete_account_description
 import nuvio.composeapp.generated.resources.settings_account_not_signed_in
+import nuvio.composeapp.generated.resources.settings_account_loading
 import nuvio.composeapp.generated.resources.settings_account_sign_out
 import nuvio.composeapp.generated.resources.settings_account_status_anonymous
 import nuvio.composeapp.generated.resources.settings_account_status_signed_in
@@ -205,6 +207,7 @@ internal fun LazyListScope.desktopUpdatesContent(
 @Composable
 internal fun DesktopAccountCard(
     authState: AuthState,
+    onSignInClick: () -> Unit,
     onSignOutClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -267,6 +270,14 @@ internal fun DesktopAccountCard(
                     label = stringResource(Res.string.settings_account_sign_out),
                     icon = Icons.AutoMirrored.Rounded.Logout,
                     onClick = onSignOutClick,
+                    tone = NuvioCompactActionTone.Ghost,
+                    size = NuvioActionSize.Small,
+                )
+            } else if (authState is AuthState.Unauthenticated) {
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.compose_auth_sign_in),
+                    icon = Icons.Rounded.Person,
+                    onClick = onSignInClick,
                     tone = NuvioCompactActionTone.Ghost,
                     size = NuvioActionSize.Small,
                 )

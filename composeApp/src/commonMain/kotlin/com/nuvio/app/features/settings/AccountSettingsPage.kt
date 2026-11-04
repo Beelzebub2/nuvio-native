@@ -140,7 +140,11 @@ private fun AccountSettingsBody(
 
     if (isDesktop) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DesktopAccountCard(authState = authState, onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true })
+            DesktopAccountCard(
+                authState = authState,
+                onSignInClick = AuthRepository::requestSignInScreen,
+                onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true },
+            )
             signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (namedAccount != null && (canCheckGoogle || PasskeyRepository.canUseOnActiveServer())) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))

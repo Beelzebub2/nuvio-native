@@ -826,6 +826,7 @@
     <string name="settings_account_email">Email</string>
     <string name="settings_account_guest_profile">Guest account</string>
     <string name="settings_account_not_signed_in">Not signed in</string>
+    <string name="settings_account_loading">Checking sign-in…</string>
     <string name="settings_account_profile_name">Starlit account</string>
     <string name="settings_account_section_actions">ACCOUNT MANAGEMENT</string>
     <string name="settings_account_section_data">DATA &amp; SYNC</string>
@@ -2708,7 +2709,6 @@
     <string name="remote_qr_change_network">Choose network address</string>
     <string name="remote_qr_scan">Scan desktop QR code</string>
     <string name="remote_qr_scan_failed">Couldn’t read a Starlit desktop QR code. Try again, update Google Play services, or enter the PC’s local IP below.</string>
-    <string name="settings_account_loading">Loading account…</string>
     <string name="settings_account_server_detail">Server: %1$s</string>
     <string name="auth_google_link_status_failed">Couldn’t check your Google connection. Try again.</string>
     <string name="remote_qr_sign_in_required">Sign in to your Starlit account to connect your phone.</string>

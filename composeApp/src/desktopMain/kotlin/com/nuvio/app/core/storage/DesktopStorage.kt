@@ -67,7 +67,12 @@ internal object DesktopStorage {
                 .sorted(Comparator.reverseOrder())
                 .filter { it != directory && !it.startsWith(directory.resolve("anonymous-workspace")) }
                 .filter { !it.startsWith(directory.resolve("downloads")) }
-                .filter { it.fileName.toString() !in setOf("server_configuration.properties", "nuvio_sync_client_identity.properties") }
+                // A newly authenticated session must survive wiping the previous guest workspace.
+                // Supabase's sign-out and clearSession explicitly delete this separate credential.
+                .filter { it.fileName.toString() !in setOf(
+                    "server_configuration.properties", "nuvio_sync_client_identity.properties",
+                    "nuvio_remote_session.properties", "nuvio_remote_session.properties.bak",
+                ) }
                 .forEach { path -> runCatching { Files.deleteIfExists(path) } }
         }
     }

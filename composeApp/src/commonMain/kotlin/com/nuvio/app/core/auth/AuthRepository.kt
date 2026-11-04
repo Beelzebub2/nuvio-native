@@ -23,9 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -48,6 +50,15 @@ object AuthRepository {
     /** Neutral auth messages, such as an account that is waiting for the server owner's approval. */
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    // Cached desktop profiles can be used when the remote session is missing.
+    // Give their Account page a way back to the existing authentication screen.
+    private val _signInScreenRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val signInScreenRequests = _signInScreenRequests.asSharedFlow()
+
+    fun requestSignInScreen() {
+        if (_state.value is AuthState.Unauthenticated) _signInScreenRequests.tryEmit(Unit)
+    }
 
     private var detachedWorkspace: AuthState.Authenticated? = null
     private var remoteSignInRequested = false

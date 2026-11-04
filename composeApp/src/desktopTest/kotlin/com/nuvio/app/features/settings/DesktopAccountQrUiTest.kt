@@ -57,7 +57,7 @@ class DesktopAccountQrUiTest {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.nuvio.colors.background).padding(40.dp)) {
                     Column(Modifier.widthIn(max = 800.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Account", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.nuvio.colors.textPrimary)
-                        DesktopAccountCard(state, onSignOutClick = {})
+                        DesktopAccountCard(state, onSignInClick = {}, onSignOutClick = {})
                         Text("Devices", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                         DesktopPhoneConnectionCard(state)
                     }
@@ -86,7 +86,7 @@ class DesktopAccountQrUiTest {
                                 Column(Modifier.widthIn(max = 800.dp).verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text("Account", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.nuvio.colors.textPrimary)
-                                    DesktopAccountCard(namedAccount, onSignOutClick = {})
+                                    DesktopAccountCard(namedAccount, onSignInClick = {}, onSignOutClick = {})
                                     Text("Sign-in & security", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                                     GoogleAccountLinkCard(namedAccount, isAvailable = true, loadIdentity = { false })
                                     PasskeySecurityCard(namedAccount, loadCapability = { true }, loadPasskeys = {

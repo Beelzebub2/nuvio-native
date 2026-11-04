@@ -1,3 +1,30 @@
+## Starlit 1.7.4
+
+### Fixes
+
+- **Desktop sign-in stays connected after restarting Starlit:** The desktop app now saves and restores its cloud account session. Saved sessions are tied to the configured account server, protected for the current Windows user, and retained when Starlit cleans up a previous guest workspace.
+- **Recover from a missing desktop account session:** If an older Starlit version lost a session while keeping a local viewing profile, the Account page now offers **Sign In** to reconnect. While the app restores a session, the account card shows **Checking sign-in** instead of incorrectly reporting that the user is signed out.
+- **Safe account-session cleanup:** Signing out removes both the saved session and its recovery copy. Session storage runs off the UI thread; Android and iOS authentication storage remains unchanged.
+
+### Validation
+
+- Desktop Kotlin compilation and the four targeted session-persistence tests passed twice, including after the final I/O scheduling adjustment. Tests cover restart restoration, guest-workspace cleanup, sign-out, server isolation and corrupted sessions. Android Full, Android Play Store, desktop-auth, iOS Kotlin and source-security CI passed for the fix. The signed installer and APK release workflow performs the final packaging checks.
+
+## Starlit 1.7.3
+
+### Fixes
+
+- **Desktop torrents wait for usable episode metadata:** The player waits for complete video names and sizes instead of trying to select an episode from TorrServer's temporary incomplete entries.
+- **Safer torrent engine shutdown and recovery:** An engine process that refuses to exit remains tracked, preventing its download cache from being cleaned up while still in use. Playback shows a useful error if shutdown also fails during recovery.
+- **Android login stays usable after activity recreation:** Rotating the phone or recreating the login screen during a sign-in request no longer leaves the login controls permanently disabled.
+- **Android Account Settings no longer crashes on Google linking:** The shared Google logo now uses an Android-supported vector resource instead of an SVG that crashed the signed-in Account page. The same replacement also protects the Google login controls.
+- **Correct offline download source validation:** HLS playlists, DASH manifests and torrent files are rejected as direct video downloads even when their URLs contain fragments or query parameters.
+- **Bounded provider cooldowns in gateway source:** The gateway now interprets rate-limit reset timestamps in seconds or milliseconds and caps provider-wide cooldowns at one hour. Deploying the gateway on the VPS is a separate server update.
+
+### Validation
+
+- Targeted Windows desktop regression tests passed for downloaded URL filtering, incomplete torrent metadata, TorrServer shutdown ownership and playback error recovery. Gateway tests and local account/sync backend tests also passed. The Android Google-logo regression was reproduced in the released 1.7.1 APK; Android Full and Play Store CI passed, and the corrected signed-in Account page stayed open in repeated isolated emulator checks. The existing release workflow verifies and signs the Windows installer and Android APKs before publication.
+
 ## Starlit 1.7.2
 
 ### Fixes
