@@ -16,6 +16,18 @@
 
 - Desktop authorization-callback tests cover valid codes, rejected or malformed callbacks, consent denial and provider errors. Desktop QR tests cover scanned payload decoding, network switching, fractional screen scaling, supported servers and responsive Account layouts. Android Full and Play Store, iOS Kotlin, desktop-auth and source-security CI are required to pass before publishing the signed installers. Actual two-device QR pairing and real Google linking should also be checked on devices with valid accounts and Google Play services.
 
+## Starlit 1.7.4
+
+### Fixes
+
+- **Desktop sign-in stays connected after restarting Starlit:** The desktop app now saves and restores its cloud account session. Saved sessions are tied to the configured account server, protected for the current Windows user, and retained when Starlit cleans up a previous guest workspace.
+- **Recover from a missing desktop account session:** If an older Starlit version lost a session while keeping a local viewing profile, the Account page now offers **Sign In** to reconnect. While the app restores a session, the account card shows **Checking sign-in** instead of incorrectly reporting that the user is signed out.
+- **Safe account-session cleanup:** Signing out removes both the saved session and its recovery copy. Session storage runs off the UI thread; Android and iOS authentication storage remains unchanged.
+
+### Validation
+
+- Desktop Kotlin compilation and the four targeted session-persistence tests passed twice, including after the final I/O scheduling adjustment. Tests cover restart restoration, guest-workspace cleanup, sign-out, server isolation and corrupted sessions. Android Full, Android Play Store, desktop-auth, iOS Kotlin and source-security CI passed for the fix. The signed installer and APK release workflow performs the final packaging checks.
+
 ## Starlit 1.7.3
 
 ### Fixes

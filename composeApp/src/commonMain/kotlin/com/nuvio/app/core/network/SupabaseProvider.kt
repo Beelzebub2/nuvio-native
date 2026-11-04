@@ -110,6 +110,7 @@ object SupabaseProvider {
                 // Google client credentials or tokens to a web page.
                 scheme = "nuvio"
                 host = "auth"
+                configurePlatformAuth(configuration.backendUrl)
             }
             install(Postgrest)
             install(Functions)

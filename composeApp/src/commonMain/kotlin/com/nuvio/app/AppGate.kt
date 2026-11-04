@@ -187,6 +187,14 @@ internal fun AppGate(
     }
 
     var gateScreen by rememberSaveable { mutableStateOf(AppGateScreen.Loading.name) }
+    LaunchedEffect(ownsAppRuntime) {
+        if (!ownsAppRuntime) return@LaunchedEffect
+        AuthRepository.signInScreenRequests.collect {
+            if (AuthRepository.state.value is AuthState.Unauthenticated) {
+                gateScreen = AppGateScreen.Auth.name
+            }
+        }
+    }
     var editingProfile by remember { mutableStateOf<NuvioProfile?>(null) }
     var autoSkipProfileSelection by rememberSaveable { mutableStateOf(false) }
     var profileSelectionLoading by rememberSaveable { mutableStateOf(false) }
