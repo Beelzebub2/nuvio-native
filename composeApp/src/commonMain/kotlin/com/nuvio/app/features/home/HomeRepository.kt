@@ -91,6 +91,8 @@ object HomeRepository {
             val prioritizedRequests = prioritizeDefinitions(
                 definitions = requests,
                 snapshot = HomeCatalogSettingsRepository.snapshot(),
+                forcedRefresh = force,
+                cachedKeys = cachedSections.keys,
             )
             val loadedSections = linkedMapOf<String, HomeCatalogSection>().apply {
                 putAll(cachedSections)
@@ -515,9 +517,11 @@ private const val DESKTOP_HOME_CATALOG_PREVIEW_FETCH_LIMIT = 64
 private const val DESKTOP_HOME_CATALOG_PREVIEW_MAX_PAGES = 4
 private const val HOME_CATALOG_PUBLISH_INTERVAL = 2
 
-private fun prioritizeDefinitions(
+internal fun prioritizeDefinitions(
     definitions: List<HomeCatalogDefinition>,
     snapshot: HomeCatalogSettingsSnapshot,
+    forcedRefresh: Boolean = false,
+    cachedKeys: Set<String> = emptySet(),
 ): List<HomeCatalogDefinition> {
     val orderedDefinitions = definitions.sortedBy { definition ->
         snapshot.preferences[definition.key]?.order ?: Int.MAX_VALUE
@@ -530,5 +534,12 @@ private fun prioritizeDefinitions(
             preference.enabled || (snapshot.heroEnabled && preference.heroSourceEnabled)
         }
     }
-    return priority + remainder
+    // Hidden rows are loaded once so that enabling one does not leave a blank
+    // section. After that, a timed/forced refresh need not repeatedly fetch
+    // rows that cannot appear either in Home or in the enabled hero.
+    return priority + if (forcedRefresh) {
+        remainder.filterNot { definition -> definition.cacheKey in cachedKeys }
+    } else {
+        remainder
+    }
 }
