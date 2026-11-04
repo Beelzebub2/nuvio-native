@@ -1,3 +1,21 @@
+## Starlit 1.8.0
+
+### Account settings and sign-in
+
+- **Organized desktop Account page:** Sign-in and security, passkeys, anonymous-settings import, phone connections and supported account actions now have clear sections and compact controls at wide and narrow desktop sizes. The signed-in account and server are visible.
+- **Link Google on desktop:** Approved users of the official Starlit server can link a Google identity to their existing account after password confirmation, without replacing the current profile or its library. Registered passkeys can be inspected and removed on desktop; registering a new passkey remains available on Android.
+- **More reliable browser authorization:** Closing the desktop Account page while Google consent is open no longer cancels the pending callback. Denied consent returns a clear message, stale callbacks are rejected, and logout, account changes and explicit cancellation stop pending linking. Google-link availability can be checked again without leaving Settings.
+
+### Phone remote pairing
+
+- **Desktop pairing QR code:** Account Settings now shows a QR code containing a local, private IPv4 discovery address when the PC listener is available. Users with multiple interfaces can choose the right address; reopening the dialog refreshes the available addresses after a network change.
+- **Scan from Android:** The Android PC controller can scan the desktop code through Google Play services. Manual IP entry and local-network discovery remain available if the scanner is unsupported or cannot start. The desktop Connect phone action explains when a signed-in custom HTTP server cannot host pairing.
+- **Existing pairing protections remain:** The code is only a discovery hint. The phone and PC must still be on a compatible local network, use the same Starlit account and server, and confirm matching six-digit pairing codes. Tokens, private keys and media URLs are never encoded in the QR image.
+
+### Validation
+
+- Desktop authorization-callback tests cover valid codes, rejected or malformed callbacks, consent denial and provider errors. Desktop QR tests cover scanned payload decoding, network switching, fractional screen scaling, supported servers and responsive Account layouts. Android Full and Play Store, iOS Kotlin, desktop-auth and source-security CI are required to pass before publishing the signed installers. Actual two-device QR pairing and real Google linking should also be checked on devices with valid accounts and Google Play services.
+
 ## Starlit 1.7.4
 
 ### Fixes
