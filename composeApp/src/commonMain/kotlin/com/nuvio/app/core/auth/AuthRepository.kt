@@ -18,14 +18,18 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
@@ -66,6 +70,10 @@ object AuthRepository {
     private var pendingGoogleLink: PendingGoogleLink? = null
     private val _googleLinkFeedback = MutableStateFlow<GoogleLinkFeedback?>(null)
     val googleLinkFeedback: StateFlow<GoogleLinkFeedback?> = _googleLinkFeedback.asStateFlow()
+    private data class DesktopGoogleLinkSession(val accountId: String, val job: Job)
+    private val activeDesktopGoogleLink = MutableStateFlow<DesktopGoogleLinkSession?>(null)
+    val desktopGoogleLinkInProgress: StateFlow<Boolean> = activeDesktopGoogleLink
+        .map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
 
     fun initialize() {
         if (initialized) return
@@ -116,6 +124,7 @@ object AuthRepository {
                         acceptRemoteSession(userId, user?.email)
                     }
                     is SessionStatus.NotAuthenticated -> {
+                        cancelDesktopGoogleAccountLink()
                         _state.value = AuthState.Unauthenticated
                     }
                     is SessionStatus.Initializing -> {
@@ -124,6 +133,7 @@ object AuthRepository {
                         }
                     }
                     is SessionStatus.RefreshFailure -> {
+                        cancelDesktopGoogleAccountLink()
                         _state.value = AuthState.Unauthenticated
                     }
                 }
@@ -135,8 +145,12 @@ object AuthRepository {
     internal fun cancelRemoteSessionRequest() { remoteSignInRequested = false }
 
     internal suspend fun acceptRemoteSession(userId: String, email: String?) {
+        if (activeDesktopGoogleLink.value?.accountId?.let { it != userId } == true) {
+            cancelDesktopGoogleAccountLink()
+        }
         val previous = (_state.value as? AuthState.Authenticated) ?: detachedWorkspace
         val accountChanged = previous != null && (previous.isAnonymous || previous.userId != userId)
+        if (accountChanged) _googleLinkFeedback.value = null
         if (accountChanged) {
             val backup = runCatching {
                 val old = checkNotNull(previous)
@@ -290,7 +304,8 @@ object AuthRepository {
         cancelRemoteSessionRequest()
         if (e is CancellationException) throw e
         // Provider errors can contain callback URLs; keep them out of logs.
-        _error.value = e.safeAuthErrorDescription()
+        _error.value = (e as? GoogleAuthorizationFailure)?.message
+            ?: e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_google_sign_in_failed)
     }
 
@@ -299,7 +314,7 @@ object AuthRepository {
      * Return the provider URL rather than allowing the SDK to import a session
      * before we have verified the account identity on the PKCE callback.
      */
-    suspend fun prepareGoogleAccountLink(password: String): Result<String> = runCatching {
+    internal suspend fun prepareGoogleAccountLink(password: String, redirectUrl: String = "nuvio://auth"): Result<String> = runCatching {
         val account = requireNotNull(_state.value as? AuthState.Authenticated)
         require(!account.isAnonymous) { "Sign in to your approved account first" }
         check(pendingGoogleLink == null) { "Complete or cancel the current Google linking request first" }
@@ -317,7 +332,7 @@ object AuthRepository {
         check(client.auth.retrieveUserForCurrentSession(false).identities.orEmpty().none { it.provider == "google" }) {
             "This account already has Google linked"
         }
-        val url = requireNotNull(client.auth.linkIdentity(Google, redirectUrl = "nuvio://auth") {
+        val url = requireNotNull(client.auth.linkIdentity(Google, redirectUrl = redirectUrl) {
             automaticallyOpenUrl = false
         }) { "Google did not return an authorization URL" }
         check(isTrustedGoogleAuthorizationUrl(url)) { "Google returned an untrusted authorization address" }
@@ -343,6 +358,56 @@ object AuthRepository {
         if (accountId != null) {
             _googleLinkFeedback.value = GoogleLinkFeedback(accountId, "Google linking was canceled.", completed = false)
         }
+    }
+
+    /** Keep the desktop browser callback alive when the Account screen is closed or navigated away from. */
+    fun beginDesktopGoogleAccountLink(password: String, openUrl: (String) -> Unit): Boolean {
+        val account = (_state.value as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
+            ?: return false
+        if (!GoogleOAuthAvailability.isOfficialServer()) return false
+        val expectedServer = ServerConfigurationRepository.active.value
+        // The job is created lazily, then published atomically before it can run.
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                launchGoogleAccountLink(password, openUrl)
+            } catch (error: CancellationException) {
+                cancelGoogleAccountLink()
+                throw error
+            } catch (error: Exception) {
+                cancelGoogleAccountLink()
+                // The desktop callback must never expose URLs, authorization codes or provider errors.
+                _googleLinkFeedback.value = GoogleLinkFeedback(
+                    account.userId,
+                    (error as? GoogleAuthorizationFailure)?.message
+                        ?: "Google linking couldn't be completed. Check your browser and try again.",
+                    completed = false,
+                )
+            }
+        }
+        val session = DesktopGoogleLinkSession(account.userId, job)
+        if (!activeDesktopGoogleLink.compareAndSet(null, session)) {
+            job.cancel()
+            return false
+        }
+        // Completion callbacks also run if cancellation wins before a lazy coroutine starts.
+        job.invokeOnCompletion {
+            activeDesktopGoogleLink.compareAndSet(session, null)
+        }
+        // A logout/server change could occur between the initial check and publication.
+        // Once published, concurrent cancellation always sees this job.
+        if ((_state.value as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }?.userId != account.userId ||
+            ServerConfigurationRepository.active.value != expectedServer
+        ) {
+            job.cancel()
+            return false
+        }
+        job.start()
+        return true
+    }
+
+    fun cancelDesktopGoogleAccountLink() {
+        activeDesktopGoogleLink.value?.job?.cancel()
+        cancelGoogleAccountLink()
     }
 
     internal fun handleGoogleOAuthCallback(url: String) {
@@ -432,6 +497,7 @@ object AuthRepository {
 
     suspend fun signOut(): Result<Unit> {
         _error.value = null
+        cancelDesktopGoogleAccountLink()
         pendingGoogleLink = null
         _googleLinkFeedback.value = null
         val anonymousRead = runCatching { AuthStorage.loadAnonymousUserId() }
@@ -492,6 +558,8 @@ object AuthRepository {
 
     suspend fun prepareForServerSwitch(): Result<Unit> {
         _error.value = null
+        cancelDesktopGoogleAccountLink()
+        _googleLinkFeedback.value = null
         val current = _state.value as? AuthState.Authenticated
         detachedWorkspace = current
         if (current?.isAnonymous == true) {
@@ -519,6 +587,7 @@ object AuthRepository {
     }
 
     fun reinitialize() {
+        cancelDesktopGoogleAccountLink()
         sessionStatusJob?.cancel()
         sessionStatusJob = null
         initialized = false
@@ -537,6 +606,8 @@ object AuthRepository {
 
     private suspend fun clearLocalSessionAfterRemoteInvalidation() {
         _error.value = null
+        cancelDesktopGoogleAccountLink()
+        _googleLinkFeedback.value = null
         val current = _state.value as? AuthState.Authenticated
         val saved = runCatching {
             if (current?.isAnonymous == true) LocalSettingsImport.saveAnonymousWorkspace(current.userId)
@@ -562,6 +633,7 @@ object AuthRepository {
 
     suspend fun deleteAccount(): Result<Unit> = runCatching {
         _error.value = null
+        cancelDesktopGoogleAccountLink()
         val account = _state.value as? AuthState.Authenticated
         val backendUrl = ServerConfigurationRepository.active.value.backendUrl
         SupabaseProvider.client.functions.invoke("delete-account")

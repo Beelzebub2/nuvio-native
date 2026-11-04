@@ -28,7 +28,7 @@ internal fun DesktopRemoteSettingsButton() {
 }
 
 @Composable
-internal fun DesktopRemoteDialogs() {
+internal fun DesktopRemoteDialogs(localAddresses: () -> List<String> = { DesktopRemote.transport.localAddresses() }) {
     val pairing by DesktopRemote.pairing.collectAsState()
     val pendingHandoff by DesktopRemote.pendingHandoff.collectAsState()
     val visible by DesktopRemote.visible.collectAsState()
@@ -38,7 +38,21 @@ internal fun DesktopRemoteDialogs() {
     val desktops by DesktopRemote.desktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val playback by DesktopRemote.remotePlayback.collectAsState()
+    val hostReady by DesktopRemote.hostReady.collectAsState()
+    // Reopening after Wi-Fi/DHCP changes refreshes both the QR and its manual-IP fallback.
+    val hostAddresses = remember(visible, hostReady) {
+        if (isDesktop && visible) localAddresses() else emptyList()
+    }
     var manualIp by rememberSaveable { mutableStateOf("") }
+    var qrError by remember { mutableStateOf(false) }
+    val qrScanner = rememberRemoteQrScanner { payload ->
+        val address = payload?.let(::parseRemotePairingQr)
+        qrError = address == null
+        if (address != null) {
+            manualIp = address
+            DesktopRemote.transport.discover(address)
+        }
+    }
     var editingWakeFor by remember { mutableStateOf<String?>(null) }
     var wakeMacDraft by remember { mutableStateOf("") }
     var wakeMacError by remember { mutableStateOf(false) }
@@ -96,9 +110,12 @@ internal fun DesktopRemoteDialogs() {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (isDesktop) {
-                        Text(status)
-                        Text("On your Android phone open Settings → PC controller. Select this PC and compare the codes. Both devices must sign in to the same account and server.")
-                        DesktopRemote.transport.localAddresses().takeIf { it.isNotEmpty() }?.let { addresses ->
+                        Text(if (hostReady && hostAddresses.isEmpty()) stringResource(Res.string.remote_qr_no_network) else status)
+                        if (hostReady && hostAddresses.isNotEmpty()) {
+                            Text(stringResource(Res.string.remote_qr_instructions))
+                            DesktopPairingQr(hostAddresses)
+                        }
+                        hostAddresses.takeIf { it.isNotEmpty() }?.let { addresses ->
                             Text(
                                 stringResource(Res.string.remote_pc_desktop_addresses, addresses.joinToString(", ")),
                                 style = MaterialTheme.typography.bodySmall,
@@ -109,6 +126,16 @@ internal fun DesktopRemoteDialogs() {
                         Text(stringResource(Res.string.remote_pc_unsupported))
                     } else {
                         Text(status)
+                        if (qrScanner != null) {
+                            OutlinedButton(onClick = { qrError = false; qrScanner() }, enabled = !scanning,
+                                modifier = Modifier.fillMaxWidth().testTag("desktop-remote-scan-qr")) {
+                                Text(stringResource(Res.string.remote_qr_scan))
+                            }
+                        }
+                        if (qrError) {
+                            Text(stringResource(Res.string.remote_qr_scan_failed),
+                                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
                         // The manual scan stays accessible with an empty list, after failed
                         // discovery, or while connected to an existing desktop.
                         OutlinedButton(

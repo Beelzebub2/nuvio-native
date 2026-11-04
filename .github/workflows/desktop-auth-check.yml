@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - 'composeApp/src/**/core/auth/**'
+      - 'composeApp/src/**/features/remote/**'
+      - 'composeApp/src/commonMain/kotlin/com/nuvio/app/features/settings/AccountSettingsPage.kt'
+      - 'composeApp/src/commonMain/kotlin/com/nuvio/app/features/settings/DesktopSettingsPages.kt'
+      - 'composeApp/src/desktopTest/kotlin/com/nuvio/app/features/settings/DesktopAccountQrUiTest.kt'
+      - 'composeApp/build.gradle.kts'
+      - 'composeApp/proguard-rules.pro'
       - 'composeApp/src/commonMain/kotlin/com/nuvio/app/core/network/SupabaseProvider.kt'
       - '.github/workflows/desktop-auth-check.yml'
   workflow_dispatch:
@@ -32,12 +38,15 @@ jobs:
           nuget install Microsoft.Web.WebView2 -Version 1.0.4078.44 -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
           if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
           "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.1.0.4078.44" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Test passkey policies and Google loopback callbacks
+      - name: Test account policies, Google callbacks and desktop QR pairing
         shell: pwsh
         run: >-
           ./gradlew.bat :composeApp:desktopTest
           "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT"
           --tests '*GoogleOAuth*' --tests '*PasskeyRepositoryTest*'
+          --tests '*RemotePairingQrTest*' --tests '*RemoteQrEncodingTest*'
+          --tests '*DesktopRemoteProtocolTest*'
+          --tests '*DesktopAccountQrUiTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --no-configuration-cache --no-daemon --console=plain
@@ -45,5 +54,7 @@ jobs:
         if: always()
         with:
           name: desktop-auth-test-results
-          path: composeApp/build/reports/tests/desktopTest/
+          path: |
+            composeApp/build/reports/tests/desktopTest/
+            composeApp/build/account-qr-capture/
           if-no-files-found: warn

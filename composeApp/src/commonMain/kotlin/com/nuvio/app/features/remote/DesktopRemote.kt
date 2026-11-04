@@ -71,6 +71,7 @@ internal object DesktopRemote {
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
     val scanning = MutableStateFlow(false)
+    val hostReady = MutableStateFlow(false)
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())

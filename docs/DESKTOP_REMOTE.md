@@ -9,6 +9,14 @@ Closing the phone's remote dialog keeps the session connected. Reopen it from Se
 
 If no PC appears after searching, verify that both apps are signed into the **same non-guest account and account server**, the desktop app is open, and the phone and PC can reach each other on the local network. Press **Search local network** again after changing Wi-Fi or the PC's firewall settings; the button remains accessible even when already connected to another PC. A scan cannot proceed before account sign-in. iOS shows the controller entry with an unsupported notice, but scanning is currently available only on Android.
 
+## Pair with a QR code
+
+On desktop, open **Settings → Account → Devices → Connect phone**. Once the local listener is ready, Starlit shows a QR code and its selected local IPv4 address. If the PC has multiple network adapters, use **Choose network address** to select the address shared with your phone. After changing Wi-Fi or the PC’s IP address, close and reopen Phone remote to refresh both the QR code and manual-IP addresses. If the PC has no local network yet, connect it and reopen the dialog; no account restart is needed.
+
+On Android, open **Settings → PC controller → Scan desktop QR code** inside Starlit. Wait for any current network search to finish before scanning. Select the discovered PC and compare and approve the fresh codes on both devices. The QR code contains only a versioned private IPv4 discovery hint, never credentials, account information or an approval. It does not open a website or run commands. The phone still probes the same subnet and verifies the account through the existing encrypted handshake.
+
+Scanning uses the native Google Play services scanner without requesting camera permission in Starlit. Google Play services may need to download its scanner module on first use. If scanning is unavailable, canceled, or cannot read the code, use **Search local network** or enter the desktop's local IPv4 address manually.
+
 ## Safe desktop download management
 
 After the encrypted session has been **approved on both devices** and the same Starlit HTTPS account has been verified, Android may view the status of up to 30 existing desktop downloads and pause/resume only tasks belonging to the desktop's **currently selected profile**. Open the same profile on the phone to receive the list. The desktop rechecks both the local profile and task state for each command.

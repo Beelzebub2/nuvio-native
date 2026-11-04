@@ -62,3 +62,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Google Code Scanner discovers ML Kit components through Firebase registrars.
+# Preserve their reflective constructors in R8 full mode (AGP 9+).
+-keep class * implements com.google.firebase.components.ComponentRegistrar { void <init>(); }
+-keep,allowshrinking interface com.google.firebase.components.ComponentRegistrar

@@ -8,6 +8,10 @@
     <string name="auth_google_link_button">Vincular Google</string>
     <string name="auth_google_link_connected">O Google está vinculado a esta conta Starlit.</string>
     <string name="auth_google_link_password_prompt">Confirme a senha da conta antes de vincular um novo método de login.</string>
+    <string name="auth_google_link_unavailable">A vinculação com a conta Google não está disponível no momento. Verifique a conexão ou tente novamente.</string>
+    <string name="auth_google_link_checking">Verificando a disponibilidade da vinculação com a conta Google…</string>
+    <string name="auth_google_link_browser_pending">A vinculação com a conta Google está aguardando autorização no navegador. Conclua a autorização ou cancele esta solicitação.</string>
+    <string name="remote_qr_https_required">O controle remoto pelo celular requer um servidor de conta HTTPS. Mude para um servidor HTTPS para conectar o celular.</string>
     <string name="auth_sign_in_with_passkey">Entrar com chave de acesso</string>
     <string name="auth_add_passkey">Adicionar chave de acesso</string>
     <string name="auth_passkey_confirm_password">Confirme sua senha para adicionar uma chave de acesso a esta conta.</string>
@@ -1522,4 +1526,19 @@
     <string name="movie_status_rumored">Rumores</string>
     <string name="movie_status_in_production">Em Produção</string>
     <string name="movie_status_post_production">Pós-Produção</string>
+    <string name="remote_qr_devices_heading">Dispositivos</string>
+    <string name="remote_qr_phone_remote">Controle pelo celular</string>
+    <string name="remote_qr_connected">Um celular está conectado a este computador.</string>
+    <string name="remote_qr_account_description">Controle a reprodução pelo seu celular Android. Pareie na mesma rede com sua conta Starlit.</string>
+    <string name="remote_qr_manage">Gerenciar conexão</string>
+    <string name="remote_qr_show">Conectar celular</string>
+    <string name="remote_qr_instructions">No celular Android, abra Starlit → Configurações → Controlador do PC → Ler QR code do computador. Escolha este PC, compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
+    <string name="remote_qr_image_description">QR code de pareamento do computador %1$s</string>
+    <string name="remote_qr_change_network">Escolher endereço de rede</string>
+    <string name="remote_qr_scan">Ler QR code do computador</string>
+    <string name="remote_qr_scan_failed">Não foi possível ler um QR code do Starlit. Tente novamente, atualize o Google Play Services ou digite o IP local do PC abaixo.</string>
+    <string name="settings_account_server_detail">Servidor: %1$s</string>
+    <string name="auth_google_link_status_failed">Não foi possível verificar a conexão com o Google. Tente novamente.</string>
+    <string name="remote_qr_sign_in_required">Entre na sua conta Starlit para conectar o celular.</string>
+    <string name="remote_qr_no_network">Conecte este PC ao Wi-Fi ou Ethernet e reabra Controle pelo celular para mostrar um QR code.</string>
 </resources>
