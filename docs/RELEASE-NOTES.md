@@ -1,3 +1,15 @@
+## Starlit 1.8.2
+
+### Performance
+
+- **Avoid unnecessary Home catalogue requests:** Forced and timed Home refreshes no longer refetch cached catalogue rows that are disabled from both the Home screen and hero. Initial loading still warms hidden rows, missing cached rows are retried, and active hero sources continue refreshing normally.
+- **Keep runtime labels off the blocking UI path:** Details, episode cards and Watch Later hover cards now format localized runtimes through Compose resources rather than synchronously waiting for translated strings during rendering. The visible labels and runtime parsing remain unchanged.
+
+### Validation
+
+- Both performance fixes passed Android Full, Android Play Store, iOS Kotlin and source-security CI. The runtime formatting change also passed two targeted Windows desktop Compose and parsing tests. Four Home refresh-selection regression cases were added. Device-level frame-time and real-world network-traffic improvements have not yet been quantified.
+- The existing release workflow verifies and packages the Windows installer and signed Android APKs before publication.
+
 ## Starlit 1.8.1
 
 ### Fixes
