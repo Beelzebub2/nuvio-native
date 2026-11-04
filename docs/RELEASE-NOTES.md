@@ -1,3 +1,14 @@
+## Starlit 1.8.1
+
+### Fixes
+
+- **Watch Later is accessible from Library on Android:** The Library / Watch Later selector now appears on phones, so saved Watch Later titles and episodes can be opened without switching to desktop. The selector has a larger touch target, and the Library icon remains selected while viewing Watch Later.
+- **Cloud library explains separate service connections:** The Cloud files tab now distinguishes Starlit's Saved library from optional TorBox and Premiumize cloud-file services. A Starlit account sign-in alone does not connect those external services; the empty state explains where to configure them instead of incorrectly implying the Starlit session is disconnected. English and European Portuguese text is updated.
+
+### Validation
+
+- The fix passed Android Full, Android Play Store, iOS Kotlin and source-security CI. Desktop shared Kotlin compilation and 15 focused Cloud Library / Watch Later tests passed, with no failures. The existing release workflow builds and verifies the Windows installer and signed Android APKs before publishing.
+
 ## Starlit 1.8.0
 
 ### Account settings and sign-in
