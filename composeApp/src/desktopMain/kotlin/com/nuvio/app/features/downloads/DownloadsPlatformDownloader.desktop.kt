@@ -16,6 +16,8 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
@@ -307,13 +309,24 @@ internal class DownloadIo {
         continuation.invokeOnCancellation { future.cancel(true); close() }
         future.whenComplete { response, error ->
             pending.compareAndSet(future, null)
-            if (error != null) { if (continuation.isActive) continuation.resumeWithException(error) }
+            // CompletableFuture wraps request timeouts and connection failures in a
+            // CompletionException. Preserve their IOException type so the transfer's
+            // bounded resume/retry path can handle them instead of failing the queue.
+            if (error != null) { if (continuation.isActive) continuation.resumeWithException(unwrapDownloadHttpFailure(error)) }
             else {
                 body.set(response.body())
                 if (continuation.isActive) continuation.resume(response) else close()
             }
         }
     }
+}
+
+internal fun unwrapDownloadHttpFailure(error: Throwable): Throwable {
+    var failure = error
+    while ((failure is CompletionException || failure is ExecutionException) && failure.cause != null) {
+        failure = failure.cause!!
+    }
+    return failure
 }
 
 /** A restart must durably discard stale bytes before publishing a validator for new bytes. */
@@ -326,7 +339,9 @@ private fun resetDownloadPart(part: File) {
 internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: DownloadIo,
     onProgress: (Long, Long?) -> Unit, expectedSize: Long? = null,
     selectedTorrentFile: TorrServerFile? = null,
-    onAfterPartReset: (() -> Unit)? = null): File {
+    onAfterPartReset: (() -> Unit)? = null,
+    onRecoverMissingTorrent: (suspend () -> Unit)? = null,
+    requestTimeout: Duration = if (selectedTorrentFile == null) Duration.ofSeconds(30) else Duration.ofSeconds(90)): File {
     val file = prepareDownloadPath(item)
     val part = File(file.path + ".part")
     require(!Files.isSymbolicLink(part.toPath()) && !Files.isSymbolicLink(downloadProofFile(file).toPath()))
@@ -382,7 +397,8 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 }
             }
             suspend fun response(start: Long): HttpResponse<InputStream> {
-                val builder = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(30)).GET()
+                // P2P streams may need more than 30 seconds to discover initial pieces.
+                val builder = HttpRequest.newBuilder(URI(url)).timeout(requestTimeout).GET()
                 item.sourceHeaders.forEach { (key, value) ->
                     if (key.lowercase() !in setOf("range", "if-range", "accept-encoding", "host", "content-length") && key.isNotBlank()) builder.header(key, value)
                 }
@@ -403,7 +419,21 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 digest.reset()
                 reply = response(0)
             }
-            check(reply.statusCode() == 200 || reply.statusCode() == 206) { "Download HTTP ${reply.statusCode()}; retry later or choose another source" }
+            val status = reply.statusCode()
+            if (status != 200 && status != 206) {
+                // TorrServer can forget a torrent even while its process stays healthy.
+                // Re-add that magnet before retrying the same verified file/range.
+                if (status == 404 && selectedTorrentFile != null && onRecoverMissingTorrent != null) {
+                    try { onRecoverMissingTorrent() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { throw IOException("Torrent stream could not be restored: ${e.message}", e) }
+                }
+                if (status in setOf(408, 425, 429, 500, 502, 503, 504) ||
+                    (status == 404 && selectedTorrentFile != null)) {
+                    throw IOException("Temporary download HTTP $status")
+                }
+                error("Download HTTP $status; retry later or choose another source")
+            }
             val contentType = reply.headers().firstValue("Content-Type").orElse("").lowercase()
             check(!listOf("text/", "json", "xml", "mpegurl", "dash+xml", "bittorrent").any(contentType::contains)) {
                 "Source returned a playlist or web page, not a downloadable media file"
@@ -559,7 +589,9 @@ private fun String.toLocalFileOrNull(): File? = runCatching { if (startsWith("fi
 internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit,
     onSelected: (TorrServerFile) -> Unit = {}): File =
     downloadTorrentFile(item, torrentEngines, { P2pSettingsRepository.ensureLoaded(); P2pSettingsRepository.uiState.value },
-        onSelected) { url, selected -> copyDesktopDownload(item, url, io, progress, selected.length, selected) }
+        onSelected) { url, selected, restore ->
+        copyDesktopDownload(item, url, io, progress, selected.length, selected, onRecoverMissingTorrent = restore)
+    }
 
 /** TorrServer accepts hexadecimal BTIH; normalize legacy 32-character base32 BTIH first. */
 internal fun canonicalDownloadTorrentHash(infoHash: String): String {
@@ -587,8 +619,10 @@ internal fun canonicalDownloadTorrentHash(infoHash: String): String {
 
 /** Metadata may be delayed or temporarily unavailable while a healthy engine connects to peers. */
 internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend, hash: String,
-    timeoutMs: Long = 90_000L, pollMs: Long = 1_000L, item: DownloadItem? = null): List<TorrServerFile> = withTimeout(timeoutMs) {
+    timeoutMs: Long = 90_000L, pollMs: Long = 1_000L, item: DownloadItem? = null,
+    restoreMissingTorrent: (suspend () -> Unit)? = null): List<TorrServerFile> = withTimeout(timeoutMs) {
     var files: List<TorrServerFile> = emptyList()
+    var missingRecoveries = 0
     fun ready(): Boolean {
         val videos = files.filter { file -> file.path.substringAfterLast('.', "").lowercase() in
             setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts", "m2ts", "wmv", "flv") }
@@ -613,7 +647,14 @@ internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend
             throw e
         } catch (e: DesktopTorrentEngineUnavailable) {
             if (e.httpStatusCode == 404) {
-                throw DesktopTorrentEngineUnavailable("Torrent disappeared from the local engine; retry this source", e, 404)
+                if (restoreMissingTorrent == null || missingRecoveries >= 3) {
+                    throw DesktopTorrentEngineUnavailable("Torrent disappeared from the local engine after reconnecting; choose another source or retry", e, 404)
+                }
+                if (!backend.isHealthy()) throw DesktopTorrentEngineUnavailable("Torrent engine stopped while fetching metadata", e)
+                missingRecoveries++
+                restoreMissingTorrent()
+                delay(pollMs * missingRecoveries)
+                continue
             }
             if (e.httpStatusCode != null && e.httpStatusCode !in 500..599 &&
                 e.httpStatusCode !in listOf(408, 425, 429)) throw e
@@ -629,7 +670,7 @@ internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend
 /** Reads one file of a torrent through the engine shared by every download of that torrent. */
 internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTorrentEngines,
     settings: () -> P2pSettingsUiState, onSelected: (TorrServerFile) -> Unit = {},
-    copy: suspend (String, TorrServerFile) -> File): File {
+    copy: suspend (String, TorrServerFile, suspend () -> Unit) -> File): File {
     val hash = canonicalDownloadTorrentHash(checkNotNull(item.torrentHash) { "No downloadable media source" })
     val magnet = buildP2pMagnetUri(hash, item.torrentTrackers)
     val selectedSettings = settings()
@@ -642,12 +683,13 @@ internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTo
                 e, e.httpStatusCode)
             throw e
         }
-        val files = awaitDownloadTorrentMetadata(backend, added, item = item)
+        val restore = suspend { backend.addTorrent(magnet); Unit }
+        val files = awaitDownloadTorrentMetadata(backend, added, item = item, restoreMissingTorrent = restore)
         val chosen = selectDownloadTorrentFile(files, item.torrentFileIdx, item.torrentFilename,
             item.seasonNumber, item.episodeNumber, downloadAbsoluteEpisode(item.episodeTitle),
             item.torrentFilenameAlternates, requireStrongEpisodeEvidence = item.sourceSelection != null)
         onSelected(chosen)
-        copy(backend.getStreamUrl(magnet, chosen.id), chosen)
+        copy(backend.getStreamUrl(magnet, chosen.id), chosen, restore)
     }
 }
 
