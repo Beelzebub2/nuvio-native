@@ -42,6 +42,9 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.GoogleBrandMark
 import androidx.compose.material3.Icon
@@ -92,6 +95,8 @@ import com.nuvio.app.core.auth.GoogleOAuthAvailability
 import com.nuvio.app.core.auth.STARLIT_GOOGLE_ORIGIN
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.PasskeyRepository
+import com.nuvio.app.core.auth.PasswordRecoveryRepository
+import com.nuvio.app.core.auth.PasswordRecoveryRequestResult
 import com.nuvio.app.core.auth.rememberPasskeyCeremony
 import com.nuvio.app.core.auth.DeviceLinkAuthRepository
 import com.nuvio.app.core.auth.DeviceLinkAuthState
@@ -103,6 +108,8 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.action_cancel
+import nuvio.composeapp.generated.resources.action_done
 import nuvio.composeapp.generated.resources.auth_request_account
 import nuvio.composeapp.generated.resources.auth_google_request_access
 import nuvio.composeapp.generated.resources.auth_google_sign_in
@@ -123,6 +130,14 @@ import nuvio.composeapp.generated.resources.compose_auth_or_separator
 import nuvio.composeapp.generated.resources.compose_auth_password
 import nuvio.composeapp.generated.resources.compose_auth_sign_in
 import nuvio.composeapp.generated.resources.auth_sign_in_with_passkey
+import nuvio.composeapp.generated.resources.auth_forgot_password
+import nuvio.composeapp.generated.resources.auth_password_recovery_title
+import nuvio.composeapp.generated.resources.auth_password_recovery_description
+import nuvio.composeapp.generated.resources.auth_password_recovery_send
+import nuvio.composeapp.generated.resources.auth_password_recovery_sent
+import nuvio.composeapp.generated.resources.auth_password_recovery_invalid_email
+import nuvio.composeapp.generated.resources.auth_password_recovery_failed
+import nuvio.composeapp.generated.resources.auth_password_recovery_unavailable
 import nuvio.composeapp.generated.resources.compose_auth_sign_in_subtitle
 import nuvio.composeapp.generated.resources.compose_auth_sign_up
 import nuvio.composeapp.generated.resources.compose_auth_sign_up_subtitle
@@ -916,6 +931,13 @@ private fun AuthForm(
         )
         return
     }
+    var showRecoveryDialog by remember { mutableStateOf(false) }
+    if (showRecoveryDialog) {
+        PasswordRecoveryDialog(
+            initialEmail = email,
+            onDismiss = { showRecoveryDialog = false },
+        )
+    }
     val uriHandler = LocalUriHandler.current
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -959,6 +981,26 @@ private fun AuthForm(
                 onDone = { onSubmit() },
             ),
         )
+
+        if (!isSignUp && isStarlitServer && PasswordRecoveryRepository.isAvailableOnActiveServer()) {
+            Spacer(modifier = Modifier.height(10.dp * scale))
+            TextButton(
+                onClick = { showRecoveryDialog = true },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .testTag("auth-forgot-password"),
+            ) {
+                Text(
+                    text = stringResource(Res.string.auth_forgot_password),
+                    color = AuthTextPrimary,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = (13f * scale).sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                )
+            }
+        }
 
         if (isSignUp && isStarlitServer) {
             Spacer(modifier = Modifier.height(10.dp * scale))
@@ -1139,6 +1181,82 @@ private fun AuthForm(
             textAlign = TextAlign.Center,
         )
     }
+}
+
+@Composable
+private fun PasswordRecoveryDialog(initialEmail: String, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var address by rememberSaveable { mutableStateOf(initialEmail) }
+    var sending by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<PasswordRecoveryRequestResult?>(null) }
+    val sent = result == PasswordRecoveryRequestResult.SENT
+
+    fun submit() {
+        if (sending || sent) return
+        sending = true
+        scope.launch {
+            try {
+                result = PasswordRecoveryRepository.requestPasswordReset(address)
+            } finally {
+                sending = false
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!sending) onDismiss() },
+        title = { Text(stringResource(Res.string.auth_password_recovery_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(
+                        if (sent) Res.string.auth_password_recovery_sent
+                        else Res.string.auth_password_recovery_description
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!sent) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it; result = null },
+                        label = { Text(stringResource(Res.string.compose_auth_email)) },
+                        singleLine = true,
+                        enabled = !sending,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth().testTag("auth-password-recovery-email"),
+                    )
+                    val failure = when (result) {
+                        PasswordRecoveryRequestResult.INVALID_EMAIL -> Res.string.auth_password_recovery_invalid_email
+                        PasswordRecoveryRequestResult.UNAVAILABLE -> Res.string.auth_password_recovery_unavailable
+                        PasswordRecoveryRequestResult.FAILED -> Res.string.auth_password_recovery_failed
+                        else -> null
+                    }
+                    failure?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(stringResource(it), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (sent) onDismiss() else submit() },
+                enabled = !sending,
+                modifier = Modifier.testTag("auth-password-recovery-submit"),
+            ) {
+                Text(stringResource(if (sent) Res.string.action_done else Res.string.auth_password_recovery_send))
+            }
+        },
+        dismissButton = {
+            if (!sent) {
+                TextButton(onClick = onDismiss, enabled = !sending) {
+                    Text(stringResource(Res.string.action_cancel))
+                }
+            }
+        },
+    )
 }
 
 @Composable
