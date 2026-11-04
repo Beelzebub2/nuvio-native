@@ -1,3 +1,16 @@
+## Starlit 1.8.3
+
+### Account recovery and security
+
+- **Reset a forgotten password:** The official Starlit sign-in page now offers Forgot password in English and Portuguese. Reset links open a secure browser page, where you can choose a new password and return to the app. Requests use the same confirmation for existing and unknown accounts.
+- **Account email notifications:** Approved accounts receive a welcome message. Security emails cover successful sign-ins, password and email changes, passkey additions and removals, linked sign-in methods, verified two-step verification changes, recovery-code changes, and disabled or deleted accounts. Sign-in alerts are limited to prevent email floods.
+- **Reliable delivery:** Account emails use Starlit's configured mail server with verified encryption, bounded retries and background delivery. The recovery page clears credentials from the address bar and does not retain them in browser storage.
+
+### Validation
+
+- Desktop recovery tests and Android Full Kotlin compilation passed. Live mailbox tests verified actual recovery and account-alert receipt, the exact app request, rejection of untrusted redirects, password replacement, recovery logout and denial of reused reset links.
+- Version metadata and authored release notes pass the repository release-policy checks. The release workflow verifies the Windows installer and signed Android APKs before publication.
+
 ## Starlit 1.8.2
 
 ### Performance
