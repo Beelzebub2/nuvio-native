@@ -1,5 +1,16 @@
 ## Starlit 1.9.2
 
+### PC discovery and Bluetooth remote
+
+- **Find PCs more reliably:** Local-network remote control now uses a stable TCP port alongside UDP discovery. Search local network can probe compatible PCs directly, including saved PCs and nearby private-network addresses, so it can recover when UDP broadcasts fail.
+- **Control a Windows PC over Bluetooth:** The Android app can discover and connect to a Windows Starlit host over Bluetooth Classic without requiring a LAN connection for the remote transport. Bluetooth uses the existing encrypted, account-verified pairing and command restrictions; Windows and Android Bluetooth permissions and OS pairing are still required. Other desktop platforms continue to use LAN remote control.
+
+### Account security and playback
+
+- **Manage sign-in credentials:** Signed-in users can change their password or request a verified email-address change in Account > Sign-in & security. Password changes require reauthentication, and email updates retain two-address confirmation.
+- **Compare RTX processing on Windows:** While RTX Video Super Resolution is requested, the native player now offers a press-and-hold original-video comparison that bypasses and restores the video filter without changing saved playback preferences. NVIDIA App remains the source of truth for driver activation.
+- **Consistent email branding:** Versioned light and dark Starlit wordmarks are available for account and notification email templates.
+
 ### Repository rename compatibility
 
 - **Seamless transition for updated installations:** Before the repository rename, the desktop and Full Android update check still uses `Beelzebub2/nuvio-native`. If GitHub redirects or removes that releases API after the rename, the app checks the fixed `Beelzebub2/starlit` path instead. Existing update channels remain unchanged.
@@ -8,6 +19,8 @@
 
 ### Validation
 
+- Android Full and Play Store, iOS Kotlin, desktop authentication and GitGuardian PR checks passed for the PC-discovery/Bluetooth update. The Windows Bluetooth helper compiled and registered successfully, and desktop remote-protocol tests passed.
+- Physical Android-to-Windows Bluetooth pairing and remote control have **not** been tested end-to-end on devices; hardware validation remains outstanding.
 - Regression coverage exercises old and new repository endpoints, redirect and missing-repository fallback, preservation of rate-limit errors, rejected download URLs, and checksum metadata.
 - The release workflow verifies the version policy, tests the Windows installer and builds the signed Android APKs before publication.
 
