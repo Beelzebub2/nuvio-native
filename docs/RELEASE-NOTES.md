@@ -1,3 +1,31 @@
+## Starlit 1.11.0
+
+### Phone-to-PC controller
+
+- **A dedicated Android PC controller:** Open Settings > PC controller to find a PC through local-network discovery, QR pairing, a direct local address or supported Bluetooth. After pairing, the Remote, Downloads and PCs tabs organize playback controls, eligible desktop downloads and previously paired computers. Connection methods are presented together as clear options.
+- **A separate desktop pairing window:** Settings > Account > Devices > Connect phone opens a modeless Phone remote window with a QR code, setup guidance, local addresses and a six-digit pairing-code comparison. You can keep using the main Starlit window while pairing.
+- **Windows Firewall help inside Starlit:** The desktop checks inbound firewall access without an administrator prompt and can request one Windows administrator approval to add Starlit-only allow rules for TCP 47789 and UDP 47788, limited to Private/Domain networks and the local subnet. Existing block policies are preserved. The UI explains Public network limitations, provides a way to check again or open network settings, and remembers a dismissed one-time startup suggestion.
+- **Local connection requirements:** Remote control needs the same approved account and a reachable local connection. Bluetooth remote currently requires an Android phone and compatible Windows PC. Guest-network isolation, VPNs and Public network restrictions can still prevent discovery.
+
+### MyAnimeList rewatching and lists
+
+- **Recognize rewatches:** On desktop, starting a completed MyAnimeList anime again marks it as rewatching while preserving its Completed status, rating and watched-episode count. You can also change the rewatching state from anime details.
+- **Browse your anime list:** An optional MyAnimeList desktop tab, off by default for each profile, presents statuses such as Watching, Completed and Dropped, with posters, progress, ratings, rewatch badges and refresh.
+- **Keep analytics consistent:** The optional MyAnimeList tab is handled as a library visit in usage diagnostics. No new content-identifying event is introduced.
+
+### Optional diagnostics and analytics
+
+- **Make separate privacy choices:** A first-run consent dialog lets users choose usage statistics and supported crash reporting independently. New installations start with both off; existing crash-reporting preferences are kept. Both settings remain available in Settings > Advanced.
+- **Track versions and reliability when opted in:** Usage analytics can report the Starlit version, platform and limited events such as app opens, screen visits, playback and download outcomes. Watched titles, searches, media URLs, account information and credentials are excluded. The server pseudonymizes a random installation identifier; opting out stops future reporting and discards the local identifier. Stored records have a configured 30-day retention period.
+- **Private OpenObserve processing:** The gateway supports forwarding consented events to the project's self-hosted OpenObserve service. Public ingestion remains disabled until the protected server credentials and HMAC key are configured, so usage events are not yet collected end to end.
+
+### Validation
+
+- Desktop Kotlin compilation and the complete Windows desktop test suite passed after the final integration fixes: 1,907 tests across 301 suites, zero failures, four skipped, from a clean generated test-data directory.
+- Six live non-elevated Windows Firewall inspections completed successfully, each reading 541 inbound rules with zero unreadable port fields. Both generated PowerShell scripts passed syntax validation.
+- Android Full, Android Play Store, desktop authentication, iOS Kotlin and security CI for the PC-controller feature passed before merge; the merged MyAnimeList and diagnostics changes also passed their respective checks.
+- Physical phone-to-PC pairing and real controller use, the elevated Windows administrator approval path and local iOS builds were not tested end to end. Public OpenObserve ingestion is disabled pending secure server configuration.
+
 ## Starlit 1.10.0
 
 ### Safer download storage cleanup
