@@ -2114,4 +2114,9 @@
     <string name="account_credentials_send_confirmation">Enviar confirmações</string>
     <string name="account_credentials_send_code">Enviar código</string>
     <string name="account_credentials_notice_title">Segurança da conta</string>
+    <string name="remote_bluetooth_search">Procurar PCs por Bluetooth</string>
+    <string name="remote_bluetooth_found_devices">PCs Bluetooth próximos</string>
+    <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
+    <string name="remote_bluetooth_host_ready">O comando por Bluetooth está disponível. Emparelha o telemóvel com este PC nas definições Bluetooth e procura PCs no telemóvel.</string>
+    <string name="remote_bluetooth_host_unavailable">O comando por Bluetooth não está disponível neste PC. A ligação pela rede local continua a funcionar.</string>
 </resources>

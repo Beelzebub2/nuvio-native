@@ -979,6 +979,68 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     commandLine(windowsPlayerBridgeCommand)
 }
 
+// Windows RFCOMM host runs in a small isolated native helper. Unlike the
+// playback bridge it has no libmpv/WebView2 dependency.
+val windowsBluetoothBridgeSource = layout.projectDirectory.file("src/desktopMain/native/windows/starlit_bluetooth_bridge.cpp")
+val windowsBluetoothBridgeOutput = layout.buildDirectory.file("native/windows/starlit_bluetooth_bridge.exe")
+val windowsBluetoothBridgeObject = layout.buildDirectory.file("native/windows/starlit_bluetooth_bridge.obj")
+val windowsBluetoothBridgeScript = layout.buildDirectory.file("native/windows/build-bluetooth-bridge.bat")
+val bluetoothCompile = listOf(
+    "cl", "/nologo", "/EHsc", "/std:c++17", "/O2", "/MT",
+    "/DWIN32_LEAN_AND_MEAN", "/DNOMINMAX",
+    cmdQuote(windowsBluetoothBridgeSource.asFile.absolutePath),
+    "/Fo${cmdQuote(windowsBluetoothBridgeObject.get().asFile.absolutePath)}",
+    "/Fe${cmdQuote(windowsBluetoothBridgeOutput.get().asFile.absolutePath)}",
+    "/link", "/NOLOGO", "Ws2_32.lib",
+).joinToString(" ")
+val buildWindowsBluetoothBridge = tasks.register<Exec>("buildWindowsBluetoothBridge") {
+    notCompatibleWithConfigurationCache("Uses the installed Visual Studio toolchain.")
+    enabled = isWindowsHost
+    inputs.file(windowsBluetoothBridgeSource)
+    outputs.file(windowsBluetoothBridgeOutput)
+    outputs.file(windowsBluetoothBridgeObject)
+    val commandTemplate = bluetoothCompile.replace("\"", "__DQ__")
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        """
+        ${'$'}ErrorActionPreference = 'Stop'
+        ${'$'}dq = [char]34
+        ${'$'}vcvars = ${psSingleQuote(windowsVcvarsPath.orEmpty())}
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars)) {
+          ${'$'}vswhere = ${psSingleQuote(windowsVsWhere.absolutePath)}
+          if (Test-Path -LiteralPath ${'$'}vswhere) {
+            ${'$'}vcvars = & ${'$'}vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find ${psSingleQuote(windowsVcvarsRelativePath)} | Select-Object -First 1
+          }
+        }
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars) -or -not (Test-Path -LiteralPath ${'$'}vcvars)) {
+          Write-Error 'MSVC C++ compiler is needed to build the Windows Bluetooth remote host.'
+          exit 1
+        }
+        ${'$'}vcvars = ([string]${'$'}vcvars).Trim()
+        ${'$'}bat = ${psSingleQuote(windowsBluetoothBridgeScript.get().asFile.absolutePath)}
+        ${'$'}compile = ${psSingleQuote(commandTemplate)}.Replace('__DQ__', ${'$'}dq)
+        ${'$'}lines = @(
+          '@echo off',
+          ('set {0}VCVARS={1}{0}' -f ${'$'}dq, ${'$'}vcvars),
+          ('call {0}%VCVARS%{0} >nul' -f ${'$'}dq),
+          'if errorlevel 1 exit /b %errorlevel%',
+          ${'$'}compile,
+          'exit /b %ERRORLEVEL%'
+        )
+        Set-Content -LiteralPath ${'$'}bat -Value ${'$'}lines -Encoding ASCII
+        & cmd.exe /d /c ${'$'}bat
+        exit ${'$'}LASTEXITCODE
+        """.trimIndent(),
+    )
+}
+
+tasks.withType<Copy>().configureEach {
+    if (isWindowsHost && name == "desktopProcessResources") {
+        dependsOn(buildWindowsBluetoothBridge)
+        from(windowsBluetoothBridgeOutput) { into("native/windows") }
+    }
+}
+
 val prepareWindowsPlayerRuntime = tasks.register<Sync>("prepareWindowsPlayerRuntime") {
     enabled = isWindowsHost
     into(windowsPlayerRuntimeOutput)

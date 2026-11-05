@@ -1,3 +1,43 @@
+## Starlit 1.10.0
+
+### Safer download storage cleanup
+
+- **Find older downloaded episodes to review:** Downloads > Storage management can suggest completed episodes that have not been watched recently, making it easier to free space without searching through every file.
+- **You stay in control:** Suggestions never delete anything automatically. Review each candidate and explicitly confirm a removal; Starlit excludes unverified paths, active downloads and files it does not own.
+- **Keep playback data:** Cleaning up a suggested offline file does not erase watch history or change the account library.
+
+### Validation
+
+- The download-cleanup feature's Android Full and Play Store, iOS Kotlin, desktop and security CI checks passed before merge.
+- A clean combined desktop build passed the complete `:composeApp:desktopTest` suite. Device-level storage and filesystem acceptance testing is still recommended.
+- The official release workflow verifies release notes and version policy, builds and tests the Windows installer and signed Android APKs, checks checksums, and publishes only after required jobs succeed.
+
+## Starlit 1.9.2
+
+### PC discovery and Bluetooth remote
+
+- **Find PCs more reliably:** Local-network remote control now uses a stable TCP port alongside UDP discovery. Search local network can probe compatible PCs directly, including saved PCs and nearby private-network addresses, so it can recover when UDP broadcasts fail.
+- **Control a Windows PC over Bluetooth:** The Android app can discover and connect to a Windows Starlit host over Bluetooth Classic without requiring a LAN connection for the remote transport. Bluetooth uses the existing encrypted, account-verified pairing and command restrictions; Windows and Android Bluetooth permissions and OS pairing are still required. Other desktop platforms continue to use LAN remote control.
+
+### Account security and playback
+
+- **Manage sign-in credentials:** Signed-in users can change their password or request a verified email-address change in Account > Sign-in & security. Password changes require reauthentication, and email updates retain two-address confirmation.
+- **Compare RTX processing on Windows:** While RTX Video Super Resolution is requested, the native player now offers a press-and-hold original-video comparison that bypasses and restores the video filter without changing saved playback preferences. NVIDIA App remains the source of truth for driver activation.
+- **Consistent email branding:** Versioned light and dark Starlit wordmarks are available for account and notification email templates.
+
+### Repository rename compatibility
+
+- **Seamless transition for updated installations:** Before the repository rename, the desktop and Full Android update check still uses `Beelzebub2/nuvio-native`. If GitHub redirects or removes that releases API after the rename, the app checks the fixed `Beelzebub2/starlit` path instead. Existing update channels remain unchanged.
+- **Support both installer paths:** The desktop downloader accepts release URLs from either repository name while retaining strict HTTPS/GitHub-host restrictions and SHA-256 installer verification. The installer, app data, package IDs and account configuration are unchanged.
+- **Staged migration:** Publish this compatibility release under the original repository name before completing the separate rename. Desktop installations that skip this release may still require a one-time manual update after the rename.
+
+### Validation
+
+- Android Full and Play Store, iOS Kotlin, desktop authentication and GitGuardian PR checks passed for the PC-discovery/Bluetooth update. The Windows Bluetooth helper compiled and registered successfully, and desktop remote-protocol tests passed.
+- Physical Android-to-Windows Bluetooth pairing and remote control have **not** been tested end-to-end on devices; hardware validation remains outstanding.
+- Regression coverage exercises old and new repository endpoints, redirect and missing-repository fallback, preservation of rate-limit errors, rejected download URLs, and checksum metadata.
+- The release workflow verifies the version policy, tests the Windows installer and builds the signed Android APKs before publication.
+
 ## Starlit 1.9.1
 
 ### Interface refinements

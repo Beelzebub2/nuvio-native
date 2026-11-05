@@ -4,7 +4,7 @@ internal actual fun createDesktopRemoteTransport(): DesktopRemoteTransport = obj
     override val supported = false
     override fun start(account: RemoteAccount, host: Boolean) {}
     override fun stop() {}
-    override fun discover(localIp: String?) {}
+    override fun discover(localIp: String?, deepScan: Boolean) {}
     override fun connect(desktop: RemoteDesktop) {}
     override fun confirmPairing() {}
     override fun disconnect() {}

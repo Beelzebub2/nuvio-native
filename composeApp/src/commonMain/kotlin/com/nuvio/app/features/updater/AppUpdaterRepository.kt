@@ -1,6 +1,7 @@
 package com.nuvio.app.features.updater
 
 import com.nuvio.app.features.addons.httpRequestRaw
+import com.nuvio.app.features.addons.RawHttpResponse
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerialName
@@ -68,15 +69,21 @@ internal object AppUpdaterRepository {
 
     suspend fun getLatestChannelUpdate(channel: UpdateChannel): Result<AppUpdate> = runCatching {
         val source = AppUpdaterPlatform.releaseSource
-        val response = httpRequestRaw(
-            method = "GET",
-            url = "https://api.github.com/repos/${source.owner}/${source.repo}/${releasePath(channel)}",
-            headers = mapOf(
-                "Accept" to "application/vnd.github+json",
-                "User-Agent" to source.userAgent,
-            ) + AppUpdaterPlatform.releaseRequestHeaders(),
-            body = "",
-        )
+        val response = fetchReleaseMetadata(
+            source = source,
+            channel = channel,
+            additionalHeaders = AppUpdaterPlatform.releaseRequestHeaders(),
+        ) { url, headers ->
+            httpRequestRaw(
+                method = "GET",
+                url = url,
+                headers = headers,
+                body = "",
+                // GitHub redirects the old API path after a repository rename.
+                // Retry only the explicitly configured new path, not an arbitrary Location.
+                followRedirects = false,
+            )
+        }
         currentCoroutineContext().ensureActive()
         if (response.status == 404) {
             if (source.privateRepository) error("No private release is visible. Check your GitHub sign-in and repository access.")
@@ -93,6 +100,36 @@ internal object AppUpdaterRepository {
             useApiAssetUrls = source.privateRepository,
         )
             ?: throw NoChannelReleaseException()
+    }
+
+    /**
+     * The compatibility release must first be published under the old repository name.
+     * When GitHub redirects or removes that API path after the rename, retry the
+     * known new repository. Other errors (including rate limits) are not masked.
+     */
+    internal suspend fun fetchReleaseMetadata(
+        source: AppUpdateReleaseSource,
+        channel: UpdateChannel,
+        additionalHeaders: Map<String, String> = emptyMap(),
+        request: suspend (url: String, headers: Map<String, String>) -> RawHttpResponse,
+    ): RawHttpResponse {
+        val repositories = (listOf(source.repo) + source.fallbackRepositories).distinct()
+        val headers = mapOf(
+            "Accept" to "application/vnd.github+json",
+            "User-Agent" to source.userAgent,
+        ) + additionalHeaders
+        for ((index, repo) in repositories.withIndex()) {
+            val response = request(
+                "https://api.github.com/repos/${source.owner}/$repo/${releasePath(channel)}",
+                headers,
+            )
+            if (index == repositories.lastIndex ||
+                response.status !in setOf(301, 302, 307, 308, 404)
+            ) {
+                return response
+            }
+        }
+        error("No release repositories configured")
     }
 
     internal fun releasePath(channel: UpdateChannel): String = when (channel) {

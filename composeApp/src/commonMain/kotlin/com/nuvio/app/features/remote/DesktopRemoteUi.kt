@@ -83,9 +83,11 @@ internal fun DesktopRemoteDialogs(
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
     val desktops by DesktopRemote.desktops.collectAsState()
+    val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val playback by DesktopRemote.remotePlayback.collectAsState()
     val hostReady by DesktopRemote.hostReady.collectAsState()
+    val bluetoothHostReady by DesktopRemote.bluetoothHostReady.collectAsState()
     // Reopening after Wi-Fi/DHCP changes refreshes both the QR and its manual-IP fallback.
     val hostAddresses = remember(visible, hostReady) {
         if (desktopLayout && visible) localAddresses() else emptyList()
@@ -150,6 +152,12 @@ internal fun DesktopRemoteDialogs(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
+                    if (hostReady) {
+                        DialogHint(
+                            if (bluetoothHostReady) stringResource(Res.string.remote_bluetooth_host_ready)
+                            else stringResource(Res.string.remote_bluetooth_host_unavailable),
+                        )
+                    }
                 } else if (!DesktopRemote.transport.supported) {
                     RemoteStatusPanel(stringResource(Res.string.remote_pc_unsupported), connected = false)
                 } else {
@@ -172,8 +180,9 @@ internal fun DesktopRemoteDialogs(
                         icon = Icons.Rounded.Refresh,
                         enabled = !scanning,
                         modifier = Modifier.fillMaxWidth().testTag("desktop-remote-search-local-network"),
-                        onClick = { DesktopRemote.transport.discover() },
+                        onClick = { DesktopRemote.transport.discover(deepScan = true) },
                     )
+                    RemoteBluetoothSearchButton(enabled = true)
                     if (scanning) {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
@@ -192,8 +201,20 @@ internal fun DesktopRemoteDialogs(
                                 )
                             }
                         }
-                    } else if (!scanning && !connected) {
+                    } else if (!scanning && !connected && bluetoothDesktops.isEmpty()) {
                         DialogHint(stringResource(Res.string.remote_pc_no_devices_hint))
+                    }
+                    if (bluetoothDesktops.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            DialogSectionLabel(stringResource(Res.string.remote_bluetooth_found_devices))
+                            bluetoothDesktops.forEach { desktop ->
+                                RemoteDeviceRow(
+                                    name = desktop.name,
+                                    address = stringResource(Res.string.remote_bluetooth_device, desktop.address),
+                                    onClick = { DesktopRemote.transport.connect(desktop) },
+                                )
+                            }
+                        }
                     }
                     if (connected) {
                         RemotePlaybackControls(playback)

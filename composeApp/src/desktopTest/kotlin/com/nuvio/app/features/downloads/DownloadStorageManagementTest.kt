@@ -11,6 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DownloadStorageManagementTest {
+<<<<<<< HEAD
     @Test
     fun hardQuotaBlocksOversizedKnownDownloadsButAllowsExactlyTheRemainingBudget() {
         val root = File("unused")
@@ -75,6 +76,8 @@ class DownloadStorageManagementTest {
         assertTrue(quotaAllowsDownloadStart(cleaned, emptySet(), "next", 1_000L))
         assertEquals(400L, projectedDownloadQuotaBytes(cleaned, setOf("next")))
     }
+=======
+>>>>>>> origin/Dev
     private fun progress(
         metaId: String,
         episode: Int,
