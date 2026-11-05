@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -170,6 +171,7 @@ internal fun MainTabsDestination(
             0.dp
         }
         val navBarGlowEnabled by ThemeSettingsRepository.navBarGlowEnabled.collectAsStateWithLifecycle()
+        val showMyAnimeListTab = com.nuvio.app.features.myanimelist.MyAnimeListTabVisible()
         var isTopProfileSwitcherOpen by remember { mutableStateOf(false) }
         val floatingNavigationItems = buildList {
             addAll(listOf(
@@ -210,9 +212,10 @@ internal fun MainTabsDestination(
             ),
             ))
         }
-        // Desktop: three labelled tabs; Watch Later lives inside Library and Settings/profile
-        // move to the right side of the bar.
-        val desktopTopBarItems = listOf(
+        // Desktop: three standard labelled tabs, plus optional MyAnimeList.
+        // Watch Later lives inside Library; Settings/profile sit to the right.
+        val desktopTopBarItems = buildList {
+            addAll(listOf(
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Home,
                 onClick = { onTabSelected(AppScreenTab.Home) },
@@ -231,7 +234,16 @@ internal fun MainTabsDestination(
                 drawable = Res.drawable.sidebar_library,
                 label = stringResource(Res.string.compose_nav_library),
             ),
-        )
+            ))
+            if (showMyAnimeListTab) {
+                add(FloatingNavigationItem(
+                    selected = selectedTab == AppScreenTab.MyAnimeList,
+                    onClick = { onTabSelected(AppScreenTab.MyAnimeList) },
+                    icon = Icons.AutoMirrored.Filled.PlaylistAddCheck,
+                    label = "MyAnimeList",
+                ))
+            }
+        }
 
         Scaffold(
             modifier = Modifier
@@ -314,6 +326,7 @@ internal fun MainTabsDestination(
                     DesktopHoverSidebar(
                         selectedTab = selectedTab,
                         onTabSelected = onTabSelected,
+                        showMyAnimeListTab = showMyAnimeListTab,
                         onProfileSelected = onProfileSelected,
                         onAddProfileRequested = onAddProfileRequested,
                         sidebarExpanded = isSidebarExpanded,

@@ -1,3 +1,17 @@
+## Starlit 1.10.0
+
+### Safer download storage cleanup
+
+- **Find older downloaded episodes to review:** Downloads > Storage management can suggest completed episodes that have not been watched recently, making it easier to free space without searching through every file.
+- **You stay in control:** Suggestions never delete anything automatically. Review each candidate and explicitly confirm a removal; Starlit excludes unverified paths, active downloads and files it does not own.
+- **Keep playback data:** Cleaning up a suggested offline file does not erase watch history or change the account library.
+
+### Validation
+
+- The download-cleanup feature's Android Full and Play Store, iOS Kotlin, desktop and security CI checks passed before merge.
+- A clean combined desktop build passed the complete `:composeApp:desktopTest` suite. Device-level storage and filesystem acceptance testing is still recommended.
+- The official release workflow verifies release notes and version policy, builds and tests the Windows installer and signed Android APKs, checks checksums, and publishes only after required jobs succeed.
+
 ## Starlit 1.9.2
 
 ### PC discovery and Bluetooth remote

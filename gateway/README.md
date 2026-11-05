@@ -57,6 +57,89 @@ the token only in an upstream Bearer header. No app rebuild is needed after setu
 The previous Worker had no TMDB token configured; the migration preserves that
 state. A missing token skips TMDB without imposing a cooldown or preventing TVmaze.
 
+## Opt-in usage diagnostics
+
+The VPS Node gateway exposes `POST /telemetry/events` for opted-in clients. It
+accepts only fixed event names, platform, app version and a random 128-bit
+installation ID. It rejects unknown fields and any media, account, search or
+URL data. The ID is HMAC-hashed **on the gateway** before being sent to the
+separate, private `starlit_usage` logs stream in the self-hosted OpenObserve
+instance. Raw IDs, IP addresses, user agents, request headers and URLs are not
+exported. Crash reporting remains an independent Sentry opt-in.
+
+Configure these server-only variables in the existing root-private
+`/etc/starlit/runtime.env` (mode 0600):
+
+- `TELEMETRY_HMAC_KEY`: a stable random secret of at least 32 characters.
+  Changing it changes pseudonymous identifiers and distinct-installation counts.
+- `OPENOBSERVE_INGEST_URL`: the **server-reachable** JSON logs endpoint, such as
+  `http://openobserve:5080/api/default/starlit_usage/_json` on a private Docker
+  network, or an HTTPS endpoint. Do not point container traffic at the public
+  Cloudflare Access dashboard login page.
+- `OPENOBSERVE_INGEST_AUTH`: `Basic <base64(username:ingest-token)>` from a
+  dedicated OpenObserve ingestion-only credential. Keep it in the server env;
+  never place it in app builds, logs, source, or public Cloudflare configuration.
+
+The gateway returns 503 with no outbound request unless all three settings
+are valid. It returns 202 only when OpenObserve confirms the record was ingested.
+In the VPS `backend/vps/compose.yml`, the `metadata` service's `environment:`
+must explicitly forward all three values from the runtime env. Merely adding
+them to `/etc/starlit/runtime.env` does not pass them into the container:
+
+```yaml
+OPENOBSERVE_INGEST_URL: ${OPENOBSERVE_INGEST_URL:-}
+OPENOBSERVE_INGEST_AUTH: ${OPENOBSERVE_INGEST_AUTH:-}
+TELEMETRY_HMAC_KEY: ${TELEMETRY_HMAC_KEY:-}
+```
+
+Recreate just the `metadata` service with the existing Compose deployment
+procedure and `--env-file /etc/starlit/runtime.env`; do not log environment
+values. The deployment currently uses `network_mode: host`, so
+`http://127.0.0.1:5080/api/default/starlit_usage/_json` reaches OpenObserve
+without exposing its ingest port publicly.
+
+OpenObserve errors or a four-second timeout return 502; the app treats analytics
+as best-effort. A four-request concurrency budget, per-installation minute cap,
+and 100,000-event daily process cap keep telemetry from starving provider
+requests. Configure edge IP rate limits too, because client installation IDs are
+unauthenticated. Existing GET routes and the old `workers.dev` compatibility
+shim are unchanged; the shim does not forward telemetry POST requests.
+
+**Retention:** Set the `starlit_usage` stream's data retention to **30 days** in
+OpenObserve. The collector no longer writes JSONL files and does not expose an
+operator summary endpoint. Restrict stream access to authorized operators.
+In the OpenObserve Logs or Dashboard interface, select `starlit_usage` and query:
+
+```sql
+SELECT version, platform,
+       COUNT(DISTINCT installation_hash) AS active_installations,
+       COUNT(*) AS app_opens
+FROM "starlit_usage"
+WHERE event = 'app_open'
+GROUP BY version, platform
+ORDER BY active_installations DESC;
+```
+
+For feature usage, query `SELECT event, COUNT(*) AS events FROM "starlit_usage"
+GROUP BY event ORDER BY events DESC`. Choose the 1–30 day time window in the
+OpenObserve UI. These are *consenting active installations*, not all users or
+unique real people.
+
+**Deployment:** Nginx must forward `/gateway/telemetry/` to the metadata Node
+service after stripping `/gateway/`. Ensure the metadata container can reach
+OpenObserve over a private route before releasing new clients. Test both the
+public telemetry endpoint and the stream query; exclude request bodies and IDs
+from reverse-proxy logs. Keep the OpenObserve UI protected by Cloudflare Access.
+
+The VPS's existing generic `/gateway/` Nginx location disables request bodies
+for its read-only metadata providers (`proxy_pass_request_body off` and an empty
+`Content-Length`). **Do not reuse it for the telemetry POST:** add a more-specific
+`/gateway/telemetry/` location which forwards request bodies to
+`http://127.0.0.1:8790/telemetry/`, keeps the original client-IP rate limit and
+does not log bodies. Apply a small request body cap (such as 2 KiB), check with
+`nginx -t`, and verify that existing metadata GET routes still work. Otherwise
+the collector will receive an empty body and reject opted-in events with 400.
+
 The app's existing TMDB settings remain for its separate, optional general
 metadata enrichment. That local API-key setting does **not** configure the gateway
 or automatically upload a credential. This fallback requires the server token

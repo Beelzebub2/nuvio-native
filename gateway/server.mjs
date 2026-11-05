@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { handleRequest } from './worker.mjs';
+import { handleTelemetryRequest, OpenObserveTelemetry } from './openobserve-telemetry.mjs';
 
 // Process-local metadata only: eviction or restart never loses account data.
 export class MemoryCache {
@@ -41,9 +42,38 @@ export class MemoryCache {
   }
 }
 
-export function createGatewayServer({ cache = new MemoryCache(), fetcher = fetch, tmdbToken = '' } = {}) {
+export function createGatewayServer({
+  cache = new MemoryCache(), fetcher = fetch, tmdbToken = '',
+  telemetryReporter = new OpenObserveTelemetry({
+    ingestUrl: process.env.OPENOBSERVE_INGEST_URL,
+    authorization: process.env.OPENOBSERVE_INGEST_AUTH,
+    hashKey: process.env.TELEMETRY_HMAC_KEY,
+  }),
+} = {}) {
   let active = 0;
+  let telemetryActive = 0;
   const server = createServer({ maxHeaderSize: 16 * 1024 }, async (incoming, outgoing) => {
+    if (!incoming.url?.startsWith('/') || incoming.url.startsWith('//')) {
+      outgoing.writeHead(400); outgoing.end(); return;
+    }
+    // Telemetry runs in its own small concurrency budget: diagnostic bursts must
+    // never crowd out the metadata routes used by browsing and playback.
+    if (incoming.url.startsWith('/telemetry/')) {
+      if (telemetryActive >= 4) {
+        outgoing.writeHead(429, { 'Retry-After': '2', 'Cache-Control': 'no-store' });
+        outgoing.end();
+        return;
+      }
+      telemetryActive++;
+      try {
+        await handleTelemetryRequest(incoming, outgoing, { reporter: telemetryReporter });
+      } catch (error) {
+        console.error(JSON.stringify({ event: 'gateway_telemetry_failed', name: error.name }));
+        if (!outgoing.headersSent) outgoing.writeHead(500, { 'Cache-Control': 'no-store' });
+        outgoing.end();
+      } finally { telemetryActive--; }
+      return;
+    }
     if (active >= 8) {
       outgoing.writeHead(503, { 'Retry-After': '1', 'Cache-Control': 'no-store' });
       outgoing.end();
@@ -55,9 +85,6 @@ export function createGatewayServer({ cache = new MemoryCache(), fetcher = fetch
         outgoing.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' }); outgoing.end(); return;
       }
       // Ignore Host/forwarded headers so all requests share the same cache origin.
-      if (!incoming.url.startsWith('/') || incoming.url.startsWith('//')) {
-        outgoing.writeHead(400); outgoing.end(); return;
-      }
       const request = new Request(`http://gateway.internal${incoming.url}`, { method: incoming.method });
       const pending = [];
       const response = await handleRequest(request, { waitUntil: task => pending.push(task) }, { cache, fetcher, tmdbToken });

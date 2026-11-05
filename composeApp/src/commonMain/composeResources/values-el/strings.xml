@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Αποστολή αναφορών σφαλμάτων και ANR με ασφαλές πλαίσιο. Ανενεργό μέχρι να το ενεργοποιήσετε.</string>
     <string name="about_supporters_contributors_subtitle">Δημόσια αναγνώριση και συντελεστές του έργου</string>
     <string name="action_back">Πίσω</string>
     <string name="action_cancel">Άκυρο</string>
@@ -380,7 +381,6 @@
     <string name="settings_account_status_signed_in">Συνδεδεμένος</string>
     <string name="settings_advanced_section_diagnostics">ΔΙΑΓΝΩΣΤΙΚΑ</string>
     <string name="settings_advanced_sentry_reports">Αναφορές σφαλμάτων Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Αποστολή αναφορών σφαλμάτων και ANR με ασφαλές πλαίσιο. Ενεργό από προεπιλογή.</string>
     <string name="settings_appearance_amoled_black">AMOLED Μαύρο</string>
     <string name="settings_appearance_amoled_description">Χρήση καθαρού μαύρου φόντου για οθόνες OLED.</string>
     <string name="settings_appearance_app_icon">Εικονίδιο εφαρμογής</string>
