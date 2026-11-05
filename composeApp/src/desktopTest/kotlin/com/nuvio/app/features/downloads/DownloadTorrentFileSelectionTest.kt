@@ -111,16 +111,16 @@ class DownloadTorrentFileSelectionTest {
 
     @Test fun animeAbsoluteNumberIsUsedOnlyWhenCatalogueTitleExplicitlyProvidesOne() {
         val files = listOf(
-            TorrServerFile(8, "KONOSUBA Season 3/[Group] KONOSUBA - 24 [1080p].mkv", 100),
-            TorrServerFile(19, "KONOSUBA Season 3/[Group] KONOSUBA - 25 [1080p].mkv", 120),
+            TorrServerFile(8, "SAMPLE SHOW Season 3/[Group] SAMPLE SHOW - 24 [1080p].mkv", 100),
+            TorrServerFile(19, "SAMPLE SHOW Season 3/[Group] SAMPLE SHOW - 25 [1080p].mkv", 120),
         )
-        val absolute = downloadAbsoluteEpisode("25. A Smile for This Dour Girl!")
+        val absolute = downloadAbsoluteEpisode("25. Sample Episode Title")
         assertEquals(25, absolute)
         assertEquals(19, selectDownloadTorrentFile(files, 0, "Season 3 pack", 3, 2, absolute, requireStrongEpisodeEvidence = true).id)
         assertFailsWith<DownloadTorrentFileSelectionException> {
             selectDownloadTorrentFile(files, null, "Season 3 pack", 3, 2)
         }
-        assertNull(downloadAbsoluteEpisode("A Smile for This Dour Girl!"))
+        assertNull(downloadAbsoluteEpisode("Sample Episode Title"))
     }
 
     @Test fun alternateProviderMetadataAndCanonicalPathAreAcceptedWithoutUnsafeIndices() {
