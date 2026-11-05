@@ -1,4 +1,15 @@
 <resources>
+    <string name="settings_advanced_usage_analytics">Estatísticas de utilização anónimas</string>
+    <string name="settings_advanced_usage_analytics_subtitle">Partilha a versão, a plataforma e contagens gerais de funcionalidades. Desativado até autorizares.</string>
+    <string name="diagnostics_consent_title">Ajuda a melhorar o Starlit</string>
+    <string name="diagnostics_consent_description">Escolhe os dados que queres partilhar, se quiseres. Ambas as opções estão desativadas por predefinição e podem ser alteradas em Definições → Avançado.</string>
+    <string name="diagnostics_consent_usage">Estatísticas de utilização anónimas</string>
+    <string name="diagnostics_consent_usage_detail">Versão da aplicação, plataforma do dispositivo e frequência de utilização dos ecrãs, reprodução e transferências.</string>
+    <string name="diagnostics_consent_crashes">Relatórios de falhas e erros</string>
+    <string name="diagnostics_consent_crashes_detail">Detalhes técnicos e rastos de erros ajudam-nos a corrigir problemas.</string>
+    <string name="diagnostics_consent_privacy">As estatísticas não incluem títulos, pesquisas, identificadores de conta nem endereços de streams. Um identificador aleatório permite contar as versões ativas e é reposto quando desativas a opção. Os dados são conservados até 30 dias.</string>
+    <string name="diagnostics_consent_not_now">Não, obrigado</string>
+    <string name="diagnostics_consent_save">Guardar escolhas</string>
     <string name="auth_google_sign_in">Iniciar sessão com o Google</string>
     <string name="auth_google_sign_up">Registar com o Google</string>
     <string name="auth_google_approval_notice">As novas contas continuam a precisar de aprovação.</string>

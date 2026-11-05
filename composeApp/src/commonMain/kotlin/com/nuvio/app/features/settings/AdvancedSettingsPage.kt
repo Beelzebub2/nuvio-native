@@ -15,6 +15,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.diagnostics.DiagnosticsConsent
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
 import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogButtonStyle
@@ -43,6 +45,8 @@ import nuvio.composeapp.generated.resources.settings_advanced_section_discord
 import nuvio.composeapp.generated.resources.settings_advanced_section_startup
 import nuvio.composeapp.generated.resources.settings_advanced_section_windows_graphics
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports
+import nuvio.composeapp.generated.resources.settings_advanced_usage_analytics
+import nuvio.composeapp.generated.resources.settings_advanced_usage_analytics_subtitle
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle
 import nuvio.composeapp.generated.resources.settings_advanced_sentry_reports_subtitle_desktop
 import nuvio.composeapp.generated.resources.sentry_disable_dialog_subtitle
@@ -115,8 +119,11 @@ internal fun LazyListScope.advancedSettingsContent(
             }
         }
     }
-    if (SentrySettingsRepository.isSupported) {
-        item {
+    item {
+            val diagnosticsConsent by remember {
+                UsageDiagnostics.ensureLoaded()
+                UsageDiagnostics.consent
+            }.collectAsStateWithLifecycle()
             val sentryEnabledFlow = remember {
                 SentrySettingsRepository.ensureLoaded()
                 SentrySettingsRepository.enabled
@@ -130,22 +137,31 @@ internal fun LazyListScope.advancedSettingsContent(
             ) {
                 SettingsGroup(isTablet = isTablet) {
                     SettingsSwitchRow(
-                        title = stringResource(Res.string.settings_advanced_sentry_reports),
-                        description = stringResource(
-                            if (SentrySettingsPlatform.usesDesktopCopy) {
-                                Res.string.settings_advanced_sentry_reports_subtitle_desktop
-                            } else {
-                                Res.string.settings_advanced_sentry_reports_subtitle
-                            },
-                        ),
-                        checked = sentryEnabled,
+                        title = stringResource(Res.string.settings_advanced_usage_analytics),
+                        description = stringResource(Res.string.settings_advanced_usage_analytics_subtitle),
+                        checked = diagnosticsConsent == DiagnosticsConsent.Enabled,
                         isTablet = isTablet,
-                        onCheckedChange = { showSentryDialog = true },
+                        onCheckedChange = UsageDiagnostics::setEnabled,
                     )
+                    if (SentrySettingsRepository.isSupported) {
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_advanced_sentry_reports),
+                            description = stringResource(
+                                if (SentrySettingsPlatform.usesDesktopCopy) {
+                                    Res.string.settings_advanced_sentry_reports_subtitle_desktop
+                                } else {
+                                    Res.string.settings_advanced_sentry_reports_subtitle
+                                },
+                            ),
+                            checked = sentryEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = { showSentryDialog = true },
+                        )
+                    }
                 }
             }
 
-            if (showSentryDialog) {
+            if (showSentryDialog && SentrySettingsRepository.isSupported) {
                 SentrySettingsDialog(
                     enabled = sentryEnabled,
                     onConfirm = {
@@ -156,7 +172,6 @@ internal fun LazyListScope.advancedSettingsContent(
                     },
                 )
             }
-        }
     }
     if (DiscordRichPresenceRepository.isSupported) {
         item {

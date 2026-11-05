@@ -57,6 +57,49 @@ the token only in an upstream Bearer header. No app rebuild is needed after setu
 The previous Worker had no TMDB token configured; the migration preserves that
 state. A missing token skips TMDB without imposing a cooldown or preventing TVmaze.
 
+## Opt-in anonymous diagnostics
+
+The VPS Node gateway also exposes `POST /telemetry/events`, accepting only fixed
+event names, a platform, the app version and a 128-bit pseudonymous installation
+ID. It rejects extra fields, arbitrary properties and media/account data. Raw IDs,
+IPs, user agents and URLs are not stored by the telemetry module. IDs are HMAC
+hashed before durable storage. Reporting is disabled in the client until the
+user explicitly opts in, and crash reporting has an independent opt-in.
+
+In the existing root-private VPS runtime environment, configure all three:
+
+- `TELEMETRY_DATA_DIR`: durable *writable* volume path, e.g.
+  `/var/lib/starlit-telemetry`. Mount this directory into the metadata container
+  and restrict it to the service UID (directory 0700, files 0600).
+- `TELEMETRY_HMAC_KEY`: a new random secret of at least 32 characters. Keep it
+  stable across restarts so daily active installations can be deduplicated.
+- `TELEMETRY_ADMIN_TOKEN`: independent random bearer token of at least 24
+  characters, only for the operator. Never include it in a client build.
+
+Generate secrets outside the source tree (for example, using `openssl rand -hex 32`)
+and avoid putting them in command history or logs. The gateway returns 503 for
+telemetry ingestion when the directory or HMAC key is missing. Keep the metadata
+service at **one instance per data directory**: rollup writes are serialized in a
+single Node process. Existing GET provider routes remain unchanged. The old
+`workers.dev` compatibility shim does not forward telemetry POST requests.
+
+View consented active versions, platforms and event counts using an authenticated
+`GET /gateway/telemetry/admin/summary?days=7` against
+`https://starlit-api.rrmtools.uk`, with header
+`Authorization: Bearer <operator-token>`. The `days` parameter accepts 1–30.
+`activeInstallations` counts distinct pseudonymous IDs within the period, not
+all Starlit users or unique real people. No account information is needed.
+The server rotates out per-day records after approximately 30 days.
+
+**Deployment note:** Nginx must forward the `/gateway/telemetry/` prefix to
+this VPS Node service after removing `/gateway/`, as with existing gateway
+paths. Ensure the container's durable volume and environment are present before
+shipping clients; otherwise events will be discarded safely. Validate the admin
+route requires a token, then send a synthetic consented event and inspect the
+summary. Exclude `/gateway/telemetry/` from body logging and avoid storing
+installation IDs in reverse-proxy logs. Do not publish the operator token or
+aggregates as a public dashboard.
+
 The app's existing TMDB settings remain for its separate, optional general
 metadata enrichment. That local API-key setting does **not** configure the gateway
 or automatically upload a credential. This fallback requires the server token

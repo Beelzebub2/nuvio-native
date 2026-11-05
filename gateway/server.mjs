@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { handleRequest } from './worker.mjs';
+import { handleTelemetryRequest, TelemetryStore } from './telemetry.mjs';
 
 // Process-local metadata only: eviction or restart never loses account data.
 export class MemoryCache {
@@ -41,7 +42,14 @@ export class MemoryCache {
   }
 }
 
-export function createGatewayServer({ cache = new MemoryCache(), fetcher = fetch, tmdbToken = '' } = {}) {
+export function createGatewayServer({
+  cache = new MemoryCache(), fetcher = fetch, tmdbToken = '',
+  telemetryStore = new TelemetryStore({
+    directory: process.env.TELEMETRY_DATA_DIR,
+    hashKey: process.env.TELEMETRY_HMAC_KEY,
+  }),
+  telemetryAdminToken = process.env.TELEMETRY_ADMIN_TOKEN || '',
+} = {}) {
   let active = 0;
   const server = createServer({ maxHeaderSize: 16 * 1024 }, async (incoming, outgoing) => {
     if (active >= 8) {
@@ -51,13 +59,16 @@ export function createGatewayServer({ cache = new MemoryCache(), fetcher = fetch
     }
     active++;
     try {
+      if (!incoming.url?.startsWith('/') || incoming.url.startsWith('//')) {
+        outgoing.writeHead(400); outgoing.end(); return;
+      }
+      if (await handleTelemetryRequest(incoming, outgoing, {
+        store: telemetryStore, adminToken: telemetryAdminToken,
+      })) return;
       if (incoming.method !== 'GET') {
         outgoing.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' }); outgoing.end(); return;
       }
       // Ignore Host/forwarded headers so all requests share the same cache origin.
-      if (!incoming.url.startsWith('/') || incoming.url.startsWith('//')) {
-        outgoing.writeHead(400); outgoing.end(); return;
-      }
       const request = new Request(`http://gateway.internal${incoming.url}`, { method: incoming.method });
       const pending = [];
       const response = await handleRequest(request, { waitUntil: task => pending.push(task) }, { cache, fetcher, tmdbToken });
