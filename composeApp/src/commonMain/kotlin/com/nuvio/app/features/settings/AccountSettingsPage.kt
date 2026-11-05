@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +42,7 @@ import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +70,12 @@ import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.network.SupabaseProvider
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.CancellationException
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogTextField
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.GoogleBrandMark
 import com.nuvio.app.core.ui.NuvioStatusModal
@@ -565,27 +570,29 @@ internal fun GoogleAccountLinkCard(
     }
 
     if (showPasswordConfirm) {
-        AlertDialog(
+        DialogSurface(
             onDismissRequest = { if (!busy) { password = ""; showPasswordConfirm = false } },
-            title = { Text(stringResource(Res.string.auth_google_link_button)) },
-            text = {
-                Column {
-                    Text(stringResource(Res.string.auth_google_link_password_prompt))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        label = { Text(stringResource(Res.string.compose_auth_password)) },
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
+            title = stringResource(Res.string.auth_google_link_button),
+            message = stringResource(Res.string.auth_google_link_password_prompt),
+        ) {
+            DialogTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = stringResource(Res.string.compose_auth_password),
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            DialogButtons {
+                DialogButton(
+                    text = stringResource(Res.string.action_cancel),
+                    enabled = !busy,
+                    onClick = { password = ""; showPasswordConfirm = false },
+                )
+                DialogButton(
+                    text = stringResource(Res.string.auth_google_link_button),
+                    style = DialogButtonStyle.Primary,
                     enabled = !busy && password.isNotBlank(),
                     onClick = {
-                        if (busy || password.isBlank()) return@TextButton
+                        if (busy || password.isBlank()) return@DialogButton
                         val confirmationPassword = password
                         password = ""
                         showPasswordConfirm = false
@@ -609,15 +616,9 @@ internal fun GoogleAccountLinkCard(
                             }
                         }
                     },
-                ) { Text(stringResource(Res.string.auth_google_link_button)) }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !busy,
-                    onClick = { password = ""; showPasswordConfirm = false },
-                ) { Text(stringResource(Res.string.action_cancel)) }
-            },
-        )
+                )
+            }
+        }
     }
 }
 
@@ -834,38 +835,51 @@ internal fun PasskeySecurityCard(
     }
 
     if (showPasswordConfirm) {
-        AlertDialog(
+        DialogSurface(
             onDismissRequest = {
                 if (!busy) { password = ""; showPasswordConfirm = false; removing = null }
             },
-            title = { Text(stringResource(if (removing == null) Res.string.auth_add_passkey else Res.string.auth_passkey_remove)) },
-            text = {
-                Column {
-                    if (busy) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                            Text(operationStage, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    } else {
-                        Text(stringResource(if (removing == null)
-                            Res.string.auth_passkey_confirm_password else Res.string.auth_passkey_remove_confirm))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            label = { Text(stringResource(Res.string.compose_auth_password)) },
-                        )
-                    }
+            title = stringResource(if (removing == null) Res.string.auth_add_passkey else Res.string.auth_passkey_remove),
+        ) {
+            if (busy) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.nuvio.shapes.compactCard)
+                        .background(MaterialTheme.nuvio.colors.textPrimary.copy(alpha = MaterialTheme.nuvio.opacity.subtle))
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    NuvioLoadingIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.nuvio.colors.accent)
+                    Text(operationStage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.nuvio.colors.textPrimary)
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (busy || password.isBlank()) return@TextButton
+            } else {
+                Text(
+                    stringResource(if (removing == null)
+                        Res.string.auth_passkey_confirm_password else Res.string.auth_passkey_remove_confirm),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.nuvio.colors.textSecondary,
+                )
+                DialogTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = stringResource(Res.string.compose_auth_password),
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+            }
+            DialogButtons {
+                DialogButton(
+                    text = stringResource(Res.string.action_cancel),
+                    enabled = !busy,
+                    onClick = { password = ""; showPasswordConfirm = false; removing = null },
+                )
+                DialogButton(
+                    text = stringResource(if (removing == null) Res.string.auth_add_passkey else Res.string.auth_passkey_remove),
+                    style = if (removing == null) DialogButtonStyle.Primary else DialogButtonStyle.Destructive,
+                    enabled = !busy && password.isNotBlank(),
+                    onClick = {
+                    if (busy || password.isBlank()) return@DialogButton
                     busy = true
                     val secret = password
                     password = ""
@@ -906,17 +920,10 @@ internal fun PasskeySecurityCard(
                         }
                         showResultModal = true
                     }
-                }, enabled = !busy && password.isNotBlank()) {
-                    Text(if (removing == null) stringResource(Res.string.auth_add_passkey)
-                        else stringResource(Res.string.auth_passkey_remove))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { password = ""; showPasswordConfirm = false; removing = null }, enabled = !busy) {
-                    Text(stringResource(Res.string.action_cancel))
-                }
-            },
-        )
+                    },
+                )
+            }
+        }
     }
     feedback?.let { result ->
         NuvioStatusModal(

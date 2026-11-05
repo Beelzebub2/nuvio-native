@@ -168,6 +168,7 @@ internal fun AddonsSettingsPageContent(
             onAddClick = installAddon,
         )
 
+        SectionHeader(stringResource(Res.string.addons_section_backup))
         AddonBackupCard()
 
         SectionHeader(stringResource(Res.string.addons_section_installed))

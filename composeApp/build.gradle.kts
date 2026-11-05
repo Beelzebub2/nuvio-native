@@ -1372,6 +1372,8 @@ tasks.matching {
 }
 
 tasks.withType<Test>().configureEach {
+    // Robolectric runtime JAR downloads from repo1.maven.org are rate-limited on hosted CI.
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     systemProperty("nuvio.dataDir", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
     systemProperty("nuvio.airingSmoke", providers.gradleProperty("nuvio.airingSmoke").orElse("false").get())
     systemProperty("nuvio.updateSmoke", providers.gradleProperty("nuvio.updateSmoke").orElse("false").get())

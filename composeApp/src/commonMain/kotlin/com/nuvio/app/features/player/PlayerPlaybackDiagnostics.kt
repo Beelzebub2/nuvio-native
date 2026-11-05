@@ -1,24 +1,34 @@
 package com.nuvio.app.features.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.core.ui.nuvio
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -86,75 +96,84 @@ internal fun PlaybackDiagnosticsDialog(
     val data = snapshot.safePlaybackMetrics()
     val network by NetworkStatusRepository.uiState.collectAsState()
     val clipboard = LocalClipboardManager.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.player_diagnostics_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_phase),
-                    stringResource(
-                        when (data.phase) {
-                            SafePlaybackPhase.Ended -> Res.string.player_diagnostics_ended
-                            SafePlaybackPhase.Buffering -> Res.string.player_diagnostics_buffering
-                            SafePlaybackPhase.Playing -> Res.string.player_diagnostics_playing
-                            SafePlaybackPhase.PausedOrIdle -> Res.string.player_diagnostics_paused
-                        },
-                    ),
-                )
-                DiagnosticsLine(stringResource(Res.string.player_diagnostics_resolution), data.resolution)
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_position),
-                    data.positionSeconds.toString() + "s" +
-                        (data.durationSeconds?.let { " / ${it}s" } ?: ""),
-                )
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_buffer),
-                    "${data.bufferAheadSeconds}s",
-                )
-                DiagnosticsLine(stringResource(Res.string.player_diagnostics_speed), "${data.playbackSpeed}×")
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_network_status),
-                    stringResource(
-                        when (network.condition) {
-                            NetworkCondition.Online -> Res.string.player_diagnostics_network_online
-                            NetworkCondition.NoInternet -> Res.string.player_diagnostics_network_offline
-                            NetworkCondition.ServersUnreachable -> Res.string.player_diagnostics_network_services
-                            NetworkCondition.Checking -> Res.string.player_diagnostics_network_checking
-                            NetworkCondition.Unknown -> Res.string.player_diagnostics_unavailable
-                        }
-                    ),
-                )
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_network),
-                    stringResource(Res.string.player_diagnostics_unavailable),
-                )
-                DiagnosticsLine(
-                    stringResource(Res.string.player_diagnostics_decoder),
-                    stringResource(Res.string.player_diagnostics_unavailable),
-                )
-                Text(
-                    stringResource(Res.string.player_diagnostics_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_close)) }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                clipboard.setText(AnnotatedString(safeDiagnosticsReport(data, network.condition)))
-            }) { Text(stringResource(Res.string.player_diagnostics_copy)) }
-        },
+    val tokens = MaterialTheme.nuvio
+    val copiedLabel = stringResource(Res.string.player_diagnostics_copied)
+    val rows = listOf(
+        stringResource(Res.string.player_diagnostics_phase) to stringResource(
+            when (data.phase) {
+                SafePlaybackPhase.Ended -> Res.string.player_diagnostics_ended
+                SafePlaybackPhase.Buffering -> Res.string.player_diagnostics_buffering
+                SafePlaybackPhase.Playing -> Res.string.player_diagnostics_playing
+                SafePlaybackPhase.PausedOrIdle -> Res.string.player_diagnostics_paused
+            },
+        ),
+        stringResource(Res.string.player_diagnostics_resolution) to data.resolution,
+        stringResource(Res.string.player_diagnostics_position) to
+            data.positionSeconds.toString() + "s" + (data.durationSeconds?.let { " / ${it}s" } ?: ""),
+        stringResource(Res.string.player_diagnostics_buffer) to "${data.bufferAheadSeconds}s",
+        stringResource(Res.string.player_diagnostics_speed) to "${data.playbackSpeed}×",
+        stringResource(Res.string.player_diagnostics_network_status) to stringResource(
+            when (network.condition) {
+                NetworkCondition.Online -> Res.string.player_diagnostics_network_online
+                NetworkCondition.NoInternet -> Res.string.player_diagnostics_network_offline
+                NetworkCondition.ServersUnreachable -> Res.string.player_diagnostics_network_services
+                NetworkCondition.Checking -> Res.string.player_diagnostics_network_checking
+                NetworkCondition.Unknown -> Res.string.player_diagnostics_unavailable
+            },
+        ),
+        stringResource(Res.string.player_diagnostics_network) to stringResource(Res.string.player_diagnostics_unavailable),
+        stringResource(Res.string.player_diagnostics_decoder) to stringResource(Res.string.player_diagnostics_unavailable),
     )
+    DialogSurface(
+        onDismissRequest = onDismiss,
+        title = stringResource(Res.string.player_diagnostics_title),
+    ) {
+        // One quiet panel holds the readings so label/value pairs line up like a table.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(tokens.shapes.compactCard)
+                .background(tokens.colors.textPrimary.copy(alpha = tokens.opacity.subtle))
+                .padding(horizontal = 14.dp, vertical = 4.dp),
+        ) {
+            rows.forEachIndexed { index, (label, value) ->
+                if (index > 0) HorizontalDivider(color = tokens.colors.borderSubtle)
+                DiagnosticsLine(label, value)
+            }
+        }
+        DialogHint(stringResource(Res.string.player_diagnostics_help))
+        DialogButtons {
+            DialogButton(
+                text = stringResource(Res.string.player_diagnostics_copy),
+                onClick = {
+                    clipboard.setText(AnnotatedString(safeDiagnosticsReport(data, network.condition)))
+                    NuvioToastController.show(copiedLabel)
+                },
+            )
+            DialogButton(
+                text = stringResource(Res.string.action_close),
+                onClick = onDismiss,
+                style = DialogButtonStyle.Primary,
+            )
+        }
+    }
 }
 
 @Composable
 private fun DiagnosticsLine(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 10.dp))
+    val colors = MaterialTheme.nuvio.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = colors.textPrimary,
+            textAlign = TextAlign.End,
+        )
     }
 }

@@ -1,27 +1,30 @@
 package com.nuvio.app.features.downloads
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.DataUsage
+import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,8 +32,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogCheckboxRow
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.Menu
+import com.nuvio.app.core.ui.MenuItem
+import com.nuvio.app.core.ui.NuvioActionSize
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import nuvio.composeapp.generated.resources.*
@@ -67,105 +83,118 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
     var notice by remember(profileId) { mutableStateOf<String?>(null) }
     val usage = remember(items) { trackedDownloadBytes(items) }
     val available = remember(items) { DownloadStorageManagement.availableBytes() }
+    val tokens = MaterialTheme.nuvio
+    val overTarget = target?.let { usage > it } == true
+    val noTargetLabel = stringResource(Res.string.downloads_storage_no_target)
+    fun targetLabel(bytes: Long?) = bytes?.let { "${it / Gib} GiB" } ?: noTargetLabel
 
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(tokens.shapes.compactCard)
+            .background(tokens.colors.textPrimary.copy(alpha = 0.04f))
+            .border(1.dp, tokens.colors.borderSubtle, tokens.shapes.compactCard)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(Res.string.downloads_storage_heading),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                stringResource(Res.string.downloads_storage_recorded, formatDownloadBytes(usage)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            available?.let {
-                Text(
-                    stringResource(Res.string.downloads_storage_available, formatDownloadBytes(it)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (target != null && usage > target!!) {
-                Text(
-                    stringResource(Res.string.downloads_storage_above_target),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).background(tokens.colors.accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
             ) {
-                androidx.compose.foundation.layout.Box {
-                    OutlinedButton(onClick = { showTargetMenu = true }) {
-                        Text(
-                            stringResource(
-                                Res.string.downloads_storage_target_button,
-                                target?.let { "${it / Gib} GiB" }
-                                    ?: stringResource(Res.string.downloads_storage_no_target),
-                            ),
+                Icon(Icons.Rounded.Storage, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(24.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    stringResource(Res.string.downloads_storage_heading),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tokens.colors.textPrimary,
+                )
+                Text(
+                    stringResource(Res.string.downloads_storage_recorded, formatDownloadBytes(usage)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.colors.textMuted,
+                )
+                available?.let {
+                    Text(
+                        stringResource(Res.string.downloads_storage_available, formatDownloadBytes(it)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.colors.textMuted,
+                    )
+                }
+            }
+        }
+        // With a target set, a bar shows how much of it the downloads use; it turns red past the target.
+        target?.takeIf { it > 0L }?.let { limit ->
+            LinearProgressIndicator(
+                progress = { (usage.toDouble() / limit).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                color = if (overTarget) tokens.colors.danger else tokens.colors.accent,
+                trackColor = tokens.colors.textPrimary.copy(alpha = 0.08f),
+            )
+        }
+        if (overTarget) DialogHint(stringResource(Res.string.downloads_storage_above_target), isError = true)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box {
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.downloads_storage_target_button, targetLabel(target)),
+                    icon = Icons.Rounded.DataUsage,
+                    trailingIcon = Icons.Rounded.ExpandMore,
+                    size = NuvioActionSize.Small,
+                    onClick = { showTargetMenu = true },
+                )
+                Menu(expanded = showTargetMenu, onDismissRequest = { showTargetMenu = false }) {
+                    listOf<Long?>(null).plus(StorageTargets.map { it * Gib }).forEach { bytes ->
+                        MenuItem(
+                            text = targetLabel(bytes),
+                            selected = bytes == target,
+                            onClick = {
+                                runCatching {
+                                    DownloadStorageManagement.setQuotaBytes(profileId, bytes)
+                                }.onSuccess {
+                                    target = bytes
+                                    notice = null
+                                }.onFailure { error ->
+                                    notice = error.message
+                                }
+                                showTargetMenu = false
+                            },
                         )
                     }
-                    DropdownMenu(
-                        expanded = showTargetMenu,
-                        onDismissRequest = { showTargetMenu = false },
-                    ) {
-                        listOf<Long?>(null).plus(StorageTargets.map { it * Gib }).forEach { bytes ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(bytes?.let { "${it / Gib} GiB" }
-                                        ?: stringResource(Res.string.downloads_storage_no_target))
-                                },
-                                onClick = {
-                                    runCatching {
-                                        DownloadStorageManagement.setQuotaBytes(profileId, bytes)
-                                    }.onSuccess {
-                                        target = bytes
-                                        notice = null
-                                    }.onFailure { error ->
-                                        notice = error.message
-                                    }
-                                    showTargetMenu = false
-                                },
-                            )
-                        }
-                    }
                 }
-                TextButton(onClick = {
+            }
+            NuvioCompactActionButton(
+                label = stringResource(Res.string.downloads_storage_review),
+                icon = Icons.Rounded.CleaningServices,
+                size = NuvioActionSize.Small,
+                onClick = {
                     watchedOnly = false
                     selectedIds = emptySet()
                     showPreview = true
-                }) {
-                    Text(stringResource(Res.string.downloads_storage_review))
-                }
-                TextButton(
-                    enabled = watchedEpisodeIds.isNotEmpty(),
-                    onClick = {
-                        // The preview will further restrict this snapshot to verified,
-                        // Starlit-owned files before any confirmation can be accepted.
-                        watchedOnly = true
-                        selectedIds = watchedEpisodeIds
-                        showPreview = true
-                    },
-                ) {
-                    Text(stringResource(Res.string.downloads_storage_remove_watched))
-                }
-            }
-            Text(
-                stringResource(Res.string.downloads_storage_target_note),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                },
             )
-            notice?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            NuvioCompactActionButton(
+                label = stringResource(Res.string.downloads_storage_remove_watched),
+                icon = Icons.Rounded.DoneAll,
+                size = NuvioActionSize.Small,
+                enabled = watchedEpisodeIds.isNotEmpty(),
+                onClick = {
+                    // The preview will further restrict this snapshot to verified,
+                    // Starlit-owned files before any confirmation can be accepted.
+                    watchedOnly = true
+                    selectedIds = watchedEpisodeIds
+                    showPreview = true
+                },
+            )
+        }
+        DialogHint(stringResource(Res.string.downloads_storage_target_note))
+        notice?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
         }
     }
 
@@ -183,75 +212,84 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             .fold(0L) { sum, entry ->
                 if (entry.bytes > Long.MAX_VALUE - sum) Long.MAX_VALUE else sum + entry.bytes
             }
-        AlertDialog(
-            onDismissRequest = { showPreview = false },
-            title = { Text(stringResource(if (watchedOnly)
-                Res.string.downloads_storage_remove_watched else Res.string.downloads_storage_review)) },
-            text = {
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(stringResource(Res.string.downloads_storage_safety_notice),
-                        style = MaterialTheme.typography.bodySmall)
-                    if (watchedOnly) {
-                        Text(stringResource(Res.string.downloads_storage_watched_notice),
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (eligible.isEmpty()) {
-                        Text(stringResource(if (watchedOnly) Res.string.downloads_storage_no_watched_eligible
-                            else Res.string.downloads_storage_none_eligible))
-                    } else {
-                        eligible.forEach { entry ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = entry.id in validSelection,
-                                    onCheckedChange = { checked ->
-                                        selectedIds = if (checked) selectedIds + entry.id
-                                            else selectedIds - entry.id
-                                    },
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(entry.title, style = MaterialTheme.typography.bodyMedium)
-                                    Text(formatDownloadBytes(entry.bytes),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
+        DownloadCleanupDialog(
+            title = stringResource(if (watchedOnly)
+                Res.string.downloads_storage_remove_watched else Res.string.downloads_storage_review),
+            watchedOnly = watchedOnly,
+            eligible = eligible,
+            selection = validSelection,
+            onToggle = { id, checked -> selectedIds = if (checked) selectedIds + id else selectedIds - id },
+            onDismiss = { showPreview = false },
+            onConfirm = {
+                val removed = if (watchedOnly) {
+                    DownloadsRepository.removeSelectedVerifiedWatchedEpisodes(validSelection, profileId)
+                } else {
+                    DownloadsRepository.removeSelectedVerifiedDownloads(validSelection, profileId)
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = validSelection.isNotEmpty(),
-                    onClick = {
-                        val removed = if (watchedOnly) {
-                            DownloadsRepository.removeSelectedVerifiedWatchedEpisodes(validSelection, profileId)
-                        } else {
-                            DownloadsRepository.removeSelectedVerifiedDownloads(validSelection, profileId)
-                        }
-                        notice = if (removed == validSelection.size) {
-                            "Scheduled removal of ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
-                        } else {
-                            "Scheduled removal of ${removed} verified offline copies. Changed or unowned items were preserved."
-                        }
-                        showPreview = false
-                    },
-                ) {
-                    Text(stringResource(Res.string.downloads_storage_remove_selected, validSelection.size))
+                notice = if (removed == validSelection.size) {
+                    "Scheduled removal of ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
+                } else {
+                    "Scheduled removal of ${removed} verified offline copies. Changed or unowned items were preserved."
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPreview = false }) {
-                    Text(stringResource(Res.string.action_cancel))
-                }
+                showPreview = false
             },
         )
+    }
+}
+
+/** Lets the user pick which verified offline copies to remove before anything is deleted. */
+@Composable
+internal fun DownloadCleanupDialog(
+    title: String,
+    watchedOnly: Boolean,
+    eligible: List<DownloadCleanupEntry>,
+    selection: Set<String>,
+    onToggle: (id: String, checked: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    DialogSurface(
+        onDismissRequest = onDismiss,
+        title = title,
+        message = stringResource(Res.string.downloads_storage_safety_notice),
+    ) {
+        if (watchedOnly) DialogHint(stringResource(Res.string.downloads_storage_watched_notice))
+        if (eligible.isEmpty()) {
+            Text(
+                stringResource(if (watchedOnly) Res.string.downloads_storage_no_watched_eligible
+                    else Res.string.downloads_storage_none_eligible),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(tokens.shapes.compactCard)
+                    .background(tokens.colors.textPrimary.copy(alpha = tokens.opacity.subtle))
+                    .padding(14.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textSecondary,
+            )
+        } else {
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                eligible.forEach { entry ->
+                    DialogCheckboxRow(
+                        text = entry.title,
+                        description = formatDownloadBytes(entry.bytes),
+                        checked = entry.id in selection,
+                        onCheckedChange = { checked -> onToggle(entry.id, checked) },
+                    )
+                }
+            }
+        }
+        DialogButtons {
+            DialogButton(text = stringResource(Res.string.action_cancel), onClick = onDismiss)
+            DialogButton(
+                text = stringResource(Res.string.downloads_storage_remove_selected, selection.size),
+                style = DialogButtonStyle.Destructive,
+                enabled = selection.isNotEmpty(),
+                onClick = onConfirm,
+            )
+        }
     }
 }

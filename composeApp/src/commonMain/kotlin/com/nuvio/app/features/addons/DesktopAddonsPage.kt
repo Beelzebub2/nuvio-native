@@ -107,6 +107,7 @@ internal fun DesktopAddonsContent(
         }
 
         Spacer(Modifier.height(10.dp))
+        NuvioSectionLabel(stringResource(Res.string.addons_section_backup).uppercase())
         AddonBackupCard()
 
         Spacer(Modifier.height(10.dp))
