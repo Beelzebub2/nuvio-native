@@ -1,6 +1,6 @@
 """Generates every Starlit logo, app icon and wordmark asset from one vector mark.
 
-    python branding/generate_brand_assets.py [--preview-only | --readme-only | --android-only]
+    python branding/generate_brand_assets.py [--preview-only | --readme-only | --android-only | --email-only]
 
 The mark is a rounded play triangle holding a four-point star, with a small
 twinkle above it. Each app-icon colourway (Settings > Appearance > App icon)
@@ -22,7 +22,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_ICONS = ROOT / "composeApp/src/desktopMain/resources/icons"
@@ -32,6 +32,11 @@ IOS_ASSETS = ROOT / "iosApp/iosApp/Assets.xcassets"
 WORDMARK_FONT = ROOT / "composeApp/src/commonMain/composeResources/font/jetbrains_sans_bold.ttf"
 PREVIEW = ROOT / "build/brand/starlit-brand-board.png"
 README_ASSETS = ROOT / "branding/readme"
+# Account emails show the wordmark in a 140 x 32 CSS-pixel slot; 3x keeps it sharp on phones.
+# The VPS serves these files with immutable caching, so new artwork needs a new version.
+EMAIL_ASSETS = ROOT / "branding/email"
+EMAIL_WORDMARK_SIZE = (420, 96)
+EMAIL_ASSET_VERSION = "v1"
 EDGE_CANDIDATES = [
     Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft/Edge/Application/msedge.exe",
     Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Microsoft/Edge/Application/msedge.exe",
@@ -288,6 +293,43 @@ def write_platform_icons(key: str, ios_name: str, mark: Image.Image) -> Image.Im
     return on_black(picker)
 
 
+def email_wordmark(wordmark: Image.Image, outline_dark_lettering: bool) -> Image.Image:
+    """Fit a README wordmark into the email logo slot, left-aligned like the email text.
+
+    Gmail and Outlook apps can darken a message without applying its dark-mode CSS, which leaves
+    the light theme's near-black lettering on a dark page. A 1 px white outline keeps it readable
+    there and disappears against the white card everywhere else.
+    """
+    width, height = EMAIL_WORDMARK_SIZE
+    scale = min(width / wordmark.width, height / wordmark.height)
+    size = (round(wordmark.width * scale), round(wordmark.height * scale))
+    fitted = wordmark.convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", EMAIL_WORDMARK_SIZE, (0, 0, 0, 0))
+    canvas.alpha_composite(fitted, (0, (height - fitted.height) // 2))
+    if not outline_dark_lettering:
+        return canvas
+    # Transparent pixels are stored as black, so the lettering is "dark and visible", not just dark.
+    dark = canvas.convert("RGB").convert("L").point(lambda value: 255 if value < 90 else 0)
+    lettering = ImageChops.multiply(dark, canvas.getchannel("A"))
+    outline = lettering.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.GaussianBlur(0.6))
+    result = Image.new("RGBA", canvas.size, (255, 255, 255, 0))
+    result.putalpha(outline)
+    result.alpha_composite(canvas)
+    return result
+
+
+def write_email_wordmarks() -> list[Path]:
+    """Email logos come from the README wordmarks: dark lettering for light mode, white for dark."""
+    written = []
+    for theme, outline in (("light", True), ("dark", False)):
+        with Image.open(README_ASSETS / f"starlit-wordmark-{theme}.png") as source:
+            image = email_wordmark(source, outline)
+        path = EMAIL_ASSETS / f"starlit-email-wordmark-{theme}-{EMAIL_ASSET_VERSION}.png"
+        save_png(image, path)
+        written.append(path)
+    return written
+
+
 def write_preview(icons: dict[str, Image.Image], wordmark: Image.Image, mark: Image.Image) -> None:
     board = Image.new("RGB", (1500, 760), (13, 13, 13))
     x = 40
@@ -315,7 +357,14 @@ def main() -> None:
     modes.add_argument("--preview-only", action="store_true", help="render the board without touching app assets")
     modes.add_argument("--readme-only", action="store_true", help="render only the README wordmarks")
     modes.add_argument("--android-only", action="store_true", help="render only Android launcher icons")
+    modes.add_argument("--email-only", action="store_true",
+                       help="derive only the account-email logos from the README wordmarks (no Edge needed)")
     args = parser.parse_args()
+
+    if args.email_only:
+        for path in write_email_wordmarks():
+            print(f"Email wordmark: {path}")
+        return
 
     edge = find_edge()
     with tempfile.TemporaryDirectory(prefix="starlit-brand-") as temp:
@@ -333,6 +382,7 @@ def main() -> None:
             page.write_text(wordmark_document(COLORWAYS["original"][0], text_color), encoding="utf-8")
             wordmark = trim(render(edge, page, work / f"readme-{theme}.png", 1800, 400, work / f"profile-readme-{theme}"))
             save_png(wordmark, README_ASSETS / f"starlit-wordmark-{theme}.png")
+        write_email_wordmarks()
         if args.readme_only:
             print(f"README wordmarks: {README_ASSETS}")
             return
