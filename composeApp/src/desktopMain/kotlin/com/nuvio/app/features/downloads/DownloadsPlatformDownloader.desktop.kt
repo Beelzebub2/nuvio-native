@@ -30,8 +30,7 @@ private val desktopDownloadHttpClient: HttpClient by lazy {
 }
 private val transferScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 private val pathLocks = ConcurrentHashMap<String, Mutex>()
-private data class PendingDownloadRemoval(val item: DownloadItem, val verifiedProfileId: Int? = null)
-private val pendingRemovals = ConcurrentHashMap<String, PendingDownloadRemoval>()
+private val pendingRemovals = ConcurrentHashMap<String, DownloadItem>()
 private val transfers = ConcurrentHashMap<String, Job>()
 private val transferIo = ConcurrentHashMap<String, DownloadIo>()
 private val playbackAwareDownloadLimiter = PlaybackAwareDownloadLimiter()
@@ -171,7 +170,7 @@ internal actual object DownloadsPlatformDownloader {
             transferIo.remove(request.item.id, io)
             transferScope.launch {
                 pathLocks.computeIfAbsent(downloadPath(request.item).absolutePath) { Mutex() }.withLock {
-                    if (transfers.remove(request.item.id, job)) pendingRemovals.remove(request.item.id)?.let(::removeRequestedDownload)
+                    if (transfers.remove(request.item.id, job)) pendingRemovals.remove(request.item.id)?.let(::removeOwnedDownload)
                 }
             }
         }
@@ -268,17 +267,21 @@ private fun prepareDownloadPath(item: DownloadItem): File {
     } else check(dir.isDirectory || dir.mkdirs()) { "Cannot create download directory" }
     return file
 }
-internal fun requestDownloadRemoval(item: DownloadItem, verifiedProfileId: Int? = null) {
-    pendingRemovals[item.id] = PendingDownloadRemoval(item, verifiedProfileId)
+internal fun requestDownloadRemoval(item: DownloadItem) {
+    pendingRemovals[item.id] = item
     transferScope.launch {
         pathLocks.computeIfAbsent(downloadPath(item).absolutePath) { Mutex() }.withLock {
-            if (transfers[item.id]?.isCompleted != false) pendingRemovals.remove(item.id)?.let(::removeRequestedDownload)
+            if (transfers[item.id]?.isCompleted != false) pendingRemovals.remove(item.id)?.let(::removeOwnedDownload)
         }
     }
 }
-private fun removeRequestedDownload(removal: PendingDownloadRemoval): Boolean =
-    if (removal.verifiedProfileId != null) removeVerifiedOwnedDownload(removal.item, removal.verifiedProfileId)
-    else removeOwnedDownload(removal.item)
+internal fun downloadPathLock(item: DownloadItem): Mutex =
+    pathLocks.computeIfAbsent(downloadPath(item).absolutePath) { Mutex() }
+
+internal suspend fun removeVerifiedDesktopDownload(item: DownloadItem, expectedProfileId: Int): Boolean =
+    withContext(Dispatchers.IO) {
+        downloadPathLock(item).withLock { removeVerifiedOwnedDownload(item, expectedProfileId) }
+    }
 
 /** Called under the transfer's path lock immediately before confirmed cleanup. */
 internal fun removeVerifiedOwnedDownload(item: DownloadItem, expectedProfileId: Int): Boolean {

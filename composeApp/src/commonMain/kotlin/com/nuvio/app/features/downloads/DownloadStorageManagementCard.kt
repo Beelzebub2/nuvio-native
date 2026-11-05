@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,7 @@ import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.launch
 
 private const val Gib = 1L shl 30
 private val StorageTargets = listOf(5L, 10L, 25L, 50L, 100L, 250L, 500L)
@@ -64,6 +66,7 @@ private val StorageTargets = listOf(5L, 10L, 25L, 50L, 100L, 250L, 500L)
 @Composable
 internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId: Int) {
     if (!DownloadStorageManagement.supported) return
+    val scope = rememberCoroutineScope()
 
     val watchedState by remember(profileId) {
         WatchedRepository.ensureLoaded()
@@ -284,17 +287,20 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             onSuggestLeastRecentlyWatched = { selectedIds = leastRecentlyWatchedSuggestions },
             onDismiss = { showPreview = false },
             onConfirm = {
+                showPreview = false
+                notice = "Removing selected verified offline copies…"
+                scope.launch {
                 val removed = if (watchedOnly) {
                     DownloadsRepository.removeSelectedVerifiedWatchedEpisodes(validSelection, profileId)
                 } else {
                     DownloadsRepository.removeSelectedVerifiedDownloads(validSelection, profileId)
                 }
                 notice = if (removed == validSelection.size) {
-                    "Scheduled removal of ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
+                    "Removed ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
                 } else {
-                    "Scheduled removal of ${removed} verified offline copies. Changed or unowned items were preserved."
+                    "Removed ${removed} verified offline copies. Changed, unavailable or unowned items were preserved."
                 }
-                showPreview = false
+                }
             },
         )
     }

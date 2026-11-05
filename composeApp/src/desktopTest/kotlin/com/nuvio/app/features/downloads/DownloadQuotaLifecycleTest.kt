@@ -11,6 +11,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
@@ -23,6 +25,58 @@ class DownloadQuotaLifecycleTest {
     private val gib = 1L shl 30
     private fun waitFor(predicate: () -> Boolean) = runBlocking {
         withTimeout(12_000L) { while (!predicate()) delay(20) }
+    }
+
+    @Test fun deferredCleanupFailureRetainsTheQueueAndQuotaUntilActualDeletionSucceeds(): Unit = runBlocking {
+        val root = Files.createTempDirectory("download-cleanup-accounting").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val profile = ProfileRepository.activeProfileId
+        val id = "cleanup-accounting"
+        val file = File(File(root, id).apply { mkdirs() }, "fixture.mp4")
+        File(file.parentFile, ".starlit-owner").writeText(id)
+        file.writeBytes(byteArrayOf(0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 1, 2, 3, 4))
+        val item = DownloadItem(id, "movie", "cleanup-meta", "movie", "cleanup-video", "Fixture",
+            streamTitle = "1080p", providerName = "Fixture", sourceUrl = "https://example.invalid/file.mp4",
+            destinationDirectory = root.absolutePath, fileName = file.name, localFileUri = file.toURI().toString(),
+            status = DownloadStatus.Completed, downloadedBytes = file.length(), totalBytes = file.length(),
+            createdAtEpochMs = 1L, updatedAtEpochMs = 1L)
+        val proof = DesktopDownloadProof(id, file.name, downloadSourceFingerprint(item, item.sourceUrl),
+            "-", "fixture", file.length(), downloadSha256File(file))
+        writeDesktopDownloadProof(file, proof)
+        val ioLock = downloadPathLock(item)
+        try {
+            DownloadsRepository.clearLocalState()
+            DownloadDesktopFeatures.setDirectory(root)
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(listOf(item)))
+            DownloadsRepository.ensureLoaded()
+            waitFor { DownloadsRepository.uiState.value.items.singleOrNull()?.isPlayable == true }
+            ioLock.lock()
+            val deletion = async(start = CoroutineStart.UNDISPATCHED) {
+                DownloadsRepository.removeSelectedVerifiedDownloads(setOf(id), profile)
+            }
+            assertFalse(deletion.isCompleted, "Cleanup must wait for the transfer IO lock")
+            assertEquals(file.length(), trackedDownloadBytes(DownloadsRepository.uiState.value.items))
+            downloadProofFile(file).writeText("changed after confirmation")
+            ioLock.unlock()
+            assertEquals(0, deletion.await())
+            assertTrue(file.exists())
+            assertEquals(listOf(id), DownloadsRepository.uiState.value.items.map { it.id })
+            assertEquals(file.length(), trackedDownloadBytes(DownloadsRepository.uiState.value.items))
+            assertEquals(listOf(id), DownloadsCodec.decodeItems(DownloadsStorage.loadPayload()).map { it.id })
+
+            writeDesktopDownloadProof(file, proof)
+            assertTrue(verifiedDesktopDownloadContent(file, proof))
+            assertEquals(1, DownloadsRepository.removeSelectedVerifiedDownloads(setOf(id), profile))
+            assertFalse(file.exists())
+            assertTrue(DownloadsRepository.uiState.value.items.isEmpty())
+            assertEquals(0L, trackedDownloadBytes(DownloadsCodec.decodeItems(DownloadsStorage.loadPayload())))
+        } finally {
+            if (ioLock.isLocked) ioLock.unlock()
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original)))
+            root.deleteRecursively()
+        }
     }
 
     @Test fun discoveredOversizePausesWithoutLateCompletionOrAutomaticResume() {

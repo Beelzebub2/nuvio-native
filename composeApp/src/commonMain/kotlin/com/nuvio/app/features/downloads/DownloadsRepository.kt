@@ -366,38 +366,61 @@ object DownloadsRepository {
      * profile, status, active handles and owned file path while holding the
      * queue lock after the user confirms the exact selection.
      */
-    internal fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
-        synchronized(lock) {
-            removeVerifiedDownloadsLocked(downloadIds, expectedProfileId)
-        }
+    internal suspend fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        removeVerifiedDownloads(downloadIds, expectedProfileId, watchedOnly = false)
 
     /** Re-evaluate watched status and file ownership when the confirmation is accepted. */
-    internal fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
-        synchronized(lock) {
+    internal suspend fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        removeVerifiedDownloads(downloadIds, expectedProfileId, watchedOnly = true)
+
+    private suspend fun removeVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int, watchedOnly: Boolean): Int {
+        val safe = synchronized(lock) {
             if (!hasLoaded || loadedProfile != expectedProfileId ||
-                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized 0
-            val watchedIds = watchedDownloadedEpisodeIds(
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized emptyList()
+            val watchedIds = if (watchedOnly) watchedDownloadedEpisodeIds(
                 _uiState.value.items,
                 com.nuvio.app.features.watched.WatchedRepository.uiState.value.watchedKeys,
                 com.nuvio.app.features.watchprogress.WatchProgressRepository.uiState.value.entries,
-            )
-            removeVerifiedDownloadsLocked(downloadIds.intersect(watchedIds), expectedProfileId)
+            ) else downloadIds
+            _uiState.value.items.filter { item ->
+                item.id in downloadIds && item.id in watchedIds && item.id !in activeHandles &&
+                    item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+            }
         }
-
-    private fun removeVerifiedDownloadsLocked(downloadIds: Set<String>, expectedProfileId: Int): Int {
-        if (!hasLoaded || loadedProfile != expectedProfileId ||
-            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return 0
-        val safe = _uiState.value.items.filter { item ->
-            item.id in downloadIds && item.id !in activeHandles &&
-                item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+        var removed = 0
+        for (item in safe) {
+            val unchanged = synchronized(lock) {
+                loadedProfile == expectedProfileId && item.id !in activeHandles && item in _uiState.value.items &&
+                    com.nuvio.app.features.profiles.ProfileRepository.activeProfileId == expectedProfileId
+            }
+            if (!unchanged) continue
+            val deleted = if (isDesktop) DownloadDesktopFeatures.removeVerified(item, expectedProfileId)
+            else synchronized(lock) {
+                if (DownloadStorageManagement.eligibleCleanupBytes(item) != null &&
+                    DownloadsPlatformDownloader.removeFile(item.localFileUri)) {
+                    DownloadsPlatformDownloader.removePartialFile(item.fileName)
+                    true
+                } else false
+            }
+            if (!deleted) continue
+            synchronized(lock) {
+                // Retain accounting until disk removal succeeds. A failed or
+                // cancelled deferred verification must never make bytes free.
+                if (loadedProfile == expectedProfileId && item in _uiState.value.items &&
+                    com.nuvio.app.features.profiles.ProfileRepository.activeProfileId == expectedProfileId) {
+                    publish(_uiState.value.items.filterNot { it.id == item.id })
+                    persist()
+                    removed++
+                    pumpQueue()
+                }
+            }
         }
-        removeItems(safe, expectedProfileId)
-        return safe.size
+        return removed
     }
 
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
 
-    private fun removeItems(items: List<DownloadItem>, verifiedProfileId: Int? = null) {
+    private fun removeItems(items: List<DownloadItem>) {
         if (items.isEmpty()) return
         val ids = items.map { it.id }.toSet()
         // Invalidate the entire batch before cancellation callbacks or the queue can run.
@@ -408,9 +431,7 @@ object DownloadsRepository {
             val handle = handles[item.id]
             handle?.cancel()
             // Desktop cleanup waits for closed streams and removes only this task's owned files.
-            if (isDesktop && verifiedProfileId != null) {
-                DownloadDesktopFeatures.removeVerified(item, verifiedProfileId)
-            } else DownloadDesktopFeatures.remove(item, handle == null)
+            DownloadDesktopFeatures.remove(item, handle == null)
             if (!isDesktop) {
                 DownloadsPlatformDownloader.removeFile(DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName) ?: item.localFileUri)
                 DownloadsPlatformDownloader.removePartialFile(item.fileName)

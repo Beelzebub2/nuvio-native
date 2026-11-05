@@ -120,9 +120,8 @@ internal actual object DownloadDesktopFeatures {
         return byKey.values.toList()
     }
     actual fun remove(item: DownloadItem, idle: Boolean) { requestDownloadRemoval(item) }
-    actual fun removeVerified(item: DownloadItem, expectedProfileId: Int) {
-        requestDownloadRemoval(item, expectedProfileId)
-    }
+    actual suspend fun removeVerified(item: DownloadItem, expectedProfileId: Int): Boolean =
+        removeVerifiedDesktopDownload(item, expectedProfileId)
 
     actual fun parallelDownloads(): Int = store.getInt("parallel")?.takeIf { it in ParallelDownloadChoices } ?: DefaultParallelDownloads
     internal fun setParallelDownloads(count: Int) {
