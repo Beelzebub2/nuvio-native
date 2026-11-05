@@ -54,6 +54,7 @@ import com.nuvio.app.features.profiles.ProfileEditScreen
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.ProfileSelectionScreen
 import com.nuvio.app.features.profiles.profileAvatarImageUrl
+import com.nuvio.app.features.settings.DiagnosticsConsentHost
 import com.nuvio.app.features.trakt.TraktAuthRepository
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.watched.WatchedRepository
@@ -138,6 +139,9 @@ internal fun AppGate(
                 controller::requestProfileSelection
             } ?: {},
         )
+        // iOS renders its native Home tab separately from the SwiftUI gate overlay.
+        // Keep this decision in the interactive tab, not behind SwiftUI's disabled gate hit testing.
+        if (ownsAppRuntime) DiagnosticsConsentHost()
         return
     }
 
@@ -633,6 +637,14 @@ internal fun AppGate(
                     AppLoadingContent(modifier = Modifier.fillMaxSize())
                 }
             }
+        }
+
+        if (
+            ownsAppRuntime && renderMainContent &&
+            gateScreen == AppGateScreen.Main.name &&
+            !profileSelectionLoading && !profileOverlayVisible && !launchOverlayVisible
+        ) {
+            DiagnosticsConsentHost()
         }
     }
 }

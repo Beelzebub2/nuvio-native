@@ -1,6 +1,8 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
+import com.nuvio.app.core.diagnostics.UsageEvent
 import com.nuvio.app.core.ui.NuvioToastController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.shuffle.EpisodeShuffleRepository
@@ -49,6 +51,20 @@ import org.jetbrains.compose.resources.getString
 
 @Composable
 internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
+    var playbackReadyReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    var playbackFailedReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    LaunchedEffect(activePlaybackKey, playbackSnapshot.isPlaying) {
+        if (playbackSnapshot.isPlaying && !playbackReadyReported) {
+            playbackReadyReported = true
+            UsageDiagnostics.track(UsageEvent.PlaybackReady)
+        }
+    }
+    LaunchedEffect(activePlaybackKey, errorMessage) {
+        if (errorMessage != null && !playbackFailedReported) {
+            playbackFailedReported = true
+            UsageDiagnostics.track(UsageEvent.PlaybackFailed)
+        }
+    }
     val currentFeedback = liveGestureFeedback ?: gestureFeedback
     LaunchedEffect(currentFeedback) {
         if (currentFeedback != null) {

@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Odesílat hlášení o pádech a ANR s bezpečným kontextem. Dokud je nezapnete, jsou vypnutá.</string>
     <string name="about_licenses_attributions_subtitle">Zdroje dat, poděkování a licence platformy</string>
     <string name="about_supporters_contributors_subtitle">Otevřené uznání a kredity projektu</string>
     <string name="action_back">Zpět</string>
@@ -2003,7 +2004,6 @@
     <string name="compose_settings_root_tracking_description">Připojte služby pro sledování a vyberte, která bude zdrojem pro Knihovnu a Pokračovat ve sledování.</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTIKA</string>
     <string name="settings_advanced_sentry_reports">Hlášení pádů Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Odesílat hlášení o pádech a ANR s bezpečným kontextem. Ve výchozím nastavení zapnuto.</string>
     <string name="sentry_enable_dialog_title">Zapnout hlášení pádů?</string>
     <string name="sentry_enable_dialog_subtitle">Hlášení pádů pomáhají odhalit chyby specifické pro zařízení, aniž byste je museli znovu vyvolávat pomocí protokolů ADB.</string>
     <string name="sentry_disable_dialog_title">Vypnout hlášení pádů?</string>

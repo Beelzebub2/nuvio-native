@@ -44,6 +44,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -72,7 +75,8 @@ fun DialogSurface(
         Surface(
             modifier = modifier
                 .fillMaxWidth()
-                .widthIn(max = tokens.components.dialogMaxWidth),
+                .widthIn(max = tokens.components.dialogMaxWidth)
+                .semantics { if (title != null) paneTitle = title },
             shape = tokens.shapes.dialog,
             color = tokens.colors.surfaceDialog,
             contentColor = tokens.colors.textPrimary,
@@ -85,6 +89,7 @@ fun DialogSurface(
                 if (title != null) {
                     Text(
                         text = title,
+                        modifier = Modifier.semantics { heading() },
                         style = MaterialTheme.typography.titleLarge,
                         color = tokens.colors.textPrimary,
                     )

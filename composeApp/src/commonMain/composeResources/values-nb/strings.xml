@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Send krasj- og ANR-rapporter med trygg kontekst. Av til du aktiverer det.</string>
     <string name="about_licenses_attributions_subtitle">Datakilder, anerkjennelser og plattformlisenser</string>
     <string name="about_supporters_contributors_subtitle">Åpen anerkjennelse og bidragsytere</string>
     <string name="action_back">Tilbake</string>
@@ -1320,7 +1321,6 @@ Du bruker denne funksjonen helt på eget ansvar. P2P kan deaktiveres når som he
     <string name="settings_advanced_section_diagnostics">DIAGNOSTIKK</string>
     <string name="settings_advanced_section_startup">OPPSTART</string>
     <string name="settings_advanced_sentry_reports">Sentry krasjrapporter</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Send krasj- og ANR-rapporter med trygg kontekst. På som standard.</string>
     <string name="settings_appearance_amoled_black">AMOLED Svart</string>
     <string name="settings_appearance_amoled_description">Bruk ren svart bakgrunn for OLED-skjermer.</string>
     <string name="settings_appearance_app_icon">Appikon</string>

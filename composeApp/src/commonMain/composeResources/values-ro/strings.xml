@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Trimite rapoarte de blocare și ANR în condiții de siguranță. Dezactivat până când îl activezi.</string>
     <string name="about_licenses_attributions_subtitle">Surse de date, mulțumiri și licențe de platformă</string>
     <string name="about_supporters_contributors_subtitle">Recunoaștere publică și credite proiect</string>
     <string name="action_back">Înapoi</string>
@@ -467,7 +468,6 @@
     <string name="settings_advanced_remember_last_profile">Reține ultimul profil</string>
     <string name="settings_advanced_remember_last_profile_description">Reține ultimul profil selectat la pornire</string>
     <string name="settings_advanced_sentry_reports">Rapoarte de eroare Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Trimite rapoarte de blocare și ANR în condiții de siguranță. Activat implicit.</string>
     <string name="sentry_enable_dialog_title">Activezi rapoartele de eroare?</string>
     <string name="sentry_enable_dialog_subtitle">Rapoartele de eroare ajută la identificarea problemelor specifice dispozitivului fără a fi nevoie să reproduci problema folosind logurile ADB.</string>
     <string name="sentry_disable_dialog_title">Dezactivezi rapoartele de eroare?</string>

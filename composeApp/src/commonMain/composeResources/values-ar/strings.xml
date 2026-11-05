@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">إرسال تقارير الأعطال وANR مع سياق آمن. معطّل حتى تفعّله.</string>
     <string name="about_licenses_attributions_subtitle">مصادر البيانات والإقرارات وتراخيص المنصة</string>
     <string name="about_supporters_contributors_subtitle">تقدير مفتوح وشكر للمساهمين في المشروع</string>
     <string name="action_back">رجوع</string>
@@ -487,7 +488,6 @@
     <string name="settings_advanced_remember_last_profile">تذكر آخر مستخدم</string>
     <string name="settings_advanced_remember_last_profile_description">تذكر آخر ملف مستخدم تم اختياره عند بدء التشغيل</string>
     <string name="settings_advanced_sentry_reports">تقارير الأعطال عبر Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">إرسال تقارير الأعطال وANR مع سياق آمن. مفعّل افتراضيًا.</string>
     <string name="sentry_enable_dialog_title">تفعيل تقارير الأعطال؟</string>
     <string name="sentry_enable_dialog_subtitle">تساعد تقارير الأعطال في تحديد المشاكل الخاصة بأجهزة معينة دون مطالبتك بإعادة المشكلة باستخدام سجلات ADB.</string>
     <string name="sentry_disable_dialog_title">إيقاف تقارير الأعطال؟</string>
