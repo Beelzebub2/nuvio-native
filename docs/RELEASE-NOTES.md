@@ -1,3 +1,22 @@
+## Starlit 1.11.0
+
+### MyAnimeList rewatching and library
+
+- **Automatically recognize rewatches:** On desktop, starting playback of a completed anime in a connected MyAnimeList account marks it as rewatching without clearing its completed status, score or watched-episode count. Updates are guarded against duplicate requests and switching profiles.
+- **Browse MyAnimeList in Starlit:** An optional desktop MyAnimeList tab lets you explore watching, completed, on-hold, dropped and planned anime, with posters, progress, ratings, status filters, paging and refresh. The tab is off by default and can be enabled when wanted.
+- **Control rewatching yourself:** Anime details also offer a manual rewatch toggle. Android and iOS MyAnimeList behavior is unchanged by this feature.
+
+### Optional diagnostics and privacy
+
+- **Choose which diagnostics to share:** A first-use prompt offers separate, off-by-default switches for anonymous usage analytics and crash reports. Existing Sentry crash-reporting preferences are preserved, and both choices can be changed later in Settings > Advanced.
+- **Understand which versions are in use:** When opted in and the server is configured, Starlit reports limited app-version, platform, navigation and download event codes to the self-hosted OpenObserve service. A random installation identifier is pseudonymized at the gateway; media titles, watch history, search terms, account identities and URLs are not exported.
+- **No interruption if diagnostics are unavailable:** Analytics can be turned off at any time, which cancels queued events and resets the local identifier. An unconfigured collector or network failure does not interrupt Starlit. MyAnimeList tab visits are correctly categorized in usage diagnostics.
+
+### Validation
+
+- MyAnimeList feature validation included 11 targeted desktop tests, desktop Kotlin compilation, and Android, iOS and source-security checks. The new diagnostics gateway passed 14 targeted Node tests covering ingestion, quotas, consent-related behavior and failure handling.
+- The tag-triggered release workflow tests the Windows installer and signed Android APKs, verifies checksums and publishes only after all required jobs pass. OpenObserve server configuration and the public privacy-policy update are separate deployment requirements.
+
 ## Starlit 1.10.0
 
 ### Safer download storage cleanup
