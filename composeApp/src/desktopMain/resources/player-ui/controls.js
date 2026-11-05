@@ -2136,8 +2136,15 @@ const renderP2pConsentModal = () => {
   p2pConsentEnableButton.textContent = state.p2pConsentEnableLabel || "Enable P2P";
 };
 
-const diagnosticsMetrics = () =>
-  window.StarlitPlaybackDiagnostics.normalize(lastDiagnosticsUpdate, diagnosticsRebuffers);
+const diagnosticsMetrics = () => {
+  // navigator.onLine is a passive browser/OS hint, not a network probe or
+  // proof that the media origin is reachable. No requests are issued.
+  const networkOnline = typeof navigator.onLine === "boolean" ? navigator.onLine : null;
+  return window.StarlitPlaybackDiagnostics.normalize(
+    { ...(lastDiagnosticsUpdate || {}), networkOnline },
+    diagnosticsRebuffers
+  );
+};
 
 const renderDiagnosticsModal = () => {
   if (activeModal !== "diagnostics") return;
@@ -2155,6 +2162,8 @@ const renderDiagnosticsModal = () => {
   setValue("diagnosticsRebuffers", metrics.rebufferEvents);
   setValue("diagnosticsDecoder", metrics.decoder);
   setValue("diagnosticsThroughput", metrics.throughput);
+  setValue("diagnosticsNetwork", metrics.networkHint);
+  setValue("diagnosticsAdvice", metrics.advice);
   diagnosticsCloseButton.textContent = state.panelCloseLabel || "Close";
 };
 
@@ -2974,6 +2983,8 @@ document.querySelectorAll("[data-command]").forEach(button => {
 });
 
 diagnosticsCloseButton.addEventListener("click", () => closePlayerModal());
+window.addEventListener("online", renderDiagnosticsModal);
+window.addEventListener("offline", renderDiagnosticsModal);
 diagnosticsCopyButton.addEventListener("click", () => {
   const report = window.StarlitPlaybackDiagnostics.report(diagnosticsMetrics());
   const copied = () => { diagnosticsCopyStatus.textContent = "Sanitized report copied"; };
