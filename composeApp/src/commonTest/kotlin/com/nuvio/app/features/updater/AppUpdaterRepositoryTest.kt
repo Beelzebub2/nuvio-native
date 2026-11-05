@@ -1,10 +1,99 @@
 package com.nuvio.app.features.updater
 
+import com.nuvio.app.features.addons.RawHttpResponse
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class AppUpdaterRepositoryTest {
+    private val migrationSource = AppUpdateReleaseSource(
+        owner = "Beelzebub2",
+        repo = "nuvio-native",
+        userAgent = "Starlit-Update-Test",
+        fallbackRepositories = listOf("nuvio-native", "starlit"),
+    )
+
+    @Test
+    fun compatibilityBuildChecksLegacyRepositoryFirst() = runBlocking {
+        val requests = mutableListOf<String>()
+        val response = AppUpdaterRepository.fetchReleaseMetadata(
+            source = migrationSource,
+            channel = UpdateChannel.STABLE,
+            additionalHeaders = mapOf("X-Test" to "yes"),
+        ) { url, headers ->
+            requests += url
+            assertEquals("application/vnd.github+json", headers["Accept"])
+            assertEquals("Starlit-Update-Test", headers["User-Agent"])
+            assertEquals("yes", headers["X-Test"])
+            rawResponse(200)
+        }
+
+        assertEquals(200, response.status)
+        assertEquals(listOf("https://api.github.com/repos/Beelzebub2/nuvio-native/releases/latest"), requests)
+    }
+
+    @Test
+    fun renamedRepositoryIsUsedOnlyAfterRedirectOrMissingPrimary() = runBlocking {
+        for (redirectOrMissing in listOf(301, 302, 307, 308, 404)) {
+            val requests = mutableListOf<String>()
+            val response = AppUpdaterRepository.fetchReleaseMetadata(
+                source = migrationSource,
+                channel = UpdateChannel.ALL_RELEASES,
+            ) { url, _ ->
+                requests += url
+                rawResponse(if (requests.size == 1) redirectOrMissing else 200)
+            }
+            assertEquals(200, response.status)
+            assertEquals(listOf(
+                "https://api.github.com/repos/Beelzebub2/nuvio-native/releases?per_page=20",
+                "https://api.github.com/repos/Beelzebub2/starlit/releases?per_page=20",
+            ), requests)
+        }
+    }
+
+    @Test
+    fun gatewayOrRateLimitErrorsNeverTriggerRepositoryFallback() = runBlocking {
+        for (failure in listOf(401, 403, 429, 500, 503)) {
+            val requests = mutableListOf<String>()
+            val response = AppUpdaterRepository.fetchReleaseMetadata(
+                source = migrationSource,
+                channel = UpdateChannel.BETA,
+            ) { url, _ ->
+                requests += url
+                rawResponse(failure)
+            }
+            assertEquals(failure, response.status)
+            assertEquals(listOf("https://api.github.com/repos/Beelzebub2/nuvio-native/releases?per_page=100"), requests)
+        }
+    }
+
+    @Test
+    fun renamedRepositoryCanAlsoBePrimaryWithoutDroppingLegacyFallback() = runBlocking {
+        val requests = mutableListOf<String>()
+        val response = AppUpdaterRepository.fetchReleaseMetadata(
+            // PR #29 needs only to change the primary repo; the legacy name stays in the aliases.
+            source = migrationSource.copy(repo = "starlit"),
+            channel = UpdateChannel.STABLE,
+        ) { url, _ ->
+            requests += url
+            rawResponse(if (requests.size == 1) 404 else 200)
+        }
+        assertEquals(200, response.status)
+        assertEquals(listOf(
+            "https://api.github.com/repos/Beelzebub2/starlit/releases/latest",
+            "https://api.github.com/repos/Beelzebub2/nuvio-native/releases/latest",
+        ), requests)
+    }
+
+    private fun rawResponse(status: Int) = RawHttpResponse(
+        status = status,
+        statusText = "",
+        url = "",
+        body = "",
+        headers = emptyMap(),
+    )
+
     @Test
     fun channelsUseTheSameReleaseEndpointsAsTv() {
         assertEquals("releases/latest", AppUpdaterRepository.releasePath(UpdateChannel.STABLE))
