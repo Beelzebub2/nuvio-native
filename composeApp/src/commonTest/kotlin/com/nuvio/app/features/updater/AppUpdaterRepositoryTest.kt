@@ -11,7 +11,7 @@ class AppUpdaterRepositoryTest {
         owner = "Beelzebub2",
         repo = "nuvio-native",
         userAgent = "Starlit-Update-Test",
-        fallbackRepositories = listOf("starlit"),
+        fallbackRepositories = listOf("nuvio-native", "starlit"),
     )
 
     @Test
@@ -72,14 +72,18 @@ class AppUpdaterRepositoryTest {
     fun renamedRepositoryCanAlsoBePrimaryWithoutDroppingLegacyFallback() = runBlocking {
         val requests = mutableListOf<String>()
         val response = AppUpdaterRepository.fetchReleaseMetadata(
-            source = migrationSource.copy(repo = "starlit", fallbackRepositories = listOf("nuvio-native")),
+            // PR #29 needs only to change the primary repo; the legacy name stays in the aliases.
+            source = migrationSource.copy(repo = "starlit"),
             channel = UpdateChannel.STABLE,
         ) { url, _ ->
             requests += url
-            rawResponse(200)
+            rawResponse(if (requests.size == 1) 404 else 200)
         }
         assertEquals(200, response.status)
-        assertEquals(listOf("https://api.github.com/repos/Beelzebub2/starlit/releases/latest"), requests)
+        assertEquals(listOf(
+            "https://api.github.com/repos/Beelzebub2/starlit/releases/latest",
+            "https://api.github.com/repos/Beelzebub2/nuvio-native/releases/latest",
+        ), requests)
     }
 
     private fun rawResponse(status: Int) = RawHttpResponse(
