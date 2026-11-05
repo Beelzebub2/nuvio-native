@@ -56,6 +56,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
+import com.nuvio.app.core.auth.AccountCredentialsRepository
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.GoogleOAuthAvailability
@@ -137,6 +138,7 @@ private fun AccountSettingsBody(
         (authState as? AuthState.Authenticated)?.isAnonymous == false
     val namedAccount = (authState as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
     val canCheckGoogle = namedAccount != null && !isIos && GoogleOAuthAvailability.isOfficialServer()
+    val hasAccountCredentials = namedAccount != null && AccountCredentialsRepository.isAvailableOnActiveServer()
     var googleRetry by remember(namedAccount?.userId, activeServer) { mutableStateOf(0) }
     var googleLinkAvailable by remember(namedAccount?.userId, activeServer) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(namedAccount?.userId, activeServer, googleRetry) {
@@ -151,8 +153,9 @@ private fun AccountSettingsBody(
                 onSignOutClick = { signOutErrorMessage = null; showSignOutConfirm = true },
             )
             signOutErrorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            if (namedAccount != null && (canCheckGoogle || PasskeyRepository.canUseOnActiveServer())) {
+            if (namedAccount != null && (hasAccountCredentials || canCheckGoogle || PasskeyRepository.canUseOnActiveServer())) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
+                if (hasAccountCredentials) AccountCredentialsCard(namedAccount)
                 if (canCheckGoogle) {
                     when (googleLinkAvailable) {
                         true -> GoogleAccountLinkCard(authState, isAvailable = true)
@@ -182,7 +185,7 @@ private fun AccountSettingsBody(
     } else {
         val canImportLocal = namedAccount != null && LocalSettingsImport.isAvailable
         val hasSignInMethods = namedAccount != null && (
-            canCheckGoogle || PasskeyRepository.canUseOnActiveServer()
+            hasAccountCredentials || canCheckGoogle || PasskeyRepository.canUseOnActiveServer()
         )
 
         Column(
@@ -193,6 +196,7 @@ private fun AccountSettingsBody(
 
             if (hasSignInMethods) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_security))
+                if (hasAccountCredentials && namedAccount != null) AccountCredentialsCard(namedAccount)
                 if (canCheckGoogle) {
                     when (googleLinkAvailable) {
                         true -> GoogleAccountLinkCard(authState, isAvailable = true)

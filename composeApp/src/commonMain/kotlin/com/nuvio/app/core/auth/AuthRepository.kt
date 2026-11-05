@@ -192,6 +192,13 @@ object AuthRepository {
         _state.value = AuthState.Authenticated(userId = userId, email = email, isAnonymous = false)
     }
 
+    /** Called after a verified GoTrue profile fetch, never for a pending email-change request. */
+    internal fun applyConfirmedAccountEmail(userId: String, verifiedEmail: String?) {
+        if (verifiedEmail.isNullOrBlank()) return
+        val current = _state.value as? AuthState.Authenticated ?: return
+        if (current.isAnonymous || current.userId != userId) return
+        if (current.email != verifiedEmail) _state.value = current.copy(email = verifiedEmail)
+    }
     private suspend fun validateRemoteSession(userId: String): Boolean {
         if (userId.isBlank() || validatedRemoteUserId == userId) return true
 
