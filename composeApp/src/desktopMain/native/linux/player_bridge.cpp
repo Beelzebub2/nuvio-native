@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <atomic>
 #include <clocale>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -867,16 +868,29 @@ gboolean pushPlayerUpdate(gpointer data) {
     }
     double duration = mpvGetDouble(player->mpv, "duration");
     double position = mpvGetDouble(player->mpv, "time-pos");
+    long long videoWidth = (long long)mpvGetInt(player->mpv, "video-params/w");
+    long long videoHeight = (long long)mpvGetInt(player->mpv, "video-params/h");
+    double cacheTime = mpvGetDouble(player->mpv, "demuxer-cache-time");
+    double cacheAhead = cacheTime > 0 ? std::max(0.0, cacheTime - position)
+        : std::max(0.0, mpvGetDouble(player->mpv, "demuxer-cache-duration"));
+    double playbackSpeed = mpvGetDouble(player->mpv, "speed");
+    if (!std::isfinite(cacheAhead) || cacheAhead < 0.0) cacheAhead = 0.0;
+    if (!std::isfinite(playbackSpeed) || playbackSpeed <= 0.0) playbackSpeed = 1.0;
+    char *hardwareDecoder = mpv_get_property_string(player->mpv, "hwdec-current");
+    int decoderMode = !hardwareDecoder || !*hardwareDecoder ? -1 :
+        strcmp(hardwareDecoder, "no") == 0 ? 0 : 1;
+    if (hardwareDecoder) mpv_free(hardwareDecoder);
     double volumeLevel = mpvGetDouble(player->mpv, "volume") / 100.0;
     volumeLevel = std::max(0.0, std::min(kMaxVolumePercent / 100.0, volumeLevel));
     bool paused = mpvGetFlag(player->mpv, "pause");
     bool loading = playerLoading(player);
     std::string audioTracks = buildTracksJson(player->mpv, "audio");
     std::string subtitleTracks = buildTracksJson(player->mpv, "sub");
-    char head[224];
+    char head[512];
     snprintf(head, sizeof(head),
-             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,paused:%s,loading:%s,audioTracks:",
-             duration, position, volumeLevel, paused ? "true" : "false", loading ? "true" : "false");
+             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,videoWidth:%lld,videoHeight:%lld,bufferAheadSeconds:%0.3f,playbackSpeed:%0.3f,decoderMode:%d,paused:%s,loading:%s,audioTracks:",
+             duration, position, volumeLevel, videoWidth, videoHeight, cacheAhead, playbackSpeed, decoderMode,
+             paused ? "true" : "false", loading ? "true" : "false");
     std::string js = std::string(head) + audioTracks +
                      ",subtitleTracks:" + subtitleTracks + "})";
     evalJs(player->webview, js);

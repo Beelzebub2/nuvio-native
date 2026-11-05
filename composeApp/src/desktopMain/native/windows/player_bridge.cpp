@@ -1875,6 +1875,15 @@ private:
         double duration = doubleProperty("duration", 0.0);
         double position = doubleProperty("time-pos", 0.0);
         double volumeLevel = volume();
+        long long videoWidth = int64Property("video-params/w", 0);
+        long long videoHeight = int64Property("video-params/h", 0);
+        double bufferedAhead = cacheAheadSeconds();
+        double playbackSpeed = doubleProperty("speed", 1.0);
+        if (!std::isfinite(bufferedAhead) || bufferedAhead < 0.0) bufferedAhead = 0.0;
+        if (!std::isfinite(playbackSpeed) || playbackSpeed <= 0.0) playbackSpeed = 1.0;
+        // Do not transfer arbitrary decoder names or paths into the WebView.
+        std::string hardwareDecoder = stringProperty("hwdec-current", "");
+        int decoderMode = hardwareDecoder.empty() ? -1 : hardwareDecoder == "no" ? 0 : 1;
         bool paused = isPaused();
         bool loading = isLoading();
         std::string audioTracks = audioTracksJson();
@@ -1884,6 +1893,11 @@ private:
         script << "window.playerUpdate({duration:" << duration
                << ",position:" << position
                << ",volumeLevel:" << volumeLevel
+               << ",videoWidth:" << videoWidth
+               << ",videoHeight:" << videoHeight
+               << ",bufferAheadSeconds:" << bufferedAhead
+               << ",playbackSpeed:" << playbackSpeed
+               << ",decoderMode:" << decoderMode
                << ",paused:" << (paused ? "true" : "false")
                << ",loading:" << (loading ? "true" : "false")
                << ",audioTracks:" << audioTracks

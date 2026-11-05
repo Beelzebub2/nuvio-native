@@ -43,6 +43,11 @@ const sourcesLabel = document.getElementById("sourcesLabel");
 const episodesLabel = document.getElementById("episodesLabel");
 const submitIntroButton = document.getElementById("submitIntroButton");
 const videoSettingsButton = document.getElementById("videoSettingsButton");
+const diagnosticsButton = document.getElementById("diagnosticsButton");
+const diagnosticsModal = document.getElementById("diagnosticsModal");
+const diagnosticsCloseButton = document.getElementById("diagnosticsCloseButton");
+const diagnosticsCopyButton = document.getElementById("diagnosticsCopyButton");
+const diagnosticsCopyStatus = document.getElementById("diagnosticsCopyStatus");
 const rtxCompareButton = document.getElementById("rtxCompareButton");
 const rtxCompareLabel = document.getElementById("rtxCompareLabel");
 const rtxCompareStatus = document.getElementById("rtxCompareStatus");
@@ -391,6 +396,12 @@ let isScrubbing = false;
 let scrubPositionMs = 0;
 let tapTimer = 0;
 let activeModal = "";
+// Native telemetry is ephemeral and never written to disk. Only numeric fields
+// from mpv are allowed into the diagnostic report.
+let lastDiagnosticsUpdate = null;
+let previousDiagnosticsLoading = true;
+let diagnosticsPlaybackStarted = false;
+let diagnosticsRebuffers = 0;
 let pressedButton = null;
 let focusedActionCommand = "";
 let rtxComparisonHeld = false;
@@ -1015,6 +1026,7 @@ const rangePositionMs = () => {
 
 const modalByName = {
   audio: audioModal,
+  diagnostics: diagnosticsModal,
   subtitles: subtitleModal,
   speed: speedModal,
   sources: sourceModal,
@@ -2124,7 +2136,30 @@ const renderP2pConsentModal = () => {
   p2pConsentEnableButton.textContent = state.p2pConsentEnableLabel || "Enable P2P";
 };
 
+const diagnosticsMetrics = () =>
+  window.StarlitPlaybackDiagnostics.normalize(lastDiagnosticsUpdate, diagnosticsRebuffers);
+
+const renderDiagnosticsModal = () => {
+  if (activeModal !== "diagnostics") return;
+  const metrics = diagnosticsMetrics();
+  const setValue = (id, text) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = text;
+  };
+  setValue("diagnosticsPhase", metrics.phase);
+  setValue("diagnosticsResolution", metrics.resolution);
+  setValue("diagnosticsTime", metrics.positionSeconds + "s / " + metrics.durationSeconds + "s");
+  setValue("diagnosticsBuffer", metrics.bufferAheadSeconds === "Unavailable"
+    ? "Unavailable" : metrics.bufferAheadSeconds + "s");
+  setValue("diagnosticsSpeed", metrics.playbackSpeed);
+  setValue("diagnosticsRebuffers", metrics.rebufferEvents);
+  setValue("diagnosticsDecoder", metrics.decoder);
+  setValue("diagnosticsThroughput", metrics.throughput);
+  diagnosticsCloseButton.textContent = state.panelCloseLabel || "Close";
+};
+
 const renderActiveModal = () => {
+  if (activeModal === "diagnostics") renderDiagnosticsModal();
   if (activeModal === "audio") renderAudioTrackList();
   if (activeModal === "subtitles") renderSubtitleModal();
   if (activeModal === "speed") renderSpeedOptionList();
@@ -2907,6 +2942,11 @@ document.querySelectorAll("[data-command]").forEach(button => {
       openPlayerModal("speed");
       return;
     }
+    if (command === "diagnostics") {
+      diagnosticsCopyStatus.textContent = "";
+      openPlayerModal("diagnostics");
+      return;
+    }
     if (command === "sources") {
       sourceFilterId = "";
       openPlayerModal("sources");
@@ -2931,6 +2971,29 @@ document.querySelectorAll("[data-command]").forEach(button => {
     showCommandToast(command);
     send(command, 0);
   });
+});
+
+diagnosticsCloseButton.addEventListener("click", () => closePlayerModal());
+diagnosticsCopyButton.addEventListener("click", () => {
+  const report = window.StarlitPlaybackDiagnostics.report(diagnosticsMetrics());
+  const copied = () => { diagnosticsCopyStatus.textContent = "Sanitized report copied"; };
+  const failed = () => { diagnosticsCopyStatus.textContent = "Unable to access clipboard"; };
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    navigator.clipboard.writeText(report).then(copied, failed);
+    return;
+  }
+  // Desktop WebViews may run from a file URL without the async clipboard API.
+  const field = document.createElement("textarea");
+  field.value = report;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  let succeeded = false;
+  try { succeeded = document.execCommand("copy"); } catch (_error) { /* Unavailable */ }
+  field.remove();
+  if (succeeded) copied(); else failed();
 });
 
 const setRtxComparisonHeld = held => {
@@ -3233,6 +3296,29 @@ timeLabel.addEventListener("click", () => {
 });
 
 window.playerUpdate = update => {
+  if (update && typeof update === "object") {
+    const loading = update.loading === true;
+    const playing = !loading && update.paused === false;
+    if (loading && !previousDiagnosticsLoading && diagnosticsPlaybackStarted) {
+      diagnosticsRebuffers = Math.min(diagnosticsRebuffers + 1, 1000000);
+    }
+    if (playing) diagnosticsPlaybackStarted = true;
+    previousDiagnosticsLoading = loading;
+    // Keep only measurements, never the native update's arbitrary track
+    // metadata or any future fields containing source/private data.
+    lastDiagnosticsUpdate = {
+      loading,
+      paused: update.paused === true,
+      duration: update.duration,
+      position: update.position,
+      videoWidth: update.videoWidth,
+      videoHeight: update.videoHeight,
+      bufferAheadSeconds: update.bufferAheadSeconds,
+      playbackSpeed: update.playbackSpeed,
+      decoderMode: update.decoderMode,
+    };
+    renderDiagnosticsModal();
+  }
   const durationMs = Math.round((Number(update.duration) || 0) * 1000);
   const positionMs = Math.round((Number(update.position) || 0) * 1000);
   const reportedVolumeLevel = Number(update.volumeLevel);

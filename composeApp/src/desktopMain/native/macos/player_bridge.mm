@@ -1611,10 +1611,17 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
             double position = [self doubleProperty:"time-pos" fallback:0.0];
             double volumeLevel = [self volume];
             double cacheAhead = [self cacheAheadSecondsForPosition:position];
+            if (!std::isfinite(cacheAhead) || cacheAhead < 0.0) cacheAhead = 0.0;
+            long long videoWidth = [self int64Property:"video-params/w" fallback:0];
+            long long videoHeight = [self int64Property:"video-params/h" fallback:0];
+            NSString *hardwareDecoder = [self stringProperty:"hwdec-current" fallback:@""];
+            int decoderMode = hardwareDecoder.length == 0 ? -1 :
+                [hardwareDecoder isEqualToString:@"no"] ? 0 : 1;
             BOOL paused = [self rawIsPaused];
             BOOL ended = [self rawIsEnded];
             BOOL loading = [self rawLoadingWithPaused:paused ended:ended duration:duration];
             double speed = [self rawSpeed];
+            if (!std::isfinite(speed) || speed <= 0.0) speed = 1.0;
             NSString *audioTracks = [self audioTracksJson] ?: @"[]";
             NSString *subtitleTracks = [self subtitleTracksJson] ?: @"[]";
             NSString *mediaTitle = [self stringProperty:"media-title" fallback:@""];
@@ -1640,10 +1647,15 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
                                          paused:paused
                                           speed:speed];
                 NSString *script = [NSString stringWithFormat:
-                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
+                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,videoWidth:%lld,videoHeight:%lld,bufferAheadSeconds:%0.3f,playbackSpeed:%0.3f,decoderMode:%d,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
                     duration,
                     position,
                     volumeLevel,
+                    videoWidth,
+                    videoHeight,
+                    cacheAhead,
+                    speed,
+                    decoderMode,
                     paused ? @"true" : @"false",
                     loading ? @"true" : @"false",
                     audioTracks,
