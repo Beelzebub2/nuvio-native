@@ -595,6 +595,7 @@
     <string name="downloads_storage_review">Rever limpeza</string>
     <string name="downloads_storage_suggest_old">Sugerir ficheiros com mais de 30 dias</string>
     <string name="downloads_storage_suggest_target">Sugerir até ao objetivo</string>
+    <string name="downloads_storage_suggest_lru">Sugerir os episódios vistos há mais tempo</string>
     <string name="downloads_storage_suggest_note">As sugestões apenas selecionam ficheiros concluídos e verificados. Confirma a seleção; nada é apagado sem a tua confirmação.</string>
     <string name="downloads_storage_remove_watched">Remover episódios vistos</string>
     <string name="downloads_storage_watched_notice">Os episódios concluídos marcados como vistos ou reproduzidos até ao fim ficam pré-selecionados. Desmarca os que quiseres manter. O histórico de visualização não será eliminado.</string>

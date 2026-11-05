@@ -741,6 +741,7 @@
     <string name="downloads_storage_review">Review cleanup</string>
     <string name="downloads_storage_suggest_old">Suggest 30+ day files</string>
     <string name="downloads_storage_suggest_target">Suggest to meet target</string>
+    <string name="downloads_storage_suggest_lru">Suggest least recently watched</string>
     <string name="downloads_storage_suggest_note">Suggestions only select verified, completed files. Check the selection carefully; nothing is deleted without your confirmation.</string>
     <string name="downloads_storage_remove_watched">Remove watched episodes</string>
     <string name="downloads_storage_watched_notice">Completed episodes marked as watched or played to completion are preselected. Uncheck anything you want to keep. Your watch history will not be deleted.</string>

@@ -543,6 +543,7 @@
     <string name="downloads_storage_review">Revisar limpeza</string>
     <string name="downloads_storage_suggest_old">Sugerir arquivos com mais de 30 dias</string>
     <string name="downloads_storage_suggest_target">Sugerir até a meta</string>
+    <string name="downloads_storage_suggest_lru">Sugerir os episódios assistidos há mais tempo</string>
     <string name="downloads_storage_suggest_note">As sugestões apenas selecionam arquivos concluídos e verificados. Confira a seleção; nada é apagado sem sua confirmação.</string>
     <string name="downloads_storage_remove_watched">Remover episódios assistidos</string>
     <string name="downloads_storage_watched_notice">Os episódios concluídos marcados como assistidos ou reproduzidos até o fim ficam pré-selecionados. Desmarque os que quiser manter. O histórico de reprodução não será apagado.</string>

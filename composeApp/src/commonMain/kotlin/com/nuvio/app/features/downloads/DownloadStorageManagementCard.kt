@@ -76,6 +76,11 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
     val watchedEpisodeIds = remember(items, watchedState.watchedKeys, progressState.entries) {
         watchedDownloadedEpisodeIds(items, watchedState.watchedKeys, progressState.entries)
     }
+    val lastWatchedByDownloadId = remember(items, progressState.entries) {
+        lastWatchedEpochMsByDownloadedEpisodeId(
+            items, progressState.entries, kotlin.time.Clock.System.now().toEpochMilliseconds(),
+        )
+    }
     var target by remember(profileId) { mutableStateOf(DownloadStorageManagement.quotaBytes(profileId)) }
     var showTargetMenu by remember(profileId) { mutableStateOf(false) }
     var showPreview by remember(profileId) { mutableStateOf(false) }
@@ -222,6 +227,12 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
         val targetSuggestions = remember(eligible, usage, target) {
             suggestedTargetDownloadCleanupIds(eligible, usage, target)
         }
+        val leastRecentlyWatchedSuggestions =
+            remember(eligible, usage, target, watchedEpisodeIds, lastWatchedByDownloadId) {
+                suggestedLeastRecentlyWatchedCleanupIds(
+                    eligible, watchedEpisodeIds, lastWatchedByDownloadId, usage, target,
+                )
+            }
         val selectedBytes = eligible.filter { it.id in validSelection }
             .fold(0L) { sum, entry ->
                 if (entry.bytes > Long.MAX_VALUE - sum) Long.MAX_VALUE else sum + entry.bytes
@@ -235,8 +246,10 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             onToggle = { id, checked -> selectedIds = if (checked) selectedIds + id else selectedIds - id },
             oldSuggestionsAvailable = !watchedOnly && oldSuggestions.isNotEmpty(),
             targetSuggestionsAvailable = !watchedOnly && targetSuggestions.isNotEmpty(),
+            leastRecentlyWatchedAvailable = !watchedOnly && leastRecentlyWatchedSuggestions.isNotEmpty(),
             onSuggestOld = { selectedIds = oldSuggestions },
             onSuggestTarget = { selectedIds = targetSuggestions },
+            onSuggestLeastRecentlyWatched = { selectedIds = leastRecentlyWatchedSuggestions },
             onDismiss = { showPreview = false },
             onConfirm = {
                 val removed = if (watchedOnly) {
@@ -266,8 +279,10 @@ internal fun DownloadCleanupDialog(
     onToggle: (id: String, checked: Boolean) -> Unit,
     oldSuggestionsAvailable: Boolean = false,
     targetSuggestionsAvailable: Boolean = false,
+    leastRecentlyWatchedAvailable: Boolean = false,
     onSuggestOld: () -> Unit = {},
     onSuggestTarget: () -> Unit = {},
+    onSuggestLeastRecentlyWatched: () -> Unit = {},
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -310,6 +325,14 @@ internal fun DownloadCleanupDialog(
                             icon = Icons.Rounded.DataUsage,
                             size = NuvioActionSize.Small,
                             onClick = onSuggestTarget,
+                        )
+                    }
+                    if (leastRecentlyWatchedAvailable) {
+                        NuvioCompactActionButton(
+                            label = stringResource(Res.string.downloads_storage_suggest_lru),
+                            icon = Icons.Rounded.History,
+                            size = NuvioActionSize.Small,
+                            onClick = onSuggestLeastRecentlyWatched,
                         )
                     }
                 }

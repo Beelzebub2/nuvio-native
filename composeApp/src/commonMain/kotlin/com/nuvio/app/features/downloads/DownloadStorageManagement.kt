@@ -1,5 +1,7 @@
 package com.nuvio.app.features.downloads
 
+import com.nuvio.app.features.watchprogress.WatchProgressEntry
+
 /**
  * Storage estimates are informational: unknown total sizes and untracked files
  * must never be treated as free disk capacity.
@@ -71,6 +73,74 @@ internal fun suggestedTargetDownloadCleanupIds(
         if (entry.bytes <= 0L || entry.id.isBlank() || !selected.add(entry.id)) continue
         remaining = (remaining - entry.bytes).coerceAtLeast(0L)
     }
+    return selected
+}
+
+/**
+ * Playback timestamps are not download transfer timestamps. Match by the
+ * series and exact season/episode identity so recycled addon video IDs cannot
+ * incorrectly mark another offline copy as recently watched.
+ */
+internal fun lastWatchedEpochMsByDownloadedEpisodeId(
+    items: Collection<DownloadItem>,
+    progressEntries: Collection<WatchProgressEntry>,
+    nowEpochMs: Long,
+): Map<String, Long> {
+    if (nowEpochMs <= 0L) return emptyMap()
+    data class Episode(val type: String, val metaId: String, val season: Int, val episode: Int)
+    fun key(type: String, metaId: String, season: Int?, episode: Int?): Episode? {
+        if (season == null || episode == null || metaId.isBlank()) return null
+        return Episode(type.trim().lowercase(), metaId.trim(), season, episode)
+    }
+
+    val lastPlayed = progressEntries.asSequence()
+        .filter {
+            it.lastUpdatedEpochMs in 1L..nowEpochMs &&
+                (it.lastPositionMs > 0L || it.isEffectivelyCompleted)
+        }
+        .mapNotNull { entry ->
+            key(entry.parentMetaType, entry.parentMetaId, entry.seasonNumber, entry.episodeNumber)
+                ?.let { identity -> identity to entry.lastUpdatedEpochMs }
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, dates) -> dates.maxOrNull() ?: 0L }
+
+    return items.asSequence()
+        .filter { it.isEpisode && it.status == DownloadStatus.Completed }
+        .mapNotNull { item ->
+            val identity = key(item.parentMetaType, item.parentMetaId, item.seasonNumber, item.episodeNumber)
+                ?: return@mapNotNull null
+            lastPlayed[identity]?.takeIf { it > 0L }?.let { item.id to it }
+        }
+        .toMap()
+}
+
+/**
+ * LRU-based *suggestions* are limited to watched, ownership-verified offline
+ * copies. A suggestion is never a deletion request: the user still checks the
+ * exact files in the existing confirmation dialog.
+ */
+internal fun suggestedLeastRecentlyWatchedCleanupIds(
+    eligible: List<DownloadCleanupEntry>,
+    watchedDownloadIds: Set<String>,
+    lastWatchedEpochMsByDownloadId: Map<String, Long>,
+    trackedBytes: Long,
+    targetBytes: Long?,
+): Set<String> {
+    if (targetBytes == null || targetBytes <= 0L || trackedBytes <= targetBytes) return emptySet()
+    var remaining = trackedBytes - targetBytes
+    val selected = linkedSetOf<String>()
+    eligible.asSequence()
+        .filter { it.bytes > 0L && it.id in watchedDownloadIds &&
+            (lastWatchedEpochMsByDownloadId[it.id] ?: 0L) > 0L }
+        .sortedWith(compareBy<DownloadCleanupEntry> {
+            lastWatchedEpochMsByDownloadId[it.id] ?: Long.MAX_VALUE
+        }.thenBy { it.createdAtEpochMs }.thenBy { it.id })
+        .forEach { entry ->
+            if (remaining > 0L && selected.add(entry.id)) {
+                remaining = (remaining - entry.bytes).coerceAtLeast(0L)
+            }
+        }
     return selected
 }
 

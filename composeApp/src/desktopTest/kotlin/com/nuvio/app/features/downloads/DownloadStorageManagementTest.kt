@@ -1,5 +1,7 @@
 package com.nuvio.app.features.downloads
 
+import com.nuvio.app.features.watchprogress.WatchProgressEntry
+
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -9,6 +11,23 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DownloadStorageManagementTest {
+    private fun progress(
+        metaId: String,
+        episode: Int,
+        playedAt: Long,
+        videoId: String = "shared-add-on-video-id",
+    ) = WatchProgressEntry(
+        contentType = "series",
+        parentMetaId = metaId,
+        parentMetaType = "series",
+        videoId = videoId,
+        title = "Episode",
+        seasonNumber = 1,
+        episodeNumber = episode,
+        lastPositionMs = 2_000L,
+        durationMs = 4_000L,
+        lastUpdatedEpochMs = playedAt,
+    )
     private fun item(root: File, id: String = "owned123", status: DownloadStatus = DownloadStatus.Completed) =
         DownloadItem(
             id = id,
@@ -139,5 +158,53 @@ class DownloadStorageManagementTest {
                 targetBytes = 1L,
             ),
         )
+    }
+
+    @Test
+    fun lastWatchedMappingUsesSeriesAndExactEpisodeAndRejectsFutureDates() {
+        val root = File("unused")
+        val owned = item(root).copy(id = "owned", contentType = "series", parentMetaType = "series",
+            parentMetaId = "series-a", videoId = "shared-add-on-video-id", seasonNumber = 1, episodeNumber = 2)
+        val unrelated = owned.copy(id = "other", parentMetaId = "series-b")
+        val unwatched = owned.copy(id = "unwatched", episodeNumber = 3)
+        val dates = lastWatchedEpochMsByDownloadedEpisodeId(
+            listOf(owned, unrelated, unwatched),
+            listOf(
+                progress("series-a", 2, 2_000L),
+                progress("series-a", 2, 3_000L),
+                progress("series-b", 2, 1_000L),
+                progress("series-a", 3, 20_000L), // Future timestamp is never accepted.
+                progress("series-c", 2, 500L),
+            ),
+            nowEpochMs = 10_000L,
+        )
+        assertEquals(mapOf("owned" to 3_000L, "other" to 1_000L), dates)
+    }
+
+    @Test
+    fun lruSuggestionsPrioritizeWatchedVerifiedCopiesAndNeverAuthorizeDeletion() {
+        val eligible = listOf(
+            DownloadCleanupEntry("newly-played", "Recent", 250L, 100L),
+            DownloadCleanupEntry("unwatched", "Not watched", 800L, 1L),
+            DownloadCleanupEntry("old-played", "Watched a while ago", 125L, 300L),
+            DownloadCleanupEntry("mid-played", "Watched recently", 100L, 200L),
+        )
+        val watched = setOf("newly-played", "old-played", "mid-played")
+        val timestamps = mapOf("old-played" to 10L, "mid-played" to 20L, "newly-played" to 30L,
+            "unwatched" to 1L)
+        val ids = suggestedLeastRecentlyWatchedCleanupIds(
+            eligible, watched, timestamps, trackedBytes = 1_000L, targetBytes = 780L,
+        )
+        assertEquals(listOf("old-played", "mid-played"), ids.toList())
+        assertFalse("unwatched" in ids)
+        assertEquals(emptySet(), suggestedLeastRecentlyWatchedCleanupIds(
+            eligible, watched, timestamps, trackedBytes = 1_000L, targetBytes = null,
+        ))
+        assertEquals(emptySet(), suggestedLeastRecentlyWatchedCleanupIds(
+            eligible, watched, timestamps, trackedBytes = 1_000L, targetBytes = 1_000L,
+        ))
+        assertEquals(emptySet(), suggestedLeastRecentlyWatchedCleanupIds(
+            eligible, emptySet(), timestamps, trackedBytes = 1_000L, targetBytes = 500L,
+        ))
     }
 }
