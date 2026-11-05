@@ -450,6 +450,16 @@ internal fun settingsSearchEntries(
             icon = Icons.Rounded.Tune,
         )
     }
+    addRow(
+        page = SettingsPage.Advanced,
+        key = "anonymous-usage-analytics",
+        title = stringResource(Res.string.settings_advanced_usage_analytics),
+        description = stringResource(Res.string.settings_advanced_usage_analytics_subtitle),
+        pageLabel = advancedPage,
+        section = stringResource(Res.string.settings_advanced_section_diagnostics),
+        category = advancedCategory,
+        icon = Icons.Rounded.Tune,
+    )
     if (SentrySettingsRepository.isSupported) {
         addRow(
             page = SettingsPage.Advanced,

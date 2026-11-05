@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.DataUsage
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -75,6 +76,11 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
     val watchedEpisodeIds = remember(items, watchedState.watchedKeys, progressState.entries) {
         watchedDownloadedEpisodeIds(items, watchedState.watchedKeys, progressState.entries)
     }
+    val lastWatchedByDownloadId = remember(items, progressState.entries) {
+        lastWatchedEpochMsByDownloadedEpisodeId(
+            items, progressState.entries, kotlin.time.Clock.System.now().toEpochMilliseconds(),
+        )
+    }
     var target by remember(profileId) { mutableStateOf(DownloadStorageManagement.quotaBytes(profileId)) }
     var showTargetMenu by remember(profileId) { mutableStateOf(false) }
     var showPreview by remember(profileId) { mutableStateOf(false) }
@@ -85,6 +91,7 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
     val available = remember(items) { DownloadStorageManagement.availableBytes() }
     val tokens = MaterialTheme.nuvio
     val overTarget = target?.let { usage > it } == true
+    val lowSpace = available?.let { it in 0L until 2L * Gib } == true
     val noTargetLabel = stringResource(Res.string.downloads_storage_no_target)
     fun targetLabel(bytes: Long?) = bytes?.let { "${it / Gib} GiB" } ?: noTargetLabel
 
@@ -135,6 +142,12 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             )
         }
         if (overTarget) DialogHint(stringResource(Res.string.downloads_storage_above_target), isError = true)
+        if (lowSpace) {
+            DialogHint(
+                stringResource(Res.string.downloads_storage_low_space, formatDownloadBytes(available ?: 0L)),
+                isError = true,
+            )
+        }
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -208,6 +221,18 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             )
         }
         val validSelection = selectedIds.intersect(eligible.mapTo(mutableSetOf()) { it.id })
+        val oldSuggestions = remember(eligible) {
+            suggestedOldDownloadCleanupIds(eligible, kotlin.time.Clock.System.now().toEpochMilliseconds())
+        }
+        val targetSuggestions = remember(eligible, usage, target) {
+            suggestedTargetDownloadCleanupIds(eligible, usage, target)
+        }
+        val leastRecentlyWatchedSuggestions =
+            remember(eligible, usage, target, watchedEpisodeIds, lastWatchedByDownloadId) {
+                suggestedLeastRecentlyWatchedCleanupIds(
+                    eligible, watchedEpisodeIds, lastWatchedByDownloadId, usage, target,
+                )
+            }
         val selectedBytes = eligible.filter { it.id in validSelection }
             .fold(0L) { sum, entry ->
                 if (entry.bytes > Long.MAX_VALUE - sum) Long.MAX_VALUE else sum + entry.bytes
@@ -219,6 +244,12 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             eligible = eligible,
             selection = validSelection,
             onToggle = { id, checked -> selectedIds = if (checked) selectedIds + id else selectedIds - id },
+            oldSuggestionsAvailable = !watchedOnly && oldSuggestions.isNotEmpty(),
+            targetSuggestionsAvailable = !watchedOnly && targetSuggestions.isNotEmpty(),
+            leastRecentlyWatchedAvailable = !watchedOnly && leastRecentlyWatchedSuggestions.isNotEmpty(),
+            onSuggestOld = { selectedIds = oldSuggestions },
+            onSuggestTarget = { selectedIds = targetSuggestions },
+            onSuggestLeastRecentlyWatched = { selectedIds = leastRecentlyWatchedSuggestions },
             onDismiss = { showPreview = false },
             onConfirm = {
                 val removed = if (watchedOnly) {
@@ -238,6 +269,7 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
 }
 
 /** Lets the user pick which verified offline copies to remove before anything is deleted. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DownloadCleanupDialog(
     title: String,
@@ -245,6 +277,12 @@ internal fun DownloadCleanupDialog(
     eligible: List<DownloadCleanupEntry>,
     selection: Set<String>,
     onToggle: (id: String, checked: Boolean) -> Unit,
+    oldSuggestionsAvailable: Boolean = false,
+    targetSuggestionsAvailable: Boolean = false,
+    leastRecentlyWatchedAvailable: Boolean = false,
+    onSuggestOld: () -> Unit = {},
+    onSuggestTarget: () -> Unit = {},
+    onSuggestLeastRecentlyWatched: () -> Unit = {},
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -268,6 +306,38 @@ internal fun DownloadCleanupDialog(
                 color = tokens.colors.textSecondary,
             )
         } else {
+            if (!watchedOnly) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    NuvioCompactActionButton(
+                        label = stringResource(Res.string.downloads_storage_suggest_old),
+                        icon = Icons.Rounded.History,
+                        size = NuvioActionSize.Small,
+                        enabled = oldSuggestionsAvailable,
+                        onClick = onSuggestOld,
+                    )
+                    if (targetSuggestionsAvailable) {
+                        NuvioCompactActionButton(
+                            label = stringResource(Res.string.downloads_storage_suggest_target),
+                            icon = Icons.Rounded.DataUsage,
+                            size = NuvioActionSize.Small,
+                            onClick = onSuggestTarget,
+                        )
+                    }
+                    if (leastRecentlyWatchedAvailable) {
+                        NuvioCompactActionButton(
+                            label = stringResource(Res.string.downloads_storage_suggest_lru),
+                            icon = Icons.Rounded.History,
+                            size = NuvioActionSize.Small,
+                            onClick = onSuggestLeastRecentlyWatched,
+                        )
+                    }
+                }
+                DialogHint(stringResource(Res.string.downloads_storage_suggest_note))
+            }
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp),

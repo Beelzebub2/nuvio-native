@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Összeomlási és ANR-jelentések küldése biztonságos környezeti adatokkal. Bekapcsolásig kikapcsolva.</string>
     <string name="about_licenses_attributions_subtitle">Adatforrások, köszönetnyilvánítások és platform licencek</string>
     <string name="about_supporters_contributors_subtitle">Támogatók elismerése és a projekt készítői</string>
     <string name="action_back">Vissza</string>
@@ -1917,7 +1918,6 @@
     </plurals>
     <string name="settings_advanced_section_diagnostics">DIAGNOSZTIKA</string>
     <string name="settings_advanced_sentry_reports">Sentry összeomlási jelentések</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Összeomlási és ANR (nem válaszoló app) jelentések küldése biztonságos környezeti adatokkal. Alapértelmezés szerint be van kapcsolva.</string>
     <string name="sentry_enable_dialog_title">Bekapcsolja az összeomlási jelentéseket?</string>
     <string name="sentry_enable_dialog_subtitle">Az összeomlási jelentések segítenek azonosítani az eszközspecifikus hibákat anélkül, hogy meg kellene ismételnie a hibát ADB logok mentésével.</string>
     <string name="sentry_disable_dialog_title">Kikapcsolja az összeomlási jelentéseket?</string>

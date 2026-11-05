@@ -140,9 +140,12 @@ internal fun DesktopNavigationBar(
         }
         val compactItemWidth = iconSize + 20.dp
         val expandedItemWidth = iconSize + widestLabel + 32.dp
-        val effectiveLabelFraction = if (maxWidth < expandedItemWidth * items.size + 8.dp) 0f else labelFraction
+        // The desktop row also hosts the wordmark, global search, settings and profile.
+        // Reserve their space before sizing a user-enabled fourth navigation tab.
+        val availableTabWidth = if (spansWindow) (maxWidth - 600.dp).coerceAtLeast(0.dp) else maxWidth
+        val effectiveLabelFraction = if (availableTabWidth < expandedItemWidth * items.size + 8.dp) 0f else labelFraction
         val trackWidth = ((compactItemWidth + (expandedItemWidth - compactItemWidth) * effectiveLabelFraction) * items.size + 8.dp)
-            .coerceAtMost(maxWidth)
+            .coerceAtMost(availableTabWidth)
         val tabs: @Composable () -> Unit = {
             JellyNavigationBar(
                 items = items,

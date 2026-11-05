@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,15 @@ import kotlinx.coroutines.withTimeoutOrNull
     LaunchedEffect(profile.activeProfile) { MyAnimeListRepository.ensureLoaded() }
     return MyAnimeListRepository.state.collectAsState().value
 }
+@Composable internal actual fun MyAnimeListTabVisible(): Boolean {
+    val connection = rememberMalConnection()
+    return connection.connected && connection.showTab
+}
+
+internal actual suspend fun markMyAnimeListRewatchOnPlayback(meta: MetaDetails, playbackProfileId: Int) {
+    MyAnimeListRepository.markRewatchingIfCompleted(meta, playbackProfileId)
+}
+
 @Composable internal actual fun MyAnimeListSettingsCard() {
     val connection = rememberMalConnection()
     var setup by remember { mutableStateOf(false) }
@@ -44,6 +54,17 @@ import kotlinx.coroutines.withTimeoutOrNull
                 Button(enabled = !connection.busy, onClick = { setup = true }) { Text(if (connection.connected) "Reconnect" else "Set up / Connect") }
                 if (connection.connected) TextButton(onClick = MyAnimeListRepository::disconnect) { Text("Disconnect") }
                 if (connection.connecting) TextButton(onClick = MyAnimeListRepository::cancelConnect) { Text("Cancel") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    Text("Show MyAnimeList tab", style = MaterialTheme.typography.bodyMedium)
+                    Text("Browse your MAL anime list from the Starlit navigation bar.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(
+                    checked = connection.showTab && connection.connected,
+                    onCheckedChange = MyAnimeListRepository::setTabVisible,
+                    enabled = connection.connected && !connection.busy,
+                )
             }
             if (connection.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             connection.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -76,15 +97,14 @@ import kotlinx.coroutines.withTimeoutOrNull
         } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
         finally { busy = false }
     }
-    val anime = malId != null || meta.id.substringBefore(':') in listOf("nativeairing", "mal", "anilist", "kitsu") ||
-        meta.genres.any { it.equals("anime", true) || it.equals("animation", true) }
+    val anime = malId != null || isLikelyMyAnimeListAnime(meta)
     if (!anime) return
-    fun update(newStatus: MalStatus? = null, score: Int? = null) {
+    fun update(newStatus: MalStatus? = null, score: Int? = null, isRewatching: Boolean? = null) {
         val id = malId ?: return
         if (busy || connection.busy) return
         scope.launch {
             busy = true; error = null
-            try { status = MyAnimeListRepository.update(id, newStatus, score); NuvioToastController.show("MyAnimeList updated") }
+            try { status = MyAnimeListRepository.update(id, newStatus, score, isRewatching); NuvioToastController.show("MyAnimeList updated") }
             catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
             finally { busy = false }
         }
@@ -125,6 +145,15 @@ import kotlinx.coroutines.withTimeoutOrNull
                     icon = Icons.Default.Edit, tone = NuvioCompactActionTone.Quiet,
                     enabled = !busy && !connection.busy, onClick = { search = true },
                 )
+                if (status?.status == MalStatus.COMPLETED) {
+                    val rewatching = status?.isRewatching == true
+                    NuvioCompactActionButton(
+                        label = if (rewatching) "Rewatching · On" else "Mark rewatching",
+                        icon = Icons.Default.Replay,
+                        enabled = !busy && !connection.busy,
+                        onClick = { update(isRewatching = !rewatching) },
+                    )
+                }
             }
         }
         if (busy) LinearProgressIndicator(Modifier.width(220.dp))

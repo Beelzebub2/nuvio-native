@@ -56,6 +56,8 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.DeviceSessionRegistration
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
+import com.nuvio.app.core.diagnostics.UsageEvent
 import com.nuvio.app.core.deeplink.AppDeepLink
 import com.nuvio.app.core.deeplink.AppDeepLinkRepository
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
@@ -103,6 +105,7 @@ import com.nuvio.app.features.collection.CollectionSyncService
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadStatus
 import com.nuvio.app.features.downloads.DownloadSubtitles
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.home.HomeCatalogSection
@@ -180,6 +183,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -251,6 +255,15 @@ internal fun MainAppContent(
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
         var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
+        LaunchedEffect(selectedTab) {
+            val event = when (selectedTab) {
+                AppScreenTab.Home -> UsageEvent.Home
+                AppScreenTab.Search -> UsageEvent.Search
+                AppScreenTab.Library, AppScreenTab.WatchLater -> UsageEvent.Library
+                AppScreenTab.Settings -> UsageEvent.Settings
+            }
+            UsageDiagnostics.track(event)
+        }
         var searchFocusRequestCount by remember { mutableStateOf(0) }
         val homeScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val searchScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -263,6 +276,31 @@ internal fun MainAppContent(
             warmProfileBoundRepositories()
         }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
+        LaunchedEffect(currentRoute) {
+            if (currentRoute is PlayerRoute) {
+                UsageDiagnostics.track(UsageEvent.PlaybackOpened)
+            }
+        }
+        LaunchedEffect(ownsAppRuntime) {
+            if (!ownsAppRuntime) return@LaunchedEffect
+            var previous: Map<String, DownloadStatus>? = null
+            DownloadsRepository.uiState.collect { state ->
+                val current = state.items.associate { it.id to it.status }
+                previous?.let { before ->
+                    for (item in state.items) {
+                        val old = before[item.id]
+                        val event = when {
+                            old == null && item.status == DownloadStatus.Downloading -> UsageEvent.DownloadQueued
+                            old != null && old != DownloadStatus.Completed && item.status == DownloadStatus.Completed -> UsageEvent.DownloadCompleted
+                            old != null && old != DownloadStatus.Failed && item.status == DownloadStatus.Failed -> UsageEvent.DownloadFailed
+                            else -> null
+                        }
+                        if (event != null) UsageDiagnostics.track(event)
+                    }
+                }
+                previous = current
+            }
+        }
         var registeredPlayerSystemBack by remember {
             mutableStateOf<Pair<PlayerRoute, () -> Unit>?>(null)
         }
@@ -426,6 +464,7 @@ internal fun MainAppContent(
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.WatchLater -> Unit
+            AppScreenTab.MyAnimeList -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }
