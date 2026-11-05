@@ -38,6 +38,9 @@ object DownloadsRepository {
     private var ordinal = 0L
     private var hasLoaded = false
     private var loadedProfile: Int? = null
+    // Cache the profile-scoped opt-in quota. Never repeatedly read platform
+    // settings on the downloader's hot progress callback.
+    private var enforcedQuotaBytes: Long? = null
     private val desktopVerificationScope = CoroutineScope(SupervisorJob() + DownloadDesktopFeatures.verificationDispatcher())
     private var desktopVerificationJob: Job? = null
 
@@ -58,6 +61,7 @@ object DownloadsRepository {
         invalidateTransfers()
         hasLoaded = false
         loadedProfile = null
+        enforcedQuotaBytes = null
         _uiState.value = DownloadsUiState()
         _hasUnseenCompleted.value = false
         notifyLiveStatusPlatform()
@@ -424,6 +428,7 @@ object DownloadsRepository {
         invalidateTransfers()
         hasLoaded = false
         loadedProfile = null
+        enforcedQuotaBytes = null
         val profile = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId
         var hadStoredPayload = false
         val items = try {
@@ -448,6 +453,7 @@ object DownloadsRepository {
         }
         hasLoaded = true
         loadedProfile = profile
+        refreshStorageQuota()
         _hasUnseenCompleted.value = false
         publish(items)
         // An absent profile key must stay absent: account backup restoration uses
@@ -505,10 +511,53 @@ object DownloadsRepository {
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
 
+    private fun refreshStorageQuota() {
+        val profile = loadedProfile
+        enforcedQuotaBytes = if (DownloadStorageManagement.supported && profile != null &&
+            DownloadStorageManagement.enforceQuota(profile)) {
+            DownloadStorageManagement.quotaBytes(profile)
+        } else null
+    }
+
+    /** Re-evaluate explicit per-profile quota changes, never auto-resume paused downloads. */
+    internal fun onStoragePolicyChanged() = synchronized(lock) {
+        if (!hasLoaded) return@synchronized
+        refreshStorageQuota()
+        enforcedQuotaBytes?.let { ceiling ->
+            for (id in activeHandles.keys.toList().asReversed()) {
+                if (!quotaRequiresPause(_uiState.value.items, activeHandles.keys, ceiling)) break
+                holdForQuota(id)
+            }
+        }
+        pumpQueue()
+    }
+
+    /** Preserves partial files and the existing restart/resume semantics. Never deletes media. */
+    private fun holdForQuota(downloadId: String) {
+        tokens.remove(downloadId)
+        activeHandles.remove(downloadId)?.cancel()
+        mutateItem(downloadId) { item ->
+            item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
+                errorMessage = runBlocking { getString(Res.string.downloads_storage_enforce_paused) })
+        }
+        pumpQueue()
+    }
+
     private fun pumpQueue() {
         val limit = DownloadDesktopFeatures.parallelDownloads()
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
-            .take((limit - activeHandles.size).coerceAtLeast(0)).forEach { startDownload(it) }
+            .forEach { item ->
+                if (activeHandles.size >= limit) return@forEach
+                val ceiling = enforcedQuotaBytes
+                if (ceiling != null && !quotaAllowsDownloadStart(
+                    _uiState.value.items, activeHandles.keys, item.id, ceiling,
+                )) {
+                    mutateItem(item.id) { old ->
+                        old.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
+                            errorMessage = runBlocking { getString(Res.string.downloads_storage_enforce_paused) })
+                    }
+                } else startDownload(item)
+            }
     }
     private fun startDownload(item: DownloadItem, attempt: Int = 1) {
         val token = ++ordinal
@@ -551,6 +600,13 @@ object DownloadsRepository {
                     mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
                         phase = if (!isDesktop && DownloadsPlatformDownloader.supportsTorrentDownloads) it.phase else phase,
                         bytesPerSecond = speed, updatedAtEpochMs = now) }
+                    // Source size becomes known only after a transfer starts
+                    // (and may remain unknown). Pause as soon as the reported
+                    // total or actual bytes exceed the opt-in reserved budget.
+                    val ceiling = enforcedQuotaBytes
+                    if (ceiling != null && quotaRequiresPause(
+                        _uiState.value.items, activeHandles.keys, ceiling,
+                    )) holdForQuota(item.id)
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,

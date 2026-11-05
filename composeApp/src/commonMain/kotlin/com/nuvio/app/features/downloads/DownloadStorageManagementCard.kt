@@ -82,6 +82,9 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
         )
     }
     var target by remember(profileId) { mutableStateOf(DownloadStorageManagement.quotaBytes(profileId)) }
+    var hardLimitEnabled by remember(profileId) {
+        mutableStateOf(DownloadStorageManagement.enforceQuota(profileId))
+    }
     var showTargetMenu by remember(profileId) { mutableStateOf(false) }
     var showPreview by remember(profileId) { mutableStateOf(false) }
     var watchedOnly by remember(profileId) { mutableStateOf(false) }
@@ -171,6 +174,8 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                                     DownloadStorageManagement.setQuotaBytes(profileId, bytes)
                                 }.onSuccess {
                                     target = bytes
+                                    if (bytes == null) hardLimitEnabled = false
+                                    DownloadsRepository.onStoragePolicyChanged()
                                     notice = null
                                 }.onFailure { error ->
                                     notice = error.message
@@ -180,6 +185,29 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                         )
                     }
                 }
+            }
+            if (target != null) {
+                NuvioCompactActionButton(
+                    label = stringResource(if (hardLimitEnabled) {
+                        Res.string.downloads_storage_enforce_disable
+                    } else {
+                        Res.string.downloads_storage_enforce_enable
+                    }),
+                    icon = Icons.Rounded.DataUsage,
+                    size = NuvioActionSize.Small,
+                    onClick = {
+                        val enabled = !hardLimitEnabled
+                        runCatching {
+                            DownloadStorageManagement.setEnforceQuota(profileId, enabled)
+                        }.onSuccess {
+                            hardLimitEnabled = enabled
+                            DownloadsRepository.onStoragePolicyChanged()
+                            notice = null
+                        }.onFailure { error ->
+                            notice = error.message
+                        }
+                    },
+                )
             }
             NuvioCompactActionButton(
                 label = stringResource(Res.string.downloads_storage_review),
@@ -205,7 +233,11 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                 },
             )
         }
-        DialogHint(stringResource(Res.string.downloads_storage_target_note))
+        DialogHint(stringResource(if (hardLimitEnabled) {
+            Res.string.downloads_storage_enforce_note_on
+        } else {
+            Res.string.downloads_storage_enforce_note_off
+        }))
         notice?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
         }

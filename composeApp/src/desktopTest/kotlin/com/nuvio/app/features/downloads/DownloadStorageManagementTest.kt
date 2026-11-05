@@ -11,6 +11,70 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DownloadStorageManagementTest {
+    @Test
+    fun hardQuotaBlocksOversizedKnownDownloadsButAllowsExactlyTheRemainingBudget() {
+        val root = File("unused")
+        val owned = item(root).copy(id = "completed", downloadedBytes = 600L, totalBytes = 600L)
+        val candidate = item(root).copy(id = "pending", status = DownloadStatus.Downloading,
+            downloadedBytes = 0L, totalBytes = 500L)
+        assertFalse(quotaAllowsDownloadStart(listOf(owned, candidate), emptySet(), "pending", 1_000L))
+        val exactly = candidate.copy(totalBytes = 400L)
+        assertTrue(quotaAllowsDownloadStart(listOf(owned, exactly), emptySet(), "pending", 1_000L))
+        assertFalse(quotaAllowsDownloadStart(listOf(owned, exactly), emptySet(), "absent", 1_000L))
+        assertFalse(quotaAllowsDownloadStart(listOf(owned, exactly), emptySet(), "pending", -1L))
+    }
+
+    @Test
+    fun hardQuotaReservesKnownTotalsForConcurrentActiveTransfers() {
+        val root = File("unused")
+        val running = item(root).copy(id = "first", status = DownloadStatus.Downloading,
+            downloadedBytes = 100L, totalBytes = 700L)
+        val candidate = item(root).copy(id = "second", status = DownloadStatus.Downloading,
+            downloadedBytes = 0L, totalBytes = 350L)
+        assertEquals(700L, projectedDownloadQuotaBytes(listOf(running, candidate), setOf("first")))
+        assertFalse(quotaAllowsDownloadStart(
+            listOf(running, candidate), setOf("first"), "second", 1_000L,
+        ))
+        assertTrue(quotaRequiresPause(
+            listOf(running, candidate), setOf("first", "second"), 1_000L,
+        ))
+        assertFalse(quotaRequiresPause(
+            listOf(running, candidate), setOf("first"), 1_000L,
+        ))
+    }
+
+    @Test
+    fun unknownLengthStartsOnlyBelowLimitAndPausesWhenMetadataOrBytesExceedIt() {
+        val root = File("unused")
+        val existing = item(root).copy(id = "completed", downloadedBytes = 900L)
+        val unknown = item(root).copy(id = "next", status = DownloadStatus.Downloading,
+            downloadedBytes = 0L, totalBytes = null)
+        assertTrue(quotaAllowsDownloadStart(listOf(existing, unknown), emptySet(), "next", 1_000L))
+        assertTrue(quotaRequiresPause(
+            listOf(existing, unknown.copy(downloadedBytes = 10L, totalBytes = 300L)),
+            setOf("next"), 1_000L,
+        ))
+        assertTrue(quotaRequiresPause(
+            listOf(existing, unknown.copy(downloadedBytes = 101L, totalBytes = null)),
+            setOf("next"), 1_000L,
+        ))
+        assertFalse(quotaAllowsDownloadStart(listOf(existing, unknown), emptySet(), "next", 900L))
+    }
+
+    @Test
+    fun quotaAccountingSaturatesOnMalformedOrEnormousSizeAndAllowsAfterCleanup() {
+        val root = File("unused")
+        val malformed = item(root).copy(id = "large", downloadedBytes = Long.MAX_VALUE - 100L,
+            totalBytes = Long.MAX_VALUE)
+        val another = item(root).copy(id = "next", status = DownloadStatus.Downloading,
+            downloadedBytes = 200L, totalBytes = -20L)
+        assertEquals(Long.MAX_VALUE,
+            projectedDownloadQuotaBytes(listOf(malformed, another), setOf("large", "next")))
+        assertFalse(quotaAllowsDownloadStart(listOf(malformed, another), emptySet(), "next", 10_000L))
+        val cleaned = listOf(another.copy(downloadedBytes = 0L, totalBytes = 400L))
+        assertTrue(quotaAllowsDownloadStart(cleaned, emptySet(), "next", 1_000L))
+        assertEquals(400L, projectedDownloadQuotaBytes(cleaned, setOf("next")))
+    }
     private fun progress(
         metaId: String,
         episode: Int,

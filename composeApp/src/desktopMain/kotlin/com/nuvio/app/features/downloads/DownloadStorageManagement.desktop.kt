@@ -11,6 +11,7 @@ internal actual object DownloadStorageManagement {
     actual val supported: Boolean = true
     private val store by lazy { DesktopStorage.store("download_storage_budget") }
     private fun key(profileId: Int) = ProfileScopedKey.of("quota_bytes", profileId)
+    private fun hardKey(profileId: Int) = ProfileScopedKey.of("hard_quota_enabled", profileId)
 
     actual fun availableBytes(): Long? = runCatching {
         val folder = File(DownloadDesktopFeatures.directory() ?: return null)
@@ -23,6 +24,15 @@ internal actual object DownloadStorageManagement {
     actual fun setQuotaBytes(profileId: Int, limitBytes: Long?) {
         require(limitBytes == null || limitBytes in (1L shl 30)..(2L shl 40))
         store.putString(key(profileId), limitBytes?.toString() ?: "")
+        if (limitBytes == null) store.putString(hardKey(profileId), "false")
+    }
+
+    actual fun enforceQuota(profileId: Int): Boolean =
+        store.getString(hardKey(profileId)) == "true" && quotaBytes(profileId) != null
+
+    actual fun setEnforceQuota(profileId: Int, enabled: Boolean) {
+        require(!enabled || quotaBytes(profileId) != null) { "Choose a storage target first" }
+        store.putString(hardKey(profileId), enabled.toString())
     }
 
     /** Never claim legacy/unowned files or folders just because a queue record points to them. */

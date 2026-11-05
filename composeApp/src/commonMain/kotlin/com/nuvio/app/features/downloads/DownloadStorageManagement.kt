@@ -12,6 +12,51 @@ internal fun trackedDownloadBytes(items: List<DownloadItem>): Long =
         if (bytes > Long.MAX_VALUE - total) Long.MAX_VALUE else total + bytes
     }
 
+/**
+ * Conservative accounting for active downloads: once the source reports the
+ * full size, reserve the entire remaining size against the optional quota.
+ * Queued/paused files count only bytes already written; unknown sizes cannot
+ * be guessed. Saturation prevents long overflow from weakening the guard.
+ */
+internal fun projectedDownloadQuotaBytes(
+    items: Collection<DownloadItem>,
+    activeDownloadIds: Set<String>,
+): Long = items.fold(0L) { total, item ->
+    val writtenBytes = item.downloadedBytes.coerceAtLeast(0L)
+    val predictedBytes = if (item.id in activeDownloadIds) {
+        maxOf(writtenBytes, item.totalBytes?.coerceAtLeast(0L) ?: 0L)
+    } else writtenBytes
+    if (predictedBytes > Long.MAX_VALUE - total) Long.MAX_VALUE else total + predictedBytes
+}
+
+/**
+ * Admission is fail-closed when the actual consumed bytes have exhausted the
+ * configured ceiling or a known file size would exceed it. Unknown file sizes
+ * can start below the limit; their first progress metadata must be checked by
+ * the running transfer guard, which may pause them immediately.
+ */
+internal fun quotaAllowsDownloadStart(
+    items: Collection<DownloadItem>,
+    activeDownloadIds: Set<String>,
+    candidateId: String,
+    ceilingBytes: Long,
+): Boolean {
+    if (ceilingBytes <= 0L || candidateId.isBlank() || items.none { it.id == candidateId }) return false
+    val written = items.fold(0L) { sum, item ->
+        val bytes = item.downloadedBytes.coerceAtLeast(0L)
+        if (bytes > Long.MAX_VALUE - sum) Long.MAX_VALUE else sum + bytes
+    }
+    if (written >= ceilingBytes) return false
+    return projectedDownloadQuotaBytes(items, activeDownloadIds + candidateId) <= ceilingBytes
+}
+
+internal fun quotaRequiresPause(
+    items: Collection<DownloadItem>,
+    activeDownloadIds: Set<String>,
+    ceilingBytes: Long,
+): Boolean = ceilingBytes > 0L &&
+    projectedDownloadQuotaBytes(items, activeDownloadIds) > ceilingBytes
+
 /** Only explicitly checked, completed, locally verified downloads can be cleaned. */
 internal fun eligibleDownloadCleanup(
     items: List<DownloadItem>,
@@ -153,5 +198,8 @@ internal expect object DownloadStorageManagement {
     fun availableBytes(): Long?
     fun quotaBytes(profileId: Int): Long?
     fun setQuotaBytes(profileId: Int, limitBytes: Long?)
+    /** Separate opt-in. A saved informational target never enables this implicitly. */
+    fun enforceQuota(profileId: Int): Boolean
+    fun setEnforceQuota(profileId: Int, enabled: Boolean)
     fun eligibleCleanupBytes(item: DownloadItem): Long?
 }
