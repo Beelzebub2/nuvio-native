@@ -669,7 +669,7 @@
     <string name="player_cast_candidate">Este endereço multimédia público pode ser compatível. Só continua se tiveres permissão para o reproduzir no recetor escolhido; alguns codecs e recetores podem não funcionar.</string>
     <string name="player_cast_alternative">Ficheiros locais, P2P, DRM e fontes privadas não podem ser enviados para recetores Cast. A reprodução num PC Starlit emparelhado continua disponível.</string>
     <string name="player_cast_sender_intro">A transmissão direta utiliza o Google Cast e o recetor predefinido. Só podem ser enviados conteúdos multimédia HTTPS públicos elegíveis, após escolheres o dispositivo e confirmares os direitos de acesso.</string>
-    <string name="player_cast_sender_rights">Tenho autorização para reproduzir esta fonte na televisão</string>
+    <string name="player_cast_sender_rights">Este conteúdo é público, não usa ligações assinadas e tenho autorização para o reproduzir nesta televisão</string>
     <string name="player_cast_sender_unavailable">Os serviços Google Cast não estão disponíveis neste dispositivo.</string>
     <string name="player_cast_sender_connect">Escolhe um recetor através do botão Cast.</string>
     <string name="player_cast_sender_connected">Está ligado um recetor Cast.</string>

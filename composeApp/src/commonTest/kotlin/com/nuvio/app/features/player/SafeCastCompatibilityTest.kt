@@ -47,10 +47,36 @@ class SafeCastCompatibilityTest {
             "https://inside.internal/video.mp4",
             "https://user:pass@cdn.example.org/video.mp4",
             "https://cd..n.example.org/video.mp4",
+            "https://router.home/video.mp4",
+            "https://router.home.arpa/video.mp4",
+            "https://router.localdomain/video.mp4",
+            "https://-cdn.example.org/video.mp4",
+            "https://cdn-.example.org/video.mp4",
+            "https://${"a".repeat(64)}.example.org/video.mp4",
+            "https://0x7f.1/video.mp4",
+            "https://[::1]/video.mp4",
+            "https://media.example.org:443/video.mp4",
         ).forEach { assertEquals(CastCompatibility.PrivateOrUnknownHost, check(it), it) }
         assertEquals(CastCompatibility.UnsupportedMediaFormat, check(
             "https://cdn.example.org/player",
         ))
+    }
+
+    @Test
+    fun parserAmbiguitiesAndControlCharactersCannotReachTheReceiver() {
+        listOf(
+            " https://media.example.org/clip.mp4",
+            "https://media.example.org/clip.mp4 ",
+            "https://media.example.org/a\n/clip.mp4",
+            "https://media.example.org/a\t/clip.mp4",
+            "https://media.example.org/a%0D%0a/clip.mp4",
+            "https://media.example.org/a%00/clip.mp4",
+            "https://media.example.org/a\\clip.mp4",
+            "https://media.example.org/a clip.mp4",
+        ).forEach {
+            assertEquals(CastCompatibility.SignedOrOpaqueUrl, check(it), it)
+            assertNull(eligibleCastMimeType(it))
+        }
     }
 
     @Test

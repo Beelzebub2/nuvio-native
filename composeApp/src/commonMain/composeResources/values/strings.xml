@@ -795,7 +795,7 @@
     <string name="player_cast_candidate">This may be a compatible public media URL. Only continue if you have permission to play it on the selected receiver; some codecs and receivers may not work.</string>
     <string name="player_cast_alternative">Local files, P2P streams, DRM and private sources cannot be forwarded to a Cast receiver. Play on Starlit PC remains available for a paired computer.</string>
     <string name="player_cast_sender_intro">Direct casting uses Google Cast and the default media receiver. Only eligible public HTTPS media can be sent, after you select a device and confirm access rights.</string>
-    <string name="player_cast_sender_rights">I have permission to play this source on the TV</string>
+    <string name="player_cast_sender_rights">This is public, unsigned media that I am allowed to play on this TV</string>
     <string name="player_cast_sender_unavailable">Google Cast services are unavailable on this device.</string>
     <string name="player_cast_sender_connect">Choose a receiver with the Cast button.</string>
     <string name="player_cast_sender_connected">A Cast receiver is connected.</string>

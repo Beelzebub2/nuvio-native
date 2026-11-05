@@ -58,16 +58,19 @@ internal fun assessCastCompatibility(
     if (sourceHeaders.isNotEmpty()) return CastCompatibility.AuthenticatedHeaders
     if (hasSeparateAudio) return CastCompatibility.SeparateAudio
     if (!url.startsWith("https://", ignoreCase = true)) return CastCompatibility.NonHttpsSource
-    if ('?' in url || '#' in url || url.length > 2048 || '\\' in url)
+    if (url != sourceUrl || '?' in url || '#' in url || url.length > 2048 || '\\' in url ||
+        url.any { it.isWhitespace() || it.code < 32 || it.code == 127 } ||
+        Regex("%(?:0[0-9a-f]|1[0-9a-f]|7f)", RegexOption.IGNORE_CASE).containsMatchIn(url))
         return CastCompatibility.SignedOrOpaqueUrl
 
     val authority = url.substringAfter("://").substringBefore('/')
     val host = authority.lowercase()
-    if (host.length !in 4..253 || !host.contains('.') ||
-        !host.matches(Regex("[a-z0-9.-]+")) ||
-        host.startsWith('.') || host.endsWith('.') || ".." in host ||
-        host.all { it in '0'..'9' || it == '.' } ||
-        listOf(".local", ".localhost", ".lan", ".internal", ".test", ".invalid", ".onion")
+    val labels = host.split('.')
+    if (host.length !in 4..253 || labels.size < 2 ||
+        labels.any { it.length !in 1..63 || !it.matches(Regex("[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")) } ||
+        !labels.last().matches(Regex("[a-z]{2,63}")) ||
+        listOf(".local", ".localhost", ".lan", ".internal", ".test", ".invalid", ".onion",
+            ".home", ".home.arpa", ".localdomain")
             .any { host.endsWith(it) })
         return CastCompatibility.PrivateOrUnknownHost
 
@@ -134,10 +137,13 @@ internal fun CastCompatibilityDialog(
             )
         }
         DialogHint(stringResource(Res.string.player_cast_alternative))
-        if (eligibility == CastCompatibility.PotentiallyCompatibleDirectMedia && CastSenderSupported &&
-            !sourceUrl.isNullOrBlank()) {
+        if (CastSenderSupported) {
             CastSenderControls(
-                sourceUrl = sourceUrl,
+                // Keep disconnect/remote controls reachable after a source switch,
+                // but never give an ineligible source to the load action.
+                sourceUrl = sourceUrl.takeIf {
+                    eligibility == CastCompatibility.PotentiallyCompatibleDirectMedia
+                }.orEmpty(),
                 resumePositionMs = resumePositionMs,
                 onCastStarted = onCastStarted,
             )
