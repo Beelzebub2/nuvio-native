@@ -74,6 +74,7 @@ internal expect fun createDesktopRemoteTransport(): DesktopRemoteTransport
 
 internal object DesktopRemote {
     val transport by lazy { createDesktopRemoteTransport() }
+    val firewall by lazy { createRemoteFirewallAccess() }
     val desktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
@@ -195,6 +196,8 @@ internal fun DesktopRemoteHost() {
             DesktopRemote.accountChanged(remoteAccount)
             DesktopRemote.handoffAccount = remoteAccount
             DesktopRemote.transport.start(remoteAccount, isDesktop)
+            // Phones can only find a PC whose firewall lets them in; check while it starts listening.
+            if (isDesktop) DesktopRemote.firewall.refresh()
         } else {
             DesktopRemote.accountChanged(null)
             DesktopRemote.handoffAccount = null

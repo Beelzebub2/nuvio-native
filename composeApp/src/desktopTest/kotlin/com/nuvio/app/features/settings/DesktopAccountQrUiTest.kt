@@ -28,6 +28,7 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.remote.DesktopPairingQr
 import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.remote.DesktopRemoteDialogs
+import com.nuvio.app.features.remote.NoRemoteFirewallAccess
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
@@ -62,7 +63,7 @@ class DesktopAccountQrUiTest {
                         DesktopPhoneConnectionCard(state)
                     }
                 }
-                DesktopRemoteDialogs(localAddresses = addresses)
+                DesktopRemoteDialogs(localAddresses = addresses, firewall = NoRemoteFirewallAccess, inline = true)
             }
         }
     }
@@ -200,7 +201,7 @@ class DesktopAccountQrUiTest {
                 RGBLuminanceSource(image.width, image.height, pixels))))
             assertEquals("starlit-pc:1:192.168.1.50", result.text)
             val file = File("build/account-qr-capture/phone-remote-dialog.png").apply { parentFile.mkdirs() }
-            ImageIO.write(onNode(isDialog()).captureToImage().toAwtImage(), "png", file)
+            ImageIO.write(onNodeWithTag("desktop-remote-window").captureToImage().toAwtImage(), "png", file)
             onNodeWithText("Close").performClick()
         } finally {
             DesktopRemote.visible.value = false
