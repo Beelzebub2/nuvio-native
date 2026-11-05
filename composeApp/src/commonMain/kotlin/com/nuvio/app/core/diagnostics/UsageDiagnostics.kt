@@ -88,6 +88,7 @@ internal object UsageDiagnostics {
         val next = if (enabled) DiagnosticsConsent.Enabled else DiagnosticsConsent.Disabled
         if (!enabled) {
             // Stop in-flight work before persisting the revoked state.
+            _consent.value = DiagnosticsConsent.Disabled
             scope.cancel()
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             sessionReported = false

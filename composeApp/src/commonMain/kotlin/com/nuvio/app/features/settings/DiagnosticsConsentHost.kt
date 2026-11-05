@@ -63,17 +63,22 @@ internal fun DiagnosticsConsentHost() {
     LaunchedEffect(Unit) { UsageDiagnostics.onAppOpen() }
     if (consent != DiagnosticsConsent.Undecided) return
 
-    var usage by rememberSaveable { mutableStateOf(false) }
-    var crashes by rememberSaveable { mutableStateOf(false) }
     val sentrySupported = SentrySettingsRepository.isSupported
-    val decide: (Boolean, Boolean) -> Unit = { allowUsage, allowCrashes ->
-        // Explicitly reject crash reporting when the user declines the first-run invitation.
-        SentrySettingsRepository.setEnabled(sentrySupported && allowCrashes)
+    val sentryEnabledFlow = remember {
+        SentrySettingsRepository.ensureLoaded()
+        SentrySettingsRepository.enabled
+    }
+    val sentryEnabled by sentryEnabledFlow.collectAsStateWithLifecycle()
+    var usage by rememberSaveable { mutableStateOf(false) }
+    // Existing crash-reporting consent must survive the new usage-consent prompt.
+    var crashes by rememberSaveable { mutableStateOf(sentryEnabled) }
+    val decide: (Boolean, Boolean?) -> Unit = { allowUsage, allowCrashes ->
+        if (sentrySupported && allowCrashes != null) SentrySettingsRepository.setEnabled(allowCrashes)
         UsageDiagnostics.setEnabled(allowUsage)
     }
 
     DialogSurface(
-        onDismissRequest = { decide(false, false) },
+        onDismissRequest = { decide(false, null) },
         title = stringResource(Res.string.diagnostics_consent_title),
         properties = DialogProperties(dismissOnClickOutside = false),
     ) {
@@ -118,7 +123,7 @@ internal fun DiagnosticsConsentHost() {
         DialogButtons {
             DialogButton(
                 text = stringResource(Res.string.diagnostics_consent_not_now),
-                onClick = { decide(false, false) },
+                onClick = { decide(false, null) },
             )
             DialogButton(
                 text = stringResource(Res.string.diagnostics_consent_save),

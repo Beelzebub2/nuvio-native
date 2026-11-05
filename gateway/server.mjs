@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { handleRequest } from './worker.mjs';
-import { handleTelemetryRequest, TelemetryStore } from './telemetry.mjs';
+import { handleTelemetryRequest, OpenObserveTelemetry } from './openobserve-telemetry.mjs';
 
 // Process-local metadata only: eviction or restart never loses account data.
 export class MemoryCache {
@@ -44,11 +44,11 @@ export class MemoryCache {
 
 export function createGatewayServer({
   cache = new MemoryCache(), fetcher = fetch, tmdbToken = '',
-  telemetryStore = new TelemetryStore({
-    directory: process.env.TELEMETRY_DATA_DIR,
+  telemetryReporter = new OpenObserveTelemetry({
+    ingestUrl: process.env.OPENOBSERVE_INGEST_URL,
+    authorization: process.env.OPENOBSERVE_INGEST_AUTH,
     hashKey: process.env.TELEMETRY_HMAC_KEY,
   }),
-  telemetryAdminToken = process.env.TELEMETRY_ADMIN_TOKEN || '',
 } = {}) {
   let active = 0;
   let telemetryActive = 0;
@@ -66,9 +66,7 @@ export function createGatewayServer({
       }
       telemetryActive++;
       try {
-        await handleTelemetryRequest(incoming, outgoing, {
-          store: telemetryStore, adminToken: telemetryAdminToken,
-        });
+        await handleTelemetryRequest(incoming, outgoing, { reporter: telemetryReporter });
       } catch (error) {
         console.error(JSON.stringify({ event: 'gateway_telemetry_failed', name: error.name }));
         if (!outgoing.headersSent) outgoing.writeHead(500, { 'Cache-Control': 'no-store' });
@@ -103,15 +101,6 @@ export function createGatewayServer({
   server.headersTimeout = 10000;
   server.keepAliveTimeout = 5000;
   server.maxRequestsPerSocket = 100;
-  if (telemetryStore.isConfigured) {
-    // Enforce retention even when no new telemetry events are received.
-    const pruneTimer = setInterval(() => {
-      telemetryStore.prune(telemetryStore.clock()).catch(() => {});
-    }, 24 * 60 * 60 * 1000);
-    pruneTimer.unref();
-    server.on('close', () => clearInterval(pruneTimer));
-    telemetryStore.prune(telemetryStore.clock()).catch(() => {});
-  }
   return server;
 }
 
