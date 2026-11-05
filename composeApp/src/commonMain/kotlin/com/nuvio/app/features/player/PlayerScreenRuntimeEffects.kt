@@ -15,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.myanimelist.isLikelyMyAnimeListAnime
+import com.nuvio.app.features.myanimelist.markMyAnimeListRewatchOnPlayback
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.p2p.P2pStreamingState
@@ -70,6 +72,28 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         if (currentMeta.type == parentMetaType && currentMeta.id == parentMetaId) {
             playerMeta = currentMeta
             playerMetaVideos = currentMeta.videos
+        }
+    }
+
+    // Opening details, choosing a source, or preloading a video must never alter the MAL list.
+    // Run only after playback has actually started; per-playback dedup avoids requests on resume.
+    val malRewatchAttempted = remember { mutableSetOf<String>() }
+    LaunchedEffect(
+        profileId, parentMetaType, parentMetaId, activePlaybackKey,
+        playerMeta, playbackSnapshot.isPlaying, playbackSnapshot.isLoading,
+    ) {
+        val meta = playerMeta
+        if (!isDesktop || !playbackSnapshot.isPlaying || playbackSnapshot.isLoading ||
+            meta == null || !isLikelyMyAnimeListAnime(meta)) return@LaunchedEffect
+        val key = "$profileId:$parentMetaType:$parentMetaId:$activePlaybackKey"
+        if (key in malRewatchAttempted) return@LaunchedEffect
+        try {
+            markMyAnimeListRewatchOnPlayback(meta, profileId)
+            malRewatchAttempted += key
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Playback must continue even if the connected tracking service is unavailable.
         }
     }
 

@@ -68,6 +68,62 @@ class MalClientTest {
             assertFailsWith<IllegalArgumentException> { client.update(21, "test-token", score = 11) }
         } finally { server.stop(0) }
     }
+
+    @Test fun completedAnimeRewatchOnlyChangesTheRewatchFlag(): Unit = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val patches = mutableListOf<String>()
+        server.createContext("/v2/anime/21") { request ->
+            val response = if (request.requestMethod == "PATCH") {
+                patches += request.requestBody.readBytes().toString(Charsets.UTF_8)
+                """{"status":"completed","score":10,"num_episodes_watched":11,"is_rewatching":true}"""
+            } else {
+                """{"my_list_status":{"status":"completed","score":10,"num_episodes_watched":11,"is_rewatching":false}}"""
+            }
+            val bytes = response.toByteArray()
+            request.sendResponseHeaders(200, bytes.size.toLong())
+            request.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val client = MalClient(api = "http://127.0.0.1:${server.address.port}/v2/")
+            val completed = client.listStatus(21, "test-token")
+            assertTrue(shouldMarkMalRewatch(completed))
+            val updated = client.update(21, "test-token", isRewatching = true)
+            assertTrue(updated.isRewatching)
+            assertEquals(MalStatus.COMPLETED, updated.status)
+            assertEquals(10, updated.score)
+            assertEquals(11, updated.watchedEpisodes)
+            assertEquals(listOf("is_rewatching=true"), patches)
+            assertFalse(shouldMarkMalRewatch(updated))
+            assertFalse(shouldMarkMalRewatch(MalListStatus(MalStatus.WATCHING, 0, 1)))
+            assertFalse(shouldMarkMalRewatch(null))
+        } finally { server.stop(0) }
+    }
+
+    @Test fun animeListParsesStatusesImagesAndPaging(): Unit = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/v2/users/@me/animelist") { request ->
+            assertEquals("Bearer test-token", request.requestHeaders.getFirst("Authorization"))
+            // The authenticated list uses the official fields, status filter and offset.
+            val query = request.requestURI.rawQuery.orEmpty()
+            assertContains(query, "fields=list_status%2Cnum_episodes")
+            assertContains(query, "status=completed")
+            assertContains(query, "offset=20")
+            val response = """{"data":[{"node":{"id":42,"title":"Test title","main_picture":{"medium":"https://example.org/a.jpg"},"num_episodes":12},"list_status":{"status":"completed","score":9,"num_episodes_watched":12,"is_rewatching":true}}],"paging":{"next":"https://api.myanimelist.net/v2/users/@me/animelist?offset=21"}}"""
+            val bytes = response.toByteArray()
+            request.sendResponseHeaders(200, bytes.size.toLong())
+            request.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val client = MalClient(api = "http://127.0.0.1:${server.address.port}/v2/")
+            val page = client.animeList("test-token", MalStatus.COMPLETED, offset = 20, limit = 1)
+            assertEquals(21, page.nextOffset)
+            assertEquals(42, page.entries.single().anime.id)
+            assertEquals(12, page.entries.single().totalEpisodes)
+            assertTrue(page.entries.single().listStatus.isRewatching)
+        } finally { server.stop(0) }
+    }
     @Test fun oauthUsesMalPkceAndRejectsWrongOrDuplicatedState() {
         val verifier = malNonce()
         val state = malNonce()

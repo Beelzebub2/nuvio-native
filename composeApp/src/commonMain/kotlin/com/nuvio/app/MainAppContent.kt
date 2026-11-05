@@ -426,6 +426,7 @@ internal fun MainAppContent(
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.WatchLater -> Unit
+            AppScreenTab.MyAnimeList -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }

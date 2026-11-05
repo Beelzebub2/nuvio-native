@@ -14,8 +14,24 @@ internal enum class MalStatus(val value: String, val label: String) {
     WATCHING("watching", "Watching"), COMPLETED("completed", "Completed"), ON_HOLD("on_hold", "On Hold"),
     DROPPED("dropped", "Dropped"), PLAN_TO_WATCH("plan_to_watch", "Plan to Watch")
 }
-internal data class MalListStatus(val status: MalStatus?, val score: Int, val watchedEpisodes: Int)
+internal data class MalListStatus(
+    val status: MalStatus?,
+    val score: Int,
+    val watchedEpisodes: Int,
+    val isRewatching: Boolean = false,
+)
 internal data class MalAnime(val id: Int, val title: String)
+internal data class MalAnimeListEntry(
+    val anime: MalAnime,
+    val imageUrl: String?,
+    val totalEpisodes: Int,
+    val listStatus: MalListStatus,
+)
+internal data class MalAnimeListPage(val entries: List<MalAnimeListEntry>, val nextOffset: Int?)
+
+/** Never reset a completed title's progress or score when a new rewatch starts. */
+internal fun shouldMarkMalRewatch(status: MalListStatus?): Boolean =
+    status?.let { it.status == MalStatus.COMPLETED && !it.isRewatching } == true
 @Serializable internal data class MalTokens(val clientId: String, val accessToken: String, val refreshToken: String,
     val expiresAt: Long, val username: String = "", val clientSecret: String = "")
 internal class MalHttpException(val status: Int, errorCode: String? = null) : IOException(when (errorCode) {
@@ -51,11 +67,45 @@ internal class MalClient(
         require(id > 0)
         return (get("anime/$id?fields=my_list_status", token)["my_list_status"] as? JsonObject)?.let(::parseMalListStatus)
     }
-    suspend fun update(id: Int, token: String, status: MalStatus? = null, score: Int? = null): MalListStatus {
-        require(id > 0 && (status != null || score != null) && (score == null || score in 0..10))
-        val body = FormBody.Builder().apply { status?.let { add("status", it.value) }; score?.let { add("score", it.toString()) } }.build()
+    suspend fun update(
+        id: Int, token: String, status: MalStatus? = null, score: Int? = null,
+        isRewatching: Boolean? = null,
+    ): MalListStatus {
+        require(id > 0 && (status != null || score != null || isRewatching != null) && (score == null || score in 0..10))
+        val body = FormBody.Builder().apply {
+            status?.let { add("status", it.value) }
+            score?.let { add("score", it.toString()) }
+            isRewatching?.let { add("is_rewatching", it.toString()) }
+        }.build()
         return parseMalListStatus(request(Request.Builder().url(api + "anime/$id/my_list_status")
             .header("Authorization", "Bearer $token").patch(body).build()))
+    }
+    suspend fun animeList(token: String, status: MalStatus? = null, offset: Int = 0, limit: Int = 60): MalAnimeListPage {
+        require(offset in 0..100_000 && limit in 1..100)
+        val url = (api + "users/@me/animelist").toHttpUrl().newBuilder()
+            .addQueryParameter("fields", "list_status,num_episodes")
+            .addQueryParameter("sort", "list_updated_at")
+            .addQueryParameter("limit", limit.toString())
+            .addQueryParameter("offset", offset.toString())
+            .apply { status?.let { addQueryParameter("status", it.value) } }
+            .build()
+        val response = request(Request.Builder().url(url).header("Authorization", "Bearer $token").build())
+        val entries = (response["data"] as? JsonArray).orEmpty().mapNotNull { raw ->
+            val row = raw as? JsonObject ?: return@mapNotNull null
+            val node = row["node"] as? JsonObject ?: return@mapNotNull null
+            val id = node["id"]?.jsonPrimitive?.intOrNull?.takeIf { it > 0 } ?: return@mapNotNull null
+            val listStatus = (row["list_status"] as? JsonObject)?.let(::parseMalListStatus) ?: return@mapNotNull null
+            val picture = node["main_picture"] as? JsonObject
+            MalAnimeListEntry(
+                anime = MalAnime(id, node["title"]?.jsonPrimitive?.contentOrNull.orEmpty().ifBlank { "Anime $id" }),
+                imageUrl = picture?.get("medium")?.jsonPrimitive?.contentOrNull
+                    ?: picture?.get("large")?.jsonPrimitive?.contentOrNull,
+                totalEpisodes = node["num_episodes"]?.jsonPrimitive?.intOrNull?.coerceAtLeast(0) ?: 0,
+                listStatus = listStatus,
+            )
+        }
+        val hasNext = (response["paging"] as? JsonObject)?.get("next")?.jsonPrimitive?.contentOrNull?.isNotBlank() == true
+        return MalAnimeListPage(entries, if (hasNext && entries.isNotEmpty()) offset + limit else null)
     }
     suspend fun search(name: String, token: String): List<MalAnime> {
         val url = (api + "anime").toHttpUrl().newBuilder().addQueryParameter("q", name.take(64)).addQueryParameter("limit", "10").build()
@@ -93,4 +143,5 @@ internal fun parseMalListStatus(value: JsonObject) = MalListStatus(
     MalStatus.entries.firstOrNull { it.value == value["status"]?.jsonPrimitive?.contentOrNull },
     value["score"]?.jsonPrimitive?.intOrNull?.coerceIn(0, 10) ?: 0,
     value["num_episodes_watched"]?.jsonPrimitive?.intOrNull?.coerceAtLeast(0) ?: 0,
+    value["is_rewatching"]?.jsonPrimitive?.booleanOrNull ?: false,
 )
