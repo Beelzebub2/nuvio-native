@@ -1291,6 +1291,7 @@ kotlin {
                 implementation(libs.androidx.appcompat)
                 implementation(libs.androidx.activity.compose)
                 implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+                implementation("com.google.android.gms:play-services-cast-framework:23.0.0")
                 implementation(libs.androidx.credentials.core)
                 implementation(libs.androidx.credentials.play.services.auth)
                 implementation(libs.androidx.core.splashscreen)

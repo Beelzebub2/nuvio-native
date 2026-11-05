@@ -1,48 +1,53 @@
-# Chromecast and Android TV casting — capability gate
+# Chromecast and Cast-enabled Android TV sender
 
-Starlit does **not** currently have a production Google Cast sender or a
-configured receiver. The Android player has a **Casting availability** action
-that explains this limitation and classifies the current stream entirely
-on-device. It **does not** scan for Cast devices or send playback requests.
-It must not be described as functioning Chromecast support.
+Starlit's Android sender is limited to **plain, unauthenticated, direct HTTPS**
+MP4, WebM, HLS and DASH media. The Android player offers a Cast device picker
+backed by the official Google Cast SDK (v23.0.0), Google's **Default Media
+Receiver**, and a separate **Play on TV** action. Media is **not** transmitted
+when the Cast information dialog opens or a device is merely discovered.
 
-## What the compatibility check excludes
+## How to use
 
-- Magnet/torrent, P2P, loopback, private-network and local file or content URI sources.
-- Streams requiring private HTTP headers, cookies or signed/opaque URLs.
-- Separate audio/video streams requiring remuxing or transcoding.
-- Non-HTTPS media or URLs without an obvious direct MP4, WebM, HLS (.m3u8)
-  or DASH (.mpd) format.
+1. Start an eligible video on Android and open **Casting availability**.
+2. Confirm you have permission to watch the source on the receiver.
+3. Choose a Chromecast or a television with built-in Google Cast using the
+   Cast button. Device discovery and reconnection are managed by Google Play
+   services, and require a compatible receiver and local network.
+4. Select **Play on TV**. Only then is the media URL sent directly to the
+   receiver. On successful load, the local player pauses. Pause/resume and
+   disconnect are available when reopening the Cast dialog.
 
-A passing format check does **not** grant rights, guarantee that the receiver
-can fetch the URL, prove that a source is public, or permit publishing media.
-It is informational only. No media URL, credential or local path is copied
-or logged by the compatibility UI.
+## Security and limitations
 
-## Requirements before adding real casting
+- No P2P, torrent, magnet, local/localhost, LAN, file or content URI sources.
+- No auth headers, cookies, signed query strings or opaque source URLs.
+- No proxy, transcoder, port-forwarding, private media relay, upload, token or
+  local-file server.
+- No automatic media transfer without an explicit rights acknowledgment, route
+  selection and Play action.
+- A filename check cannot grant media rights or prove a URL is publicly
+  reachable. DNS changes, server redirects, receiver codec support, provider
+  policy and DRM may still prevent playback; failed loads are reported.
+- The Default Media Receiver is generic, not Starlit-branded. A branded web
+  receiver requires separate registration, implementation and review.
+- A TV without built-in Google Cast does **not** become a Cast Connect receiver
+  automatically. Supporting a separate Starlit Android TV receiver app requires
+  Android TV Cast Connect integration and registration.
+- Google Play services may be missing on some Android devices; the UI degrades
+  to an unavailable message rather than crashing.
+- iOS and desktop do not advertise sender functionality. **Play on Starlit PC**
+  remains an alternative for separately authenticated, paired desktop playback.
 
-1. Choose and register a production Web Receiver in the **Google Cast SDK
-   Developer Console**. The default media receiver is not suitable for a
-   production branded application. A custom receiver may be needed for
-   authorization, codecs, subtitles or a protected playback flow.
-2. Implement the official Android Sender SDK, CastOptionsProvider,
-   CastContext, device route UI, MediaInfo load, session lifecycle,
-   disconnect and error UX. Observe Google Cast's device and media format
-   constraints and Android platform/network permissions.
-3. For Android TV native-app reception, add a proper Cast Connect receiver
-   and its media session/receiver registration, not an arbitrary open port or
-   shared localhost playback server.
-4. Verify the source's provider/licensing/DRM terms and require explicit
-   user selection. Never relay torrents, signed URLs or private tokens.
-5. End-to-end test actual Chromecast and Android TV hardware before making
-   the route button functional or claiming support.
+## Verification gate
 
-The existing **Play on Starlit PC** authenticated LAN handoff is the safe
-alternative for a paired desktop. It sends *content identifiers* only and
-requires separate desktop confirmation and local source resolution.
+Run `./gradlew :composeApp:desktopTest`, the Android compile and lint tasks,
+and the source eligibility unit tests. The Android sender must be tested on
+actual Chromecast and Cast-enabled Android TV hardware, including end of
+stream, remote pauses/resumes, app backgrounding, Google Play services absence,
+reconnection, receiver errors and restricted media sources **before release**.
+Source eligibility tests alone cannot establish device compatibility.
 
-Official specifications:
-- [Android Sender SDK](https://developers.google.com/cast/docs/android_sender/integrate)
-- [Receiver types and limitations](https://developers.google.com/cast/docs/overview)
-- [Supported media](https://developers.google.com/cast/docs/media)
-- [Android TV Cast Connect](https://developers.google.com/cast/docs/android_tv_receiver/)
+Official references: [Android Sender SDK](https://developers.google.com/cast/docs/android_sender/integrate),
+[Default Media Receiver](https://developers.google.com/cast/docs/receiver_apps),
+[Supported media](https://developers.google.com/cast/docs/media),
+[Android TV Cast Connect](https://developers.google.com/cast/docs/android_tv_receiver/).

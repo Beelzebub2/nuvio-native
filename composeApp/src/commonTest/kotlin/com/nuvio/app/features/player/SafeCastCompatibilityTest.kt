@@ -3,6 +3,7 @@ package com.nuvio.app.features.player
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class SafeCastCompatibilityTest {
     private fun check(
@@ -63,5 +64,17 @@ class SafeCastCompatibilityTest {
         val outcome = check("https://media.example.org/title.mp4")
         assertFalse(outcome.name.contains("https", ignoreCase = true))
         assertFalse(outcome.name.contains("token", ignoreCase = true))
+    }
+
+    @Test
+    fun receiverMimeTypesAreResolvedOnlyForPublicDirectMedia() {
+        assertEquals("video/mp4", eligibleCastMimeType("https://media.example.org/clip.mp4"))
+        assertEquals("video/webm", eligibleCastMimeType("https://media.example.org/clip.WEBM"))
+        assertEquals("application/x-mpegURL", eligibleCastMimeType("https://media.example.org/master.m3u8"))
+        assertEquals("application/dash+xml", eligibleCastMimeType("https://media.example.org/manifest.mpd"))
+        assertNull(eligibleCastMimeType("https://localhost/media.mp4"))
+        assertNull(eligibleCastMimeType("http://media.example.org/media.mp4"))
+        assertNull(eligibleCastMimeType("https://media.example.org/media.mp4?private=secret"))
+        assertNull(eligibleCastMimeType("https://media.example.org/opaque"))
     }
 }
