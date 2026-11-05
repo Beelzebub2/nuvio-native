@@ -864,6 +864,7 @@ public:
         eventSink = sink;
         eventMethod = method;
         hostHwnd = host;
+        rtxVideoConfigured = nvidiaRtxSuperResolutionEnabled;
 
         auto initState = std::make_shared<InitializationState>();
         auto self = shared_from_this();
@@ -1083,6 +1084,21 @@ public:
         if (!mpv) return;
         int flag = paused ? 1 : 0;
         mpvApi().setProperty(mpv, "pause", MPV_FORMAT_FLAG, &flag);
+    }
+
+    // Compare the actual frame path, without changing the saved playback preference
+    // or recreating the video/stream. mpv reconfigures its video filter at runtime.
+    // Success only means that mpv accepted the change, not that the GPU driver
+    // actually engaged RTX Video Super Resolution.
+    bool setRtxCompareOriginal(bool original) {
+        if (!rtxVideoConfigured || stopping.load()) return false;
+        std::lock_guard<std::mutex> lock(mpvMutex);
+        if (!mpv) return false;
+        return mpvApi().setPropertyString(
+            mpv,
+            "vf",
+            original ? "" : "d3d11vpp=scale=2:scaling-mode=nvidia"
+        ) >= 0;
     }
 
     bool isPaused() {
@@ -1363,6 +1379,7 @@ private:
 
     std::mutex mpvMutex;
     mpv_handle *mpv = nullptr;
+    bool rtxVideoConfigured = false;
     std::thread eventThread;
     std::atomic_bool stopping = false;
     std::atomic_bool shuttingDown = false;
@@ -2753,6 +2770,14 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setPaused(JNIEnv *, jobject, jlong handle, jboolean paused) {
     auto player = playerFromHandle(handle);
     if (player) player->setPaused(paused == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setRtxCompareOriginal(
+    JNIEnv *, jobject, jlong handle, jboolean original
+) {
+    auto player = playerFromHandle(handle);
+    return player && player->setRtxCompareOriginal(original == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -43,6 +43,9 @@ const sourcesLabel = document.getElementById("sourcesLabel");
 const episodesLabel = document.getElementById("episodesLabel");
 const submitIntroButton = document.getElementById("submitIntroButton");
 const videoSettingsButton = document.getElementById("videoSettingsButton");
+const rtxCompareButton = document.getElementById("rtxCompareButton");
+const rtxCompareLabel = document.getElementById("rtxCompareLabel");
+const rtxCompareStatus = document.getElementById("rtxCompareStatus");
 const backButton = document.getElementById("backButton");
 const openingOverlay = document.getElementById("openingOverlay");
 const openingArtwork = document.getElementById("openingArtwork");
@@ -198,6 +201,9 @@ let state = {
   resizeModeLabel: "Fit",
   playbackSpeedLabel: "1x",
   isFullscreen: false,
+  rtxComparisonAvailable: false,
+  rtxShowingOriginal: false,
+  rtxComparisonFailed: false,
   volumeLevel: null,
   subtitlesLabel: "Subs",
   audioLabel: "Audio",
@@ -387,6 +393,7 @@ let tapTimer = 0;
 let activeModal = "";
 let pressedButton = null;
 let focusedActionCommand = "";
+let rtxComparisonHeld = false;
 let sourceFilterId = "";
 let sourceVirtualKey = "";
 let sourceVirtualItems = [];
@@ -2327,6 +2334,7 @@ const canAutoHideChrome = showOpening => Boolean(
   !state.isLoading &&
   !activeModal &&
   !isScrubbing &&
+  !rtxComparisonHeld &&
   !isInteractingWithChrome() &&
   !playbackErrorText() &&
   !showOpening,
@@ -2483,6 +2491,26 @@ const renderChrome = () => {
   setActionButtonLabel("audio", state.audioLabel || "Audio");
   setActionButtonLabel("sources", state.sourcesLabel || "Sources");
   setActionButtonLabel("episodes", state.episodesLabel || "Episodes");
+  const showRtxCompare = Boolean(state.rtxComparisonAvailable && !showError && !showOpening);
+  setVisible(rtxCompareButton, showRtxCompare);
+  if (rtxCompareButton) {
+    const original = Boolean(state.rtxShowingOriginal);
+    const label = original ? "Original" : "Hold: Original";
+    const hint = original
+      ? "Showing original video without RTX. Release to request the enhancement."
+      : "Hold to bypass the RTX filter and compare the same video. NVIDIA App confirms driver activation.";
+    rtxCompareButton.setAttribute("aria-pressed", original ? "true" : "false");
+    rtxCompareButton.setAttribute("aria-label", hint);
+    rtxCompareButton.setAttribute("title", hint);
+    rtxCompareLabel.textContent = label;
+  }
+  if (rtxCompareStatus) {
+    const compareFailed = Boolean(state.rtxComparisonFailed);
+    rtxCompareStatus.hidden = Boolean(showError || showOpening || (!state.rtxShowingOriginal && !compareFailed));
+    rtxCompareStatus.textContent = compareFailed
+      ? "RTX comparison unavailable — restart video"
+      : "Original video · RTX filter bypassed";
+  }
   if (pipButton) {
     const pipLabel = String(state.pipLabel || "").trim();
     pipButton.setAttribute("aria-label", pipLabel);
@@ -2858,6 +2886,7 @@ document.querySelectorAll("[data-command]").forEach(button => {
     }
     noteChromeActivity(true);
     const command = button.dataset.command;
+    if (command === "rtxCompare") return; // Held via pointer/keyboard, never latched by a click.
     if (command === "toggle") {
       if (event.detail !== 0 && suppressNextPointerToggleClick) {
         suppressNextPointerToggleClick = false;
@@ -2902,6 +2931,44 @@ document.querySelectorAll("[data-command]").forEach(button => {
     showCommandToast(command);
     send(command, 0);
   });
+});
+
+const setRtxComparisonHeld = held => {
+  const nextHeld = Boolean(held);
+  if (nextHeld && (!state.rtxComparisonAvailable || playbackErrorText())) return;
+  if (rtxComparisonHeld === nextHeld) return;
+  rtxComparisonHeld = nextHeld;
+  noteChromeActivity(true);
+  send("rtxCompareOriginal", nextHeld ? 1 : 0);
+};
+const releaseRtxComparison = () => setRtxComparisonHeld(false);
+if (rtxCompareButton) {
+  rtxCompareButton.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    event.preventDefault();
+    rtxCompareButton.setPointerCapture(event.pointerId);
+    setRtxComparisonHeld(true);
+  });
+  rtxCompareButton.addEventListener("pointerup", releaseRtxComparison);
+  rtxCompareButton.addEventListener("pointercancel", releaseRtxComparison);
+  rtxCompareButton.addEventListener("lostpointercapture", releaseRtxComparison);
+  rtxCompareButton.addEventListener("keydown", event => {
+    if (event.code !== "Space" && event.code !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation(); // Space normally toggles playback in the root shortcut handler.
+    if (!event.repeat) setRtxComparisonHeld(true);
+  });
+  rtxCompareButton.addEventListener("keyup", event => {
+    if (event.code !== "Space" && event.code !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation();
+    releaseRtxComparison();
+  });
+  rtxCompareButton.addEventListener("blur", releaseRtxComparison);
+}
+window.addEventListener("blur", releaseRtxComparison);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) releaseRtxComparison();
 });
 
 toggle.addEventListener("pointerdown", event => {
