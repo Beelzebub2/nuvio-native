@@ -131,6 +131,15 @@ OpenObserve over a private route before releasing new clients. Test both the
 public telemetry endpoint and the stream query; exclude request bodies and IDs
 from reverse-proxy logs. Keep the OpenObserve UI protected by Cloudflare Access.
 
+The VPS's existing generic `/gateway/` Nginx location disables request bodies
+for its read-only metadata providers (`proxy_pass_request_body off` and an empty
+`Content-Length`). **Do not reuse it for the telemetry POST:** add a more-specific
+`/gateway/telemetry/` location which forwards request bodies to
+`http://127.0.0.1:8790/telemetry/`, keeps the original client-IP rate limit and
+does not log bodies. Apply a small request body cap (such as 2 KiB), check with
+`nginx -t`, and verify that existing metadata GET routes still work. Otherwise
+the collector will receive an empty body and reject opted-in events with 400.
+
 The app's existing TMDB settings remain for its separate, optional general
 metadata enrichment. That local API-key setting does **not** configure the gateway
 or automatically upload a credential. This fallback requires the server token
