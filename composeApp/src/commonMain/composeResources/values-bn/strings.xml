@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">নিরাপদ প্রসঙ্গসহ ক্র্যাশ এবং ANR রিপোর্ট পাঠান। আপনি চালু না করা পর্যন্ত বন্ধ থাকে।</string>
     <string name="theme_gold">গোল্ড</string>
     <string name="theme_jade">জেড</string>
     <string name="theme_rose_gold">রোজ গোল্ড</string>
@@ -554,7 +555,6 @@
     <string name="settings_advanced_remember_last_profile">শেষ প্রোফাইল মনে রাখুন</string>
     <string name="settings_advanced_remember_last_profile_description">স্টার্টআপে সর্বশেষ নির্বাচিত প্রোফাইল মনে রাখবেন</string>
     <string name="settings_advanced_sentry_reports">সেন্ট্রি ক্র্যাশ রিপোর্ট</string>
-    <string name="settings_advanced_sentry_reports_subtitle">নিরাপদ প্রসঙ্গসহ ক্র্যাশ এবং ANR রিপোর্ট পাঠান। ডিফল্টরূপে চালু।</string>
     <string name="sentry_enable_dialog_title">ক্র্যাশ রিপোর্ট চালু করবেন?</string>
     <string name="sentry_enable_dialog_subtitle">ক্র্যাশ রিপোর্টগুলি আপনাকে ADB লগগুলির সাথে সমস্যাটি পুনরুত্পাদন করতে না বলে ডিভাইস-নির্দিষ্ট ব্যর্থতাগুলি সনাক্ত করতে সহায়তা করে।</string>
     <string name="sentry_disable_dialog_title">ক্র্যাশ রিপোর্ট বন্ধ করবেন?</string>

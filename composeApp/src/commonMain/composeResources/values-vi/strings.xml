@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Gửi báo cáo sự cố và lỗi ứng dụng không phản hồi kèm thông tin an toàn. Tắt cho đến khi bạn bật.</string>
     <string name="theme_gold">Vàng</string>
     <string name="theme_jade">Ngọc bích</string>
     <string name="theme_rose_gold">Vàng Hồng</string>
@@ -553,7 +554,6 @@
     <string name="settings_advanced_remember_last_profile">Nhớ hồ sơ gần nhất</string>
     <string name="settings_advanced_remember_last_profile_description">Nhớ hồ sơ được chọn lần cuối khi khởi động</string>
     <string name="settings_advanced_sentry_reports">Báo cáo sự cố Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Gửi báo cáo sự cố và lỗi ứng dụng không phản hồi kèm thông tin an toàn. Bật theo mặc định.</string>
     <string name="sentry_enable_dialog_title">Bật báo cáo sự cố?</string>
     <string name="sentry_enable_dialog_subtitle">Báo cáo sự cố giúp xác định các lỗi chỉ xảy ra trên thiết bị mà không yêu cầu bạn tái hiện sự cố bằng nhật ký ADB.</string>
     <string name="sentry_disable_dialog_title">Tắt báo cáo sự cố?</string>

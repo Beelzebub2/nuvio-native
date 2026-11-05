@@ -51,7 +51,31 @@ export function createGatewayServer({
   telemetryAdminToken = process.env.TELEMETRY_ADMIN_TOKEN || '',
 } = {}) {
   let active = 0;
+  let telemetryActive = 0;
   const server = createServer({ maxHeaderSize: 16 * 1024 }, async (incoming, outgoing) => {
+    if (!incoming.url?.startsWith('/') || incoming.url.startsWith('//')) {
+      outgoing.writeHead(400); outgoing.end(); return;
+    }
+    // Telemetry runs in its own small concurrency budget: diagnostic bursts must
+    // never crowd out the metadata routes used by browsing and playback.
+    if (incoming.url.startsWith('/telemetry/')) {
+      if (telemetryActive >= 4) {
+        outgoing.writeHead(429, { 'Retry-After': '2', 'Cache-Control': 'no-store' });
+        outgoing.end();
+        return;
+      }
+      telemetryActive++;
+      try {
+        await handleTelemetryRequest(incoming, outgoing, {
+          store: telemetryStore, adminToken: telemetryAdminToken,
+        });
+      } catch (error) {
+        console.error(JSON.stringify({ event: 'gateway_telemetry_failed', name: error.name }));
+        if (!outgoing.headersSent) outgoing.writeHead(500, { 'Cache-Control': 'no-store' });
+        outgoing.end();
+      } finally { telemetryActive--; }
+      return;
+    }
     if (active >= 8) {
       outgoing.writeHead(503, { 'Retry-After': '1', 'Cache-Control': 'no-store' });
       outgoing.end();
@@ -59,12 +83,6 @@ export function createGatewayServer({
     }
     active++;
     try {
-      if (!incoming.url?.startsWith('/') || incoming.url.startsWith('//')) {
-        outgoing.writeHead(400); outgoing.end(); return;
-      }
-      if (await handleTelemetryRequest(incoming, outgoing, {
-        store: telemetryStore, adminToken: telemetryAdminToken,
-      })) return;
       if (incoming.method !== 'GET') {
         outgoing.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' }); outgoing.end(); return;
       }
@@ -85,6 +103,15 @@ export function createGatewayServer({
   server.headersTimeout = 10000;
   server.keepAliveTimeout = 5000;
   server.maxRequestsPerSocket = 100;
+  if (telemetryStore.isConfigured) {
+    // Enforce retention even when no new telemetry events are received.
+    const pruneTimer = setInterval(() => {
+      telemetryStore.prune(telemetryStore.clock()).catch(() => {});
+    }, 24 * 60 * 60 * 1000);
+    pruneTimer.unref();
+    server.on('close', () => clearInterval(pruneTimer));
+    telemetryStore.prune(telemetryStore.clock()).catch(() => {});
+  }
   return server;
 }
 

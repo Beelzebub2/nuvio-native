@@ -3,6 +3,7 @@ package com.nuvio.app.core.diagnostics
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class UsageDiagnosticsTest {
@@ -33,5 +34,14 @@ class UsageDiagnosticsTest {
         assertTrue("app_open" in names)
         assertTrue("playback_failed" in names)
         assertTrue("download_completed" in names)
+    }
+
+    @Test
+    fun installationIdsAreRandomAndFitTheStrictWireFormat() {
+        val first = createDiagnosticsInstallationId()
+        val second = createDiagnosticsInstallationId()
+        assertTrue(first.matches(Regex("[0-9a-f]{32}")))
+        assertTrue(second.matches(Regex("[0-9a-f]{32}")))
+        assertNotEquals(first, second)
     }
 }

@@ -53,7 +53,7 @@ test('strict allowlist excludes personal attributes and unknown event names', ()
   assert.equal(validateTelemetryEvent({ ...validEvent, version: '../../../config' }), false);
 });
 
-test('anonymous activity is grouped by version with distinct installation counts', async () => {
+test('pseudonymous activity is grouped by version with distinct installation counts', async () => {
   assert.equal((await send()).status, 202);
   assert.equal((await send()).status, 202);
   assert.equal((await send({ ...validEvent, event: 'screen_search' })).status, 202);
@@ -66,7 +66,7 @@ test('anonymous activity is grouped by version with distinct installation counts
   assert.equal(latest.activeInstallations, 1);
   assert.equal(latest.events.app_open, 2);
   assert.equal(latest.events.screen_search, 1);
-  const stored = await readFile(join(root, '2026-11-05.json'), 'utf8');
+  const stored = await readFile(join(root, '2026-11-05.jsonl'), 'utf8');
   assert.ok(!stored.includes(installationId), 'raw installation identifiers must not be stored');
   assert.ok(!stored.includes('search_terms'));
 });
@@ -76,6 +76,15 @@ test('older active days do not double-count the same installation', async () => 
   await send();
   const data = await (await summary()).json();
   assert.equal(data.versions.find(entry => entry.version === '1.9.2').activeInstallations, 1);
+});
+
+test('append-only data survives restart and is aggregated correctly', async () => {
+  const store = new TelemetryStore({ directory: root, hashKey, clock: () => clock });
+  const data = await store.summary(7);
+  const version = data.versions.find(entry => entry.version === '1.9.2');
+  assert.equal(version.activeInstallations, 1);
+  assert.equal(version.events.app_open, 3);
+  assert.equal(version.events.screen_search, 1);
 });
 
 test('admin summary requires an exact bearer token and bounded window', async () => {
@@ -109,4 +118,47 @@ test('ingestion is unavailable without a secret and a durable directory', async 
   } finally {
     await new Promise(resolve => bare.close(resolve));
   }
+});
+
+test('busy metadata providers do not prevent diagnostics ingestion', async () => {
+  let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  let started = 0;
+  const isolated = createGatewayServer({
+    fetcher: async () => {
+      started++;
+      await blocked;
+      return Response.json({ episodes: {} });
+    },
+    telemetryStore: new TelemetryStore({ directory: root, hashKey, clock: () => clock }),
+    telemetryAdminToken: adminToken,
+  });
+  await new Promise(resolve => isolated.listen(0, '127.0.0.1', resolve));
+  const origin = 'http://127.0.0.1:' + isolated.address().port;
+  try {
+    const providerRequests = Array.from({ length: 8 }, (_, i) =>
+      fetch(origin + '/episodes?id=' + (i + 100)));
+    while (started < 8) await new Promise(resolve => setTimeout(resolve, 5));
+    const response = await fetch(origin + '/telemetry/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...validEvent, event: 'screen_library' }),
+    });
+    assert.equal(response.status, 202);
+    release();
+    for (const result of await Promise.all(providerRequests)) {
+      assert.equal(result.status, 200);
+    }
+  } finally {
+    release();
+    await new Promise(resolve => isolated.close(resolve));
+  }
+});
+
+test('old rollups are deleted after the 30-day retention period', async () => {
+  clock += 31 * 86400000;
+  assert.equal((await send()).status, 202);
+  const files = await readdir(root);
+  assert.ok(!files.includes('2026-11-05.jsonl'));
+  assert.ok(!files.includes('2026-11-06.jsonl'));
 });

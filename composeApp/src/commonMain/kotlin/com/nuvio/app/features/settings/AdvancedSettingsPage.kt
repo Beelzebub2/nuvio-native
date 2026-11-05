@@ -155,7 +155,10 @@ internal fun LazyListScope.advancedSettingsContent(
                             ),
                             checked = sentryEnabled,
                             isTablet = isTablet,
-                            onCheckedChange = { showSentryDialog = true },
+                            onCheckedChange = { enabled ->
+                                if (enabled) showSentryDialog = true
+                                else SentrySettingsRepository.setEnabled(false)
+                            },
                         )
                     }
                 }

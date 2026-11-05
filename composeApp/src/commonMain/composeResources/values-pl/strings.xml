@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Wysyłaj raporty awarii i ANR z bezpiecznym kontekstem. Wyłączone do momentu włączenia.</string>
     <string name="about_licenses_attributions_subtitle">Źródła danych, podziękowania i licencje platformy</string>
     <string name="about_supporters_contributors_subtitle">Osoby wspierające i współtworzące projekt</string>
     <string name="action_back">Wstecz</string>
@@ -1904,7 +1905,6 @@
     <string name="compose_auth_terms_link">Regulamin</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTYKA</string>
     <string name="settings_advanced_sentry_reports">Raporty awarii Sentry</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Wysyłaj raporty awarii i ANR z bezpiecznym kontekstem. Domyślnie włączone.</string>
     <string name="sentry_enable_dialog_title">Włączyć raporty awarii?</string>
     <string name="sentry_enable_dialog_subtitle">Raporty awarii pomagają identyfikować problemy specyficzne dla urządzenia bez konieczności reprodukcji błędu z logami ADB.</string>
     <string name="sentry_disable_dialog_title">Wyłączyć raporty awarii?</string>

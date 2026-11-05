@@ -57,7 +57,7 @@ the token only in an upstream Bearer header. No app rebuild is needed after setu
 The previous Worker had no TMDB token configured; the migration preserves that
 state. A missing token skips TMDB without imposing a cooldown or preventing TVmaze.
 
-## Opt-in anonymous diagnostics
+## Opt-in usage diagnostics
 
 The VPS Node gateway also exposes `POST /telemetry/events`, accepting only fixed
 event names, a platform, the app version and a 128-bit pseudonymous installation
@@ -65,6 +65,11 @@ ID. It rejects extra fields, arbitrary properties and media/account data. Raw ID
 IPs, user agents and URLs are not stored by the telemetry module. IDs are HMAC
 hashed before durable storage. Reporting is disabled in the client until the
 user explicitly opts in, and crash reporting has an independent opt-in.
+Events are appended to bounded daily JSONL journals rather than rewriting a
+large rollup on every request (100,000 events and 20,000 active-installation
+entries per day maximum). The operator summary aggregates journal data in
+memory, and diagnostics have their own concurrency budget so metadata requests
+are not starved by analytics traffic.
 
 In the existing root-private VPS runtime environment, configure all three:
 

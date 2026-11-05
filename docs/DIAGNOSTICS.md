@@ -19,9 +19,11 @@ The gateway necessarily sees the connection address to service the HTTPS
 request, but the telemetry collector does not write it to its records.
 
 The ID exists only for distinguishing active installations across app versions;
-the server immediately HMAC hashes it before persistence. Turning analytics
-off cancels queued sends and removes the local identifier. Past aggregated
-counts cannot be individually reversed; rotating daily records expire after
+the server immediately HMAC hashes it before persistence. The gateway keeps
+short append-only daily event records containing this pseudonymous hash, the
+platform, version and fixed event name; it never saves the raw installation ID.
+Turning analytics off cancels queued sends and removes the local identifier.
+Past records are not immediately erased when a user opts out, but expire after
 approximately 30 days. A subsequent opt-in uses a fresh ID.
 
 The operator can query a protected JSON summary by version and platform,
@@ -34,11 +36,11 @@ installs or individuals. Network failures never interrupt Starlit.
 Sentry receives error stack traces and platform diagnostics only when its
 separate setting is enabled. Sentry's existing event sanitization and redaction
 remain in force. Crash diagnostics are managed independently of usage
-analytics and do not use the anonymous installation identifier.
+analytics and do not use the usage-statistics installation identifier.
 
 ## Deployment and operational safeguards
 
-See [the gateway configuration](../gateway/README.md#opt-in-anonymous-diagnostics)
+See [the gateway configuration](../gateway/README.md#opt-in-usage-diagnostics)
 for the persistent data directory, secret key, admin token, HTTPS paths and
 verification steps. The ingestion endpoint is disabled unless its secret and
 durable store are configured. Operator access requires an independent bearer

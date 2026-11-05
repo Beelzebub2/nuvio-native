@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // An allowlist, not a generic analytics event collector. Extra payload fields are rejected.
@@ -43,10 +43,28 @@ function dateKey(now) {
 }
 
 function newDay(day) {
-  return { day, eventCount: 0, groups: {} };
+  return { day, eventCount: 0, installationsCount: 0, groups: {}, identitySets: new Map() };
 }
 
-/** Anonymous, bounded, on-disk rollups. No IP addresses, cookies or raw IDs are persisted. */
+function foldEvent(day, record) {
+  const key = record.platform + ':' + record.version;
+  const group = day.groups[key] || { platform: record.platform, version: record.version, events: {}, installations: [] };
+  let identities = day.identitySets.get(key);
+  if (!identities) {
+    identities = new Set(group.installations);
+    day.identitySets.set(key, identities);
+  }
+  if (record.event === 'app_open' && !identities.has(record.idHash)) {
+    group.installations.push(record.idHash);
+    identities.add(record.idHash);
+    day.installationsCount++;
+  }
+  group.events[record.event] = (group.events[record.event] || 0) + 1;
+  day.groups[key] = group;
+  day.eventCount++;
+}
+
+/** Pseudonymous, bounded, on-disk rollups. No IP addresses, cookies or raw IDs are persisted. */
 export class TelemetryStore {
   constructor({ directory, hashKey, clock = Date.now } = {}) {
     this.directory = directory;
@@ -67,11 +85,25 @@ export class TelemetryStore {
 
   async loadDay(day) {
     if (this.days.has(day)) return this.days.get(day);
-    let payload = newDay(day);
+    const payload = newDay(day);
     try {
-      const parsed = JSON.parse(await readFile(join(this.directory, day + '.json'), 'utf8'));
-      if (parsed.day === day && Number.isSafeInteger(parsed.eventCount) &&
-          parsed.groups && typeof parsed.groups === 'object' && !Array.isArray(parsed.groups)) payload = parsed;
+      // Append-only events avoid rewriting a growing multi-megabyte rollup for
+      // each event. The first read after restart reconstructs in-memory rollups.
+      const journal = await readFile(join(this.directory, day + '.jsonl'), 'utf8');
+      for (const line of journal.split('\n')) {
+        if (!line) continue;
+        try {
+          const record = JSON.parse(line);
+          if (typeof record.idHash !== 'string' || !/^[0-9a-f]{64}$/.test(record.idHash) ||
+              !validateTelemetryEvent({
+                event: record.event, platform: record.platform, version: record.version,
+                installationId: '0'.repeat(32),
+              })) continue;
+          foldEvent(payload, record);
+        } catch {
+          // A partially written final line on abnormal shutdown is discarded.
+        }
+      }
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
@@ -95,20 +127,18 @@ export class TelemetryStore {
       const value = await this.loadDay(day);
       if (value.eventCount >= MAX_DAILY_EVENTS) return { status: 503, error: 'Daily capacity reached' };
       const key = event.platform + ':' + event.version;
-      const group = value.groups[key] || { platform: event.platform, version: event.version, events: {}, installations: [] };
-      if (event.event === 'app_open' && !group.installations.includes(hash)) {
-        const uniques = Object.values(value.groups).reduce((n, item) => n + item.installations.length, 0);
-        if (uniques >= MAX_DAILY_INSTALLATIONS) return { status: 503, error: 'Daily capacity reached' };
-        group.installations.push(hash);
+      if (event.event === 'app_open' && !value.identitySets.get(key)?.has(hash)) {
+        if (value.installationsCount >= MAX_DAILY_INSTALLATIONS) {
+          return { status: 503, error: 'Daily capacity reached' };
+        }
       }
-      group.events[event.event] = (group.events[event.event] || 0) + 1;
-      value.groups[key] = group;
-      value.eventCount++;
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
-      const file = join(this.directory, day + '.json');
-      const staging = file + '.tmp';
-      await writeFile(staging, JSON.stringify(value), { mode: 0o600 });
-      await rename(staging, file);
+      const file = join(this.directory, day + '.jsonl');
+      const record = { event: event.event, platform: event.platform, version: event.version, idHash: hash };
+      // Prefix each entry with a newline: a truncated last entry after a crash
+      // cannot corrupt a subsequent valid entry on the next process start.
+      await appendFile(file, '\n' + JSON.stringify(record), { mode: 0o600 });
+      foldEvent(value, record);
       await this.prune(now);
       return { status: 202 };
     });
@@ -122,12 +152,19 @@ export class TelemetryStore {
     for (const day of this.days.keys()) if (day < oldest) this.days.delete(day);
     // Delete stale data only once per day, not for every request.
     if (this.lastPrune === dateKey(now)) return;
-    this.lastPrune = dateKey(now);
-    for (const filename of await readdir(this.directory)) {
-      if (/^\d{4}-\d{2}-\d{2}\.json$/.test(filename) && filename.slice(0, 10) < oldest) {
+    let files;
+    try {
+      files = await readdir(this.directory);
+    } catch (error) {
+      if (error.code === 'ENOENT') return;
+      throw error;
+    }
+    for (const filename of files) {
+      if (/^\d{4}-\d{2}-\d{2}\.jsonl$/.test(filename) && filename.slice(0, 10) < oldest) {
         await unlink(join(this.directory, filename));
       }
     }
+    this.lastPrune = dateKey(now);
   }
 
   async summary(days) {
