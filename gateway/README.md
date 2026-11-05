@@ -82,6 +82,22 @@ Configure these server-only variables in the existing root-private
 
 The gateway returns 503 with no outbound request unless all three settings
 are valid. It returns 202 only when OpenObserve confirms the record was ingested.
+In the VPS `backend/vps/compose.yml`, the `metadata` service's `environment:`
+must explicitly forward all three values from the runtime env. Merely adding
+them to `/etc/starlit/runtime.env` does not pass them into the container:
+
+```yaml
+OPENOBSERVE_INGEST_URL: ${OPENOBSERVE_INGEST_URL:-}
+OPENOBSERVE_INGEST_AUTH: ${OPENOBSERVE_INGEST_AUTH:-}
+TELEMETRY_HMAC_KEY: ${TELEMETRY_HMAC_KEY:-}
+```
+
+Recreate just the `metadata` service with the existing Compose deployment
+procedure and `--env-file /etc/starlit/runtime.env`; do not log environment
+values. The deployment currently uses `network_mode: host`, so
+`http://127.0.0.1:5080/api/default/starlit_usage/_json` reaches OpenObserve
+without exposing its ingest port publicly.
+
 OpenObserve errors or a four-second timeout return 502; the app treats analytics
 as best-effort. A four-request concurrency budget, per-installation minute cap,
 and 100,000-event daily process cap keep telemetry from starving provider

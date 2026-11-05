@@ -90,6 +90,7 @@ test('fails closed without a configured HTTPS or private network ingest URL and 
   assert.equal(new OpenObserveTelemetry({ ...config, authorization: '' }).isConfigured, false);
   assert.equal(new OpenObserveTelemetry({ ...config, ingestUrl: 'http://example.com/api/default/starlit_usage/_json' }).isConfigured, false);
   assert.equal(new OpenObserveTelemetry({ ...config, ingestUrl: 'https://observe.rrmtools.uk/admin' }).isConfigured, false);
+  assert.equal(new OpenObserveTelemetry({ ...config, ingestUrl: 'http://[::1]:5080/api/default/starlit_usage/_json' }).isConfigured, true);
   const closed = createHttpServer((request, response) => {
     import('./openobserve-telemetry.mjs').then(({ handleTelemetryRequest }) =>
       handleTelemetryRequest(request, response, { reporter: new OpenObserveTelemetry() }));
