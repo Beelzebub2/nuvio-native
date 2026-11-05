@@ -222,6 +222,8 @@ internal data class PlaybackKey(
     val episodeNumber: Int?,
 )
 
+enum class PlaybackDecoderMode { Hardware, Software, Unknown }
+
 data class PlayerPlaybackSnapshot(
     val isLoading: Boolean = true,
     val isPlaying: Boolean = false,
@@ -232,6 +234,7 @@ data class PlayerPlaybackSnapshot(
     val playbackSpeed: Float = 1f,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
+    val decoderMode: PlaybackDecoderMode = PlaybackDecoderMode.Unknown,
 )
 
 data class PlayerNowPlayingInfo(

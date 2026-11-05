@@ -13,6 +13,7 @@
 
 #include <jni.h>
 #include <mpv/client.h>
+#include "../playback_diagnostics.h"
 
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
@@ -53,6 +54,7 @@ JavaVM *gVm = nullptr;
 constexpr double kMaxVolumePercent = 200.0;
 
 struct Player {
+    bool diagnosticsEnabled = false;
     mpv_handle *mpv = nullptr;
     std::thread eventThread;
     std::atomic<bool> running{false};
@@ -452,6 +454,13 @@ void onPlayerMessage(WebKitUserContentManager *, WebKitJavascriptResult *js, gpo
     // it is up. cursorActivity also arrives while hidden (mouse woke the UI) and
     // must re-activate compositing so the fade-in is actually shown.
     if (type) {
+        if (strcmp(type, "diagnosticsVisible") == 0) {
+            player->diagnosticsEnabled = value >= 0.5;
+            g_free(type);
+            if (typeV) g_object_unref(typeV);
+            if (valV) g_object_unref(valV);
+            return;
+        }
         if (strcmp(type, "setPlaybackState") == 0 ||
             strcmp(type, "setPlaybackStateQuiet") == 0) {
             bool shouldPlay = value >= 0.5;
@@ -868,18 +877,7 @@ gboolean pushPlayerUpdate(gpointer data) {
     }
     double duration = mpvGetDouble(player->mpv, "duration");
     double position = mpvGetDouble(player->mpv, "time-pos");
-    long long videoWidth = (long long)mpvGetInt(player->mpv, "video-params/w");
-    long long videoHeight = (long long)mpvGetInt(player->mpv, "video-params/h");
-    double cacheTime = mpvGetDouble(player->mpv, "demuxer-cache-time");
-    double cacheAhead = cacheTime > 0 ? std::max(0.0, cacheTime - position)
-        : std::max(0.0, mpvGetDouble(player->mpv, "demuxer-cache-duration"));
-    double playbackSpeed = mpvGetDouble(player->mpv, "speed");
-    if (!std::isfinite(cacheAhead) || cacheAhead < 0.0) cacheAhead = 0.0;
-    if (!std::isfinite(playbackSpeed) || playbackSpeed <= 0.0) playbackSpeed = 1.0;
-    char *hardwareDecoder = mpv_get_property_string(player->mpv, "hwdec-current");
-    int decoderMode = !hardwareDecoder || !*hardwareDecoder ? -1 :
-        strcmp(hardwareDecoder, "no") == 0 ? 0 : 1;
-    if (hardwareDecoder) mpv_free(hardwareDecoder);
+    const auto diagnostics = readPlaybackDiagnostics(player->mpv, player->diagnosticsEnabled, mpv_get_property, mpv_free);
     double volumeLevel = mpvGetDouble(player->mpv, "volume") / 100.0;
     volumeLevel = std::max(0.0, std::min(kMaxVolumePercent / 100.0, volumeLevel));
     bool paused = mpvGetFlag(player->mpv, "pause");
@@ -888,8 +886,9 @@ gboolean pushPlayerUpdate(gpointer data) {
     std::string subtitleTracks = buildTracksJson(player->mpv, "sub");
     char head[512];
     snprintf(head, sizeof(head),
-             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,videoWidth:%lld,videoHeight:%lld,bufferAheadSeconds:%0.3f,playbackSpeed:%0.3f,decoderMode:%d,paused:%s,loading:%s,audioTracks:",
-             duration, position, volumeLevel, videoWidth, videoHeight, cacheAhead, playbackSpeed, decoderMode,
+             "window.playerUpdate&&window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,videoWidth:%lld,videoHeight:%lld,bufferAheadSeconds:%0.3f,playbackSpeed:%0.3f,decoderMode:%d,seeking:%s,paused:%s,loading:%s,audioTracks:",
+             duration, position, volumeLevel, diagnostics.width, diagnostics.height, diagnostics.bufferAhead, diagnostics.speed, diagnostics.decoder,
+             diagnostics.seeking ? "true" : "false",
              paused ? "true" : "false", loading ? "true" : "false");
     std::string js = std::string(head) + audioTracks +
                      ",subtitleTracks:" + subtitleTracks + "})";

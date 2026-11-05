@@ -38,7 +38,7 @@
       decoder === "Software" && width !== null && width >= 2560 ? adviceOptions[2] :
       input.loading === true ? adviceOptions[3] : adviceOptions[4];
     return {
-      phase: input.loading === true ? "Buffering" : input.paused === false ? "Playing" : "Paused or idle",
+      phase: input.loading === true ? "Buffering" : input.paused === false ? "Playing" : input.paused === true ? "Paused or idle" : "Unavailable",
       resolution: width !== null && height !== null ? `${Math.round(width)} x ${Math.round(height)}` : "Unavailable",
       positionSeconds: position === null ? "Unavailable" : Math.floor(position).toString(),
       durationSeconds: duration === null || duration <= 0 ? "Unavailable" : Math.floor(duration).toString(),
@@ -73,7 +73,7 @@
       "Duration seconds: " + seconds(safe.durationSeconds),
       "Buffered ahead seconds: " + seconds(safe.bufferAheadSeconds),
       "Playback speed: " + speed,
-      "Rebuffer events since opening player: " + seconds(safe.rebufferEvents),
+      "Rebuffer events while diagnostics open: " + seconds(safe.rebufferEvents),
       "Decoder: " + decoder,
       "Source throughput: unavailable",
       "Network link hint: " + networkHint,
@@ -81,7 +81,35 @@
     ].join("\n");
   }
 
-  const api = Object.freeze({ normalize, report });
+  function createSession() {
+    let enabled = false, last = null, started = false, previousLoading = true, rebuffers = 0;
+    return {
+      setEnabled(value) {
+        enabled = value === true;
+        last = null;
+        started = false;
+        previousLoading = true;
+        rebuffers = 0;
+      },
+      update(input) {
+        if (!enabled || !input || typeof input !== "object") return;
+        const loading = input.loading === true;
+        if (loading && !previousLoading && started && input.paused === false && input.seeking !== true) {
+          rebuffers = Math.min(rebuffers + 1, 1000000);
+        }
+        if (!loading && input.paused === false && input.seeking !== true) started = true;
+        previousLoading = loading || input.seeking === true;
+        // No track names, URLs, or arbitrary native metadata are retained.
+        last = Object.fromEntries([
+          "loading", "paused", "duration", "position", "videoWidth", "videoHeight",
+          "bufferAheadSeconds", "playbackSpeed", "decoderMode",
+        ].map(key => [key, input[key]]));
+      },
+      metrics(networkOnline) { return normalize({ ...(last || {}), networkOnline }, rebuffers); },
+    };
+  }
+
+  const api = Object.freeze({ normalize, report, createSession });
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.StarlitPlaybackDiagnostics = api;
 })(typeof window !== "undefined" ? window : null);

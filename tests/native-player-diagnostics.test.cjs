@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { normalize, report } = require("../composeApp/src/desktopMain/resources/player-ui/diagnostics.js");
+const { normalize, report, createSession } = require("../composeApp/src/desktopMain/resources/player-ui/diagnostics.js");
 
 test("normalizes measured mpv playback metrics without inferring absent values", () => {
   const metrics = normalize({
@@ -27,7 +27,7 @@ test("normalizes measured mpv playback metrics without inferring absent values",
     networkHint: "Unavailable",
     advice: "For stutters, compare an authorized direct stream and include this sanitized report.",
   });
-  assert.match(report(metrics), /Rebuffer events since opening player: 3/);
+  assert.match(report(metrics), /Rebuffer events while diagnostics open: 3/);
   assert.match(report(metrics), /Decoder: Hardware/);
 });
 
@@ -125,4 +125,48 @@ test("buffer and software decoder hints are fixed text and never include source 
   assert.match(software.advice, /software decoding/);
   assert.equal(report(software).includes("redact-me"), false);
   assert.equal(report(slow).includes("redact-me"), false);
+});
+
+test("session collects only after opt-in and clears measurements and count when closed", () => {
+  const session = createSession();
+  const playing = { paused: false, loading: false, position: 20, videoWidth: 1920, videoHeight: 1080 };
+  session.update(playing);
+  assert.equal(session.metrics().positionSeconds, "Unavailable");
+  assert.equal(session.metrics().phase, "Unavailable");
+  session.setEnabled(true);
+  session.update({ loading: true, paused: false });
+  assert.equal(session.metrics().rebufferEvents, "0", "startup is not rebuffering");
+  session.update(playing);
+  session.update({ loading: true, paused: false });
+  session.update({ loading: true, paused: false });
+  assert.equal(session.metrics().rebufferEvents, "1");
+  session.setEnabled(false);
+  session.update(playing);
+  assert.equal(session.metrics().positionSeconds, "Unavailable");
+  session.setEnabled(true);
+  assert.equal(session.metrics().rebufferEvents, "0");
+  assert.equal(session.metrics().positionSeconds, "Unavailable");
+});
+
+test("seeking and paused transitions do not inflate native rebuffer count", () => {
+  const session = createSession();
+  session.setEnabled(true);
+  const playing = { loading: false, paused: false };
+  session.update(playing);
+  session.update({ loading: true, seeking: true, paused: false });
+  session.update({ loading: true, seeking: false, paused: false });
+  assert.equal(session.metrics().rebufferEvents, "0");
+  session.update(playing);
+  session.update({ loading: true, paused: true });
+  assert.equal(session.metrics().rebufferEvents, "0");
+  session.update(playing);
+  session.update({ loading: true, paused: false });
+  assert.equal(session.metrics().rebufferEvents, "1");
+});
+
+test("negative native missing-value sentinels remain unavailable", () => {
+  const metrics = normalize({ bufferAheadSeconds: -1, playbackSpeed: -1 });
+  assert.equal(metrics.bufferAheadSeconds, "Unavailable");
+  assert.equal(metrics.playbackSpeed, "Unavailable");
+  assert.equal(normalize({ bufferAheadSeconds: 0 }).bufferAheadSeconds, "0");
 });

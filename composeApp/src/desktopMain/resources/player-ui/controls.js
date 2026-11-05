@@ -398,10 +398,7 @@ let tapTimer = 0;
 let activeModal = "";
 // Native telemetry is ephemeral and never written to disk. Only numeric fields
 // from mpv are allowed into the diagnostic report.
-let lastDiagnosticsUpdate = null;
-let previousDiagnosticsLoading = true;
-let diagnosticsPlaybackStarted = false;
-let diagnosticsRebuffers = 0;
+const diagnosticsSession = window.StarlitPlaybackDiagnostics.createSession();
 let pressedButton = null;
 let focusedActionCommand = "";
 let rtxComparisonHeld = false;
@@ -1076,6 +1073,10 @@ const setModalVisibility = (modal, visible, animated = true) => {
 
 const closePlayerModal = (notifyDismiss = false, animated = true) => {
   const closingModal = activeModal;
+  if (closingModal === "diagnostics") {
+    diagnosticsSession.setEnabled(false);
+    send("diagnosticsVisible", 0);
+  }
   activeModal = "";
   modalElements.forEach(modal => {
     setModalVisibility(modal, false, animated);
@@ -1091,6 +1092,10 @@ const openPlayerModal = modal => {
   if (!targetModal) {
     closePlayerModal(false);
     return;
+  }
+  if (activeModal === "diagnostics" || modal === "diagnostics") {
+    diagnosticsSession.setEnabled(modal === "diagnostics");
+    send("diagnosticsVisible", modal === "diagnostics" ? 1 : 0);
   }
   activeModal = modal;
   if (modal === "submitIntro") {
@@ -2140,10 +2145,7 @@ const diagnosticsMetrics = () => {
   // navigator.onLine is a passive browser/OS hint, not a network probe or
   // proof that the media origin is reachable. No requests are issued.
   const networkOnline = typeof navigator.onLine === "boolean" ? navigator.onLine : null;
-  return window.StarlitPlaybackDiagnostics.normalize(
-    { ...(lastDiagnosticsUpdate || {}), networkOnline },
-    diagnosticsRebuffers
-  );
+  return diagnosticsSession.metrics(networkOnline);
 };
 
 const renderDiagnosticsModal = () => {
@@ -3307,29 +3309,8 @@ timeLabel.addEventListener("click", () => {
 });
 
 window.playerUpdate = update => {
-  if (update && typeof update === "object") {
-    const loading = update.loading === true;
-    const playing = !loading && update.paused === false;
-    if (loading && !previousDiagnosticsLoading && diagnosticsPlaybackStarted) {
-      diagnosticsRebuffers = Math.min(diagnosticsRebuffers + 1, 1000000);
-    }
-    if (playing) diagnosticsPlaybackStarted = true;
-    previousDiagnosticsLoading = loading;
-    // Keep only measurements, never the native update's arbitrary track
-    // metadata or any future fields containing source/private data.
-    lastDiagnosticsUpdate = {
-      loading,
-      paused: update.paused === true,
-      duration: update.duration,
-      position: update.position,
-      videoWidth: update.videoWidth,
-      videoHeight: update.videoHeight,
-      bufferAheadSeconds: update.bufferAheadSeconds,
-      playbackSpeed: update.playbackSpeed,
-      decoderMode: update.decoderMode,
-    };
-    renderDiagnosticsModal();
-  }
+  diagnosticsSession.update(update);
+  renderDiagnosticsModal();
   const durationMs = Math.round((Number(update.duration) || 0) * 1000);
   const positionMs = Math.round((Number(update.position) || 0) * 1000);
   const reportedVolumeLevel = Number(update.volumeLevel);

@@ -709,7 +709,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
     val remoteConnected = DesktopRemote.connected.collectAsState().value
     val handoffSentText = stringResource(Res.string.remote_handoff_sent)
     val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
-    var showPlaybackDiagnostics by remember { mutableStateOf(false) }
+    var showPlaybackDiagnostics by remember(activePlaybackKey) { mutableStateOf(false) }
     val showCastHelp = remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
