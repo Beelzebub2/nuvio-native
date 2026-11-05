@@ -57,6 +57,7 @@ internal class NativePlayerController(
     private val createWaitTimeoutMs: Long = 5_000L,
     private val releaseTimeoutMs: Long = 10_000L,
     private val onCreateWaitCompleted: () -> Unit = {},
+    private val nativeSetRtxCompareOriginal: (Long, Boolean) -> Boolean = NativePlayerBridge::setRtxCompareOriginal,
 ) : PlayerEngineController {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
@@ -100,6 +101,9 @@ internal class NativePlayerController(
     private var releaseTimedOut: Boolean = false
     private var terminalReleaseFailure: String? = null
     private var controlsState = PlayerControlsState()
+    private var rtxComparisonAvailable = false
+    private var rtxShowingOriginal = false
+    private var rtxComparisonFailed = false
     @Volatile
     private var currentVolumeLevel = rememberedVolumeLevel.coerceDesktopPlayerVolumeLevel()
     private var pendingSubtitleDelayMs: Int? = null
@@ -340,6 +344,11 @@ internal class NativePlayerController(
                             "attach created handle=$created source=${resolvedSource.toPlaybackLogKey()} " +
                                 "initialPositionMs=${pending.initialPositionMs}"
                         }
+                        rtxComparisonAvailable =
+                            DesktopHostOs.current == DesktopHostOs.WINDOWS && pending.nvidiaRtxSuperResolutionEnabled
+                        rtxShowingOriginal = false
+                        rtxComparisonFailed = false
+                        lastSentControlsStructureKey = null
                         applyRememberedVolume()
                         updateControls(controlsState)
                         setResizeMode(rememberedResizeMode)
@@ -438,6 +447,9 @@ internal class NativePlayerController(
             state = stateWithVolume.nativeControlsStructureKey(),
             isFullscreen = isFullscreen,
             isInPip = DesktopPlayerPictureInPicture.isEnabled,
+            rtxComparisonAvailable = rtxComparisonAvailable,
+            rtxShowingOriginal = rtxShowingOriginal,
+            rtxComparisonFailed = rtxComparisonFailed,
         )
         if (structureKey == lastSentControlsStructureKey) return
         lastSentControlsStructureKey = structureKey
@@ -447,7 +459,15 @@ internal class NativePlayerController(
                 "speed=${stateWithVolume.playbackSpeedLabel} audioLabel=${stateWithVolume.audioLabel} " +
                 "subsLabel=${stateWithVolume.subtitlesLabel} fullscreen=$isFullscreen"
         }
-        NativePlayerBridge.updateControls(current, stateWithVolume.toControlsJson(isFullscreen))
+        NativePlayerBridge.updateControls(
+            current,
+            stateWithVolume.toControlsJson(
+                isFullscreen = isFullscreen,
+                rtxComparisonAvailable = rtxComparisonAvailable,
+                rtxShowingOriginal = rtxShowingOriginal,
+                rtxComparisonFailed = rtxComparisonFailed,
+            ),
+        )
     }
 
     fun onDesktopFullscreenChanged() {
@@ -520,6 +540,24 @@ internal class NativePlayerController(
         }
         when (type) {
             "cursorActivity" -> host.noteCursorActivity()
+            "rtxCompareOriginal" -> {
+                val current = handle
+                if (current == 0L || !rtxComparisonAvailable) return
+                val original = value >= 0.5
+                if (rtxShowingOriginal == original) return
+                val applied = runCatching { nativeSetRtxCompareOriginal(current, original) }
+                    .onFailure { error -> log.w(error) { "RTX comparison filter switch failed" } }
+                    .getOrDefault(false)
+                if (applied) {
+                    rtxShowingOriginal = original
+                } else {
+                    // Never label a rejected filter change as an active comparison.
+                    rtxComparisonAvailable = false
+                    rtxComparisonFailed = true
+                }
+                lastSentControlsStructureKey = null
+                updateControls(controlsState)
+            }
             "scrubChange" -> {
                 val handled = onScrubChange(value.toLong())
                 log.d { "scrubChange positionMs=${value.toLong()} handled=$handled handle=$handle" }
@@ -1252,9 +1290,17 @@ private data class NativeControlsStructureKey(
     val state: PlayerControlsState,
     val isFullscreen: Boolean,
     val isInPip: Boolean,
+    val rtxComparisonAvailable: Boolean,
+    val rtxShowingOriginal: Boolean,
+    val rtxComparisonFailed: Boolean,
 )
 
-private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
+private fun PlayerControlsState.toControlsJson(
+    isFullscreen: Boolean,
+    rtxComparisonAvailable: Boolean,
+    rtxShowingOriginal: Boolean,
+    rtxComparisonFailed: Boolean,
+): String =
     buildString {
         append('{')
         appendJsonField("title", title)
@@ -1282,6 +1328,12 @@ private fun PlayerControlsState.toControlsJson(isFullscreen: Boolean): String =
         appendJsonField("playbackSpeedLabel", playbackSpeedLabel)
         append(',')
         appendJsonField("isFullscreen", isFullscreen)
+        append(',')
+        appendJsonField("rtxComparisonAvailable", rtxComparisonAvailable)
+        append(',')
+        appendJsonField("rtxShowingOriginal", rtxShowingOriginal)
+        append(',')
+        appendJsonField("rtxComparisonFailed", rtxComparisonFailed)
         append(',')
         appendJsonField("volumeLevel", volumeLevel)
         append(',')

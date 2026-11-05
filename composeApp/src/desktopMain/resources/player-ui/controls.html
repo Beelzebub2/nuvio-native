@@ -231,6 +231,9 @@
             <button class="action" data-command="speed"><svg><use href="#icon-speed"></use></svg><span id="speedLabel">1x</span></button>
             <button class="action" data-command="subtitles"><svg><use href="#icon-subs"></use></svg><span id="subtitlesLabel">Subs</span></button>
             <button class="action" data-command="audio"><svg><use href="#icon-audio"></use></svg><span id="audioLabel">Audio</span></button>
+            <button class="action optional rtx-compare-action" id="rtxCompareButton" data-command="rtxCompare" type="button" aria-label="Hold to compare the original video" aria-pressed="false" title="Hold to compare the original video" hidden>
+              <svg><use href="#icon-swap"></use></svg><span id="rtxCompareLabel">Hold: Original</span>
+            </button>
             <button class="action optional" id="sourcesButton" data-command="sources"><svg><use href="#icon-source"></use></svg><span id="sourcesLabel">Sources</span></button>
             <button class="action optional" id="episodesButton" data-command="episodes"><svg><use href="#icon-episodes"></use></svg><span id="episodesLabel">Episodes</span></button>
             <button class="action optional toggle-action" id="autoSkipIntroButton" data-command="setAutoSkipIntro" aria-pressed="false" hidden><svg><use href="#icon-auto-skip-intro"></use></svg><span id="autoSkipIntroLabel">Auto Skip Intro</span></button>
@@ -247,6 +250,7 @@
           </div>
         </div>
       </section>
+      <section class="rtx-compare-status" id="rtxCompareStatus" role="status" aria-live="polite" hidden>Original video · RTX filter bypassed</section>
       <section class="player-toast" id="playerToast" aria-live="polite" aria-atomic="true" aria-hidden="true">
         <svg class="player-toast-icon" id="playerToastIcon" aria-hidden="true" hidden><use id="playerToastIconUse" href="#icon-speed"></use></svg>
         <span class="player-toast-text" id="playerToastText"></span>
