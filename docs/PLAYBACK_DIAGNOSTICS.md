@@ -59,3 +59,17 @@ the Windows bridge, and runs native missing-value/disabled-sampling tests, JavaS
 redaction/session tests, and common Kotlin/player lifecycle tests. Compilation and
 automated transition tests do not replace device playback checks. Record actual
 playback/buffering observations separately and identify platforms not exercised.
+
+For an isolated real Windows decode smoke, generate a synthetic fixture and compile
+the harness from a Visual Studio developer prompt (output paths may be adjusted):
+
+```bat
+ffmpeg -f lavfi -i testsrc2=size=320x180:rate=24 -t 12 -c:v libx264 -pix_fmt yuv420p fixture.mp4
+cl /EHsc /std:c++17 tests\native-playback-metrics-smoke.windows.cpp /Fe:metrics-smoke.exe
+metrics-smoke.exe composeApp\src\desktopMain\native\windows\runtime\libmpv-2.dll fixture.mp4
+```
+
+This uses real libmpv with null video/audio outputs and no app profile or network.
+It checks decoded resolution, advancing position, software decoder, a measured
+speed change, opt-out clearing, and pause/seek acceptance. It does not validate
+WebView rendering, hardware acceleration, or audible/visible presentation.
