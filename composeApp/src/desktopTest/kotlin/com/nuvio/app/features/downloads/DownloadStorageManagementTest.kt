@@ -93,4 +93,51 @@ class DownloadStorageManagementTest {
             trackedDownloadBytes(listOf(item(root).copy(downloadedBytes = Long.MAX_VALUE), item(root))),
         )
     }
+
+    @Test
+    fun ageSuggestionsNeverIncludeFutureUnknownOrTooRecentFiles() {
+        val day = 86_400_000L
+        val now = 100L * day
+        val entries = listOf(
+            DownloadCleanupEntry("old", "Older copy", 200L, now - 90L * day),
+            DownloadCleanupEntry("boundary", "30 days", 100L, now - 30L * day),
+            DownloadCleanupEntry("recent", "Recent copy", 100L, now - 2L * day),
+            DownloadCleanupEntry("future", "Clock-skewed copy", 100L, now + day),
+            DownloadCleanupEntry("unknown", "Unknown creation date", 100L, 0L),
+            DownloadCleanupEntry("empty", "Zero bytes", 0L, now - 60L * day),
+        )
+        assertEquals(setOf("old", "boundary"), suggestedOldDownloadCleanupIds(entries, now))
+        assertEquals(emptySet(), suggestedOldDownloadCleanupIds(entries, 0L))
+        assertEquals(emptySet(), suggestedOldDownloadCleanupIds(entries, now, ageDays = 0))
+        assertEquals(emptySet(), suggestedOldDownloadCleanupIds(entries, now, ageDays = 3651))
+    }
+
+    @Test
+    fun targetSuggestionsPreferOldestVerifiedCopiesWithoutGrantingDeletion() {
+        val entries = listOf(
+            DownloadCleanupEntry("newest", "Newer", 700L, 300L),
+            DownloadCleanupEntry("oldest", "Older", 125L, 100L),
+            DownloadCleanupEntry("middle", "Middle", 100L, 200L),
+        )
+        assertEquals(
+            setOf("oldest", "middle"),
+            suggestedTargetDownloadCleanupIds(entries, trackedBytes = 1_000L, targetBytes = 800L),
+        )
+        assertEquals(
+            emptySet(),
+            suggestedTargetDownloadCleanupIds(entries, trackedBytes = 1_000L, targetBytes = 1_000L),
+        )
+        assertEquals(
+            emptySet(),
+            suggestedTargetDownloadCleanupIds(entries, trackedBytes = 1_000L, targetBytes = null),
+        )
+        assertEquals(
+            setOf("oldest"),
+            suggestedTargetDownloadCleanupIds(
+                listOf(DownloadCleanupEntry("oldest", "Huge verified file", Long.MAX_VALUE, 100L)),
+                trackedBytes = Long.MAX_VALUE,
+                targetBytes = 1L,
+            ),
+        )
+    }
 }

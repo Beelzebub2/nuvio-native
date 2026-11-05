@@ -536,10 +536,14 @@
     <string name="downloads_storage_recorded">Dados offline registrados: %1$s</string>
     <string name="downloads_storage_available">Espaço disponível nesta unidade: %1$s</string>
     <string name="downloads_storage_above_target">Os downloads ultrapassaram a meta de armazenamento. Revise os downloads concluídos para liberar espaço.</string>
+    <string name="downloads_storage_low_space">Restam apenas %1$s de espaço livre. Revise os arquivos offline concluídos antes de iniciar outros downloads.</string>
     <string name="downloads_storage_target_button">Meta de armazenamento: %1$s</string>
     <string name="downloads_storage_no_target">Sem meta</string>
     <string name="downloads_storage_target_note">A meta mostra avisos e não impede novos downloads. O Starlit nunca apaga conteúdo offline automaticamente.</string>
     <string name="downloads_storage_review">Revisar limpeza</string>
+    <string name="downloads_storage_suggest_old">Sugerir arquivos com mais de 30 dias</string>
+    <string name="downloads_storage_suggest_target">Sugerir até a meta</string>
+    <string name="downloads_storage_suggest_note">As sugestões apenas selecionam arquivos concluídos e verificados. Confira a seleção; nada é apagado sem sua confirmação.</string>
     <string name="downloads_storage_remove_watched">Remover episódios assistidos</string>
     <string name="downloads_storage_watched_notice">Os episódios concluídos marcados como assistidos ou reproduzidos até o fim ficam pré-selecionados. Desmarque os que quiser manter. O histórico de reprodução não será apagado.</string>
     <string name="downloads_storage_no_watched_eligible">Não há episódios assistidos com arquivos verificados do Starlit disponíveis para remoção.</string>
