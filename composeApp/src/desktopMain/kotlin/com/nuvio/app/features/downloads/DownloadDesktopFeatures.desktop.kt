@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.app.core.ui.nuvioSwitchColors
 import com.nuvio.app.core.ui.nuvio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -285,7 +286,7 @@ internal actual object DownloadDesktopFeatures {
                 Text(stringResource(Res.string.downloads_auto_watch_later_description),
                     style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
             }
-            Switch(checked = autoWatchLater, onCheckedChange = null)
+            Switch(checked = autoWatchLater, onCheckedChange = null, colors = nuvioSwitchColors())
         }
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
         recoveredNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted) }

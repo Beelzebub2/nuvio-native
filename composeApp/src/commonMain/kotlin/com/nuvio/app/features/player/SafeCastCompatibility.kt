@@ -1,13 +1,27 @@
 package com.nuvio.app.features.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.nuvio
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -69,36 +83,46 @@ internal fun CastCompatibilityDialog(
     eligibility: CastCompatibility,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    val tokens = MaterialTheme.nuvio
+    DialogSurface(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.player_cast_availability_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(Res.string.player_cast_not_configured))
-                Text(
-                    stringResource(when (eligibility) {
-                        CastCompatibility.NoSource -> Res.string.player_cast_no_source
-                        CastCompatibility.PeerToPeerOrLocal -> Res.string.player_cast_local
-                        CastCompatibility.AuthenticatedHeaders -> Res.string.player_cast_headers
-                        CastCompatibility.SeparateAudio -> Res.string.player_cast_separate_audio
-                        CastCompatibility.NonHttpsSource -> Res.string.player_cast_https_required
-                        CastCompatibility.SignedOrOpaqueUrl -> Res.string.player_cast_signed
-                        CastCompatibility.PrivateOrUnknownHost -> Res.string.player_cast_private
-                        CastCompatibility.UnsupportedMediaFormat -> Res.string.player_cast_unsupported_format
-                        CastCompatibility.PotentiallyCompatibleDirectMedia -> Res.string.player_cast_candidate
-                    }),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    stringResource(Res.string.player_cast_alternative),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_close)) }
-        },
-    )
+        title = stringResource(Res.string.player_cast_availability_title),
+        message = stringResource(Res.string.player_cast_not_configured),
+    ) {
+        // The reason for this source sits in its own panel so it reads as the answer.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(tokens.shapes.compactCard)
+                .background(tokens.colors.textPrimary.copy(alpha = tokens.opacity.subtle))
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(Icons.Rounded.Info, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(20.dp))
+            Text(
+                stringResource(when (eligibility) {
+                    CastCompatibility.NoSource -> Res.string.player_cast_no_source
+                    CastCompatibility.PeerToPeerOrLocal -> Res.string.player_cast_local
+                    CastCompatibility.AuthenticatedHeaders -> Res.string.player_cast_headers
+                    CastCompatibility.SeparateAudio -> Res.string.player_cast_separate_audio
+                    CastCompatibility.NonHttpsSource -> Res.string.player_cast_https_required
+                    CastCompatibility.SignedOrOpaqueUrl -> Res.string.player_cast_signed
+                    CastCompatibility.PrivateOrUnknownHost -> Res.string.player_cast_private
+                    CastCompatibility.UnsupportedMediaFormat -> Res.string.player_cast_unsupported_format
+                    CastCompatibility.PotentiallyCompatibleDirectMedia -> Res.string.player_cast_candidate
+                }),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textPrimary,
+            )
+        }
+        DialogHint(stringResource(Res.string.player_cast_alternative))
+        DialogButtons {
+            DialogButton(
+                text = stringResource(Res.string.action_close),
+                onClick = onDismiss,
+                style = DialogButtonStyle.Primary,
+            )
+        }
+    }
 }

@@ -38,13 +38,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MarkEmailRead
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogTextField
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.GoogleBrandMark
 import androidx.compose.material3.Icon
@@ -1190,6 +1196,7 @@ private fun PasswordRecoveryDialog(initialEmail: String, onDismiss: () -> Unit) 
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<PasswordRecoveryRequestResult?>(null) }
     val sent = result == PasswordRecoveryRequestResult.SENT
+    val tokens = MaterialTheme.nuvio
 
     fun submit() {
         if (sending || sent) return
@@ -1203,60 +1210,66 @@ private fun PasswordRecoveryDialog(initialEmail: String, onDismiss: () -> Unit) 
         }
     }
 
-    AlertDialog(
+    DialogSurface(
         onDismissRequest = { if (!sending) onDismiss() },
-        title = { Text(stringResource(Res.string.auth_password_recovery_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(
-                        if (sent) Res.string.auth_password_recovery_sent
-                        else Res.string.auth_password_recovery_description
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (!sent) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it; result = null },
-                        label = { Text(stringResource(Res.string.compose_auth_email)) },
-                        singleLine = true,
-                        enabled = !sending,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submit() }),
-                        modifier = Modifier.fillMaxWidth().testTag("auth-password-recovery-email"),
-                    )
-                    val failure = when (result) {
-                        PasswordRecoveryRequestResult.INVALID_EMAIL -> Res.string.auth_password_recovery_invalid_email
-                        PasswordRecoveryRequestResult.UNAVAILABLE -> Res.string.auth_password_recovery_unavailable
-                        PasswordRecoveryRequestResult.FAILED -> Res.string.auth_password_recovery_failed
-                        else -> null
-                    }
-                    failure?.let {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(stringResource(it), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (sent) onDismiss() else submit() },
-                enabled = !sending,
-                modifier = Modifier.testTag("auth-password-recovery-submit"),
+        title = stringResource(Res.string.auth_password_recovery_title),
+        message = if (sent) null else stringResource(Res.string.auth_password_recovery_description),
+    ) {
+        if (sent) {
+            // After sending, the dialog becomes a confirmation so the next step is obvious.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(tokens.shapes.compactCard)
+                    .background(tokens.colors.accent.copy(alpha = tokens.opacity.selected))
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                Text(stringResource(if (sent) Res.string.action_done else Res.string.auth_password_recovery_send))
+                Icon(Icons.Rounded.MarkEmailRead, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(22.dp))
+                Text(
+                    stringResource(Res.string.auth_password_recovery_sent),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.colors.textPrimary,
+                )
             }
-        },
-        dismissButton = {
+        } else {
+            val failure = when (result) {
+                PasswordRecoveryRequestResult.INVALID_EMAIL -> Res.string.auth_password_recovery_invalid_email
+                PasswordRecoveryRequestResult.UNAVAILABLE -> Res.string.auth_password_recovery_unavailable
+                PasswordRecoveryRequestResult.FAILED -> Res.string.auth_password_recovery_failed
+                else -> null
+            }
+            DialogTextField(
+                value = address,
+                onValueChange = { address = it; result = null },
+                label = stringResource(Res.string.compose_auth_email),
+                enabled = !sending,
+                isError = failure != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                modifier = Modifier.testTag("auth-password-recovery-email"),
+            )
+            failure?.let { DialogHint(stringResource(it), isError = true) }
+        }
+        DialogButtons {
             if (!sent) {
-                TextButton(onClick = onDismiss, enabled = !sending) {
-                    Text(stringResource(Res.string.action_cancel))
-                }
+                DialogButton(
+                    text = stringResource(Res.string.action_cancel),
+                    onClick = onDismiss,
+                    enabled = !sending,
+                )
             }
-        },
-    )
+            DialogButton(
+                text = stringResource(if (sent) Res.string.action_done else Res.string.auth_password_recovery_send),
+                onClick = { if (sent) onDismiss() else submit() },
+                style = DialogButtonStyle.Primary,
+                enabled = sent || address.isNotBlank(),
+                loading = sending,
+                modifier = Modifier.testTag("auth-password-recovery-submit"),
+            )
+        }
+    }
 }
 
 @Composable

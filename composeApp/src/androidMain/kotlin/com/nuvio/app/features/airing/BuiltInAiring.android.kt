@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -37,8 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,6 +54,20 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSectionLabel
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogSwitchRow
+import com.nuvio.app.core.ui.DialogTextField
+import com.nuvio.app.core.ui.NuvioActionSize
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
+import com.nuvio.app.core.ui.NuvioSegment
+import com.nuvio.app.core.ui.NuvioSegmentedControl
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.NuvioAsyncImage
 import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.features.catalog.CatalogTarget
@@ -80,6 +91,13 @@ import nuvio.composeapp.generated.resources.airing_settings_hide_nsfw
 import nuvio.composeapp.generated.resources.airing_settings_title
 import nuvio.composeapp.generated.resources.airing_settings_zone
 import nuvio.composeapp.generated.resources.airing_show_all_again
+import nuvio.composeapp.generated.resources.airing_show_again
+import nuvio.composeapp.generated.resources.airing_settings_zone_example
+import nuvio.composeapp.generated.resources.airing_settings_window
+import nuvio.composeapp.generated.resources.airing_settings_source
+import nuvio.composeapp.generated.resources.airing_settings_intro
+import nuvio.composeapp.generated.resources.airing_hidden_title
+import nuvio.composeapp.generated.resources.airing_days_unit
 import org.jetbrains.compose.resources.stringResource
 import java.time.Instant
 import java.time.LocalDate
@@ -337,61 +355,112 @@ private fun MobileAiringSettingsDialog(
     onSave: (AiringSettings) -> Unit,
 ) {
     var edited by remember(original) { mutableStateOf(original) }
-    val validZone = remember(edited.zone) { runCatching { ZoneId.of(edited.zone) }.isSuccess }
-    AlertDialog(
+    val validZone = remember(edited.zone) { runCatching { ZoneId.of(edited.zone.trim()) }.isSuccess }
+    DialogSurface(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.airing_settings_title)) },
-        text = {
-            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Recently released: days", style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    (1..MAX_AIRING_HISTORY_DAYS).forEach { days ->
-                        FilterChip(selected = edited.historyDays == days, onClick = {
-                            edited = edited.copy(historyDays = days)
-                        }, label = { Text("$days") })
-                    }
-                }
-                Text("Episode source", style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("broadcast", "sub", "dub").forEach { type ->
-                        FilterChip(selected = edited.airType == type,
-                            onClick = { edited = edited.copy(airType = type) },
-                            label = { Text(type.replaceFirstChar { it.uppercase() }) })
-                    }
-                }
-                OutlinedTextField(
-                    value = edited.zone, onValueChange = { edited = edited.copy(zone = it) },
-                    label = { Text(stringResource(Res.string.airing_settings_zone)) },
-                    singleLine = true, isError = !validZone, modifier = Modifier.fillMaxWidth(),
+        title = stringResource(Res.string.airing_settings_title),
+        message = stringResource(Res.string.airing_settings_intro),
+    ) {
+        Column(
+            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DialogSectionLabel(stringResource(Res.string.airing_settings_source))
+                NuvioSegmentedControl(
+                    segments = listOf("broadcast" to "Broadcast", "sub" to "Sub", "dub" to "Dub")
+                        .map { (value, label) -> NuvioSegment(value, label) },
+                    selected = edited.airType,
+                    onSelect = { edited = edited.copy(airType = it) },
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(Res.string.airing_settings_hide_nsfw), Modifier.weight(1f))
-                    Switch(checked = edited.hideNsfw, onCheckedChange = { edited = edited.copy(hideNsfw = it) })
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DialogSectionLabel(stringResource(Res.string.airing_settings_window))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NuvioSegmentedControl(
+                        segments = (1..MAX_AIRING_HISTORY_DAYS).map { NuvioSegment(it, it.toString()) },
+                        selected = edited.historyDays.coerceIn(1, MAX_AIRING_HISTORY_DAYS),
+                        onSelect = { edited = edited.copy(historyDays = it) },
+                    )
+                    Text(
+                        stringResource(Res.string.airing_days_unit),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.nuvio.colors.textMuted,
+                    )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(Res.string.airing_settings_estimated), Modifier.weight(1f))
-                    Switch(checked = edited.includeEstimated,
-                        onCheckedChange = { edited = edited.copy(includeEstimated = it) })
-                }
-                if (edited.hidden.isNotEmpty()) {
-                    HorizontalDivider()
-                    TextButton(onClick = { edited = edited.copy(hidden = emptyList()) }) {
-                        Text(stringResource(Res.string.airing_show_all_again))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DialogTextField(
+                    value = edited.zone,
+                    onValueChange = { edited = edited.copy(zone = it) },
+                    label = stringResource(Res.string.airing_settings_zone),
+                    isError = !validZone,
+                )
+                DialogHint(stringResource(Res.string.airing_settings_zone_example), isError = !validZone)
+            }
+            Column {
+                DialogSwitchRow(
+                    label = stringResource(Res.string.airing_settings_estimated),
+                    checked = edited.includeEstimated,
+                    onCheckedChange = { edited = edited.copy(includeEstimated = it) },
+                )
+                DialogSwitchRow(
+                    label = stringResource(Res.string.airing_settings_hide_nsfw),
+                    checked = edited.hideNsfw,
+                    onCheckedChange = { edited = edited.copy(hideNsfw = it) },
+                )
+            }
+            if (edited.hidden.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DialogSectionLabel(stringResource(Res.string.airing_hidden_title), Modifier.weight(1f))
+                        NuvioCompactActionButton(
+                            label = stringResource(Res.string.airing_show_all_again),
+                            icon = null,
+                            size = NuvioActionSize.Small,
+                            tone = NuvioCompactActionTone.Ghost,
+                            onClick = { edited = edited.copy(hidden = emptyList()) },
+                        )
                     }
                     edited.hidden.forEach { hidden ->
-                        TextButton(onClick = {
-                            edited = edited.copy(hidden = edited.hidden.filterNot { it.mediaId == hidden.mediaId })
-                        }) { Text("Show again: ${hidden.name}") }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.nuvio.shapes.compactCard)
+                                .background(MaterialTheme.nuvio.colors.textPrimary.copy(alpha = MaterialTheme.nuvio.opacity.subtle))
+                                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                hidden.name,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.nuvio.colors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            NuvioCompactActionButton(
+                                label = stringResource(Res.string.airing_show_again),
+                                icon = null,
+                                size = NuvioActionSize.Small,
+                                tone = NuvioCompactActionTone.Ghost,
+                                onClick = {
+                                    edited = edited.copy(hidden = edited.hidden.filterNot { it.mediaId == hidden.mediaId })
+                                },
+                            )
+                        }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(edited) }, enabled = validZone) {
-                Text(stringResource(Res.string.action_save))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_cancel)) } },
-    )
+        }
+        DialogButtons {
+            DialogButton(text = stringResource(Res.string.action_cancel), onClick = onDismiss)
+            DialogButton(
+                text = stringResource(Res.string.action_save),
+                onClick = { onSave(edited.copy(zone = edited.zone.trim())) },
+                style = DialogButtonStyle.Primary,
+                enabled = validZone,
+            )
+        }
+    }
 }

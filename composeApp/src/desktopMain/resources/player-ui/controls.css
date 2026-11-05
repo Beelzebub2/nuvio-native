@@ -886,6 +886,7 @@ button:disabled {
 .player.pip-mode [data-command="sources"],
 .player.pip-mode [data-command="episodes"],
 .player.pip-mode [data-command="playNextEpisode"],
+.player.pip-mode .toggle-action,
 .player.pip-mode .next-episode-card,
 .player.pip-mode .skip-prompt,
 .player.pip-mode .parental-guide,
@@ -1923,6 +1924,34 @@ button:disabled {
 
   .time-label {
     font-size: 18px;
+  }
+}
+
+/* Medium windows: tighten the bottom bar so the time never slides off the right edge. */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .action-pill {
+    gap: 4px;
+  }
+
+  .playback-status {
+    gap: 12px;
+  }
+
+  .volume-slider {
+    width: 96px;
+  }
+}
+
+/* The auto toggles also live in Settings, so they give way first when space runs out. */
+@media (min-width: 761px) and (max-width: 959px) {
+  .action.toggle-action {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 859px) {
+  .volume-slider {
+    width: 72px;
   }
 }
 

@@ -4,6 +4,7 @@ import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.background
 import nuvio.composeapp.generated.resources.airing_settings_window
 import nuvio.composeapp.generated.resources.airing_settings_source
+import com.nuvio.app.core.ui.nuvioSwitchColors
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogButtonStyle
@@ -534,6 +535,6 @@ private fun AiringSettingsSwitch(
     ) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.nuvio.colors.textPrimary)
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = switchModifier)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = switchModifier, colors = nuvioSwitchColors())
     }
 }

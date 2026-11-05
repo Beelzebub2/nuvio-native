@@ -1,23 +1,17 @@
 package com.nuvio.app.features.downloads
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,10 +20,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
+import com.nuvio.app.core.ui.Chip
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogCheckboxRow
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSectionLabel
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.Menu
+import com.nuvio.app.core.ui.MenuItem
+import com.nuvio.app.core.ui.NuvioActionSize
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -59,6 +63,7 @@ internal fun androidBatchAvailableEpisodes(
     }.distinctBy(::androidBatchEpisodeKey)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AndroidBatchDownloadDialog(
     meta: MetaDetails,
@@ -104,100 +109,103 @@ internal fun AndroidBatchDownloadDialog(
     var providerExpanded by remember { mutableStateOf(false) }
     val eligible = available.filter { androidBatchEpisodeKey(it) in selected }
     val seasonEpisodes = available.filter { (it.season ?: 0) == season }
-    AlertDialog(
+    DialogSurface(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.fillMaxWidth(0.95f),
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(if (movie) "Download for offline" else "Download episodes")
-                Text(meta.name, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        title = if (movie) "Download for offline" else "Download episodes",
+        message = meta.name,
+    ) {
+        if (!movie) {
+            DialogSectionLabel("Season")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(seasons) { number ->
+                    Chip(
+                        label = if (number == 0) "Specials" else "Season $number",
+                        selected = season == number,
+                        onClick = { season = number },
+                    )
+                }
             }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (!movie) {
-                    Text("Season", fontWeight = FontWeight.SemiBold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(seasons) { number ->
-                            FilterChip(
-                                selected = season == number,
-                                onClick = { season = number },
-                                label = { Text(if (number == 0) "Specials" else "Season $number") },
-                            )
-                        }
-                    }
-                    TextButton(onClick = {
-                        val keys = seasonEpisodes.map(::androidBatchEpisodeKey).toSet()
-                        selected = if (keys.all { it in selected }) selected - keys else selected + keys
-                    }, enabled = seasonEpisodes.isNotEmpty()) {
-                        Text("Select / clear available episodes in this season")
-                    }
-                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 270.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        items(allVideos.filter { (it.season ?: 0) == season },
-                            key = ::androidBatchEpisodeKey) { episode ->
-                            val key = androidBatchEpisodeKey(episode)
-                            val selectable = available.any { androidBatchEpisodeKey(it) == key }
-                            Row(Modifier.fillMaxWidth().clickable(enabled = selectable) {
-                                selected = if (key in selected) selected - key else selected + key
-                            }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = key in selected, enabled = selectable,
-                                    onCheckedChange = { checked ->
-                                        selected = if (checked) selected + key else selected - key
-                                    })
-                                Column(Modifier.weight(1f)) {
-                                    Text("E${episode.episode ?: "?"} · ${episode.title.orEmpty()}",
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    if (!selectable) Text("Not released or already in Downloads",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Text(if (available.isEmpty()) "Already downloaded or unavailable"
-                        else "This movie will be saved for playback without a connection.")
-                }
-                Text("Quality", fontWeight = FontWeight.SemiBold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf(DownloadQuality.Highest, "2160p", "1080p", "720p", DownloadQuality.Any)) { value ->
-                        FilterChip(selected = quality == value, onClick = { quality = value },
-                            label = { Text(value) })
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Provider", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Column {
-                        TextButton(onClick = { providerExpanded = true }) {
-                            Text(providers.firstOrNull { it.first == provider }?.second ?: "Any provider")
-                        }
-                        DropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
-                            providers.forEach { (id, label) ->
-                                DropdownMenuItem(text = { Text(label) }, onClick = {
-                                    provider = id
-                                    providerExpanded = false
-                                })
-                            }
-                        }
-                    }
-                }
-                Text("Android saves direct video files inside Starlit's offline storage.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val seasonKeys = seasonEpisodes.map(::androidBatchEpisodeKey).toSet()
+            val allSeasonSelected = seasonKeys.isNotEmpty() && seasonKeys.all { it in selected }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DialogSectionLabel("Episodes", Modifier.weight(1f))
+                NuvioCompactActionButton(
+                    label = if (allSeasonSelected) "Clear season" else "Select all available",
+                    icon = null,
+                    size = NuvioActionSize.Small,
+                    tone = NuvioCompactActionTone.Ghost,
+                    enabled = seasonKeys.isNotEmpty(),
+                    onClick = { selected = if (allSeasonSelected) selected - seasonKeys else selected + seasonKeys },
+                )
             }
-        },
-        confirmButton = {
-            TextButton(enabled = eligible.isNotEmpty(), onClick = {
-                val sourceMeta = if (movie) meta.copy(videos = allVideos) else meta
-                val count = DownloadsRepository.enqueueBatch(sourceMeta, eligible,
-                    DownloadSourceSelection(provider, quality, "Direct files"))
-                NuvioToastController.show("$count episode(s) queued in Downloads")
-                onDismiss()
-            }) { Text("Download (${eligible.size})") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+            // The episode list scrolls on its own so the options and buttons stay in view.
+            LazyColumn(
+                Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 320.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(allVideos.filter { (it.season ?: 0) == season }, key = ::androidBatchEpisodeKey) { episode ->
+                    val key = androidBatchEpisodeKey(episode)
+                    val selectable = available.any { androidBatchEpisodeKey(it) == key }
+                    DialogCheckboxRow(
+                        text = "E${episode.episode ?: "?"} · ${episode.title.orEmpty()}",
+                        description = if (selectable) null else "Not released or already in Downloads",
+                        checked = key in selected,
+                        enabled = selectable,
+                        onCheckedChange = { checked -> selected = if (checked) selected + key else selected - key },
+                    )
+                }
+            }
+        } else {
+            DialogHint(
+                if (available.isEmpty()) "Already downloaded or unavailable"
+                else "This movie will be saved for playback without a connection.",
+            )
+        }
+        DialogSectionLabel("Quality")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(DownloadQuality.Highest, "2160p", "1080p", "720p", DownloadQuality.Any).forEach { value ->
+                Chip(label = value, selected = quality == value, onClick = { quality = value })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            DialogSectionLabel("Provider", Modifier.weight(1f))
+            Box {
+                NuvioCompactActionButton(
+                    label = providers.firstOrNull { it.first == provider }?.second ?: "Any provider",
+                    icon = null,
+                    trailingIcon = Icons.Rounded.ExpandMore,
+                    size = NuvioActionSize.Small,
+                    onClick = { providerExpanded = true },
+                )
+                Menu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
+                    providers.forEach { (id, label) ->
+                        MenuItem(
+                            text = label,
+                            selected = id == provider,
+                            onClick = {
+                                provider = id
+                                providerExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        DialogHint("Android saves direct video files inside Starlit's offline storage.")
+        DialogButtons {
+            DialogButton(text = "Cancel", onClick = onDismiss)
+            DialogButton(
+                text = "Download (${eligible.size})",
+                style = DialogButtonStyle.Primary,
+                enabled = eligible.isNotEmpty(),
+                onClick = {
+                    val sourceMeta = if (movie) meta.copy(videos = allVideos) else meta
+                    val count = DownloadsRepository.enqueueBatch(sourceMeta, eligible,
+                        DownloadSourceSelection(provider, quality, "Direct files"))
+                    NuvioToastController.show("$count episode(s) queued in Downloads")
+                    onDismiss()
+                },
+            )
+        }
+    }
 }
