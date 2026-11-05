@@ -734,10 +734,15 @@
     <string name="downloads_storage_recorded">Tracked offline data: %1$s</string>
     <string name="downloads_storage_available">Space available on this drive: %1$s</string>
     <string name="downloads_storage_above_target">Tracked downloads exceed your storage target. Review old completed downloads to free space.</string>
+    <string name="downloads_storage_low_space">Only %1$s of disk space is available. Review completed offline files before starting more downloads.</string>
     <string name="downloads_storage_target_button">Storage target: %1$s</string>
     <string name="downloads_storage_no_target">No target</string>
     <string name="downloads_storage_target_note">The target is a warning, not a hard download limit. Starlit never deletes offline media automatically.</string>
     <string name="downloads_storage_review">Review cleanup</string>
+    <string name="downloads_storage_suggest_old">Suggest 30+ day files</string>
+    <string name="downloads_storage_suggest_target">Suggest to meet target</string>
+    <string name="downloads_storage_suggest_lru">Suggest least recently watched</string>
+    <string name="downloads_storage_suggest_note">Suggestions only select verified, completed files. Check the selection carefully; nothing is deleted without your confirmation.</string>
     <string name="downloads_storage_remove_watched">Remove watched episodes</string>
     <string name="downloads_storage_watched_notice">Completed episodes marked as watched or played to completion are preselected. Uncheck anything you want to keep. Your watch history will not be deleted.</string>
     <string name="downloads_storage_no_watched_eligible">No watched episodes have verified Starlit-owned files available for cleanup.</string>
