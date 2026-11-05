@@ -199,6 +199,36 @@ class DesktopRemoteProtocolTest {
     }
 
     @Test
+    fun directTcpDiscoveryOnlyRecognizesCurrentAccountAndChallenge() {
+        val account = RemoteAccount("user-1", "https://one.example", "public")
+        val other = account.copy(userId = "user-2")
+        val nonce = "a".repeat(64)
+        val probe = remoteTcpProbe(account, nonce)
+        assertEquals(132, probe.size)
+        assertTrue(validRemoteTcpProbe(account, probe))
+        assertFalse(validRemoteTcpProbe(other, probe))
+        assertFalse(validRemoteTcpProbe(account.copy(server = "https://other.example"), probe))
+        assertFalse(validRemoteTcpProbe(account, probe.dropLast(1).toByteArray()))
+        assertFalse(validRemoteTcpProbe(account, probe.clone().also {
+            it[80] = if (it[80] == '0'.code.toByte()) '1'.code.toByte() else '0'.code.toByte()
+        }))
+        assertFalse(validRemoteTcpProbe(account, probe.clone().also { it[8] = '!'.code.toByte() }))
+    }
+
+    @Test
+    fun subnetSweepNeverEscapesBoundedPrivateInterface() {
+        val address = InetAddress.getByName("192.168.22.53")
+        val candidates = remoteSubnetCandidates(address.address, 24).map { it.hostAddress }
+        assertEquals(253, candidates.size)
+        assertTrue("192.168.22.42" in candidates)
+        assertFalse("192.168.22.53" in candidates)
+        assertFalse("192.168.23.1" in candidates)
+        assertEquals(1, remoteSubnetCandidates(InetAddress.getByName("10.2.0.5").address, 30).size)
+        assertTrue(remoteSubnetCandidates(address.address, 15).isEmpty())
+        assertTrue(remoteSubnetCandidates(address.address, 0).isEmpty())
+    }
+
+    @Test
     fun privateAddressMustMatchTheActualInterfaceSubnet() {
         fun ip(value: String) = InetAddress.getByName(value).address
         assertTrue(sameRemoteSubnet(ip("192.168.1.80"), ip("192.168.1.2"), 24))
