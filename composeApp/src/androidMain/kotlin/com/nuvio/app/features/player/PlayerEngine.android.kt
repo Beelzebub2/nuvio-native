@@ -1462,6 +1462,7 @@ private class NuvioLibmpvView(
         val videoHeight = mpv.getPropertyInt("video-out-params/dh")
             ?: mpv.getPropertyInt("video-params/dh")
             ?: 0
+        val measuredPlaybackSpeed = mpv.getPropertyDouble("speed")?.toFloat()
         return PlayerPlaybackSnapshot(
             isLoading = isLoading,
             isPlaying = !paused && !isLoading && !idle && !ended,
@@ -1469,7 +1470,8 @@ private class NuvioLibmpvView(
             durationMs = durationMs,
             positionMs = positionMs,
             bufferedPositionMs = maxOf(positionMs, cachePositionMs),
-            playbackSpeed = (mpv.getPropertyDouble("speed") ?: Double.NaN).toFloat(),
+            playbackSpeed = measuredPlaybackSpeed?.takeIf { it.isFinite() && it > 0f } ?: 1f,
+            measuredPlaybackSpeed = measuredPlaybackSpeed,
             videoWidth = videoWidth,
             videoHeight = videoHeight,
             decoderMode = when (mpv.getPropertyString("hwdec-current")) {

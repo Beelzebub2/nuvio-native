@@ -70,7 +70,7 @@ internal fun PlayerPlaybackSnapshot.safePlaybackMetrics(): SafePlaybackMetrics {
         positionSeconds = position / 1_000L,
         durationSeconds = durationMs.takeIf { it > 0L }?.div(1_000L),
         bufferAheadSeconds = bufferAhead / 1_000L,
-        playbackSpeed = playbackSpeed.takeIf { it.isFinite() && it in 0.1f..8f },
+        playbackSpeed = measuredPlaybackSpeed?.takeIf { it.isFinite() && it in 0.1f..8f },
         decoderMode = decoderMode,
     )
 }

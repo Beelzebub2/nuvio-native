@@ -83,6 +83,9 @@ class PlaybackDiagnosticsTest {
 
     @Test
     fun decoderOutputContainsOnlyFixedClassificationAndSpeedNeverGuessesInvalidValues() {
+        val missing = PlayerPlaybackSnapshot(playbackSpeed = 1f, measuredPlaybackSpeed = null)
+        assertEquals(1f, missing.playbackSpeed)
+        assertEquals(null, missing.safePlaybackMetrics().playbackSpeed)
         for (mode in PlaybackDecoderMode.entries) {
             val metrics = PlayerPlaybackSnapshot(decoderMode = mode, playbackSpeed = Float.POSITIVE_INFINITY)
                 .safePlaybackMetrics()

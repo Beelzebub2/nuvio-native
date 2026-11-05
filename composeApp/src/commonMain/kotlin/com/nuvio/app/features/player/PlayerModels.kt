@@ -235,6 +235,9 @@ data class PlayerPlaybackSnapshot(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val decoderMode: PlaybackDecoderMode = PlaybackDecoderMode.Unknown,
+    // Operational controls can retain a safe default while diagnostics marks a
+    // missing platform measurement unavailable.
+    val measuredPlaybackSpeed: Float? = playbackSpeed,
 )
 
 data class PlayerNowPlayingInfo(
