@@ -2,6 +2,8 @@ package com.nuvio.app.features.remote
 
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.net.Socket
 import java.security.KeyFactory
@@ -63,9 +65,13 @@ internal fun remotePairingCode(transcript: ByteArray): String =
 
 internal data class RemotePairingChannel(val channel: RemoteCipherChannel, val code: String)
 
-internal fun openRemoteChannel(socket: Socket, host: Boolean): RemotePairingChannel {
-    val input = DataInputStream(socket.getInputStream())
-    val output = DataOutputStream(socket.getOutputStream())
+internal fun openRemoteChannel(socket: Socket, host: Boolean): RemotePairingChannel =
+    openRemoteChannel(socket.getInputStream(), socket.getOutputStream(), host)
+
+/** Identical encrypted protocol over LAN sockets or Bluetooth RFCOMM streams. */
+internal fun openRemoteChannel(source: InputStream, destination: OutputStream, host: Boolean): RemotePairingChannel {
+    val input = DataInputStream(source)
+    val output = DataOutputStream(destination)
     val transcript = if (host) {
         val keys = remoteRsaKeys()
         val publicKey = keys.public.encoded

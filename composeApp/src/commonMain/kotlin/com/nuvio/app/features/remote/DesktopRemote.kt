@@ -45,16 +45,23 @@ internal data class RemoteCommand(
     val handoff: RemotePlaybackHandoff? = null,
 )
 
-internal data class RemoteDesktop(val address: String, val port: Int, val name: String)
+internal data class RemoteDesktop(
+    val address: String,
+    val port: Int,
+    val name: String,
+    val bluetooth: Boolean = false,
+)
 internal data class RemotePairing(val code: String, val peer: String)
 internal data class RemoteAccount(val userId: String, val server: String, val publishableKey: String)
 
 internal interface DesktopRemoteTransport {
     val supported: Boolean
+    val bluetoothSupported: Boolean get() = false
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
-    /** A supplied literal IP sends one bounded unicast probe; null broadcasts on the LAN. */
-    fun discover(localIp: String? = null)
+    /** A literal IP is checked directly; an explicit deep scan also probes the local subnet. */
+    fun discover(localIp: String? = null, deepScan: Boolean = false)
+    fun discoverBluetooth() {}
     fun localAddresses(): List<String> = emptyList()
     fun wake(address: String, mac: String) {}
     fun connect(desktop: RemoteDesktop)
@@ -68,10 +75,12 @@ internal expect fun createDesktopRemoteTransport(): DesktopRemoteTransport
 internal object DesktopRemote {
     val transport by lazy { createDesktopRemoteTransport() }
     val desktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
+    val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
     val scanning = MutableStateFlow(false)
     val hostReady = MutableStateFlow(false)
+    val bluetoothHostReady = MutableStateFlow(false)
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
@@ -124,7 +133,7 @@ internal object DesktopRemote {
     fun open() {
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value) {
-            transport.discover()
+            transport.discover(deepScan = true)
         }
     }
 
