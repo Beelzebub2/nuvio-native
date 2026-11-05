@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -299,6 +300,12 @@ internal fun AppTabHost(
                     modifier = Modifier.fillMaxSize(),
                     topChromePadding = state.topChromePadding,
                     onShowLibrary = { actions.onTabSelected(AppScreenTab.Library) },
+                )
+            }
+
+            AppScreenTab.MyAnimeList -> {
+                com.nuvio.app.features.myanimelist.MyAnimeListTabContent(
+                    topChromePadding = state.topChromePadding,
                 )
             }
 
@@ -742,6 +749,7 @@ internal fun DesktopHoverSidebar(
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
     sidebarExpanded: Boolean = false,
+    showMyAnimeListTab: Boolean = false,
     sidebarWidth: Dp = DesktopSidebarCollapsedWidth,
     hoverSource: MutableInteractionSource = remember { MutableInteractionSource() },
     profileStackVisible: Boolean = false,
@@ -786,7 +794,8 @@ internal fun DesktopHoverSidebar(
             } else {
                 0.dp
             }
-            val navColumnHeight = DesktopSidebarItemHeight * AppScreenTab.entries.size
+            // Only visible sidebar destinations count; Watch Later is nested in Library.
+            val navColumnHeight = DesktopSidebarItemHeight * (4 + if (showMyAnimeListTab) 1 else 0)
             val centeredNavTop = ((maxHeight - navColumnHeight) / 2).coerceAtLeast(0.dp)
             val availableNavOffset = (maxHeight - navColumnHeight - centeredNavTop).coerceAtLeast(0.dp)
             val navColumnOffset = (minNavTop - centeredNavTop)
@@ -877,6 +886,21 @@ internal fun DesktopHoverSidebar(
                         modifier = Modifier.size(DesktopSidebarIconSize),
                         tint = color,
                     )
+                }
+                if (showMyAnimeListTab) {
+                    DesktopSidebarItem(
+                        label = "MyAnimeList",
+                        selected = selectedTab == AppScreenTab.MyAnimeList,
+                        expanded = sidebarExpanded,
+                        onClick = { selectTab(AppScreenTab.MyAnimeList) },
+                    ) { color ->
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.PlaylistAddCheck,
+                            contentDescription = "MyAnimeList",
+                            modifier = Modifier.size(DesktopSidebarIconSize),
+                            tint = color,
+                        )
+                    }
                 }
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_settings_page_root),
