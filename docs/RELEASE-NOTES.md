@@ -1,3 +1,15 @@
+## Starlit 1.9.1
+
+### Interface refinements
+
+- **Consistent Starlit dialogs:** Sign-in, account-security confirmations, passkey and Google linking, add-on backups, and batch episode downloads now share the app's dialog styling. Text fields, switches, checkboxes, buttons and feedback follow the same design on desktop and Android.
+- **Clearer downloads and phone pairing:** Offline storage management and cleanup confirmations, phone-to-PC remote controls, pairing QR codes and network selection have cleaner layouts and clearer status guidance.
+- **Player and Airing Now polish:** Playback diagnostics, safe casting guidance, Airing Now selection popups and desktop player controls follow the same visual language. English and Portuguese labels are refreshed.
+
+### Validation
+
+- Desktop Kotlin source and test compilation passed. The six targeted anonymous-workspace regression tests pass from a clean isolated test-data directory.
+- The release workflow tests desktop playback and the Windows installer, builds signed Android APKs, verifies release checksums and publishes only after its required jobs succeed.
 ## Starlit 1.9.0
 
 ### Offline downloads
