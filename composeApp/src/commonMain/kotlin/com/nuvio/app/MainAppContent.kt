@@ -259,7 +259,7 @@ internal fun MainAppContent(
             val event = when (selectedTab) {
                 AppScreenTab.Home -> UsageEvent.Home
                 AppScreenTab.Search -> UsageEvent.Search
-                AppScreenTab.Library, AppScreenTab.WatchLater -> UsageEvent.Library
+                AppScreenTab.Library, AppScreenTab.WatchLater, AppScreenTab.MyAnimeList -> UsageEvent.Library
                 AppScreenTab.Settings -> UsageEvent.Settings
             }
             UsageDiagnostics.track(event)
