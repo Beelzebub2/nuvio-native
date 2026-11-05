@@ -41,6 +41,19 @@ class AccountSettingsScreenTest {
     }
 
     @Test
+    fun credentialCardShowsBothAccountSecurityActions() {
+        val account = AuthState.Authenticated(
+            userId = "test-account",
+            email = "test@example.com",
+            isAnonymous = false,
+        )
+        compose.setContent { NuvioTheme { AccountCredentialsCard(account) } }
+        compose.onNodeWithTag("account-credentials-card").assertExists()
+        compose.onNodeWithTag("account-change-password-button").assertExists()
+        compose.onNodeWithTag("account-change-email-button").assertExists()
+    }
+
+    @Test
     fun accountSettingsOpensForUnauthenticatedUser() {
         authState.value = AuthState.Unauthenticated
         compose.setContent { NuvioTheme { AccountSettingsScreen(onBack = {}) } }
