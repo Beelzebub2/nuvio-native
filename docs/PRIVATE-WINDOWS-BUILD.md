@@ -18,6 +18,14 @@ An optional `NUVIO_GITHUB_TOKEN` environment variable overrides the CLI credenti
 
 Starlit builds configured with an account server connect to that server automatically. With a build that offers **Request account**, you can submit an account request from the sign-in screen and wait for owner approval before signing in and syncing with Android. Approved accounts can sign in on each device; guest mode and saved custom-server choices remain available. The account server is selected at build time, as described in the [account-server guide](ANDROID.md#servers-and-account-sync).
 
+### Repository rename compatibility rollout
+
+The updater compatibility release **must be published while the repository is still named** `Beelzebub2/nuvio-native`. In that release, desktop and Full Android continue checking the existing repository first. If GitHub returns a redirect or 404 for the old releases API after the rename, they retry the explicitly configured `Beelzebub2/starlit` API path. Both paths keep the same channel selection. They do not follow arbitrary API redirect destinations or mask authorization, rate-limit, or server errors.
+
+Desktop accepts release installer URLs from **both** `Beelzebub2/nuvio-native` and `Beelzebub2/starlit`, but still requires HTTPS, the exact GitHub hostname, a permitted release path, and a verified SHA-256 digest before installing. Android Play Store builds continue to use store updates. Do not change installer identities, application/package IDs, persisted data paths, or login callback schemes as part of the repository rename.
+
+Only **after** publishing the compatibility build from the old repository and giving installed clients a chance to update should the separate [repository rename PR](https://github.com/Beelzebub2/nuvio-native/pull/29) switch the default source to `starlit` and the GitHub repository itself be renamed. Older desktop binaries that did not install the compatibility release may reject the new asset URLs, even if GitHub redirects the old link; those users will need to run a new Starlit installer once (their existing app data is retained). Leave the old slug unused so GitHub's repository redirects keep working. These changes do not rename the repository or publish a release by themselves.
+
 ## Built-in Airing Now
 
 Use View all or click the Airing Now heading to open a full scrollable poster grid. The Home row supports drag scrolling, previous/next buttons, and a horizontal scrollbar. Both views keep the source, time-window filters, settings, and automatic refresh.

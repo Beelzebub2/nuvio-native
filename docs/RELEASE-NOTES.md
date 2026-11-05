@@ -1,3 +1,16 @@
+## Starlit 1.9.2
+
+### Repository rename compatibility
+
+- **Seamless transition for updated installations:** Before the repository rename, the desktop and Full Android update check still uses `Beelzebub2/nuvio-native`. If GitHub redirects or removes that releases API after the rename, the app checks the fixed `Beelzebub2/starlit` path instead. Existing update channels remain unchanged.
+- **Support both installer paths:** The desktop downloader accepts release URLs from either repository name while retaining strict HTTPS/GitHub-host restrictions and SHA-256 installer verification. The installer, app data, package IDs and account configuration are unchanged.
+- **Staged migration:** Publish this compatibility release under the original repository name before completing the separate rename. Desktop installations that skip this release may still require a one-time manual update after the rename.
+
+### Validation
+
+- Regression coverage exercises old and new repository endpoints, redirect and missing-repository fallback, preservation of rate-limit errors, rejected download URLs, and checksum metadata.
+- The release workflow verifies the version policy, tests the Windows installer and builds the signed Android APKs before publication.
+
 ## Starlit 1.9.1
 
 ### Interface refinements
