@@ -1080,7 +1080,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     std::atomic<double> _requestedVolumePercent;
     BOOL _didFocusControlsWebView;
     BOOL _controlsWebReady;
-    std::atomic_bool _diagnosticsEnabled{false};
+    std::atomic_bool _diagnosticsEnabled;
     BOOL _fullscreenTransitionActive;
     NSString *_pendingControlsJson;
     double _initialStartSeconds;
@@ -1128,6 +1128,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     _cachedPositionSeconds.store(initialPositionMs > 0 ? (double)initialPositionMs / 1000.0 : 0.0);
     _cachedCacheAheadSeconds.store(0.0);
     _cachedSpeed.store(1.0);
+    _diagnosticsEnabled.store(false);
     _cachedPaused.store(!playWhenReady);
     _cachedLoading.store(true);
     _cachedEnded.store(false);
