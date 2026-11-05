@@ -12,10 +12,17 @@
 - **Understand which versions are in use:** When opted in and the server is configured, Starlit reports limited app-version, platform, navigation and download event codes to the self-hosted OpenObserve service. A random installation identifier is pseudonymized at the gateway; media titles, watch history, search terms, account identities and URLs are not exported.
 - **No interruption if diagnostics are unavailable:** Analytics can be turned off at any time, which cancels queued events and resets the local identifier. An unconfigured collector or network failure does not interrupt Starlit. MyAnimeList tab visits are correctly categorized in usage diagnostics.
 
+### PC controller and Windows firewall
+
+- **Dedicated phone controller page:** The Android PC controller opens a full-screen Settings page with Remote, Downloads and PCs tabs, plus clearer connection options.
+- **Separate desktop pairing window:** Connect phone opens a modeless window with the pairing QR code, local IP addresses, setup steps and confirmation code. You can continue using Starlit while pairing your phone.
+- **Safer Windows firewall guidance:** The remote window checks Windows Firewall without administrator access and explains when inbound connections are blocked. With a single explicit administrator confirmation, Starlit can add app-specific TCP 47789 and UDP 47788 inbound rules on Private/Domain networks limited to the local subnet; existing block rules are preserved. Public-network restrictions remain in place.
+
 ### Validation
 
 - MyAnimeList feature validation included 11 targeted desktop tests, desktop Kotlin compilation, and Android, iOS and source-security checks. The new diagnostics gateway passed 14 targeted Node tests covering ingestion, quotas, consent-related behavior and failure handling.
-- The tag-triggered release workflow tests the Windows installer and signed Android APKs, verifies checksums and publishes only after all required jobs pass. OpenObserve server configuration and the public privacy-policy update are separate deployment requirements.
+- The controller and firewall changes passed a 1,907-test Windows desktop suite, Android Full/Play Store, iOS Kotlin, desktop and security CI. Actual two-device pairing and the elevated firewall-approval path still need hardware/UAC acceptance tests.
+- The tag-triggered release workflow tests the Windows installer and signed Android APKs, verifies checksums and publishes only after all required jobs pass. The public privacy page covers opt-in diagnostics; configuring the OpenObserve ingestion service remains a separate deployment requirement.
 
 ## Starlit 1.10.0
 
