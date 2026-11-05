@@ -16,6 +16,7 @@ internal expect object DownloadDesktopFeatures {
         verifyActive: () -> Boolean = { true },
     ): List<DownloadItem>
     fun remove(item: DownloadItem, idle: Boolean)
+    fun removeVerified(item: DownloadItem, expectedProfileId: Int)
     /** How many queued downloads may transfer at the same time. */
     fun parallelDownloads(): Int
 }

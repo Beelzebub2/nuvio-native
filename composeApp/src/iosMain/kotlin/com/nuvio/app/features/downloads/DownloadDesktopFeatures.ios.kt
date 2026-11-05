@@ -10,6 +10,7 @@ internal actual object DownloadDesktopFeatures {
         verifyActive: () -> Boolean): List<DownloadItem> = items
     actual fun directory(): String? = null
     actual fun remove(item: DownloadItem, idle: Boolean) {}
+    actual fun removeVerified(item: DownloadItem, expectedProfileId: Int) {}
     actual fun parallelDownloads(): Int = Int.MAX_VALUE
 }
 @Composable internal actual fun DownloadManagementControls() {}

@@ -4,6 +4,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 
 import java.io.File
 import java.nio.file.Files
+import org.junit.Assume.assumeNoException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,7 +12,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DownloadStorageManagementTest {
-<<<<<<< HEAD
     @Test
     fun hardQuotaBlocksOversizedKnownDownloadsButAllowsExactlyTheRemainingBudget() {
         val root = File("unused")
@@ -76,8 +76,6 @@ class DownloadStorageManagementTest {
         assertTrue(quotaAllowsDownloadStart(cleaned, emptySet(), "next", 1_000L))
         assertEquals(400L, projectedDownloadQuotaBytes(cleaned, setOf("next")))
     }
-=======
->>>>>>> origin/Dev
     private fun progress(
         metaId: String,
         episode: Int,
@@ -121,7 +119,11 @@ class DownloadStorageManagementTest {
         assertTrue(file.parentFile.mkdirs())
         file.writeBytes(ByteArray(32) { it.toByte() })
         File(file.parentFile, ".starlit-owner").writeText(record.id)
-        downloadProofFile(file).writeText("validation record")
+        val proof = DesktopDownloadProof(record.id, record.fileName,
+            downloadSourceFingerprint(record, record.sourceUrl), "-", "fixture",
+            file.length(), downloadSha256File(file))
+        writeDesktopDownloadProof(file, proof)
+        assertTrue(verifiedDesktopDownloadContent(file, proof))
         return record.copy(localFileUri = file.toURI().toString())
     }
 
@@ -143,8 +145,72 @@ class DownloadStorageManagementTest {
             assertEquals(32L, DownloadStorageManagement.eligibleCleanupBytes(completed))
             assertTrue(downloadProofFile(file).delete())
             assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed))
+            downloadProofFile(file).writeText("unverified record")
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed))
         } finally {
             root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cleanupRejectsWrongProofOwnerTraversalAndChangedContentWithoutHashing() {
+        val root = Files.createTempDirectory("starlit-cleanup-proof").toFile()
+        try {
+            val completed = staged(root)
+            val file = downloadPath(completed)
+            val proof = requireNotNull(readDesktopDownloadProof(file))
+            writeDesktopDownloadProof(file, proof.copy(ownerId = "other-profile-file"))
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed))
+            writeDesktopDownloadProof(file, proof.copy(fileName = "other.mp4"))
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed))
+            writeDesktopDownloadProof(file, proof)
+            assertTrue(verifiedDesktopDownloadContent(file, proof))
+            assertFalse(removeVerifiedOwnedDownload(completed,
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId + 1))
+            assertTrue(file.exists(), "A stale profile confirmation must preserve media")
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed.copy(fileName = "../owned.mp4")))
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed.copy(id = "..")))
+            file.writeBytes(ByteArray(32) { 99 })
+            file.setLastModified(System.currentTimeMillis() + 2_000L)
+            assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed), "Changed media must need IO verification again")
+            assertFalse(removeVerifiedOwnedDownload(completed,
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId),
+                "Deletion must recheck a file changed since preview")
+            assertTrue(file.exists(), "Eligibility must never delete media")
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test
+    fun cleanupRejectsSymlinkMediaProofAndOwnershipMarker() {
+        val root = Files.createTempDirectory("starlit-cleanup-link").toFile()
+        val outside = Files.createTempFile("starlit-user-media", ".mp4").toFile()
+        val links = mutableListOf<java.nio.file.Path>()
+        try {
+            outside.writeBytes(ByteArray(32) { 42 })
+            val completed = staged(root)
+            val file = downloadPath(completed)
+            val proofFile = downloadProofFile(file)
+            val marker = File(file.parentFile, ".starlit-owner")
+            for (path in listOf(file.toPath(), proofFile.toPath(), marker.toPath())) {
+                val original = Files.readAllBytes(path)
+                Files.delete(path)
+                try {
+                    Files.createSymbolicLink(path, outside.toPath())
+                    links.add(path)
+                } catch (error: Exception) {
+                    Files.write(path, original)
+                    assumeNoException("Host cannot create test symlinks; Linux storage CI exercises this case", error)
+                }
+                assertNull(DownloadStorageManagement.eligibleCleanupBytes(completed))
+                Files.delete(path)
+                links.remove(path)
+                Files.write(path, original)
+            }
+            assertEquals(32L, outside.length(), "Foreign media must remain untouched")
+        } finally {
+            links.forEach { Files.deleteIfExists(it) }
+            root.deleteRecursively()
+            outside.delete()
         }
     }
 

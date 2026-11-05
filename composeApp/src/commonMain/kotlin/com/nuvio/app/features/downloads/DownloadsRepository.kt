@@ -33,6 +33,7 @@ object DownloadsRepository {
     private val _hasUnseenCompleted = MutableStateFlow(false)
     val hasUnseenCompleted: StateFlow<Boolean> = _hasUnseenCompleted.asStateFlow()
     private val activeHandles = mutableMapOf<String, DownloadsTaskHandle>()
+    private var pumpingQueue = false
     private val tokens = mutableMapOf<String, Long>()
     private var generation = 0L
     private var ordinal = 0L
@@ -390,13 +391,13 @@ object DownloadsRepository {
             item.id in downloadIds && item.id !in activeHandles &&
                 item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
         }
-        removeItems(safe)
+        removeItems(safe, expectedProfileId)
         return safe.size
     }
 
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
 
-    private fun removeItems(items: List<DownloadItem>) {
+    private fun removeItems(items: List<DownloadItem>, verifiedProfileId: Int? = null) {
         if (items.isEmpty()) return
         val ids = items.map { it.id }.toSet()
         // Invalidate the entire batch before cancellation callbacks or the queue can run.
@@ -407,7 +408,9 @@ object DownloadsRepository {
             val handle = handles[item.id]
             handle?.cancel()
             // Desktop cleanup waits for closed streams and removes only this task's owned files.
-            DownloadDesktopFeatures.remove(item, handle == null)
+            if (isDesktop && verifiedProfileId != null) {
+                DownloadDesktopFeatures.removeVerified(item, verifiedProfileId)
+            } else DownloadDesktopFeatures.remove(item, handle == null)
             if (!isDesktop) {
                 DownloadsPlatformDownloader.removeFile(DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName) ?: item.localFileUri)
                 DownloadsPlatformDownloader.removePartialFile(item.fileName)
@@ -540,13 +543,20 @@ object DownloadsRepository {
             item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
                 errorMessage = runBlocking { getString(Res.string.downloads_storage_enforce_paused) })
         }
-        pumpQueue()
     }
 
     private fun pumpQueue() {
+        // start() may report progress/completion synchronously. A nested pump
+        // must not start another copy from this iteration's stale queue snapshot.
+        if (pumpingQueue) return
+        pumpingQueue = true
+        try {
         val limit = DownloadDesktopFeatures.parallelDownloads()
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
             .forEach { item ->
+                if (item.id in activeHandles || _uiState.value.items.none {
+                    it.id == item.id && it.status == DownloadStatus.Downloading
+                }) return@forEach
                 if (activeHandles.size >= limit) return@forEach
                 val ceiling = enforcedQuotaBytes
                 if (ceiling != null && !quotaAllowsDownloadStart(
@@ -558,6 +568,7 @@ object DownloadsRepository {
                     }
                 } else startDownload(item)
             }
+        } finally { pumpingQueue = false }
     }
     private fun startDownload(item: DownloadItem, attempt: Int = 1) {
         val token = ++ordinal
@@ -575,7 +586,7 @@ object DownloadsRepository {
         }
         val rate = DownloadRateMeter()
         var sourceResolved = item.sourceSelection == null
-        val handle = DownloadsPlatformDownloader.start(DownloadPlatformRequest(item, onResolved = { resolved -> synchronized(lock) {
+        val handle = try { DownloadsPlatformDownloader.start(DownloadPlatformRequest(item, onResolved = { resolved -> synchronized(lock) {
             sourceResolved = true
             if (current()) mutateItem(item.id) { original -> original.copy(
                 streamTitle = resolved.streamTitle, streamSubtitle = resolved.streamSubtitle,
@@ -597,7 +608,11 @@ object DownloadsRepository {
                         bytes == 0L -> "Connecting"
                         else -> "Downloading"
                     }
-                    mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
+                    mutateItem(item.id, persist = false) { it.copy(
+                        // Desktop's initial connection signal carries no size.
+                        // Keep the durable partial/reservation until real progress arrives.
+                        downloadedBytes = if (bytes == 0L && total == null) it.downloadedBytes else bytes,
+                        totalBytes = total ?: it.totalBytes,
                         phase = if (!isDesktop && DownloadsPlatformDownloader.supportsTorrentDownloads) it.phase else phase,
                         bytesPerSecond = speed, updatedAtEpochMs = now) }
                     // Source size becomes known only after a transfer starts
@@ -606,7 +621,10 @@ object DownloadsRepository {
                     val ceiling = enforcedQuotaBytes
                     if (ceiling != null && quotaRequiresPause(
                         _uiState.value.items, activeHandles.keys, ceiling,
-                    )) holdForQuota(item.id)
+                    )) {
+                        holdForQuota(item.id)
+                        pumpQueue()
+                    }
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,
@@ -622,6 +640,11 @@ object DownloadsRepository {
                     errorMessage = message.ifBlank { runBlocking { getString(Res.string.download_failed) } }) }
             } },
             onPaused = { finish { it.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0) } })
+        } catch (error: Exception) {
+            finish { it.copy(status = DownloadStatus.Failed, phase = null, bytesPerSecond = 0L,
+                errorMessage = error.message ?: "Download could not start") }
+            return
+        }
         if (current()) activeHandles[item.id] = handle else handle.cancel()
     }
     private fun mutateItem(id: String, persist: Boolean = true, transform: (DownloadItem) -> DownloadItem) {

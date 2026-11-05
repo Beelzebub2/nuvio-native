@@ -33,9 +33,14 @@ target is cleared. iOS has no storage manager and does not show the option.
 
 ## Boundaries
 
-- Only the currently loaded profile's active download task handles are
-  considered. Account/profile switches refresh the policy and invalidate old
-  handles as before.
+- Desktop tracks the currently loaded profile's task handles. Account/profile
+  switches refresh the policy and invalidate old handles as before.
+- Android persists the originating profile with each scheduled transfer and
+  enforces that profile's budget in the worker, including after process
+  recreation or while another profile is displayed. Reservations include the
+  profile's saved queue plus its current durable transfer records. The worker
+  checks response headers and every progress callback; unknown sizes may
+  overshoot by a read buffer. Account sign-out clears quota targets and opt-ins.
 - The optional quota does not modify torrent/P2P engines, their network
   behavior, source selection or file naming. It uses the existing task's
   cancellation/resume pathway.
@@ -44,6 +49,29 @@ target is cleared. iOS has no storage manager and does not show the option.
   warns about a low-space volume, but no absolute free-space guarantee is made.
 - The profile target lives in the existing local storage budget store; the
   new enforcement flag uses a separate per-profile preference key.
+
+## Cleanup safety
+
+Age and least-recently-watched actions only select eligible entries in the
+preview. Cleanup remains off until the user opens the preview and confirms
+the exact selected files. No policy deletes files without confirmation.
+
+Desktop eligibility requires a parsed completion proof matching the task,
+filename and size, plus the existing cached content verification. The storage
+screen never hashes large media. Changed/unverified files are excluded until
+the existing background verifier verifies them again. Confirmed cleanup
+rechecks the active profile, running transfer, paths and proof under the
+transfer's IO lock immediately before removal; changed files are preserved.
+
+Android eligibility additionally requires a matching completed durable
+transfer record owned by the current profile, inside the app's private
+downloads directory. Legacy files without a recorded profile are preserved
+by this cleanup flow. A new transfer cannot claim an existing untracked final
+file or another transfer's filename.
+
+These checks do not make application cleanup a filesystem transaction against
+concurrent OS-level modification. Permission errors fail closed; validate
+volume permissions and the UI on real Desktop and Android devices.
 
 ## Verification
 

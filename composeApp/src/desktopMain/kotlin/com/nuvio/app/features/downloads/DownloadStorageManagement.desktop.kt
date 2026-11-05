@@ -15,7 +15,7 @@ internal actual object DownloadStorageManagement {
 
     actual fun availableBytes(): Long? = runCatching {
         val folder = File(DownloadDesktopFeatures.directory() ?: return null)
-        folder.takeIf { it.isDirectory }?.usableSpace?.takeIf { it > 0L }
+        folder.takeIf { it.isDirectory }?.usableSpace?.takeIf { it >= 0L }
     }.getOrNull()
 
     actual fun quotaBytes(profileId: Int): Long? =
@@ -57,6 +57,10 @@ internal actual object DownloadStorageManagement {
         if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS) ||
             !Files.isRegularFile(proof.toPath(), LinkOption.NOFOLLOW_LINKS)) return null
         if (file.length() <= 0L || item.downloadedBytes != file.length()) return null
+        val record = readDesktopDownloadProof(file) ?: return null
+        if (record.ownerId != item.id || record.fileName != item.fileName ||
+            record.totalBytes != file.length() ||
+            !verifiedDesktopDownloadContent(file, record, hashIfUncached = false)) return null
         val recordedUri = item.localFileUri ?: return null
         if (File(URI(recordedUri)).toPath().toAbsolutePath().normalize() !=
             filePath.toAbsolutePath().normalize()) return null

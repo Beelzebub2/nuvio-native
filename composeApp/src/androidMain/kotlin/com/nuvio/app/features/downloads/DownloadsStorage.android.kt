@@ -17,6 +17,10 @@ internal actual object DownloadsStorage {
     actual fun loadPayload(): String? =
         preferences?.getString(ProfileScopedKey.of(payloadKey), null)
 
+    internal fun loadProfileItems(context: Context, profileId: Int): List<DownloadItem> =
+        DownloadsCodec.decodeItems(context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+            .getString(ProfileScopedKey.of(payloadKey, profileId), null))
+
     actual fun savePayload(payload: String) {
         preferences
             ?.edit()

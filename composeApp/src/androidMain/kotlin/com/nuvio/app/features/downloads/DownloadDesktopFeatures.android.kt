@@ -47,6 +47,7 @@ internal actual object DownloadDesktopFeatures {
     ): List<DownloadItem> = items // Android validates finished files via DownloadsPlatformDownloader.
     actual fun directory(): String? = null
     actual fun remove(item: DownloadItem, idle: Boolean) = Unit
+    actual fun removeVerified(item: DownloadItem, expectedProfileId: Int) = Unit
     actual fun parallelDownloads(): Int {
         val context = PlatformLocalAccountDataCleaner.appContext ?: return 3
         return context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)

@@ -19,6 +19,8 @@ internal data class AndroidDownloadTransfer(
     /** Native infohash + metadata file index/path/size that proves .part ownership on resume. */
     val torrentIdentity: String? = null,
     val retryCount: Int = 0,
+    /** Persisted so background work never borrows the foreground profile's quota. */
+    val profileId: Int? = null,
 )
 
 internal class AndroidDownloadStore(private val directory: File) {
@@ -29,13 +31,19 @@ internal class AndroidDownloadStore(private val directory: File) {
 
     fun get(fileName: String): AndroidDownloadTransfer? = state.value[fileName]
 
-    fun begin(item: DownloadItem): AndroidDownloadTransfer = synchronized(lock) {
-        val previous = get(item.fileName)?.takeIf { it.item.id == item.id }
+    fun begin(item: DownloadItem, profileId: Int? = null): AndroidDownloadTransfer = synchronized(lock) {
+        val previous = get(item.fileName)
+        require(previous == null || previous.item.id == item.id) { "Download filename belongs to another transfer" }
+        require(previous?.profileId == null || profileId == null || previous.profileId == profileId) {
+            "Download belongs to another profile"
+        }
         if (previous?.item?.status == DownloadStatus.Downloading) return@synchronized previous
+            .copy(profileId = previous.profileId ?: profileId).also(::save)
         val transfer = AndroidDownloadTransfer(
             item = item.copy(status = DownloadStatus.Downloading, errorMessage = null, localFileUri = null),
             jobId = previous?.jobId ?: ((state.value.values.maxOfOrNull { it.jobId } ?: 0) + 1),
             generation = UUID.randomUUID().toString(),
+            profileId = previous?.profileId ?: profileId,
             validator = previous?.validator?.takeIf { previous.item.sourceUrl == item.sourceUrl &&
                 previous.item.torrentHash == item.torrentHash },
             torrentIdentity = previous?.takeIf { old ->

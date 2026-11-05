@@ -1,0 +1,147 @@
+package com.nuvio.app.features.downloads
+
+import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.streams.StreamItem
+import com.sun.net.httpserver.HttpServer
+import java.io.File
+import java.net.InetSocketAddress
+import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+class DownloadQuotaLifecycleTest {
+    private val gib = 1L shl 30
+    private fun waitFor(predicate: () -> Boolean) = runBlocking {
+        withTimeout(12_000L) { while (!predicate()) delay(20) }
+    }
+
+    @Test fun discoveredOversizePausesWithoutLateCompletionOrAutomaticResume() {
+        assertNotNull(System.getProperty("nuvio.dataDir"))
+        val root = Files.createTempDirectory("download-quota-lifecycle").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val profile = ProfileRepository.activeProfileId
+        val previousTarget = DownloadStorageManagement.quotaBytes(profile)
+        val previousEnforcement = DownloadStorageManagement.enforceQuota(profile)
+        val gate = CountDownLatch(1)
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            executor = Executors.newCachedThreadPool { runnable -> Thread(runnable).apply { isDaemon = true } }
+            createContext("/") { exchange ->
+                requests.incrementAndGet()
+                runCatching {
+                    exchange.responseHeaders.add("Content-Type", "video/mp4")
+                    exchange.responseHeaders.add("ETag", "\"quota\"")
+                    exchange.sendResponseHeaders(200, gib + 1L)
+                    exchange.responseBody.flush()
+                    gate.await(8, TimeUnit.SECONDS)
+                    exchange.responseBody.close()
+                }
+            }
+            start()
+        }
+        try {
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadDesktopFeatures.setDirectory(root)
+            DownloadStorageManagement.setQuotaBytes(profile, gib)
+            DownloadStorageManagement.setEnforceQuota(profile, true)
+            assertEquals(DownloadEnqueueResult.Started, DownloadsRepository.enqueueFromStream("movie", "quota-video", "quota-meta", "movie",
+                "Quota fixture", null, null, null, null, null, null, null,
+                StreamItem(name = "1080p", url = "http://127.0.0.1:${server.address.port}/video.mp4",
+                    addonName = "Fixture", addonId = "fixture")))
+            waitFor { DownloadsRepository.uiState.value.items.singleOrNull()?.status == DownloadStatus.Paused }
+            val paused = DownloadsRepository.uiState.value.items.single()
+            assertEquals(gib + 1L, paused.totalBytes)
+            assertFalse(downloadPath(paused).exists())
+            gate.countDown()
+            DownloadStorageManagement.setEnforceQuota(profile, false)
+            DownloadsRepository.onStoragePolicyChanged()
+            Thread.sleep(250) // deliver the cancelled HTTP completion
+            assertEquals(1, requests.get())
+            assertEquals(DownloadStatus.Paused, DownloadsRepository.uiState.value.items.single().status)
+            DownloadsRepository.clearLocalState()
+            DownloadsRepository.ensureLoaded()
+            assertEquals(DownloadStatus.Paused, DownloadsRepository.uiState.value.items.single().status)
+        } finally {
+            gate.countDown()
+            server.stop(0)
+            DownloadsRepository.pauseActiveDownloads()
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadStorageManagement.setQuotaBytes(profile, previousTarget)
+            DownloadStorageManagement.setEnforceQuota(profile, previousEnforcement)
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original)))
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun loweringQuotaReducesAllReservationsBeforeStartingQueuedTransfers() {
+        val root = Files.createTempDirectory("download-quota-reduce").toFile()
+        val original = DownloadDesktopFeatures.directory()
+        val profile = ProfileRepository.activeProfileId
+        val previousTarget = DownloadStorageManagement.quotaBytes(profile)
+        val previousEnforcement = DownloadStorageManagement.enforceQuota(profile)
+        val gate = CountDownLatch(1)
+        val requests = AtomicInteger()
+        val size = 700L * 1024L * 1024L
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            executor = Executors.newCachedThreadPool { runnable -> Thread(runnable).apply { isDaemon = true } }
+            createContext("/") { exchange ->
+                requests.incrementAndGet()
+                runCatching {
+                    exchange.responseHeaders.add("Content-Type", "video/mp4")
+                    exchange.responseHeaders.add("ETag", "\"quota\"")
+                    exchange.sendResponseHeaders(200, size)
+                    exchange.responseBody.flush()
+                    gate.await(8, TimeUnit.SECONDS)
+                    exchange.responseBody.close()
+                }
+            }
+            start()
+        }
+        try {
+            DownloadsRepository.clearLocalState()
+            DownloadDesktopFeatures.setDirectory(root)
+            DownloadDesktopFeatures.setParallelDownloads(2)
+            DownloadStorageManagement.setQuotaBytes(profile, 2L * gib)
+            DownloadStorageManagement.setEnforceQuota(profile, true)
+            val items = (1..3).map { index ->
+                DownloadItem("quota-$index", "movie", "meta-$index", "movie", "video-$index", "Fixture $index",
+                    streamTitle = "1080p", providerName = "Fixture",
+                    sourceUrl = "http://127.0.0.1:${server.address.port}/$index.mp4", fileName = "$index.mp4",
+                    destinationDirectory = root.absolutePath, status = DownloadStatus.Downloading,
+                    totalBytes = size, createdAtEpochMs = index.toLong(), updatedAtEpochMs = 1L)
+            }
+            DownloadsStorage.savePayload(DownloadsCodec.encodeItems(items))
+            DownloadsRepository.ensureLoaded()
+            waitFor { requests.get() == 2 && DownloadsRepository.uiState.value.items.take(2).all { it.totalBytes == size } }
+            DownloadStorageManagement.setQuotaBytes(profile, gib)
+            DownloadsRepository.onStoragePolicyChanged()
+            val after = DownloadsRepository.uiState.value.items
+            assertEquals(1, after.count { it.status == DownloadStatus.Downloading })
+            assertEquals(2, after.count { it.status == DownloadStatus.Paused })
+            assertEquals(2, requests.get(), "Queued transfer must not start while reservations are being reduced")
+        } finally {
+            gate.countDown()
+            server.stop(0)
+            DownloadsRepository.pauseActiveDownloads()
+            DownloadsRepository.clearLocalState()
+            DownloadsStorage.savePayload("{}")
+            DownloadStorageManagement.setQuotaBytes(profile, previousTarget)
+            DownloadStorageManagement.setEnforceQuota(profile, previousEnforcement)
+            DownloadDesktopFeatures.setParallelDownloads(DefaultParallelDownloads)
+            DownloadDesktopFeatures.setDirectory(File(requireNotNull(original)))
+            root.deleteRecursively()
+        }
+    }
+}
