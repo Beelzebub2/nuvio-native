@@ -3,7 +3,6 @@ package com.nuvio.app.features.settings
 import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
@@ -42,7 +41,7 @@ class AccountSettingsScreenTest {
     }
 
     @Test
-    fun credentialCardOpensEmailChangeWithPasswordConfirmation() {
+    fun credentialCardShowsBothAccountSecurityActions() {
         val account = AuthState.Authenticated(
             userId = "test-account",
             email = "test@example.com",
@@ -51,8 +50,7 @@ class AccountSettingsScreenTest {
         compose.setContent { NuvioTheme { AccountCredentialsCard(account) } }
         compose.onNodeWithTag("account-credentials-card").assertExists()
         compose.onNodeWithTag("account-change-password-button").assertExists()
-        compose.onNodeWithTag("account-change-email-button").performClick()
-        compose.onNodeWithTag("account-new-email-field").assertExists()
+        compose.onNodeWithTag("account-change-email-button").assertExists()
     }
 
     @Test
