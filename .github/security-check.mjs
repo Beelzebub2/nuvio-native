@@ -29,6 +29,12 @@ for (const path of tracked) {
   if (signatures.some(pattern => pattern.test(content))) fail(`credential signature in ${path}`);
 }
 
+// Credentials typed into the Compose auth form must never be serialized by
+// rememberSaveable into Android SavedState or process-recreation backups.
+const authScreen = readFileSync('composeApp/src/commonMain/kotlin/com/nuvio/app/features/auth/AuthScreen.kt', 'utf8');
+if (/\b(?:var|val)\s+(?:password|newPassword|currentPassword|confirmPassword)\s+by\s+rememberSaveable\b/i.test(authScreen)) {
+  fail('Authentication password text must use memory-only Compose remember state');
+}
 // Search all history reachable by the runner, not only the current HEAD.
 // Print commit IDs only: never print secret-bearing lines to CI logs.
 const historicalPattern = '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|ghp_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}|AKIA[0-9A-Z]{16}';

@@ -260,7 +260,8 @@ object AuthRepository {
             Unit
         }.onFailure { e ->
             cancelRemoteSessionRequest()
-            log.e(e) { "Email sign-up failed" }
+            // Do not forward raw HTTP/auth exceptions (which may contain credentials) to telemetry.
+            log.w { "Email sign-up failed" }
             _error.value = e.safeAuthErrorDescription()
                 ?: (e as? IllegalArgumentException)?.message
                 ?: _error.value
@@ -278,7 +279,7 @@ object AuthRepository {
         }
     }.onFailure { e ->
         cancelRemoteSessionRequest()
-        log.e(e) { "Email sign-in failed" }
+        log.w { "Email sign-in failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_in_failed)
     }

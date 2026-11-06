@@ -245,7 +245,8 @@ fun AuthScreen(
     LaunchedEffect(backendUrl) { googleEnabled = GoogleOAuthAvailability.isEnabled() }
     var isSignUp by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    // Passwords must never enter a saved-instance-state bundle.
+    var password by remember { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     // A sign-in coroutine belongs to the current screen instance. Restoring its
     // busy flag after activity recreation can leave every sign-in action disabled
