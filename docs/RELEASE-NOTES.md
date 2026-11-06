@@ -1,3 +1,23 @@
+## Starlit 1.12.1
+
+### Phone remote connection reliability
+
+- **Keep direct pairing independent of discovery:** QR, manual IP and remembered-PC TCP checks continue when UDP discovery cannot start or send. A failed UDP discovery worker no longer stops a healthy TCP listener or Bluetooth hosting, and a failed reply to one device does not disable later discovery replies.
+- **Get help when you need it:** The PC's Phone remote window offers **Trouble connecting?** instead of Starlit's startup firewall modal. Windows rule checks distinguish TCP session permission from optional UDP discovery and explain uncertainty without claiming that a missing rule proves the phone is blocked. Connected phones do not see irrelevant LAN warnings.
+- **Open the correct Windows page:** **Open network settings** now uses the native Windows protocol handler to open Network & internet, avoiding a blank default-browser window. Connection and pairing timeout messages offer more specific recovery steps; network help is available in English, Portuguese and Brazilian Portuguese.
+- **Retain the existing security boundaries:** Two-device code approval, same-account/server verification, encrypted sessions and local-subnet IPv4 restrictions remain in place. Optional administrator-approved firewall rules stay scoped to Starlit's executable and ports on Private/Domain networks; Starlit does not switch network profiles or open Public-network exceptions.
+
+### Bluetooth and QR connection feedback
+
+- **See when your phone is searching or connecting:** The PC controller now distinguishes Bluetooth/LAN searches from a connection attempt, keeps known nearby PCs visible during a new Bluetooth scan and stops an in-progress scan before connecting. Scanning times out cleanly and late Bluetooth callbacks cannot overwrite newer connection status.
+- **Connect directly from a scanned desktop QR code:** After confirming that the QR address belongs to the phone's private subnet, Starlit probes the selected PC and starts the existing authenticated, encrypted two-device pairing flow automatically. A deliberate QR scan can replace an unfinished broad network search, without granting trust or bypassing confirmation.
+- **Exercise the new behavior in CI:** Desktop PR checks now include regressions for discovery progress, duplicate Bluetooth results, stale callbacks, QR auto-connect and controller state. The manual-IP and UDP-independent TCP routes remain supported.
+
+### Validation and limitations
+
+- PR #148 passed Android Full/Play Store, desktop, iOS Kotlin and repository security checks. Local validation passed 74 targeted desktop tests, two focused UI capture rechecks and the Android production compile. Both native-helper and asynchronous-entry smoke tests opened the actual Windows Network & internet page. The tag-triggered pipeline runs the full desktop suite, builds and tests the Windows installer, signs Android APKs and verifies release artifacts before publication.
+- A physical phone's TCP probe to a new wildcard-bound Java listener timed out on the current network. No firewall or network profile was changed, and that timeout does not uniquely identify the cause. Physical phone-app pairing and command control remain unverified; automatic tests do not guarantee reachability across routers, VPNs and security products.
+
 ## Starlit 1.12.0
 
 ### Android Google Cast
