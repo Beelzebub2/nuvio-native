@@ -4,6 +4,7 @@ import android.app.Application
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import com.nuvio.app.features.profiles.ProfileRepository
 import java.io.File
+import java.net.URI
 import java.nio.file.Files
 import java.util.UUID
 import org.junit.Assume.assumeNoException
@@ -13,6 +14,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -28,8 +30,12 @@ class AndroidDownloadRemovalSafetyTest {
 
     private fun completedDownload(profileId: Int): Fixture {
         val context = RuntimeEnvironment.getApplication()
-        PlatformLocalAccountDataCleaner.initialize(context)
         val scheduler = DownloadsPlatformDownloader.scheduler(context)
+        // Production has one application context. Robolectric can construct a
+        // new context per test while the platform downloader singleton keeps
+        // the first scheduler. Align their roots before testing ownership.
+        DownloadsPlatformDownloader.scheduler(scheduler.context)
+        PlatformLocalAccountDataCleaner.initialize(scheduler.context)
         val name = "owned-${UUID.randomUUID()}.mkv"
         val file = File(scheduler.directory.apply { mkdirs() }, name)
         file.writeText("test owned media")
@@ -49,6 +55,18 @@ class AndroidDownloadRemovalSafetyTest {
         val owned = completedDownload(current)
         val foreign = completedDownload(current + 1)
         try {
+            assertTrue(owned.item.isPlayable, "A completed transfer must be playable")
+            assertTrue(PlatformLocalAccountDataCleaner.appContext != null, "Cleaner context must be initialized")
+            assertTrue(DownloadsPlatformDownloader.managedTransfers().any {
+                it.item.id == owned.item.id && it.item.fileName == owned.item.fileName &&
+                    it.profileId == current && it.item.status == DownloadStatus.Completed &&
+                    it.item.downloadedBytes == owned.item.downloadedBytes &&
+                    it.item.localFileUri == owned.item.localFileUri
+            }, "An owned completed transfer must remain visible to the preview")
+            assertTrue(isPrivateStarlitDownloadFile(owned.scheduler.directory, owned.file),
+                "A real app-private regular file must qualify")
+            assertEquals(owned.file.canonicalFile, File(URI(requireNotNull(owned.item.localFileUri))).canonicalFile)
+            assertEquals(owned.item.downloadedBytes, owned.file.length())
             assertTrue(DownloadStorageManagement.eligibleCleanupBytes(owned.item) != null)
             assertFalse(DownloadsPlatformDownloader.removeFile(foreign.file.toURI().toString()))
             assertFalse(DownloadsPlatformDownloader.removePartialFile(foreign.item.fileName))
