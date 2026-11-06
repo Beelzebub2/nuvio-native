@@ -164,7 +164,8 @@ object PasskeyRepository {
                 "too_many_passkeys" -> "This account already has the maximum number of passkeys"
                 "webauthn_credential_exists" -> "This passkey is already registered"
                 "webauthn_challenge_expired", "webauthn_challenge_not_found" -> "Passkey request expired. Try again"
-                "email_not_confirmed", "user_banned" -> "This account is not approved for sign-in"
+                "email_not_confirmed" -> "Confirm your email address before using a passkey"
+                "user_banned" -> "This account cannot sign in. Contact support"
                 else -> "Passkey request could not be verified. Try again"
             })
         }
@@ -175,7 +176,7 @@ object PasskeyRepository {
     internal suspend fun reauthenticate(password: String) {
         require(password.isNotBlank()) { "Enter your account password to continue" }
         val state = requireNotNull(AuthRepository.state.value as? AuthState.Authenticated)
-        require(!state.isAnonymous && !state.email.isNullOrBlank()) { "An approved account is required" }
+        require(!state.isAnonymous && !state.email.isNullOrBlank()) { "Sign in to your account first" }
         val emailAddress = requireNotNull(state.email)
         val auth = SupabaseProvider.client.auth
         // Unlike using an old cached access token alone, this proves current password possession.
@@ -231,7 +232,7 @@ object PasskeyRepository {
         val serverAtStart = ServerConfigurationRepository.active.value.backendUrl
         require(isTrustedPasskeyOrigin(serverAtStart)) { "Passkeys are not available for this server" }
         val state = AuthRepository.state.value as? AuthState.Authenticated
-        require(state != null && !state.isAnonymous) { "Sign in to an approved account first" }
+        require(state != null && !state.isAnonymous) { "Sign in to your account first" }
         reauthenticate(password)
         val auth = SupabaseProvider.client.auth
         val session = requireNotNull(auth.currentSessionOrNull()) { "Sign in again before adding a passkey" }

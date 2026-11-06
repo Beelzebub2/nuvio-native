@@ -83,7 +83,7 @@ The installer is written to `composeApp/build/compose/binaries/main-release/inst
 
 ### Android mobile
 
-The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account sync. Builds configured with an account server can sync between desktop and Android: sign into the same approved account and profile on each device. Guest mode remains available, and Full builds support custom servers. iOS sources are present, but require macOS and Xcode to build and test.
+The Android app uses the shared mobile UI and Android player. See the [Android build and account-server guide](docs/ANDROID.md) for SDK setup, APK installation, distribution differences, and account sync. Builds configured with an account server can sync between desktop and Android: create an account with email verification or Google, then sign into the same account and profile on each device. Guest mode remains available, and Full builds support custom servers. iOS sources are present, but require macOS and Xcode to build and test.
 
 ### Releasing
 

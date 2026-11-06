@@ -1,7 +1,7 @@
 # Sign in on Windows with a phone passkey
 
 Register a passkey from **Settings → Account** in the Starlit Android app while
-signed in to your approved Starlit account. Then, on desktop, select **Sign in
+signed in to your verified Starlit account. Then, on desktop, select **Sign in
 with passkey** and choose **iPhone, iPad or Android device** (or **Use another
 device**) in the Windows security dialog. Scan the QR code with your phone and
 approve using your phone's screen lock, fingerprint or face. Keep Bluetooth

@@ -1,4 +1,6 @@
 <resources>
+    <string name="auth_google_sign_in_failed">N?o foi poss?vel iniciar sess?o com o Google. Tenta novamente.</string>
+    <string name="auth_sign_up_pending_confirmation">Verifica a tua caixa de entrada e confirma o e-mail antes de iniciares sess?o.</string>
     <string name="settings_advanced_usage_analytics">Estatísticas de utilização</string>
     <string name="settings_advanced_usage_analytics_subtitle">Versão, plataforma e utilização de funcionalidades com identificador aleatório da instalação. Desativado até autorizares.</string>
     <string name="settings_advanced_sentry_reports">Relatórios de falhas (Sentry)</string>
@@ -33,8 +35,6 @@
     <string name="diagnostics_consent_save">Guardar escolhas</string>
     <string name="auth_google_sign_in">Iniciar sessão com o Google</string>
     <string name="auth_google_sign_up">Registar com o Google</string>
-    <string name="auth_google_approval_notice">As novas contas continuam a precisar de aprovação.</string>
-    <string name="auth_google_request_access">Pedir acesso com o Google (sujeito a aprovação)</string>
     <string name="auth_google_link_title">Conta Google</string>
     <string name="auth_google_link_description">Associa o Google à tua conta Starlit para iniciares sessão sem perderes a biblioteca nem o histórico.</string>
     <string name="auth_google_link_button">Associar Google</string>
@@ -72,8 +72,8 @@
     <string name="auth_passkey_add_failed_title">Não foi possível adicionar a chave de acesso</string>
     <string name="auth_passkey_remove_failed_title">Não foi possível remover a chave de acesso</string>
     <string name="auth_passkey_operation_failed">Não foi possível atualizar as chaves de acesso. Tenta novamente.</string>
-    <string name="auth_request_account">Pedir conta</string>
-    <string name="auth_request_account_subtitle">Escolhe uma palavra-passe para pedires uma conta. O proprietário do servidor tem de aprovar o pedido antes de poderes iniciar sessão.</string>
+    <string name="auth_request_account">Criar conta</string>
+    <string name="auth_request_account_subtitle">Cria uma conta com o teu e-mail e palavra-passe. Confirma o endere?o de e-mail para come?ares a sincronizar.</string>
     <string name="auth_request_password_minimum">A palavra-passe tem de ter, pelo menos, 12 caracteres.</string>
     <string name="auth_forgot_password">Esqueceste-te da palavra-passe?</string>
     <string name="auth_password_recovery_title">Repor palavra-passe</string>
@@ -83,12 +83,10 @@
     <string name="auth_password_recovery_invalid_email">Introduz um endereço de e-mail válido.</string>
     <string name="auth_password_recovery_failed">Não foi possível pedir o e-mail de recuperação. Tenta novamente mais tarde.</string>
     <string name="auth_password_recovery_unavailable">A recuperação de palavra-passe só está disponível no servidor oficial do Starlit.</string>
-    <string name="auth_request_submitted_title">Pedido enviado</string>
-    <string name="auth_request_submitted_subtitle">O teu pedido de conta está a aguardar aprovação do proprietário do servidor.</string>
-    <string name="auth_request_submitted_detail">Depois de aprovado, inicia sessão com o e-mail e a palavra-passe que escolheste.</string>
+    <string name="auth_request_submitted_title">Verifica o teu e-mail</string>
+    <string name="auth_request_submitted_subtitle">Confirma o teu endere?o de e-mail para conclu?res a cria??o da conta Starlit.</string>
+    <string name="auth_request_submitted_detail">Abre a liga??o de confirma??o que envi?mos por e-mail e depois inicia sess?o com a tua conta.</string>
     <string name="auth_request_return_to_sign_in">Voltar a iniciar sessão</string>
-    <string name="auth_request_unexpected_session">O servidor devolveu uma sessão antes da aprovação. Tenta novamente.</string>
-    <string name="auth_request_notification_failed">O pedido foi guardado, mas a notificação ao proprietário falhou. Tenta pedir novamente daqui a 30 segundos com o mesmo e-mail e a mesma palavra-passe.</string>
     <string name="about_licenses_attributions_subtitle">Fontes de dados, agradecimentos e licenças da plataforma</string>
     <string name="about_supporters_contributors_subtitle">Reconhecimento público e créditos do projeto</string>
     <string name="action_back">Voltar</string>

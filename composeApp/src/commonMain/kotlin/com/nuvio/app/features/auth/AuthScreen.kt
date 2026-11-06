@@ -98,7 +98,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.auth.GoogleOAuthAvailability
-import com.nuvio.app.core.auth.STARLIT_GOOGLE_ORIGIN
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.PasskeyRepository
 import com.nuvio.app.core.auth.PasswordRecoveryRepository
@@ -117,10 +116,8 @@ import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_cancel
 import nuvio.composeapp.generated.resources.action_done
 import nuvio.composeapp.generated.resources.auth_request_account
-import nuvio.composeapp.generated.resources.auth_google_request_access
 import nuvio.composeapp.generated.resources.auth_google_sign_in
 import nuvio.composeapp.generated.resources.auth_google_sign_up
-import nuvio.composeapp.generated.resources.auth_google_approval_notice
 import nuvio.composeapp.generated.resources.auth_request_account_subtitle
 import nuvio.composeapp.generated.resources.auth_request_password_minimum
 import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
@@ -244,7 +241,6 @@ fun AuthScreen(
         PasskeyRepository.canUseOnActiveServer()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val uriHandler = LocalUriHandler.current
     var googleEnabled by remember(backendUrl) { mutableStateOf(false) }
     LaunchedEffect(backendUrl) { googleEnabled = GoogleOAuthAvailability.isEnabled() }
     var isSignUp by rememberSaveable { mutableStateOf(false) }
@@ -271,7 +267,7 @@ fun AuthScreen(
             return
         }
         val submittingSignUp = isSignUp
-        val submittingStarlitRequest = submittingSignUp && isStarlitServer
+        val submittingStarlitSignup = submittingSignUp && isStarlitServer
         val submittingServerUrl = backendUrl
         val submittingEmail = email
         val submittingPassword = password
@@ -285,7 +281,8 @@ fun AuthScreen(
                 } else {
                     AuthRepository.signInWithEmail(submittingEmail, submittingPassword)
                 }
-                if (submittingStarlitRequest && result.isSuccess &&
+                if (submittingStarlitSignup && result.isSuccess &&
+                    AuthRepository.notice.value != null &&
                     submittingServerUrl == ServerConnectionController.state.value.activeServer.backendUrl
                 ) {
                     isRequestPending = true
@@ -325,13 +322,6 @@ fun AuthScreen(
                 isLoading = false
             }
         }
-    }
-
-    fun requestAccessWithGoogle() {
-        if (isLoading || isRequestPending || !googleEnabled) return
-        focusManager.clearFocus(force = true)
-        AuthRepository.clearError()
-        uriHandler.openUri("$STARLIT_GOOGLE_ORIGIN/auth/google/request")
     }
 
     fun toggleAuthMode() {
@@ -452,7 +442,6 @@ fun AuthScreen(
                         onStartDeviceLink = ::startDeviceLink,
                         onGoogleSignIn = ::signInWithGoogle,
                         onPasskeySignIn = ::startPasskeySignIn,
-                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -494,7 +483,6 @@ fun AuthScreen(
                         onStartDeviceLink = ::startDeviceLink,
                         onGoogleSignIn = ::signInWithGoogle,
                         onPasskeySignIn = ::startPasskeySignIn,
-                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -590,7 +578,6 @@ private fun AuthMobileLayout(
     onStartDeviceLink: () -> Unit,
     onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
-    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -662,7 +649,6 @@ private fun AuthMobileLayout(
                 onStartDeviceLink = onStartDeviceLink,
                 onGoogleSignIn = onGoogleSignIn,
                     onPasskeySignIn = onPasskeySignIn,
-                onGoogleRequest = onGoogleRequest,
                 onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
@@ -702,7 +688,6 @@ private fun AuthLargeLayout(
     onStartDeviceLink: () -> Unit,
     onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
-    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -814,7 +799,6 @@ private fun AuthLargeLayout(
                     onStartDeviceLink = onStartDeviceLink,
                     onGoogleSignIn = onGoogleSignIn,
                     onPasskeySignIn = onPasskeySignIn,
-                    onGoogleRequest = onGoogleRequest,
                     onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
@@ -924,7 +908,6 @@ private fun AuthForm(
     onStartDeviceLink: () -> Unit,
     onGoogleSignIn: () -> Unit,
     onPasskeySignIn: () -> Unit,
-    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -1097,7 +1080,7 @@ private fun AuthForm(
         if (googleEnabled) {
             val googleActionLabel = stringResource(if (isSignUp) Res.string.auth_google_sign_up
                 else Res.string.auth_google_sign_in)
-            val googleAction = if (isSignUp) onGoogleRequest else onGoogleSignIn
+            val googleAction = onGoogleSignIn
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1132,22 +1115,6 @@ private fun AuthForm(
                     ),
                 )
                 Spacer(modifier = Modifier.height(8.dp * scale))
-                if (isSignUp) {
-                    Text(
-                        text = stringResource(Res.string.auth_google_approval_notice),
-                        color = AuthTextSecondary,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(Res.string.auth_google_request_access),
-                        modifier = Modifier.clickable(enabled = !isLoading, onClick = onGoogleRequest),
-                        color = AuthTextSecondary,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                    )
-                }
             }
             Spacer(modifier = Modifier.height(14.dp * scale))
         }
