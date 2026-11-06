@@ -265,7 +265,9 @@ object SkipIntroRepository {
     ): List<SkipInterval> {
         val selected = linkedMapOf<String, SkipInterval>()
         (introDb + theIntroDb).forEach { interval ->
-            if (interval.hasValidSeekTimes()) selected.putIfAbsent(interval.type, interval)
+            if (interval.hasValidSeekTimes() && interval.type !in selected) {
+                selected[interval.type] = interval
+            }
         }
         val credits = selected["movie-credits"]
         val postCredits = selected["post-credits"]
