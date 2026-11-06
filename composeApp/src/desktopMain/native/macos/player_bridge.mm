@@ -10,6 +10,7 @@
 
 #include <jni.h>
 #include <mpv/client.h>
+#include "../playback_diagnostics.h"
 #include <mpv/render.h>
 #include <mpv/render_gl.h>
 
@@ -1079,6 +1080,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     std::atomic<double> _requestedVolumePercent;
     BOOL _didFocusControlsWebView;
     BOOL _controlsWebReady;
+    std::atomic_bool _diagnosticsEnabled;
     BOOL _fullscreenTransitionActive;
     NSString *_pendingControlsJson;
     double _initialStartSeconds;
@@ -1126,6 +1128,7 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
     _cachedPositionSeconds.store(initialPositionMs > 0 ? (double)initialPositionMs / 1000.0 : 0.0);
     _cachedCacheAheadSeconds.store(0.0);
     _cachedSpeed.store(1.0);
+    _diagnosticsEnabled.store(false);
     _cachedPaused.store(!playWhenReady);
     _cachedLoading.store(true);
     _cachedEnded.store(false);
@@ -1611,10 +1614,12 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
             double position = [self doubleProperty:"time-pos" fallback:0.0];
             double volumeLevel = [self volume];
             double cacheAhead = [self cacheAheadSecondsForPosition:position];
+            const auto diagnostics = readPlaybackDiagnostics(mpv, self->_diagnosticsEnabled.load(), mpv_get_property, mpv_free);
             BOOL paused = [self rawIsPaused];
             BOOL ended = [self rawIsEnded];
             BOOL loading = [self rawLoadingWithPaused:paused ended:ended duration:duration];
             double speed = [self rawSpeed];
+            if (!std::isfinite(speed) || speed <= 0.0) speed = 1.0;
             NSString *audioTracks = [self audioTracksJson] ?: @"[]";
             NSString *subtitleTracks = [self subtitleTracksJson] ?: @"[]";
             NSString *mediaTitle = [self stringProperty:"media-title" fallback:@""];
@@ -1640,10 +1645,16 @@ static void setMpvOptionString(mpv_handle *mpv, const char *name, const char *va
                                          paused:paused
                                           speed:speed];
                 NSString *script = [NSString stringWithFormat:
-                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
+                    @"window.playerUpdate({duration:%0.3f,position:%0.3f,volumeLevel:%0.3f,videoWidth:%lld,videoHeight:%lld,bufferAheadSeconds:%0.3f,playbackSpeed:%0.3f,decoderMode:%d,seeking:%@,paused:%@,loading:%@,audioTracks:%@,subtitleTracks:%@})",
                     duration,
                     position,
                     volumeLevel,
+                    diagnostics.width,
+                    diagnostics.height,
+                    diagnostics.bufferAhead,
+                    diagnostics.speed,
+                    diagnostics.decoder,
+                    diagnostics.seeking ? @"true" : @"false",
                     paused ? @"true" : @"false",
                     loading ? @"true" : @"false",
                     audioTracks,
@@ -2561,6 +2572,11 @@ static void nuvioMpvWakeup(void *ctx) {
 
     id rawValue = message[@"value"];
     NSNumber *value = [rawValue isKindOfClass:[NSNumber class]] ? rawValue : nil;
+    if ([type isEqualToString:@"diagnosticsVisible"]) {
+        _diagnosticsEnabled.store(value && value.doubleValue >= 0.5);
+        [self syncControls];
+        return;
+    }
     if ([type isEqualToString:@"controlsReady"]) {
         _controlsWebReady = YES;
         [self flushPendingControlsJsonIfReady];
