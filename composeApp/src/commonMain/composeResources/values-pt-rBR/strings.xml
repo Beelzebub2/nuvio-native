@@ -706,8 +706,8 @@
     <string name="remote_playback_skip">Pular abertura ou créditos</string>
     <string name="remote_playback_previous">Episódio anterior</string>
     <string name="remote_playback_next">Próximo episódio</string>
-    <string name="remote_playback_fullscreen_enter">Tela cheia</string>
-    <string name="remote_playback_fullscreen_exit">Sair da tela cheia</string>
+    <string name="remote_playback_fullscreen_enter">Tela cheia no PC</string>
+    <string name="remote_playback_fullscreen_exit">Sair da tela cheia no PC</string>
     <string name="remote_playback_skip_intro">Pular abertura</string>
     <string name="remote_playback_quick_actions">Ações rápidas</string>
     <string name="remote_playback_episodes">Episódios</string>
