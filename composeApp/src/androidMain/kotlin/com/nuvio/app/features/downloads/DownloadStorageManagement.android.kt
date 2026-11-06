@@ -1,8 +1,6 @@
 package com.nuvio.app.features.downloads
 
 import android.content.Context
-import android.system.Os
-import android.system.OsConstants
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import java.io.File
 import java.net.URI
@@ -66,13 +64,19 @@ internal actual object DownloadStorageManagement {
 }
 
 /**
- * Android supports API 24+, but java.nio.file.Files is only available from
- * API 26. lstat is supported from API 21 and does not follow the final symlink.
- * Only regular files immediately inside the real app-private downloads
- * directory are eligible for cleanup, never external, nested or linked files.
+ * Android supports API 24+, while java.nio.file.Files is only available from
+ * API 26. Canonical path comparisons work on all supported Android versions
+ * and reject symlinks in either the downloads directory itself or the media
+ * file, including links that point to another file within the same directory.
+ * Canonicalize the parent first: Android's system-provided app-private parent
+ * can itself contain aliases, which are not evidence that the downloads
+ * directory is a symlink.
  */
 internal fun isPrivateStarlitDownloadFile(root: File, file: File): Boolean = runCatching {
-    OsConstants.S_ISDIR(Os.lstat(root.path).st_mode) &&
-        OsConstants.S_ISREG(Os.lstat(file.path).st_mode) &&
-        file.canonicalFile.parentFile == root.canonicalFile
+    val parent = root.parentFile?.canonicalFile ?: return false
+    val expectedRoot = File(parent, root.name)
+    val actualRoot = root.canonicalFile
+    if (!root.isDirectory || actualRoot != expectedRoot) return false
+    val expectedFile = File(actualRoot, file.name)
+    file.isFile && file.canonicalFile == expectedFile
 }.getOrDefault(false)
