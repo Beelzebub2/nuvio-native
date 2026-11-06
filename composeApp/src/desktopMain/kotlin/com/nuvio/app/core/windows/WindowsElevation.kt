@@ -116,6 +116,23 @@ internal object WindowsElevation {
             ?.let(Native::getComponentPointer)
     }.getOrNull()
 
+    /** Opens Settings through the Windows protocol handler, without a browser or elevation. */
+    fun openNetworkSettings(
+        execute: (ShellExecuteInfo) -> Boolean = { info ->
+            WindowsCom.withApartment(singleThreaded = true) { shell32.ShellExecuteExW(info) }
+        },
+    ): Boolean {
+        val info = ShellExecuteInfo().apply {
+            // The IO worker has no message loop; finish dispatching before its COM apartment closes.
+            fMask = SEE_MASK_NOASYNC or SEE_MASK_FLAG_NO_UI
+            lpVerb = WString("open")
+            lpFile = WString("ms-settings:network-status")
+            nShow = 1 // SW_SHOWNORMAL
+            cbSize = size()
+        }
+        return execute(info)
+    }
+
     /** True only when the user approved the prompt and the elevated task exited cleanly. */
     fun runSelf(arguments: List<String>, timeoutSeconds: Long, owner: Pointer?): Boolean {
         val command = selfCommand(

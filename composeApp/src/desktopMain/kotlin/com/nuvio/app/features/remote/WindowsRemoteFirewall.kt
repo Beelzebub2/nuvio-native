@@ -3,11 +3,9 @@ package com.nuvio.app.features.remote
 import com.nuvio.app.core.windows.ELEVATED_TASK_ARGUMENT
 import com.nuvio.app.core.windows.PHONE_REMOTE_FIREWALL_TASK
 import com.nuvio.app.core.windows.WindowsElevation
-import java.awt.Desktop
-import java.net.URI
+import co.touchlab.kermit.Logger
 import java.nio.file.Paths
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -420,12 +418,9 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
     override fun openNetworkSettings() {
         scope.launch {
             runCatching {
-                Desktop.getDesktop().browse(URI("ms-settings:network-status"))
+                check(WindowsElevation.openNetworkSettings()) { "Windows refused to open network settings" }
             }.onFailure {
-                runCatching {
-                    ProcessBuilder("cmd.exe", "/c", "start", "", "ms-settings:network-status")
-                        .start().waitFor(15, TimeUnit.SECONDS)
-                }
+                Logger.withTag("WindowsRemoteFirewall").w(it) { "Could not open Windows network settings" }
             }
         }
     }
