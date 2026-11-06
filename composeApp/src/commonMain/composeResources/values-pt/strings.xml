@@ -722,7 +722,7 @@
     <string name="remote_pc_check_ip">Procurar PC neste endereço</string>
     <string name="remote_pc_desktop_addresses">Endereço local do PC: %1$s</string>
     <string name="remote_pc_saved_devices">PCs anteriormente emparelhados</string>
-    <string name="remote_pc_saved_notice">Os PCs guardados só incluem o endereço local. Para voltar a ligar, tens de confirmar um novo código em ambos os dispositivos.</string>
+    <string name="remote_pc_saved_notice">Os PCs guardados estão prontos para voltar a ligar. No Bluetooth, não é preciso confirmar outro código se ambos os dispositivos mantiverem as chaves de emparelhamento protegidas. Pela rede local, continua a ser necessária confirmação.</string>
     <string name="remote_pc_forget">Esquecer</string>
     <string name="remote_pc_wake">Ligar PC</string>
     <string name="remote_pc_set_wake_mac">Definições de Wake-on-LAN</string>
@@ -2157,4 +2157,7 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O comando por Bluetooth está disponível. Emparelha o telemóvel com este PC nas definições Bluetooth e procura PCs no telemóvel.</string>
     <string name="remote_bluetooth_host_unavailable">O comando por Bluetooth não está disponível neste PC. A ligação pela rede local continua a funcionar.</string>
+    <string name="remote_discovery_unavailable">A deteção automática por UDP não está disponível porque a porta 47788 não pôde ser iniciada. Podes emparelhar através do código QR ou introduzir o endereço IP deste PC.</string>
+    <string name="remote_firewall_unverified_title">Não foi possível verificar a Firewall do Windows</string>
+    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as definições da firewall, pelo que não sabe se o Windows está a bloquear o telemóvel. Verifica novamente ou escolhe Permitir na firewall para pedir autorização.</string>
 </resources>

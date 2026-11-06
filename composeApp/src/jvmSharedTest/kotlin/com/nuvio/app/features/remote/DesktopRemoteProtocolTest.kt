@@ -1,6 +1,8 @@
 package com.nuvio.app.features.remote
 
 import java.io.*
+import java.net.BindException
+import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -10,6 +12,76 @@ import kotlinx.coroutines.*
 import kotlin.test.*
 
 class DesktopRemoteProtocolTest {
+    @Test
+    fun occupiedRemotePortHasActionableMessageAndCanBeReboundAfterRelease() {
+        val blocker = ServerSocket(0)
+        val port = blocker.localPort
+        try {
+            val failure = assertFailsWith<BindException> {
+                bindRemoteTcpListener(port).close()
+            }
+            assertContains(remoteHostFailureMessage(failure, port), "Close another Starlit instance")
+            assertContains(remoteHostFailureMessage(failure, port), "$port")
+        } finally {
+            blocker.close()
+        }
+        bindRemoteTcpListener(port).use { listener ->
+            assertEquals(port, listener.localPort)
+        }
+    }
+
+    @Test
+    fun securityFailuresAreNotMislabelledAsFirewallRules() {
+        assertContains(remoteHostFailureMessage(SecurityException("denied")), "denied access")
+        assertContains(remoteHostFailureMessage(IllegalStateException("other")), "retry automatically")
+    }
+
+    @Test
+    fun desktopHostRecoversAfterTemporaryPortConflictWithoutSigningInAgain() = runBlocking {
+        val occupied = ServerSocket(0)
+        val port = occupied.localPort
+        val udpPort = DatagramSocket(0).use { it.localPort }
+        val host = LanDesktopRemote(listenPort = port, discoveryPort = udpPort, uiDispatcher = Dispatchers.Default)
+        try {
+            host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
+            withTimeout(5_000) {
+                // Other remote tests share DesktopRemote's status flows. Only
+                // accept a failure belonging to this listener and its port.
+                while (!DesktopRemote.hostFailure.value ||
+                    !DesktopRemote.status.value.contains("TCP port $port")) delay(25)
+            }
+            assertFalse(DesktopRemote.hostReady.value)
+            assertContains(DesktopRemote.status.value, "TCP port $port")
+            occupied.close()
+            withTimeout(10_000) {
+                while (!DesktopRemote.hostReady.value) delay(25)
+            }
+            assertTrue(DesktopRemote.discoveryReady.value)
+            assertFalse(DesktopRemote.hostFailure.value)
+        } finally {
+            host.stop()
+            occupied.close()
+        }
+    }
+
+    @Test
+    fun udpDiscoveryFailureDoesNotPreventQrOrManualIpPairing() = runBlocking {
+        val tcpPort = ServerSocket(0).use { it.localPort }
+        val occupiedUdp = DatagramSocket(0)
+        val host = LanDesktopRemote(listenPort = tcpPort, discoveryPort = occupiedUdp.localPort, uiDispatcher = Dispatchers.Default)
+        try {
+            host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
+            withTimeout(5_000) {
+                while (!DesktopRemote.hostReady.value) delay(25)
+            }
+            assertFalse(DesktopRemote.discoveryReady.value)
+            assertContains(DesktopRemote.status.value, "QR")
+        } finally {
+            host.stop()
+            occupiedUdp.close()
+        }
+    }
+
     @Test
     fun controllerOpensEvenWhenNoDesktopsHaveBeenDiscovered() {
         val wasVisible = DesktopRemote.visible.value
@@ -261,6 +333,87 @@ class DesktopRemoteProtocolTest {
         assertEquals("02:12:34:56:78:9A", second.single().wakeMac)
         assertEquals(200, second.single().lastSeenEpochMs)
         assertTrue(rememberRemoteDevice(first, "bad", "attacker.example", 300) == first)
+    }
+
+    @Test
+    fun bluetoothPcIsRememberedSeparatelyFromLanAndCannotBeUsedAsWakeAddress() {
+        val lan = rememberRemoteDevice(emptyList(), "Home", "192.168.1.20", 100)
+        val bluetooth = rememberRemoteDevice(lan, "Office|PC", "a4:b5:c6:d7:e8:f9", 200, bluetooth = true)
+        assertEquals(2, bluetooth.size)
+        assertEquals("A4:B5:C6:D7:E8:F9", bluetooth.first().address)
+        assertTrue(bluetooth.first().bluetooth)
+        assertEquals("Office PC", bluetooth.first().name)
+        assertNull(bluetooth.first().wakeMac)
+        assertEquals(lan.single(), bluetooth.last())
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "my-pc.local", 300, bluetooth = true))
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "01:02:03:04:05", 300, bluetooth = true))
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "00:00:00:00:00:00", 300, bluetooth = true))
+        val updated = rememberRemoteDevice(bluetooth, "New Name", "A4:B5:C6:D7:E8:F9", 400, bluetooth = true)
+        assertEquals(2, updated.size)
+        assertEquals(400, updated.first().lastSeenEpochMs)
+    }
+
+    @Test
+    fun bluetoothTrustRequiresBothProofsAndRemainsAccountScoped() = runBlocking {
+        val store = object : RemoteBluetoothTrustStore {
+            val values = mutableMapOf<String, RemoteBluetoothTrust>()
+            private fun key(account: RemoteAccount, entry: String) = remoteBluetoothTrustKey(account, entry)
+            override fun read(account: RemoteAccount, entry: String) = values[key(account, entry)]
+            override fun write(account: RemoteAccount, entry: String, trust: RemoteBluetoothTrust) {
+                values[key(account, entry)] = trust
+            }
+            override fun delete(account: RemoteAccount, entry: String) {
+                values.remove(key(account, entry))
+            }
+        }
+        val account = RemoteAccount("owner", "https://account.example", "public")
+        val btAddress = "A4:B5:C6:D7:E8:F9"
+
+        withPeers { host, phone ->
+            assertTrue(host.supportsTrustedReconnect)
+            assertTrue(phone.supportsTrustedReconnect)
+            assertEquals(host.code, phone.code)
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertFalse(hostResume.await())
+            assertFalse(phoneResume.await())
+            // These calls are permitted only *after* the normal two-person,
+            // same-account, server-verified authorization has succeeded.
+            val hostEnroll = async(Dispatchers.IO) {
+                enrollBluetoothTrust(host.channel, account, true, null, store)
+            }
+            val phoneEnroll = async(Dispatchers.IO) {
+                enrollBluetoothTrust(phone.channel, account, false, btAddress, store)
+            }
+            hostEnroll.await()
+            phoneEnroll.await()
+        }
+        val saved = requireNotNull(store.read(account, "phone:$btAddress"))
+        assertEquals(saved, store.read(account, "host:${saved.id}"))
+        assertNull(store.read(account.copy(userId = "another"), "phone:$btAddress"))
+        assertNull(store.read(account.copy(server = "https://another.example"), "phone:$btAddress"))
+
+        withPeers { host, phone ->
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertTrue(hostResume.await(), "The desktop must verify the phone's transcript-bound proof")
+            assertTrue(phoneResume.await(), "The phone must verify the desktop's transcript-bound proof")
+            assertNotEquals(
+                remoteBluetoothTrustProof(saved, host.transcript, "phone"),
+                remoteBluetoothTrustProof(saved, host.transcript, "desktop"),
+            )
+            assertNotEquals(
+                remoteBluetoothTrustProof(saved, host.transcript, "phone"),
+                remoteBluetoothTrustProof(saved, randomRemoteBytes(), "phone"),
+            )
+        }
+        store.delete(account, "phone:$btAddress")
+        withPeers { host, phone ->
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertFalse(hostResume.await())
+            assertFalse(phoneResume.await())
+        }
     }
 
     @Test

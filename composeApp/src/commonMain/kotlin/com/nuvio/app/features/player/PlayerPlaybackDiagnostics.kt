@@ -12,6 +12,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +47,8 @@ internal data class SafePlaybackMetrics(
     val positionSeconds: Long,
     val durationSeconds: Long?,
     val bufferAheadSeconds: Long,
-    val playbackSpeed: Float,
+    val playbackSpeed: Float?,
+    val decoderMode: PlaybackDecoderMode,
 )
 
 internal enum class SafePlaybackPhase { Buffering, Playing, PausedOrIdle, Ended }
@@ -65,14 +70,33 @@ internal fun PlayerPlaybackSnapshot.safePlaybackMetrics(): SafePlaybackMetrics {
         positionSeconds = position / 1_000L,
         durationSeconds = durationMs.takeIf { it > 0L }?.div(1_000L),
         bufferAheadSeconds = bufferAhead / 1_000L,
-        playbackSpeed = playbackSpeed.takeIf { it.isFinite() && it > 0 } ?: 1f,
+        playbackSpeed = measuredPlaybackSpeed?.takeIf { it.isFinite() && it in 0.1f..8f },
+        decoderMode = decoderMode,
     )
+}
+
+/** Observed buffering episodes while the panel is open, including seek buffers. */
+internal class PlaybackDiagnosticsSession {
+    private var started = false
+    private var loading = true
+    var rebufferEvents = 0
+        private set
+
+    fun update(snapshot: PlayerPlaybackSnapshot): Int {
+        if (started && snapshot.isLoading && !loading && !snapshot.isEnded) {
+            rebufferEvents = (rebufferEvents + 1).coerceAtMost(1_000_000)
+        }
+        if (snapshot.isPlaying && !snapshot.isLoading) started = true
+        loading = snapshot.isLoading
+        return rebufferEvents
+    }
 }
 
 /** A strict, fixed-schema report. Never interpolate stream or platform log text. */
 internal fun safeDiagnosticsReport(
     metrics: SafePlaybackMetrics,
     network: NetworkCondition,
+    rebufferEvents: Int = 0,
 ): String = buildString {
     appendLine("Starlit playback diagnostics")
     appendLine("State: ${metrics.phase.name}")
@@ -82,10 +106,11 @@ internal fun safeDiagnosticsReport(
     appendLine("Position seconds: ${metrics.positionSeconds}")
     appendLine("Duration seconds: ${metrics.durationSeconds?.toString() ?: "unavailable"}")
     appendLine("Buffered ahead seconds: ${metrics.bufferAheadSeconds}")
-    appendLine("Playback speed: ${metrics.playbackSpeed}")
+    appendLine("Playback speed: ${metrics.playbackSpeed ?: "unavailable"}")
+    appendLine("Buffering events while diagnostics open (includes seeks): ${rebufferEvents.coerceIn(0, 1_000_000)}")
     appendLine("App network check: ${network.name}")
     appendLine("Source throughput: unavailable")
-    appendLine("Decoder: unavailable")
+    appendLine("Decoder: ${metrics.decoderMode.name}")
 }
 
 @Composable
@@ -94,6 +119,9 @@ internal fun PlaybackDiagnosticsDialog(
     onDismiss: () -> Unit,
 ) {
     val data = snapshot.safePlaybackMetrics()
+    val session = remember { PlaybackDiagnosticsSession() }
+    var rebufferEvents by remember { mutableStateOf(0) }
+    LaunchedEffect(snapshot) { rebufferEvents = session.update(snapshot) }
     val network by NetworkStatusRepository.uiState.collectAsState()
     val clipboard = LocalClipboardManager.current
     val tokens = MaterialTheme.nuvio
@@ -111,7 +139,9 @@ internal fun PlaybackDiagnosticsDialog(
         stringResource(Res.string.player_diagnostics_position) to
             data.positionSeconds.toString() + "s" + (data.durationSeconds?.let { " / ${it}s" } ?: ""),
         stringResource(Res.string.player_diagnostics_buffer) to "${data.bufferAheadSeconds}s",
-        stringResource(Res.string.player_diagnostics_speed) to "${data.playbackSpeed}×",
+        stringResource(Res.string.player_diagnostics_speed) to (data.playbackSpeed?.let { "${it}×" }
+            ?: stringResource(Res.string.player_diagnostics_unavailable)),
+        stringResource(Res.string.player_diagnostics_rebuffers) to rebufferEvents.toString(),
         stringResource(Res.string.player_diagnostics_network_status) to stringResource(
             when (network.condition) {
                 NetworkCondition.Online -> Res.string.player_diagnostics_network_online
@@ -122,7 +152,11 @@ internal fun PlaybackDiagnosticsDialog(
             },
         ),
         stringResource(Res.string.player_diagnostics_network) to stringResource(Res.string.player_diagnostics_unavailable),
-        stringResource(Res.string.player_diagnostics_decoder) to stringResource(Res.string.player_diagnostics_unavailable),
+        stringResource(Res.string.player_diagnostics_decoder) to when (data.decoderMode) {
+            PlaybackDecoderMode.Hardware -> "Hardware"
+            PlaybackDecoderMode.Software -> "Software"
+            PlaybackDecoderMode.Unknown -> stringResource(Res.string.player_diagnostics_unavailable)
+        },
     )
     DialogSurface(
         onDismissRequest = onDismiss,
@@ -146,7 +180,7 @@ internal fun PlaybackDiagnosticsDialog(
             DialogButton(
                 text = stringResource(Res.string.player_diagnostics_copy),
                 onClick = {
-                    clipboard.setText(AnnotatedString(safeDiagnosticsReport(data, network.condition)))
+                    clipboard.setText(AnnotatedString(safeDiagnosticsReport(data, network.condition, rebufferEvents)))
                     NuvioToastController.show(copiedLabel)
                 },
             )

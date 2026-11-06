@@ -43,6 +43,11 @@ const sourcesLabel = document.getElementById("sourcesLabel");
 const episodesLabel = document.getElementById("episodesLabel");
 const submitIntroButton = document.getElementById("submitIntroButton");
 const videoSettingsButton = document.getElementById("videoSettingsButton");
+const diagnosticsButton = document.getElementById("diagnosticsButton");
+const diagnosticsModal = document.getElementById("diagnosticsModal");
+const diagnosticsCloseButton = document.getElementById("diagnosticsCloseButton");
+const diagnosticsCopyButton = document.getElementById("diagnosticsCopyButton");
+const diagnosticsCopyStatus = document.getElementById("diagnosticsCopyStatus");
 const rtxCompareButton = document.getElementById("rtxCompareButton");
 const rtxCompareLabel = document.getElementById("rtxCompareLabel");
 const rtxCompareStatus = document.getElementById("rtxCompareStatus");
@@ -391,6 +396,9 @@ let isScrubbing = false;
 let scrubPositionMs = 0;
 let tapTimer = 0;
 let activeModal = "";
+// Native telemetry is ephemeral and never written to disk. Only numeric fields
+// from mpv are allowed into the diagnostic report.
+const diagnosticsSession = window.StarlitPlaybackDiagnostics.createSession();
 let pressedButton = null;
 let focusedActionCommand = "";
 let rtxComparisonHeld = false;
@@ -1015,6 +1023,7 @@ const rangePositionMs = () => {
 
 const modalByName = {
   audio: audioModal,
+  diagnostics: diagnosticsModal,
   subtitles: subtitleModal,
   speed: speedModal,
   sources: sourceModal,
@@ -1064,6 +1073,10 @@ const setModalVisibility = (modal, visible, animated = true) => {
 
 const closePlayerModal = (notifyDismiss = false, animated = true) => {
   const closingModal = activeModal;
+  if (closingModal === "diagnostics") {
+    diagnosticsSession.setEnabled(false);
+    send("diagnosticsVisible", 0);
+  }
   activeModal = "";
   modalElements.forEach(modal => {
     setModalVisibility(modal, false, animated);
@@ -1079,6 +1092,10 @@ const openPlayerModal = modal => {
   if (!targetModal) {
     closePlayerModal(false);
     return;
+  }
+  if (activeModal === "diagnostics" || modal === "diagnostics") {
+    diagnosticsSession.setEnabled(modal === "diagnostics");
+    send("diagnosticsVisible", modal === "diagnostics" ? 1 : 0);
   }
   activeModal = modal;
   if (modal === "submitIntro") {
@@ -2124,7 +2141,36 @@ const renderP2pConsentModal = () => {
   p2pConsentEnableButton.textContent = state.p2pConsentEnableLabel || "Enable P2P";
 };
 
+const diagnosticsMetrics = () => {
+  // navigator.onLine is a passive browser/OS hint, not a network probe or
+  // proof that the media origin is reachable. No requests are issued.
+  const networkOnline = typeof navigator.onLine === "boolean" ? navigator.onLine : null;
+  return diagnosticsSession.metrics(networkOnline);
+};
+
+const renderDiagnosticsModal = () => {
+  if (activeModal !== "diagnostics") return;
+  const metrics = diagnosticsMetrics();
+  const setValue = (id, text) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = text;
+  };
+  setValue("diagnosticsPhase", metrics.phase);
+  setValue("diagnosticsResolution", metrics.resolution);
+  setValue("diagnosticsTime", metrics.positionSeconds + "s / " + metrics.durationSeconds + "s");
+  setValue("diagnosticsBuffer", metrics.bufferAheadSeconds === "Unavailable"
+    ? "Unavailable" : metrics.bufferAheadSeconds + "s");
+  setValue("diagnosticsSpeed", metrics.playbackSpeed);
+  setValue("diagnosticsRebuffers", metrics.rebufferEvents);
+  setValue("diagnosticsDecoder", metrics.decoder);
+  setValue("diagnosticsThroughput", metrics.throughput);
+  setValue("diagnosticsNetwork", metrics.networkHint);
+  setValue("diagnosticsAdvice", metrics.advice);
+  diagnosticsCloseButton.textContent = state.panelCloseLabel || "Close";
+};
+
 const renderActiveModal = () => {
+  if (activeModal === "diagnostics") renderDiagnosticsModal();
   if (activeModal === "audio") renderAudioTrackList();
   if (activeModal === "subtitles") renderSubtitleModal();
   if (activeModal === "speed") renderSpeedOptionList();
@@ -2907,6 +2953,11 @@ document.querySelectorAll("[data-command]").forEach(button => {
       openPlayerModal("speed");
       return;
     }
+    if (command === "diagnostics") {
+      diagnosticsCopyStatus.textContent = "";
+      openPlayerModal("diagnostics");
+      return;
+    }
     if (command === "sources") {
       sourceFilterId = "";
       openPlayerModal("sources");
@@ -2931,6 +2982,31 @@ document.querySelectorAll("[data-command]").forEach(button => {
     showCommandToast(command);
     send(command, 0);
   });
+});
+
+diagnosticsCloseButton.addEventListener("click", () => closePlayerModal());
+window.addEventListener("online", renderDiagnosticsModal);
+window.addEventListener("offline", renderDiagnosticsModal);
+diagnosticsCopyButton.addEventListener("click", () => {
+  const report = window.StarlitPlaybackDiagnostics.report(diagnosticsMetrics());
+  const copied = () => { diagnosticsCopyStatus.textContent = "Sanitized report copied"; };
+  const failed = () => { diagnosticsCopyStatus.textContent = "Unable to access clipboard"; };
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    navigator.clipboard.writeText(report).then(copied, failed);
+    return;
+  }
+  // Desktop WebViews may run from a file URL without the async clipboard API.
+  const field = document.createElement("textarea");
+  field.value = report;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  let succeeded = false;
+  try { succeeded = document.execCommand("copy"); } catch (_error) { /* Unavailable */ }
+  field.remove();
+  if (succeeded) copied(); else failed();
 });
 
 const setRtxComparisonHeld = held => {
@@ -3233,6 +3309,8 @@ timeLabel.addEventListener("click", () => {
 });
 
 window.playerUpdate = update => {
+  diagnosticsSession.update(update);
+  renderDiagnosticsModal();
   const durationMs = Math.round((Number(update.duration) || 0) * 1000);
   const positionMs = Math.round((Number(update.position) || 0) * 1000);
   const reportedVolumeLevel = Number(update.volumeLevel);

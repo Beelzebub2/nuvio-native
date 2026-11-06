@@ -68,18 +68,23 @@ internal interface DesktopRemoteTransport {
     fun confirmPairing()
     fun disconnect()
     fun send(command: RemoteCommand)
+    fun forgetBluetoothTrust(account: RemoteAccount, address: String): Boolean = false
 }
 
 internal expect fun createDesktopRemoteTransport(): DesktopRemoteTransport
 
 internal object DesktopRemote {
     val transport by lazy { createDesktopRemoteTransport() }
+    val firewall by lazy { createRemoteFirewallAccess() }
     val desktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
     val scanning = MutableStateFlow(false)
     val hostReady = MutableStateFlow(false)
+    val hostFailure = MutableStateFlow(false)
+    /** True only if UDP discovery is listening; QR/manual-IP still work without it. */
+    val discoveryReady = MutableStateFlow(false)
     val bluetoothHostReady = MutableStateFlow(false)
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
@@ -100,16 +105,22 @@ internal object DesktopRemote {
         remembered.value = account?.let(RememberedRemoteDeviceStore::read).orEmpty()
     }
 
-    /** Called only after the encrypted session and both human approvals succeed. */
+    /** Called only after encrypted, account-verified pairing or a previously approved secure resume. */
     fun pairedWith(account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long) {
         if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
-        val list = rememberRemoteDevice(remembered.value, desktop.name, desktop.address, nowEpochMs)
+        val list = rememberRemoteDevice(remembered.value, desktop.name, desktop.address, nowEpochMs, desktop.bluetooth)
         RememberedRemoteDeviceStore.write(account, list)
         remembered.value = list
     }
 
     fun forget(address: String) {
         val current = activeAccount ?: return
+        if (remembered.value.any { it.address == address && it.bluetooth }) {
+            if (!transport.forgetBluetoothTrust(current, address)) {
+                status.value = "Could not forget the Bluetooth PC securely. Please try again."
+                return
+            }
+        }
         val next = remembered.value.filterNot { it.address == address }
         RememberedRemoteDeviceStore.write(current, next)
         remembered.value = next
@@ -118,7 +129,7 @@ internal object DesktopRemote {
     fun saveWakeAddress(address: String, mac: String): Boolean {
         val current = activeAccount ?: return false
         val validated = normalizedWakeMac(mac) ?: return false
-        if (remembered.value.none { it.address == address }) return false
+        if (remembered.value.none { it.address == address && !it.bluetooth }) return false
         val next = remembered.value.map {
             if (it.address == address) it.copy(wakeMac = validated) else it
         }
@@ -133,7 +144,12 @@ internal object DesktopRemote {
     fun open() {
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value) {
-            transport.discover(deepScan = true)
+            val lastBluetooth = remembered.value.firstOrNull { it.bluetooth }
+            if (lastBluetooth != null && transport.bluetoothSupported) {
+                transport.connect(RemoteDesktop(lastBluetooth.address, 0, lastBluetooth.name, bluetooth = true))
+            } else {
+                transport.discover(deepScan = true)
+            }
         }
     }
 
@@ -188,13 +204,18 @@ internal object DesktopRemote {
 internal fun DesktopRemoteHost() {
     val auth by AuthRepository.state.collectAsState()
     val server by ServerConfigurationRepository.active.collectAsState()
-    DisposableEffect(auth, server.backendUrl, server.publishableKey) {
-        val account = auth as? AuthState.Authenticated
-        if (account != null && !account.isAnonymous && server.backendUrl.startsWith("https://")) {
-            val remoteAccount = RemoteAccount(account.userId, server.backendUrl.trimEnd('/'), server.publishableKey)
+    val signedIn = (auth as? AuthState.Authenticated)?.takeUnless { it.isAnonymous }
+    val remoteAccount = if (signedIn != null && server.backendUrl.startsWith("https://")) {
+        RemoteAccount(signedIn.userId, server.backendUrl.trimEnd('/'), server.publishableKey)
+    } else null
+    // Refreshing the login session must not tear down a previously paired Bluetooth socket.
+    DisposableEffect(remoteAccount?.userId, remoteAccount?.server, remoteAccount?.publishableKey) {
+        if (remoteAccount != null) {
             DesktopRemote.accountChanged(remoteAccount)
             DesktopRemote.handoffAccount = remoteAccount
             DesktopRemote.transport.start(remoteAccount, isDesktop)
+            // Phones can only find a PC whose firewall lets them in; check while it starts listening.
+            if (isDesktop) DesktopRemote.firewall.refresh()
         } else {
             DesktopRemote.accountChanged(null)
             DesktopRemote.handoffAccount = null

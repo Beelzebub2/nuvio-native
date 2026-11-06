@@ -671,7 +671,7 @@
     <string name="remote_pc_check_ip">Procurar PC neste endereço</string>
     <string name="remote_pc_desktop_addresses">Endereço local do PC: %1$s</string>
     <string name="remote_pc_saved_devices">PCs pareados anteriormente</string>
-    <string name="remote_pc_saved_notice">Os PCs salvos guardam apenas o endereço local. Para reconectar, é preciso confirmar um novo código nos dois dispositivos.</string>
+    <string name="remote_pc_saved_notice">Os PCs salvos estão prontos para reconectar. Pelo Bluetooth, não é preciso confirmar outro código se os dois dispositivos mantiverem as chaves de pareamento protegidas. Pela rede local, a confirmação continua necessária.</string>
     <string name="remote_pc_forget">Esquecer</string>
     <string name="remote_pc_wake">Ligar PC</string>
     <string name="remote_pc_set_wake_mac">Configurações de Wake-on-LAN</string>
@@ -1630,4 +1630,7 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O controle por Bluetooth está disponível. Pareie o celular com este PC nas configurações Bluetooth e procure PCs no celular.</string>
     <string name="remote_bluetooth_host_unavailable">O controle por Bluetooth não está disponível neste PC. A conexão pela rede local continua funcionando.</string>
+    <string name="remote_discovery_unavailable">A descoberta automática por UDP está indisponível porque não foi possível iniciar a porta 47788. Você ainda pode parear pelo QR code ou digitando o endereço IP deste PC.</string>
+    <string name="remote_firewall_unverified_title">Não foi possível verificar o Firewall do Windows</string>
+    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as configurações do firewall e não sabe se o Windows está bloqueando o celular. Verifique novamente ou selecione Permitir no firewall para solicitar autorização.</string>
 </resources>

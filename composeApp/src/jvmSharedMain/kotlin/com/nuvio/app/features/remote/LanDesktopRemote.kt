@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.BindException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -29,9 +30,43 @@ import com.nuvio.app.features.profiles.ProfileRepository
 
 private const val DISCOVERY_PORT = 47788
 internal const val REMOTE_LAN_PORT = 47789
+private const val HOST_RETRY_DELAY_MS = 3_000L
 private const val PAIRING_TIMEOUT = 90_000L
 private val TCP_PROBE_MARKER = "STRP".toByteArray(Charsets.US_ASCII)
 private val wireJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Binding a socket is independent of Windows Firewall permission. A port
+ * conflict must not direct users into an endless administrator prompt.
+ */
+internal fun remoteHostFailureMessage(error: Exception, port: Int = REMOTE_LAN_PORT): String = when (error) {
+    is BindException -> "TCP port $port is already in use or unavailable. Close another Starlit instance or app using this port. Starlit will retry automatically."
+    is SecurityException -> "Windows or security software denied access to TCP port $port. Check app permissions. Starlit will retry automatically."
+    else -> "The phone remote listener stopped unexpectedly. Starlit will retry automatically."
+}
+
+/** Do not share the fixed remote port with another process on Windows. */
+internal fun bindRemoteTcpListener(port: Int): ServerSocket = ServerSocket().apply {
+    try {
+        reuseAddress = false
+        bind(InetSocketAddress(port))
+        soTimeout = 1000
+    } catch (error: Exception) {
+        runCatching { close() }
+        throw error
+    }
+}
+
+private fun bindRemoteDiscoverySocket(port: Int): DatagramSocket = DatagramSocket(null).apply {
+    try {
+        reuseAddress = false
+        bind(InetSocketAddress(port))
+        soTimeout = 1000
+    } catch (error: Exception) {
+        runCatching { close() }
+        throw error
+    }
+}
 
 // A nonce-bound discovery filter, never an authentication proof; account verification follows pairing.
 private fun discoveryAccountHint(account: RemoteAccount, nonce: String): String =
@@ -109,6 +144,10 @@ internal fun wakeMagicPacket(mac: String): ByteArray? {
 internal class LanDesktopRemote(
     private val bluetoothClient: RemoteBluetoothClient? = null,
     private val bluetoothHost: RemoteBluetoothHost? = null,
+    private val listenPort: Int = REMOTE_LAN_PORT,
+    private val discoveryPort: Int = DISCOVERY_PORT,
+    private val uiDispatcher: CoroutineDispatcher = Dispatchers.Main,
+    private val bluetoothTrustStore: RemoteBluetoothTrustStore? = null,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
@@ -139,11 +178,20 @@ internal class LanDesktopRemote(
         this.host = host
         val currentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = currentScope
-        if (host) currentScope.launch { listen(account, currentScope) }
+        if (host) currentScope.launch {
+            // A transient port conflict during an updater restart must not
+            // strand the Phone remote window until the next sign-in.
+            while (isActive) {
+                listen(account, currentScope)
+                delay(HOST_RETRY_DELAY_MS)
+            }
+        }
     }
 
     override fun stop() {
         DesktopRemote.hostReady.value = false
+        DesktopRemote.hostFailure.value = false
+        DesktopRemote.discoveryReady.value = false
         DesktopRemote.bluetoothHostReady.value = false
         scope?.cancel()
         scope = null
@@ -185,6 +233,15 @@ internal class LanDesktopRemote(
 
     override fun confirmPairing() { confirmation?.complete(Unit) }
 
+    override fun forgetBluetoothTrust(account: RemoteAccount, address: String): Boolean {
+        val validated = normalizeRememberedRemoteAddress(address, bluetooth = true) ?: return false
+        return runCatching {
+            val store = bluetoothTrustStore ?: return false
+            store.delete(account, "phone:$validated")
+            true
+        }.getOrDefault(false)
+    }
+
     override fun discoverBluetooth() {
         val currentScope = scope
         val activeClient = bluetoothClient
@@ -200,7 +257,7 @@ internal class LanDesktopRemote(
         DesktopRemote.status.value = "Searching nearby Bluetooth PCs…"
         activeClient.discover(
             onFound = { desktop ->
-                currentScope.launch(Dispatchers.Main) {
+                currentScope.launch(uiDispatcher) {
                     if (scope === currentScope && !host) {
                         DesktopRemote.bluetoothDesktops.value =
                             (DesktopRemote.bluetoothDesktops.value.filterNot { it.address == desktop.address } + desktop)
@@ -208,7 +265,7 @@ internal class LanDesktopRemote(
                 }
             },
             onFailure = { message ->
-                currentScope.launch(Dispatchers.Main) {
+                currentScope.launch(uiDispatcher) {
                     if (scope === currentScope && DesktopRemote.bluetoothDesktops.value.isEmpty()) {
                         DesktopRemote.status.value = message
                     }
@@ -252,13 +309,13 @@ internal class LanDesktopRemote(
                         socket.send(DatagramPacket(bytes, bytes.size, destination, 9))
                     }
                 }
-                withContext(Dispatchers.Main) {
+                withContext(uiDispatcher) {
                     if (scope === currentScope) DesktopRemote.status.value =
                         "Wake-on-LAN packet sent. Check your PC and search the LAN again; waking is not guaranteed."
                 }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (_: Exception) {
-                withContext(NonCancellable + Dispatchers.Main) {
+                withContext(NonCancellable + uiDispatcher) {
                     if (scope === currentScope) DesktopRemote.status.value =
                         "Could not send Wake-on-LAN. Check Wi-Fi, adapter MAC and router broadcast support."
                 }
@@ -294,7 +351,7 @@ internal class LanDesktopRemote(
         currentScope.launch {
             try {
                 DatagramSocket().use { socket ->
-                    withContext(Dispatchers.Main) {
+                    withContext(uiDispatcher) {
                         check(scope === currentScope)
                         scanSocket = socket
                     }
@@ -333,13 +390,13 @@ internal class LanDesktopRemote(
                         if (fields.size != 4 || fields[0] != REMOTE_PROTOCOL || fields[1] != challenge) continue
                         val port = fields[2].toIntOrNull()?.takeIf { it in 1024..65535 } ?: continue
                         val peer = RemoteDesktop(packet.address.hostAddress!!, port, fields[3].take(80))
-                        withContext(Dispatchers.Main) {
+                        withContext(uiDispatcher) {
                             check(scope === currentScope)
                             DesktopRemote.desktops.value = DesktopRemote.desktops.value.filterNot { it.address == peer.address } + peer
                         }
                     }
                     if (deepScan && targetAddress == null) {
-                        withContext(Dispatchers.Main) {
+                        withContext(uiDispatcher) {
                             if (scope === currentScope) DesktopRemote.status.value = "Checking local PCs directly…"
                         }
                         val candidates = localInterfaces().take(2)
@@ -349,7 +406,7 @@ internal class LanDesktopRemote(
                         probeRemoteTargets(candidates, currentScope, expected)
                     }
                 }
-                withContext(Dispatchers.Main) {
+                withContext(uiDispatcher) {
                     check(scope === currentScope)
                     DesktopRemote.status.value = if (DesktopRemote.desktops.value.isEmpty()) {
                         if (targetAddress == null)
@@ -359,11 +416,11 @@ internal class LanDesktopRemote(
                 }
             } catch (error: CancellationException) { throw error
             } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
+                withContext(uiDispatcher) {
                     if (scope === currentScope) DesktopRemote.status.value = "Could not search the local network. Check Wi-Fi and local-network permissions."
                 }
             } finally {
-                withContext(NonCancellable + Dispatchers.Main) {
+                withContext(NonCancellable + uiDispatcher) {
                     if (scope === currentScope) {
                         scanSocket = null
                         DesktopRemote.scanning.value = false
@@ -391,7 +448,7 @@ internal class LanDesktopRemote(
                             socket.getInputStream().read() == 1
                         }
                     }.getOrDefault(false)
-                    if (reachable) withContext(Dispatchers.Main) {
+                    if (reachable) withContext(uiDispatcher) {
                         check(scope === ownerScope)
                         val addressText = address.hostAddress.orEmpty()
                         if (DesktopRemote.desktops.value.none { it.address == addressText }) {
@@ -409,22 +466,20 @@ internal class LanDesktopRemote(
         var udpSocket: DatagramSocket? = null
         var localBluetoothListener: ServerSocket? = null
         try {
-            val activeListener = ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(REMOTE_LAN_PORT))
-                soTimeout = 1000
-            }.also { listener = it; server = it }
+            val activeListener = bindRemoteTcpListener(listenPort)
+                .also { listener = it; server = it }
             currentCoroutineContext().ensureActive()
-            val udp = runCatching { DatagramSocket(null).apply {
-                reuseAddress = true
-                bind(InetSocketAddress(DISCOVERY_PORT))
-                soTimeout = 1000
-            } }.getOrNull()?.also { udpSocket = it; discovery = it }
+            val udp = runCatching { bindRemoteDiscoverySocket(discoveryPort) }
+                .getOrNull()?.also { udpSocket = it; discovery = it }
             currentCoroutineContext().ensureActive()
-            withContext(Dispatchers.Main) {
+            withContext(uiDispatcher) {
                 check(scope === ownerScope)
                 DesktopRemote.hostReady.value = true
-                DesktopRemote.status.value = "Ready to pair with your phone on this local network."
+                DesktopRemote.hostFailure.value = false
+                DesktopRemote.discoveryReady.value = udp != null
+                DesktopRemote.status.value = if (udp != null)
+                    "Ready to pair with your phone on this local network."
+                else "Ready for QR pairing. Automatic UDP discovery is unavailable; use the QR code or enter this PC's IP address."
             }
             coroutineScope {
                 if (udp != null) launch {
@@ -443,19 +498,25 @@ internal class LanDesktopRemote(
                     }
                 }
                 if (bluetoothHost != null) {
-                    localBluetoothListener = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).also {
+                    // Bluetooth is optional: failure to create its loopback
+                    // relay must never take down the working LAN listener.
+                    localBluetoothListener = runCatching {
+                        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+                    }.getOrNull()?.also {
                         it.soTimeout = 1000
                         bluetoothListener = it
                     }
-                    val enabled = runCatching { bluetoothHost.start(localBluetoothListener!!.localPort) }.getOrDefault(false)
-                    withContext(Dispatchers.Main) {
+                    val enabled = localBluetoothListener?.let { relay ->
+                        runCatching { bluetoothHost.start(relay.localPort) }.getOrDefault(false)
+                    } ?: false
+                    withContext(uiDispatcher) {
                         if (scope === ownerScope) DesktopRemote.bluetoothHostReady.value = enabled
                     }
                     if (enabled) launch {
                         val btListener = localBluetoothListener!!
                         while (isActive) {
                             val socket = try { btListener.accept() } catch (_: SocketTimeoutException) { continue }
-                            val registered = registerHostSocket(socket, expected, ownerScope)
+                            val registered = registerHostSocket(socket, expected, ownerScope, bluetooth = true)
                             if (!registered) runCatching { socket.close() }
                         }
                     }
@@ -492,9 +553,14 @@ internal class LanDesktopRemote(
                 }
             }
         } catch (error: CancellationException) { throw error
-        } catch (_: Exception) {
-            withContext(NonCancellable + Dispatchers.Main) {
-                if (scope === ownerScope) DesktopRemote.status.value = "Desktop remote could not listen on the LAN. Check your firewall or another Starlit instance."
+        } catch (error: Exception) {
+            withContext(NonCancellable + uiDispatcher) {
+                if (scope === ownerScope) {
+                    DesktopRemote.hostFailure.value = true
+                    DesktopRemote.status.value = if (listener == null)
+                        remoteHostFailureMessage(error, listenPort)
+                    else "The phone remote connection stopped unexpectedly. Starlit will retry automatically."
+                }
             }
         } finally {
             runCatching { listener?.close() }
@@ -502,18 +568,21 @@ internal class LanDesktopRemote(
             runCatching { localBluetoothListener?.close() }
             // An obsolete listener must not stop a newly restarted account's Bluetooth host.
             if (scope === ownerScope) runCatching { bluetoothHost?.stop() }
-            withContext(NonCancellable + Dispatchers.Main) {
+            withContext(NonCancellable + uiDispatcher) {
                 if (scope === ownerScope) {
                     DesktopRemote.hostReady.value = false
+                    DesktopRemote.discoveryReady.value = false
                     DesktopRemote.bluetoothHostReady.value = false
                 }
             }
         }
     }
 
-    private suspend fun registerHostSocket(socket: Socket, expected: RemoteAccount, ownerScope: CoroutineScope): Boolean {
+    private suspend fun registerHostSocket(
+        socket: Socket, expected: RemoteAccount, ownerScope: CoroutineScope, bluetooth: Boolean = false,
+    ): Boolean {
         var registered = false
-        withContext(Dispatchers.Main) {
+        withContext(uiDispatcher) {
             val now = System.nanoTime()
             // LAN and RFCOMM share one active, explicitly authorized session.
             if (scope === ownerScope && sockets.isEmpty() &&
@@ -522,7 +591,7 @@ internal class LanDesktopRemote(
                 sockets.add(socket)
                 registered = true
                 val epoch = sessionEpoch.incrementAndGet()
-                connection = ownerScope.launch { session(socket, expected, true, epoch) }
+                connection = ownerScope.launch { session(socket, expected, true, epoch, bluetooth) }
             }
         }
         return registered
@@ -544,7 +613,7 @@ internal class LanDesktopRemote(
                 val address = InetAddress.getByName(desktop.address)
                 require(isRemoteLanPeer(address)) { "Desktop must be on the same local network." }
                 val socket = Socket().also { ownedSocket = it }
-                withContext(Dispatchers.Main) {
+                withContext(uiDispatcher) {
                     check(scope === currentScope && sessionEpoch.get() == epoch)
                     sockets.add(socket)
                 }
@@ -552,7 +621,7 @@ internal class LanDesktopRemote(
                 session(socket, expected, false, epoch)
             } catch (error: CancellationException) { throw error
             } catch (_: Exception) {
-                withContext(NonCancellable + Dispatchers.Main) {
+                withContext(NonCancellable + uiDispatcher) {
                     if (sessionEpoch.get() == epoch) DesktopRemote.status.value = "Could not connect. Check the desktop and its private-network firewall."
                 }
             } finally {
@@ -580,10 +649,12 @@ internal class LanDesktopRemote(
                     expected = expected,
                     serverSide = false,
                     epoch = epoch,
+                    bluetoothAddress = desktop.address,
+                    bluetooth = true,
                 )
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (_: Exception) {
-                withContext(NonCancellable + Dispatchers.Main) {
+                withContext(NonCancellable + uiDispatcher) {
                     if (sessionEpoch.get() == epoch) DesktopRemote.status.value =
                         "Bluetooth connection failed. Pair with the PC in device settings and keep Bluetooth enabled on both."
                 }
@@ -594,7 +665,9 @@ internal class LanDesktopRemote(
         }
     }
 
-    private suspend fun session(socket: Socket, expected: RemoteAccount, serverSide: Boolean, epoch: Long) {
+    private suspend fun session(
+        socket: Socket, expected: RemoteAccount, serverSide: Boolean, epoch: Long, bluetooth: Boolean = false,
+    ) {
         socket.tcpNoDelay = true
         try {
             session(
@@ -606,6 +679,7 @@ internal class LanDesktopRemote(
                 expected = expected,
                 serverSide = serverSide,
                 epoch = epoch,
+                bluetooth = bluetooth,
             )
         } finally {
             sockets.remove(socket)
@@ -621,6 +695,8 @@ internal class LanDesktopRemote(
         expected: RemoteAccount,
         serverSide: Boolean,
         epoch: Long,
+        bluetooth: Boolean = false,
+        bluetoothAddress: String? = null,
     ) {
         try {
             try {
@@ -630,32 +706,44 @@ internal class LanDesktopRemote(
                 val channel = pairing.channel
                 currentCoroutineContext().ensureActive()
                 check(sessionEpoch.get() == epoch)
+                val trusted = bluetooth && pairing.supportsTrustedReconnect &&
+                    resumeBluetoothTrust(pairing, expected, serverSide, bluetoothAddress, bluetoothTrustStore)
                 val approval = CompletableDeferred<Unit>()
-                publish(epoch) {
-                    confirmation = approval
-                    DesktopRemote.pairing.value = RemotePairing(pairing.code, peer)
-                    DesktopRemote.status.value = "Compare the code on both devices, then confirm on both."
+                if (!trusted) {
+                    publish(epoch) {
+                        confirmation = approval
+                        DesktopRemote.pairing.value = RemotePairing(pairing.code, peer)
+                        DesktopRemote.status.value = "Compare the code on both devices, then confirm on both."
+                    }
                 }
                 val peerToken = authorizeRemoteChannel(
                     channel = channel,
                     expected = expected,
                     host = serverSide,
-                    approve = { withTimeout(PAIRING_TIMEOUT) { approval.await() } },
+                    approve = { if (!trusted) withTimeout(PAIRING_TIMEOUT) { approval.await() } },
                     currentToken = { currentToken(expected) },
                     verifyToken = { verifyAccount(expected, it) },
                 )
+                if (serverSide) publish(epoch) {
+                    // An authorized session may reconnect immediately after a transient
+                    // Bluetooth drop; the 20-second throttle still covers failed peers.
+                    lastHostAttemptNanos = 0L
+                }
+                if (bluetooth && pairing.supportsTrustedReconnect && !trusted) {
+                    enrollBluetoothTrust(channel, expected, serverSide, bluetoothAddress, bluetoothTrustStore)
+                }
                 pairedLoop(channel, peer, configureTimeout, expected, peerToken, epoch)
             } finally {
                 runCatching { closeTransport() }
             }
         } catch (error: CancellationException) { throw error
         } catch (_: Exception) {
-            withContext(NonCancellable + Dispatchers.Main) {
+            withContext(NonCancellable + uiDispatcher) {
                 if (sessionEpoch.get() == epoch) DesktopRemote.status.value = "Remote disconnected. Pair again; both devices must use the same active account and server."
             }
         } finally {
             runCatching { closeTransport() }
-            withContext(NonCancellable + Dispatchers.Main) {
+            withContext(NonCancellable + uiDispatcher) {
                 if (sessionEpoch.get() == epoch) {
                     confirmation = null
                     DesktopRemote.pairing.value = null
@@ -679,7 +767,7 @@ internal class LanDesktopRemote(
         if (peerToken != null) {
             // Load the desktop's active profile queue only after encrypted,
             // two-device approved account verification, not at app startup.
-            withContext(Dispatchers.Main) {
+            withContext(uiDispatcher) {
                 check(sessionEpoch.get() == epoch)
                 currentRemoteAccessToken(expected)
                 DownloadsRepository.ensureLoaded()
@@ -690,9 +778,10 @@ internal class LanDesktopRemote(
             DesktopRemote.connected.value = true
             DesktopRemote.status.value = "Connected to $peer"
             if (peerToken == null) {
-                // A device record is only a discovery shortcut. Pairing, both
-                // code confirmations and account verification already completed.
-                selectedDesktop?.takeUnless { it.bluetooth }?.let { desktop ->
+                // Device metadata is only a discovery shortcut. A new connection
+                // requires either both approvals or mutually proven prior trust.
+                // Same-account verification has completed in both cases.
+                selectedDesktop?.let { desktop ->
                     runCatching {
                         DesktopRemote.pairedWith(expected, desktop, System.currentTimeMillis())
                     }
@@ -712,7 +801,7 @@ internal class LanDesktopRemote(
                     verifyAccount(expected, currentToken)
                     lastVerification = System.nanoTime()
                 }
-                val snapshot = withContext(Dispatchers.Main) {
+                val snapshot = withContext(uiDispatcher) {
                     check(sessionEpoch.get() == epoch)
                     currentRemoteAccessToken(expected)
                     if (command.type == "handoffRequest") {
@@ -764,9 +853,9 @@ internal class LanDesktopRemote(
         }
     }
 
-    private suspend fun currentToken(expected: RemoteAccount): String = withContext(Dispatchers.Main) { currentRemoteAccessToken(expected) }
+    private suspend fun currentToken(expected: RemoteAccount): String = withContext(uiDispatcher) { currentRemoteAccessToken(expected) }
 
-    private suspend fun publish(epoch: Long, block: () -> Unit) = withContext(Dispatchers.Main) {
+    private suspend fun publish(epoch: Long, block: () -> Unit) = withContext(uiDispatcher) {
         check(sessionEpoch.get() == epoch)
         block()
     }
