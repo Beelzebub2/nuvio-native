@@ -42,6 +42,8 @@ data class IntroDbSegmentsResponse(
 )
 
 internal fun IntroDbSegmentsResponse.movieSkipIntervals(): List<SkipInterval> {
+    val opening = intro.movieIntervalOrNull("intro")
+    val recapSegment = recap.movieIntervalOrNull("recap")
     val credits = outro.movieIntervalOrNull("movie-credits")
     val scene = postCredits.movieIntervalOrNull("post-credits")
     // End-credit skipping must stop before the post-credits scene, even if data overlaps.
@@ -50,7 +52,7 @@ internal fun IntroDbSegmentsResponse.movieSkipIntervals(): List<SkipInterval> {
     ) {
         credits.copy(endTime = scene.startTime).takeIf { it.endTime > it.startTime }
     } else credits
-    return listOfNotNull(safeCredits, scene)
+    return listOfNotNull(opening, recapSegment, safeCredits, scene)
 }
 
 private fun IntroDbSegment?.movieIntervalOrNull(type: String): SkipInterval? {
@@ -60,6 +62,37 @@ private fun IntroDbSegment?.movieIntervalOrNull(type: String): SkipInterval? {
     if (!start.isFinite() || !end.isFinite() || start < 0 || end <= start) return null
     return SkipInterval(start, end, type, "introdb")
 }
+
+// TheIntroDB's public API also indexes film openings and generic TV episodes.
+// Never turn an open-ended credit marker into a seek to the end of the video:
+// it may contain an unmarked post-credits scene or refer to another cut.
+@Serializable
+internal data class TheIntroDbMediaResponse(
+    val intro: List<TheIntroDbSegment>? = null,
+    val recap: List<TheIntroDbSegment>? = null,
+    val credits: List<TheIntroDbSegment>? = null,
+)
+
+@Serializable
+internal data class TheIntroDbSegment(
+    @SerialName("start_ms") val startMs: Long? = null,
+    @SerialName("end_ms") val endMs: Long? = null,
+)
+
+internal fun TheIntroDbMediaResponse.skipIntervals(isMovie: Boolean): List<SkipInterval> =
+    buildList {
+        fun addSegments(segments: List<TheIntroDbSegment>?, type: String, allowStartAtZero: Boolean) {
+            segments.orEmpty().forEach { segment ->
+                val start = segment.startMs ?: if (allowStartAtZero) 0L else return@forEach
+                val end = segment.endMs ?: return@forEach
+                if (start < 0 || end <= start) return@forEach
+                add(SkipInterval(start / 1000.0, end / 1000.0, type, "theintrodb"))
+            }
+        }
+        addSegments(intro, "intro", allowStartAtZero = true)
+        addSegments(recap, "recap", allowStartAtZero = true)
+        addSegments(credits, if (isMovie) "movie-credits" else "outro", allowStartAtZero = false)
+    }
 
 @Serializable
 data class IntroDbSegment(
