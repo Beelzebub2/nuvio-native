@@ -28,6 +28,8 @@ class RemoteControllerUiTest {
     fun reset() {
         DesktopRemote.visible.value = false
         DesktopRemote.connected.value = false
+        DesktopRemote.connecting.value = false
+        DesktopRemote.scanning.value = false
         DesktopRemote.pairing.value = null
         DesktopRemote.hostReady.value = false
         DesktopRemote.hostFailure.value = false
@@ -73,6 +75,35 @@ class RemoteControllerUiTest {
         onNodeWithText("Previously paired PCs".uppercase()).performScrollTo().assertIsDisplayed()
         onNodeWithText("Can't find your PC?").performScrollTo().assertIsDisplayed()
         capture("pc-controller-find-bottom")
+    }
+
+    @Test
+    fun phoneControllerShowsConnectionProgressAndHoldsOtherOptions() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connecting.value = true
+        DesktopRemote.status.value = "Connecting to Living room PC…"
+        DesktopRemote.desktops.value = listOf(RemoteDesktop("192.168.1.50", REMOTE_LAN_PORT, "Living room PC"))
+        show(desktopLayout = false)
+        onNodeWithText("Connecting to your PC").assertIsDisplayed()
+        onNodeWithText("Connecting").assertIsDisplayed()
+        onNodeWithText("Connecting to Living room PC…").assertIsDisplayed()
+        onNodeWithTag("desktop-remote-search-local-network").assertIsNotEnabled()
+        capture("pc-controller-connecting")
+
+        // Searching shows its own progress, and the result replaces it.
+        runOnIdle {
+            DesktopRemote.connecting.value = false
+            DesktopRemote.scanning.value = true
+            DesktopRemote.status.value = "Searching nearby Bluetooth PCs…"
+        }
+        onNodeWithText("Looking for your PC").assertIsDisplayed()
+        onNodeWithText("Searching").assertIsDisplayed()
+        runOnIdle {
+            DesktopRemote.scanning.value = false
+            DesktopRemote.status.value = "Choose your PC."
+        }
+        onNodeWithText("Find your Starlit PC").assertIsDisplayed()
+        onNodeWithText("Choose your PC.").assertIsDisplayed()
+        onNodeWithTag("desktop-remote-search-local-network").assertIsEnabled()
     }
 
     @Test

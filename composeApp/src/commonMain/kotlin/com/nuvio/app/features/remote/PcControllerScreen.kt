@@ -71,6 +71,7 @@ private enum class PcControllerTab { Remote, Downloads, Pcs }
 internal fun PcControllerScreen(onClose: () -> Unit) {
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
+    val connecting by DesktopRemote.connecting.collectAsState()
     var tab by rememberSaveable { mutableStateOf(PcControllerTab.Remote) }
     // Until a PC is paired, the only useful page is finding one.
     val shownTab = if (connected) tab else PcControllerTab.Pcs
@@ -105,12 +106,17 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                     text = stringResource(
                         when {
                             connected -> Res.string.remote_pc_status_connected
+                            connecting -> Res.string.remote_pc_status_connecting
                             scanning -> Res.string.remote_pc_status_searching
                             else -> Res.string.remote_pc_status_idle
                         },
                     ),
-                    tone = if (connected) RemoteTone.Success else if (scanning) RemoteTone.Accent else RemoteTone.Neutral,
-                    busy = scanning,
+                    tone = when {
+                        connected -> RemoteTone.Success
+                        connecting || scanning -> RemoteTone.Accent
+                        else -> RemoteTone.Neutral
+                    },
+                    busy = !connected && (scanning || connecting),
                 )
             }
         }
@@ -151,10 +157,13 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val status by DesktopRemote.status.collectAsState()
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
+    val connecting by DesktopRemote.connecting.collectAsState()
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val tokens = MaterialTheme.nuvio
+    // Searching or connecting: other ways to connect wait until it ends.
+    val busy = scanning || connecting
 
     // Status hero: what is happening right now.
     RemoteCard(contentPadding = 18.dp) {
@@ -163,13 +172,14 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                 Icons.Rounded.DesktopWindows,
                 tone = if (connected) RemoteTone.Success else RemoteTone.Accent,
                 size = 56.dp,
-                busy = scanning,
+                busy = !connected && busy,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(
                         when {
                             connected -> Res.string.remote_pc_hero_connected_title
+                            connecting -> Res.string.remote_pc_hero_connecting_title
                             scanning -> Res.string.remote_pc_hero_searching_title
                             else -> Res.string.remote_pc_hero_idle_title
                         },
@@ -196,7 +206,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     }
     if (!DesktopRemote.transport.supported) return
 
-    ConnectOptions(scanning = scanning)
+    ConnectOptions(busy = busy)
 
     if (desktops.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -206,6 +216,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                     name = desktop.name,
                     detail = desktop.address,
                     icon = Icons.Rounded.Computer,
+                    enabled = !connecting,
                     onClick = { DesktopRemote.transport.connect(desktop) },
                 )
             }
@@ -219,6 +230,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                     name = desktop.name,
                     detail = stringResource(Res.string.remote_bluetooth_device, desktop.address),
                     icon = Icons.AutoMirrored.Rounded.BluetoothSearching,
+                    enabled = !connecting,
                     onClick = { DesktopRemote.transport.connect(desktop) },
                 )
             }
@@ -227,16 +239,16 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     if (savedPcs.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_saved_devices))
-            savedPcs.forEach { saved -> SavedPcRow(saved, enabled = !scanning) }
+            savedPcs.forEach { saved -> SavedPcRow(saved, enabled = !busy) }
             DialogHint(stringResource(Res.string.remote_pc_saved_notice))
         }
     }
-    if (!connected) TroubleshootingCard(expandByDefault = !scanning && desktops.isEmpty() && bluetoothDesktops.isEmpty())
+    if (!connected) TroubleshootingCard(expandByDefault = !busy && desktops.isEmpty() && bluetoothDesktops.isEmpty())
 }
 
 /** QR, network search, Bluetooth and manual address as one grid of choices. */
 @Composable
-private fun ConnectOptions(scanning: Boolean) {
+private fun ConnectOptions(busy: Boolean) {
     var manualIp by rememberSaveable { mutableStateOf("") }
     var manualOpen by rememberSaveable { mutableStateOf(false) }
     var qrError by remember { mutableStateOf(false) }
@@ -245,7 +257,8 @@ private fun ConnectOptions(scanning: Boolean) {
         qrError = address == null
         if (address != null) {
             manualIp = address
-            DesktopRemote.transport.discover(address)
+            // The QR code names the PC, so check it and open the code check in one go.
+            DesktopRemote.transport.discover(address, connect = true)
         }
     }
     val bluetoothSearch = rememberRemoteBluetoothSearch()
@@ -256,7 +269,7 @@ private fun ConnectOptions(scanning: Boolean) {
                 label = stringResource(Res.string.remote_qr_scan),
                 caption = stringResource(Res.string.remote_pc_tile_qr_caption),
                 primary = true,
-                enabled = !scanning,
+                enabled = !busy,
                 modifier = modifier.testTag("desktop-remote-scan-qr"),
                 onClick = { qrError = false; qrScanner() },
             )
@@ -269,7 +282,7 @@ private fun ConnectOptions(scanning: Boolean) {
                 label = stringResource(Res.string.remote_pc_search_local_network),
                 caption = stringResource(Res.string.remote_pc_tile_network_caption),
                 primary = qrScanner == null,
-                enabled = !scanning,
+                enabled = !busy,
                 modifier = modifier.testTag("desktop-remote-search-local-network"),
                 onClick = { DesktopRemote.transport.discover(deepScan = true) },
             )
@@ -279,6 +292,7 @@ private fun ConnectOptions(scanning: Boolean) {
                 icon = Icons.AutoMirrored.Rounded.BluetoothSearching,
                 label = stringResource(Res.string.remote_bluetooth_search),
                 caption = stringResource(Res.string.remote_pc_tile_bluetooth_caption),
+                enabled = !busy,
                 modifier = modifier.testTag("desktop-remote-search-bluetooth"),
                 onClick = bluetoothSearch,
             )
@@ -314,7 +328,7 @@ private fun ConnectOptions(scanning: Boolean) {
                     label = stringResource(Res.string.remote_pc_check_ip),
                     icon = Icons.Rounded.Search,
                     tone = NuvioCompactActionTone.Primary,
-                    enabled = !scanning && manualIp.isNotBlank(),
+                    enabled = !busy && manualIp.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { DesktopRemote.transport.discover(manualIp.trim()) },
                 )

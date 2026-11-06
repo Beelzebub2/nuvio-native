@@ -59,8 +59,11 @@ internal interface DesktopRemoteTransport {
     val bluetoothSupported: Boolean get() = false
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
-    /** A literal IP is checked directly; an explicit deep scan also probes the local subnet. */
-    fun discover(localIp: String? = null, deepScan: Boolean = false)
+    /**
+     * A literal IP is checked directly; an explicit deep scan also probes the local subnet.
+     * With [connect], a PC found at [localIp] is connected to straight away (a scanned QR code).
+     */
+    fun discover(localIp: String? = null, deepScan: Boolean = false, connect: Boolean = false)
     fun discoverBluetooth() {}
     fun localAddresses(): List<String> = emptyList()
     fun wake(address: String, mac: String) {}
@@ -80,7 +83,10 @@ internal object DesktopRemote {
     val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
+    /** A network or Bluetooth search is running. */
     val scanning = MutableStateFlow(false)
+    /** The phone is opening a connection, until the code check appears or it connects. */
+    val connecting = MutableStateFlow(false)
     val hostReady = MutableStateFlow(false)
     val hostFailure = MutableStateFlow(false)
     /** True only if UDP discovery is listening; QR/manual-IP still work without it. */
@@ -143,7 +149,7 @@ internal object DesktopRemote {
     // reach its manual LAN scan and troubleshooting state from Settings.
     fun open() {
         visible.value = true
-        if (!isDesktop && transport.supported && !connected.value && !scanning.value) {
+        if (!isDesktop && transport.supported && !connected.value && !scanning.value && !connecting.value) {
             val lastBluetooth = remembered.value.firstOrNull { it.bluetooth }
             if (lastBluetooth != null && transport.bluetoothSupported) {
                 transport.connect(RemoteDesktop(lastBluetooth.address, 0, lastBluetooth.name, bluetooth = true))

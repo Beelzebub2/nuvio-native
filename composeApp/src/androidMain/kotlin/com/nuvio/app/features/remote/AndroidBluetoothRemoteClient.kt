@@ -43,23 +43,30 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
     }
 
     @SuppressLint("MissingPermission")
-    override fun discover(onFound: (RemoteDesktop) -> Unit, onFailure: (String) -> Unit) {
+    override fun discover(onFound: (RemoteDesktop) -> Unit, onFinished: (String?) -> Unit) {
         val ctx = context
         val bt = adapter()
         if (ctx == null || bt == null) {
-            onFailure("Bluetooth is unavailable on this phone.")
+            onFinished("Bluetooth is unavailable on this phone.")
             return
         }
         if (!permissionsGranted()) {
-            onFailure("Allow Nearby devices permission to search for Bluetooth PCs.")
+            onFinished("Allow Nearby devices permission to search for Bluetooth PCs.")
             return
         }
         if (!bt.isEnabled) {
-            onFailure("Enable Bluetooth on your phone and PC first.")
+            onFinished("Enable Bluetooth on your phone and PC first.")
             return
         }
         stop()
         var found = false
+        var finished = false
+        // Paired PCs are already listed, so a radio problem only matters when nothing was found.
+        fun finish(failure: String) {
+            if (finished) return
+            finished = true
+            onFinished(if (found) null else failure)
+        }
         fun add(device: BluetoothDevice?) {
             if (device == null) return
             val name = runCatching { device.name }.getOrNull().orEmpty()
@@ -80,8 +87,8 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
                         runCatching { add(device) }
                     }
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                        if (!found) onFailure("No Bluetooth PCs found. Pair with the PC in Bluetooth settings and try again.")
                         stop()
+                        finish("No Bluetooth PCs found. Pair with the PC in Bluetooth settings and try again.")
                     }
                 }
             }
@@ -95,11 +102,11 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
             discoveryReceiver = receiver
             if (!bt.startDiscovery()) {
                 stop()
-                if (!found) onFailure("Bluetooth discovery could not start. Check phone Bluetooth settings.")
+                finish("Bluetooth discovery could not start. Check phone Bluetooth settings.")
             }
         } catch (_: Exception) {
             stop()
-            if (!found) onFailure("Bluetooth scan unavailable. Check Nearby devices permission.")
+            finish("Bluetooth scan unavailable. Check Nearby devices permission.")
         }
     }
 
