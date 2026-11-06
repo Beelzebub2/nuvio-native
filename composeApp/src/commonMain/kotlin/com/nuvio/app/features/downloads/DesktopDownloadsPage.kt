@@ -246,7 +246,8 @@ private fun LazyListScope.showSections(
     val seasons = uiState.completedItems.filter { it.isEpisode && it.parentMetaId == showId }
         .sortedForSeriesDownloads()
         .groupBy { it.seasonNumber ?: 0 }
-        .toSortedMap(compareBy { if (it == 0) Int.MAX_VALUE else it })
+        .toList()
+        .sortedBy { (season, _) -> if (season == 0) Int.MAX_VALUE else season }
     if (seasons.isEmpty()) {
         item(key = "empty") { PageWidth { EmptyState(stringResource(Res.string.downloads_empty_episodes), message = null) } }
         return

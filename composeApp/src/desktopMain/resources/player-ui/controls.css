@@ -256,6 +256,28 @@ button:disabled {
   will-change: opacity, transform;
 }
 
+.rtx-compare-status {
+  position: absolute;
+  top: calc(74px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 43;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(22, 22, 24, .94);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+
+.rtx-compare-status[hidden] {
+  display: none !important;
+}
+
 .player-toast-icon {
   width: 18px;
   height: 18px;
@@ -886,6 +908,7 @@ button:disabled {
 .player.pip-mode [data-command="sources"],
 .player.pip-mode [data-command="episodes"],
 .player.pip-mode [data-command="playNextEpisode"],
+.player.pip-mode .toggle-action,
 .player.pip-mode .next-episode-card,
 .player.pip-mode .skip-prompt,
 .player.pip-mode .parental-guide,
@@ -1787,6 +1810,39 @@ button:disabled {
   background: var(--theme-accent-strong);
 }
 
+.action.rtx-compare-action {
+  position: relative;
+  touch-action: none;
+}
+
+.action.rtx-compare-action[aria-pressed="true"] {
+  background: var(--theme-selected-surface);
+  color: var(--theme-text-primary);
+}
+
+.action.rtx-compare-action:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: -3px;
+}
+
+@media (min-width: 761px) {
+  .action.rtx-compare-action::after {
+    content: "RTX";
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: .02em;
+    color: var(--theme-text-primary);
+  }
+
+  .action.rtx-compare-action svg {
+    transform: translateY(-4px);
+  }
+}
+
 /* On/off buttons: dimmed icon when off, accent bar under the icon when on. */
 .action.toggle-action {
   position: relative;
@@ -1923,6 +1979,34 @@ button:disabled {
 
   .time-label {
     font-size: 18px;
+  }
+}
+
+/* Medium windows: tighten the bottom bar so the time never slides off the right edge. */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .action-pill {
+    gap: 4px;
+  }
+
+  .playback-status {
+    gap: 12px;
+  }
+
+  .volume-slider {
+    width: 96px;
+  }
+}
+
+/* The auto toggles also live in Settings, so they give way first when space runs out. */
+@media (min-width: 761px) and (max-width: 959px) {
+  .action.toggle-action {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 859px) {
+  .volume-slider {
+    width: 72px;
   }
 }
 

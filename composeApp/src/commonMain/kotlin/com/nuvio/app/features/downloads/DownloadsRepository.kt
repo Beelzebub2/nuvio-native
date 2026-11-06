@@ -2,6 +2,13 @@ package com.nuvio.app.features.downloads
 
 import com.nuvio.app.features.player.addonSubtitleRequests
 import com.nuvio.app.features.streams.StreamItem
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +38,8 @@ object DownloadsRepository {
     private var ordinal = 0L
     private var hasLoaded = false
     private var loadedProfile: Int? = null
+    private val desktopVerificationScope = CoroutineScope(SupervisorJob() + DownloadDesktopFeatures.verificationDispatcher())
+    private var desktopVerificationJob: Job? = null
 
     fun ensureLoaded() = synchronized(lock) { if (!hasLoaded) loadFromDisk() }
     fun onProfileChanged() = synchronized(lock) { loadFromDisk() }
@@ -172,8 +181,14 @@ object DownloadsRepository {
 
     fun playableLocalFileUri(item: DownloadItem): String? = synchronized(lock) {
         ensureLoaded()
-        if (item.status != DownloadStatus.Completed) return null
-        DownloadsPlatformDownloader.resolveLocalFileUri(item.localFileUri, item.fileName)
+        // Callers may retain an item from before a profile switch. Resolve only an
+        // entry belonging to the currently loaded queue, after its scan completes.
+        val current = _uiState.value.items.firstOrNull {
+            it.id == item.id && it.logicalContentKey == item.logicalContentKey
+        } ?: return null
+        if (current.status != DownloadStatus.Completed ||
+            current.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE) return null
+        DownloadsPlatformDownloader.resolveLocalFileUri(current.localFileUri, current.fileName)
     }
 
     fun enqueueFromStream(contentType: String, videoId: String, parentMetaId: String, parentMetaType: String,
@@ -181,9 +196,19 @@ object DownloadsRepository {
         episodeTitle: String?, episodeThumbnail: String?, stream: StreamItem): DownloadEnqueueResult = synchronized(lock) {
         ensureLoaded()
         val direct = stream.playableDirectUrl?.trim()
-        val torrent = if (isDesktop && direct == null) stream.p2pInfoHash else null
+        val torrent = if (DownloadsPlatformDownloader.supportsTorrentDownloads && direct == null)
+            stream.p2pInfoHash else null
+        // Desktop's existing native-download behavior is unchanged; Android
+        // requires the user to explicitly enable its P2P feature.
+        if (torrent != null && !isDesktop) {
+            com.nuvio.app.features.p2p.P2pSettingsRepository.ensureLoaded()
+            if (!com.nuvio.app.features.p2p.P2pSettingsRepository.isVisible ||
+                !com.nuvio.app.features.p2p.P2pSettingsRepository.uiState.value.p2pEnabled)
+                return DownloadEnqueueResult.P2pDisabled
+        }
         if (direct == null && torrent == null) return DownloadEnqueueResult.MissingUrl
         if (direct != null && !direct.isSupportedDownloadUrl()) return DownloadEnqueueResult.UnsupportedFormat
+        val filenames = stream.downloadTorrentFilenameHints()
         val item = newItem(contentType, videoId, parentMetaId, parentMetaType, title, logo, poster, background,
             seasonNumber, episodeNumber, episodeTitle, episodeThumbnail, direct.orEmpty(), stream.streamLabel,
             stream.addonName, stream.addonId).copy(
@@ -192,7 +217,8 @@ object DownloadsRepository {
                 sourceResponseHeaders = sanitizeResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
                 sourceSubtitles = stream.externalSubtitles,
                 torrentHash = torrent, torrentFileIdx = stream.p2pFileIdx,
-                torrentFilename = stream.behaviorHints.filename, torrentTrackers = stream.p2pTrackers,
+                torrentFilename = filenames.firstOrNull(), torrentFilenameAlternates = filenames.drop(1),
+                torrentTrackers = stream.p2pTrackers,
             )
         val existing = _uiState.value.items.firstOrNull { it.logicalContentKey == item.logicalContentKey }
         // A manually picked source replaces a failed or still-automatic task. Desktop keeps finished
@@ -208,8 +234,12 @@ object DownloadsRepository {
     }
 
     internal fun enqueueBatch(meta: com.nuvio.app.features.details.MetaDetails,
-        episodes: List<com.nuvio.app.features.details.MetaVideo>, selection: DownloadSourceSelection): Int = synchronized(lock) {
+        episodes: List<com.nuvio.app.features.details.MetaVideo>, selection: DownloadSourceSelection,
+        retryFailed: Boolean = true, expectedProfileId: Int? = null): Int = synchronized(lock) {
+        if (expectedProfileId != null && expectedProfileId !=
+            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) return@synchronized 0
         ensureLoaded()
+        if (expectedProfileId != null && loadedProfile != expectedProfileId) return@synchronized 0
         val items = episodes.map { episode ->
             newItem(meta.type, episode.id, meta.id, meta.type, meta.name, meta.logo, meta.poster, meta.background,
                 episode.season, episode.episode, episode.title, episode.thumbnail, "", "Automatic selection", "", selection.providerId)
@@ -217,11 +247,37 @@ object DownloadsRepository {
         }
         // Queuing a season again retries its failed episodes with the new source preferences.
         val keys = items.map { it.logicalContentKey }.toSet()
-        _uiState.value.items.filter { it.logicalContentKey in keys && it.status == DownloadStatus.Failed }.forEach(::removeItem)
+        if (retryFailed) _uiState.value.items.filter {
+            it.logicalContentKey in keys && it.status == DownloadStatus.Failed
+        }.forEach(::removeItem)
         val existingKeys = _uiState.value.items.map { it.logicalContentKey }.toSet()
         val fresh = items.filter { it.logicalContentKey !in existingKeys }.distinctBy { it.logicalContentKey }
         addItems(fresh)
         fresh.size
+    }
+
+    /** Retry a failed automatic-source task in place, without deleting a manually selected file. */
+    internal fun retryFailedAutomatic(
+        meta: com.nuvio.app.features.details.MetaDetails,
+        video: com.nuvio.app.features.details.MetaVideo,
+        expectedProfileId: Int,
+    ): Boolean = synchronized(lock) {
+        if (com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized false
+        ensureLoaded()
+        if (loadedProfile != expectedProfileId) return@synchronized false
+        val failed = _uiState.value.items.firstOrNull { item ->
+            item.parentMetaId == meta.id.trim() && item.parentMetaType == meta.type &&
+                (if (video.season != null && video.episode != null) {
+                    item.seasonNumber == video.season && item.episodeNumber == video.episode
+                } else item.videoId == video.id) &&
+                item.status == DownloadStatus.Failed && item.sourceSelection != null
+        } ?: return@synchronized false
+        mutateItem(failed.id) {
+            it.copy(status = DownloadStatus.Downloading, phase = if (isDesktop) "Queued" else null,
+                errorMessage = null, localFileUri = null)
+        }
+        pumpQueue()
+        true
     }
 
     private fun newItem(type: String, videoId: String, parentId: String, parentType: String, title: String,
@@ -300,6 +356,40 @@ object DownloadsRepository {
         removeItems(_uiState.value.items.filter { it.id in downloadIds })
     }
 
+    /**
+     * A storage preview is not authority to delete a file. Recheck the live
+     * profile, status, active handles and owned file path while holding the
+     * queue lock after the user confirms the exact selection.
+     */
+    internal fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        synchronized(lock) {
+            removeVerifiedDownloadsLocked(downloadIds, expectedProfileId)
+        }
+
+    /** Re-evaluate watched status and file ownership when the confirmation is accepted. */
+    internal fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        synchronized(lock) {
+            if (!hasLoaded || loadedProfile != expectedProfileId ||
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized 0
+            val watchedIds = watchedDownloadedEpisodeIds(
+                _uiState.value.items,
+                com.nuvio.app.features.watched.WatchedRepository.uiState.value.watchedKeys,
+                com.nuvio.app.features.watchprogress.WatchProgressRepository.uiState.value.entries,
+            )
+            removeVerifiedDownloadsLocked(downloadIds.intersect(watchedIds), expectedProfileId)
+        }
+
+    private fun removeVerifiedDownloadsLocked(downloadIds: Set<String>, expectedProfileId: Int): Int {
+        if (!hasLoaded || loadedProfile != expectedProfileId ||
+            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return 0
+        val safe = _uiState.value.items.filter { item ->
+            item.id in downloadIds && item.id !in activeHandles &&
+                item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+        }
+        removeItems(safe)
+        return safe.size
+    }
+
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
 
     private fun removeItems(items: List<DownloadItem>) {
@@ -324,6 +414,8 @@ object DownloadsRepository {
 
     private fun invalidateTransfers() {
         generation++
+        desktopVerificationJob?.cancel()
+        desktopVerificationJob = null
         tokens.clear()
         activeHandles.values.forEach(DownloadsTaskHandle::detach)
         activeHandles.clear()
@@ -339,17 +431,14 @@ object DownloadsRepository {
             hadStoredPayload = payload != null
             val stored = DownloadsCodec.decodeItems(payload)
                 .map(DownloadsPlatformDownloader::restoreItem)
-            // A profile can only regain downloads from its own saved task IDs on load.
-            // Importing other identities from a shared folder requires an explicit picker/import.
-            val verified = if (isDesktop) DownloadDesktopFeatures.reconcileKnownDownloads(
-                stored, DownloadDesktopFeatures.directory(), includeDiscovered = false,
-            ) else stored
-            verified.map { restored ->
-                // Retry re-adopts a proven file in place once a desktop drive is reconnected.
-                if (isDesktop && restored.status == DownloadStatus.Completed && !restored.hasPlayableLocalFile()) {
-                    restored.copy(status = DownloadStatus.Failed, errorMessage = "Downloaded file is missing or its drive is unavailable")
-                } else restored
-            }
+            // A downloaded episode may be tens of GB. Restoring its metadata must not
+            // hash those bytes while the profile gate waits for this lock. The IO
+            // verifier below checks content before it becomes available for playback.
+            if (isDesktop) stored.map { restored ->
+                if (restored.status == DownloadStatus.Completed)
+                    restored.copy(phase = SAVED_DOWNLOAD_VERIFICATION_PHASE)
+                else restored
+            } else stored
         } catch (error: Exception) {
             // A damaged queue must never be decoded as empty and saved over the
             // original. Keep the last displayed snapshot without publishing a
@@ -365,12 +454,59 @@ object DownloadsRepository {
         // that distinction to decide whether to repopulate locally saved downloads.
         if (hadStoredPayload) persist()
         pumpQueue()
+        if (isDesktop) verifyRestoredDesktopDownloads(items, profile, generation)
+    }
+
+    /** Check each saved final file off the launch path and without holding the queue lock. */
+    private fun verifyRestoredDesktopDownloads(items: List<DownloadItem>, profile: Int, expectedGeneration: Long) {
+        val pending = items.filter {
+            it.status == DownloadStatus.Completed && it.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE
+        }
+        if (pending.isEmpty()) return
+        val folder = DownloadDesktopFeatures.directory()
+        desktopVerificationJob = desktopVerificationScope.launch {
+            val verificationJob = currentCoroutineContext()[Job]
+            for (original in pending) {
+                currentCoroutineContext().ensureActive()
+                val checked = try {
+                    // A single episode is verified at a time so a large library does
+                    // not saturate the disk with competing full-file reads.
+                    val recovered = DownloadDesktopFeatures.reconcileKnownDownloads(
+                        listOf(original), folder, includeDiscovered = false,
+                        verifyActive = { verificationJob?.isActive == true },
+                    ).firstOrNull() ?: original
+                    currentCoroutineContext().ensureActive()
+                    if (recovered.status == DownloadStatus.Completed &&
+                        (recovered.phase == SAVED_DOWNLOAD_VERIFICATION_PHASE || !recovered.hasPlayableLocalFile())) {
+                        recovered.copy(status = DownloadStatus.Failed, phase = null,
+                            errorMessage = "Downloaded file is missing or its drive is unavailable")
+                    } else recovered.copy(phase = null)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    // Never delete an unverified file or overwrite the whole queue.
+                    original.copy(status = DownloadStatus.Failed, phase = null,
+                        errorMessage = "Saved download could not be verified; reconnect its drive and retry")
+                }
+                synchronized(lock) {
+                    if (!hasLoaded || loadedProfile != profile || generation != expectedGeneration ||
+                        com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != profile) return@synchronized
+                    val current = _uiState.value.items
+                    // A transfer, folder recovery, sign-out or account import may have
+                    // changed this record while hashing. Never overwrite newer state.
+                    val updated = current.map { item -> if (item == original) checked else item }
+                    if (updated != current) {
+                        publish(updated)
+                        persist()
+                    }
+                }
+            }
+        }
     }
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
 
     private fun pumpQueue() {
-        val limit = if (isDesktop) DownloadDesktopFeatures.parallelDownloads() else Int.MAX_VALUE
+        val limit = DownloadDesktopFeatures.parallelDownloads()
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
             .take((limit - activeHandles.size).coerceAtLeast(0)).forEach { startDownload(it) }
     }
@@ -398,7 +534,8 @@ object DownloadsRepository {
                 sourceUrl = resolved.sourceUrl, sourceHeaders = resolved.sourceHeaders,
                 sourceSubtitles = resolved.sourceSubtitles, torrentHash = resolved.torrentHash,
                 torrentFileIdx = resolved.torrentFileIdx, torrentFilename = resolved.torrentFilename,
-                torrentTrackers = resolved.torrentTrackers, phase = "Connecting") }
+                torrentFilenameAlternates = resolved.torrentFilenameAlternates,
+                torrentTrackers = resolved.torrentTrackers, phase = resolved.phase ?: "Connecting") }
         } }),
             onProgress = { bytes, total -> synchronized(lock) {
                 if (current()) {
@@ -412,7 +549,8 @@ object DownloadsRepository {
                         else -> "Downloading"
                     }
                     mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
-                        phase = phase, bytesPerSecond = speed, updatedAtEpochMs = now) }
+                        phase = if (!isDesktop && DownloadsPlatformDownloader.supportsTorrentDownloads) it.phase else phase,
+                        bytesPerSecond = speed, updatedAtEpochMs = now) }
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,
@@ -448,6 +586,7 @@ object DownloadsRepository {
             DownloadsStorage.savePayload(DownloadsCodec.encodeItems(_uiState.value.items))
     }
     private fun DownloadItem.hasPlayableLocalFile(): Boolean = status == DownloadStatus.Completed &&
+        phase != SAVED_DOWNLOAD_VERIFICATION_PHASE &&
         DownloadsPlatformDownloader.resolveLocalFileUri(localFileUri, fileName) != null
 }
 
@@ -571,11 +710,11 @@ private fun String.fileExtensionFromUrl(): String {
     }
 }
 
-private fun String.isSupportedDownloadUrl(): Boolean {
+internal fun String.isSupportedDownloadUrl(): Boolean {
     val normalized = trim().lowercase()
-    if (normalized.startsWith("magnet:")) return false
-    if (normalized.endsWith(".m3u8") || normalized.contains(".m3u8?")) return false
-    if (normalized.endsWith(".mpd") || normalized.contains(".mpd?")) return false
-    if (normalized.endsWith(".torrent") || normalized.contains(".torrent?")) return false
-    return normalized.startsWith("http://") || normalized.startsWith("https://")
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) return false
+    // A fragment is not part of the resource path. Playlist/torrent URLs with
+    // fragments must not be passed to the plain-file downloader as video files.
+    val path = normalized.substringBefore('?').substringBefore('#')
+    return !path.endsWith(".m3u8") && !path.endsWith(".mpd") && !path.endsWith(".torrent")
 }

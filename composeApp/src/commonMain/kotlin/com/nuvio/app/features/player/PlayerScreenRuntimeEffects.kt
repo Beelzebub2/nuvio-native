@@ -1,6 +1,8 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
+import com.nuvio.app.core.diagnostics.UsageEvent
 import com.nuvio.app.core.ui.NuvioToastController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.shuffle.EpisodeShuffleRepository
@@ -15,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.myanimelist.isLikelyMyAnimeListAnime
+import com.nuvio.app.features.myanimelist.markMyAnimeListRewatchOnPlayback
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.p2p.P2pStreamingState
@@ -47,6 +51,20 @@ import org.jetbrains.compose.resources.getString
 
 @Composable
 internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
+    var playbackReadyReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    var playbackFailedReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    LaunchedEffect(activePlaybackKey, playbackSnapshot.isPlaying) {
+        if (playbackSnapshot.isPlaying && !playbackReadyReported) {
+            playbackReadyReported = true
+            UsageDiagnostics.track(UsageEvent.PlaybackReady)
+        }
+    }
+    LaunchedEffect(activePlaybackKey, errorMessage) {
+        if (errorMessage != null && !playbackFailedReported) {
+            playbackFailedReported = true
+            UsageDiagnostics.track(UsageEvent.PlaybackFailed)
+        }
+    }
     val currentFeedback = liveGestureFeedback ?: gestureFeedback
     LaunchedEffect(currentFeedback) {
         if (currentFeedback != null) {
@@ -73,6 +91,28 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         }
     }
 
+    // Opening details, choosing a source, or preloading a video must never alter the MAL list.
+    // Run only after playback has actually started; per-playback dedup avoids requests on resume.
+    val malRewatchAttempted = remember { mutableSetOf<String>() }
+    LaunchedEffect(
+        profileId, parentMetaType, parentMetaId, activePlaybackKey,
+        playerMeta, playbackSnapshot.isPlaying, playbackSnapshot.isLoading,
+    ) {
+        val meta = playerMeta
+        if (!isDesktop || !playbackSnapshot.isPlaying || playbackSnapshot.isLoading ||
+            meta == null || !isLikelyMyAnimeListAnime(meta)) return@LaunchedEffect
+        val key = "$profileId:$parentMetaType:$parentMetaId:$activePlaybackKey"
+        if (key in malRewatchAttempted) return@LaunchedEffect
+        try {
+            markMyAnimeListRewatchOnPlayback(meta, profileId)
+            malRewatchAttempted += key
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Playback must continue even if the connected tracking service is unavailable.
+        }
+    }
+
     LaunchedEffect(currentStreamBingeGroup, parentMetaId) {
         val bg = currentStreamBingeGroup
         if (bg != null && parentMetaId.isNotBlank()) {
@@ -96,6 +136,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         credentialRefreshJob = null
         credentialRefreshAttemptedSourceUrl = null
         initialLoadCompleted = false
+        hasPlaybackStarted = false
         lastProgressPersistEpochMs = 0L
         previousIsPlaying = false
         pendingSeekScrobbleRestart = false
@@ -398,17 +439,15 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
         lockedOverlayVisible = false
     }
 
-    LaunchedEffect(
-        playerSettingsUiState.pauseOverlayEnabled,
-        playbackSnapshot.isPlaying,
-        playbackSnapshot.isLoading,
-        playbackSnapshot.durationMs,
-        errorMessage,
-    ) {
+    val pauseMetadataEligible = pauseMetadataEligible(
+        enabled = playerSettingsUiState.pauseOverlayEnabled,
+        hasPlaybackStarted = hasPlaybackStarted,
+        snapshot = playbackSnapshot,
+        hasError = errorMessage != null,
+    )
+    LaunchedEffect(pauseMetadataEligible) {
         pausedOverlayVisible = false
-        if (!playerSettingsUiState.pauseOverlayEnabled || playbackSnapshot.isPlaying || playbackSnapshot.isLoading || playbackSnapshot.durationMs <= 0L || errorMessage != null) {
-            return@LaunchedEffect
-        }
+        if (!pauseMetadataEligible) return@LaunchedEffect
         delay(5000)
         pausedOverlayVisible = true
     }

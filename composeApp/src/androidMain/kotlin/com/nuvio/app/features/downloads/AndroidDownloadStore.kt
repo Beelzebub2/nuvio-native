@@ -16,6 +16,8 @@ internal data class AndroidDownloadTransfer(
     val jobId: Int,
     val generation: String,
     val validator: String? = null,
+    /** Native infohash + metadata file index/path/size that proves .part ownership on resume. */
+    val torrentIdentity: String? = null,
     val retryCount: Int = 0,
 )
 
@@ -34,7 +36,13 @@ internal class AndroidDownloadStore(private val directory: File) {
             item = item.copy(status = DownloadStatus.Downloading, errorMessage = null, localFileUri = null),
             jobId = previous?.jobId ?: ((state.value.values.maxOfOrNull { it.jobId } ?: 0) + 1),
             generation = UUID.randomUUID().toString(),
-            validator = previous?.validator,
+            validator = previous?.validator?.takeIf { previous.item.sourceUrl == item.sourceUrl &&
+                previous.item.torrentHash == item.torrentHash },
+            torrentIdentity = previous?.takeIf { old ->
+                item.sourceUrl.isBlank() && item.torrentHash != null &&
+                    old.item.sourceUrl.isBlank() &&
+                    old.item.torrentHash.equals(item.torrentHash, ignoreCase = true)
+            }?.torrentIdentity,
         )
         save(transfer)
         transfer

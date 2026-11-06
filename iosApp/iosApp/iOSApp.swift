@@ -10,7 +10,12 @@ struct iOSApp: App {
             ContentView()
                 .preferredColorScheme(.dark)
                 .onOpenURL { url in
-                    AppUrlBridgeKt.handleAppUrl(url: url.absoluteString)
+                    if url.scheme == "nuvio", url.host == "auth",
+                       url.fragment != nil || url.query != nil {
+                        StarlitOAuthDeepLinkKt.handleStarlitOAuthDeepLink(url: url.absoluteString)
+                    } else {
+                        AppUrlBridgeKt.handleAppUrl(url: url.absoluteString)
+                    }
                 }
         }
     }

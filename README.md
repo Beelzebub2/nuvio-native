@@ -53,9 +53,9 @@ Starlit runs on Windows 10 and 11 (64-bit).
 
 1. Download `Starlit-Windows-x64-<version>.exe` from [Releases](https://github.com/Beelzebub2/starlit/releases/latest).
 2. Run it. Setup installs to `%LOCALAPPDATA%\Starlit` and lets you choose the folder and shortcuts.
-3. For updates, sign in to the [GitHub CLI](https://cli.github.com/) once with `gh auth login`. Starlit checks for updates at startup, every six hours, and from Settings → About.
+3. Starlit checks public GitHub releases for updates at startup, every six hours, and from Settings → About. GitHub CLI sign-in is not needed.
 
-Settings, profiles and your library live in `%APPDATA%\NuvioNative` and are kept across updates. The [install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) covers silent installs, the update token, and moving over from Nuvio Native.
+Settings, profiles and your library live in `%APPDATA%\NuvioNative` and are kept across updates. The [install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) covers silent installs, update verification, and moving over from Nuvio Native.
 
 ## Build from source
 

@@ -124,12 +124,17 @@ internal object ServerDiscoveryPolicy {
         val parsed = runCatching { Url(value) }.getOrElse {
             throw ServerDiscoveryException(failure, cause = it)
         }
-        if (parsed.protocol.name != "http" && parsed.protocol.name != "https") {
+        if (parsed.protocol.name != "https" &&
+            !(parsed.protocol.name == "http" && isLocalDevelopmentHost(parsed.host))) {
             throw ServerDiscoveryException(failure)
         }
         if (parsed.host.isBlank()) throw ServerDiscoveryException(failure)
         return parsed
     }
+
+    /** Local development is the only exception; public account credentials require TLS. */
+    private fun isLocalDevelopmentHost(host: String): Boolean =
+        host.equals("localhost", ignoreCase = true) || host == "127.0.0.1" || host == "::1"
 
     private fun originOf(url: Url): String {
         val defaultPort = if (url.protocol.name == "https") 443 else 80

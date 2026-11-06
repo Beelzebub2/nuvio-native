@@ -67,7 +67,12 @@ internal object DesktopStorage {
                 .sorted(Comparator.reverseOrder())
                 .filter { it != directory && !it.startsWith(directory.resolve("anonymous-workspace")) }
                 .filter { !it.startsWith(directory.resolve("downloads")) }
-                .filter { it.fileName.toString() !in setOf("server_configuration.properties", "nuvio_sync_client_identity.properties") }
+                // A newly authenticated session must survive wiping the previous guest workspace.
+                // Supabase's sign-out and clearSession explicitly delete this separate credential.
+                .filter { it.fileName.toString() !in setOf(
+                    "server_configuration.properties", "nuvio_sync_client_identity.properties",
+                    "nuvio_remote_session.properties", "nuvio_remote_session.properties.bak",
+                ) }
                 .forEach { path -> runCatching { Files.deleteIfExists(path) } }
         }
     }
@@ -157,6 +162,28 @@ internal object DesktopStorage {
                 } else {
                     properties.setProperty(key, value) != value
                 }
+            }
+        }
+
+        /**
+         * Secret-bearing preference files may have a plaintext older generation in .bak.
+         * Once the protected primary generation is durable, replace the backup with
+         * that same protected generation; never retain historical cleartext secrets.
+         */
+        fun putProtectedString(key: String, value: String?) = synchronized(lock) {
+            ensureLoaded()
+            mutate {
+                if (value == null) properties.remove(key) != null
+                else properties.setProperty(key, value) != value
+            }
+            committed?.let { replaceSynced(backup, it) }
+        }
+
+        fun scrubProtectedBackup() = synchronized(lock) {
+            ensureLoaded()
+            committed?.let { current ->
+                val existing = runCatching { Files.readAllBytes(backup) }.getOrNull()
+                if (existing == null || !existing.contentEquals(current)) replaceSynced(backup, current)
             }
         }
 

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.app.core.ui.nuvioSwitchColors
 import com.nuvio.app.core.ui.nuvio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,24 +34,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.addons.*
 import com.nuvio.app.features.details.*
 import com.nuvio.app.features.plugins.PluginRepository
+import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.watchlater.WatchLaterRepository
 import com.nuvio.app.features.streams.streamAddonInstanceId
 import com.nuvio.app.features.streams.supportsStream
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import kotlinx.coroutines.*
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.downloads_auto_watch_later_description
+import nuvio.composeapp.generated.resources.downloads_auto_watch_later_title
+import org.jetbrains.compose.resources.stringResource
 import java.io.File
-import javax.swing.JFileChooser
-import javax.swing.SwingUtilities
-import kotlin.coroutines.resume
+import com.nuvio.app.core.ui.DesktopFileDialogs
 
 /** Choices for how many episodes download at once; a few keep the connection busy when one source slows. */
 internal val ParallelDownloadChoices = 1..5
 internal const val DefaultParallelDownloads = 3
 
 internal actual object DownloadDesktopFeatures {
+    actual fun verificationDispatcher(): CoroutineDispatcher = Dispatchers.IO
     private val store by lazy { DesktopStorage.store("desktop_download_preferences") }
     actual fun directory(): String? = store.getString("folder") ?: legacyDownloadsDirectory.also { it.mkdirs() }.absolutePath
     internal fun setDirectory(folder: File) {
@@ -62,12 +70,15 @@ internal actual object DownloadDesktopFeatures {
         val folder = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return
         if (folder.isDirectory && folder.canWrite()) setDirectory(folder)
     }
-    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean): List<DownloadItem> {
+    actual fun reconcileKnownDownloads(items: List<DownloadItem>, path: String?, includeDiscovered: Boolean,
+        verifyActive: () -> Boolean): List<DownloadItem> {
         val verified = items.map { item ->
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             // Only the item's saved task directory and verified owner/content proof
             // authorize a completed file. A legacy filename alone is insufficient.
             val playable = if (item.status == DownloadStatus.Completed)
-                runCatching { recoverFinalDownload(item) }.getOrNull() else null
+                runCatching { recoverFinalDownload(item, verifyActive) }.getOrNull() else null
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             if (playable != null) {
                 recordDesktopDownloadIdentity(item)
                 item.copy(
@@ -79,8 +90,8 @@ internal actual object DownloadDesktopFeatures {
                 // The account may already have another preferred download directory.
                 // Recover guest-owned files in their saved location before trying the
                 // newly selected folder; never change the account's destination.
-                recoverKnownDesktopDownload(item, item.destinationDirectory)
-                    ?: recoverKnownDesktopDownload(item, path)
+                recoverKnownDesktopDownload(item, item.destinationDirectory, verifyActive)
+                    ?: recoverKnownDesktopDownload(item, path, verifyActive)
                     ?: item
             }
         }
@@ -92,6 +103,7 @@ internal actual object DownloadDesktopFeatures {
             usedIds.add(item.id)
         }
         discoverDesktopDownloads(path).forEach { found ->
+            if (!verifyActive()) throw CancellationException("Saved download verification cancelled")
             val previous = byKey[found.logicalContentKey]
             if (previous == null) {
                 if (usedIds.add(found.id)) byKey[found.logicalContentKey] = found
@@ -116,6 +128,14 @@ internal actual object DownloadDesktopFeatures {
         DownloadsRepository.onParallelLimitChanged()
     }
 
+    internal fun autoDownloadWatchLater(profileId: Int = ProfileRepository.activeProfileId): Boolean =
+        store.getBoolean(ProfileScopedKey.of("auto_download_watch_later", profileId)) ?: false
+
+    internal fun setAutoDownloadWatchLater(enabled: Boolean, profileId: Int = ProfileRepository.activeProfileId) {
+        store.putBoolean(ProfileScopedKey.of("auto_download_watch_later", profileId), enabled)
+        WatchLaterRepository.onAutoDownloadPreferenceChanged(profileId, enabled)
+    }
+
     /** The provider, quality and source type chosen last time, so the dialog opens on them. */
     internal fun lastSelection() = DownloadSourceSelection(
         providerId = store.getString("provider"),
@@ -134,6 +154,8 @@ internal actual object DownloadDesktopFeatures {
     val tokens = MaterialTheme.nuvio
     val scope = rememberCoroutineScope()
     val state by DownloadsRepository.uiState.collectAsState()
+    val profileId = state.profileId ?: ProfileRepository.activeProfileId
+    var autoWatchLater by remember(profileId) { mutableStateOf(DownloadDesktopFeatures.autoDownloadWatchLater(profileId)) }
     var folder by remember { mutableStateOf(DownloadDesktopFeatures.directory().orEmpty()) }
     var parallel by remember { mutableStateOf(DownloadDesktopFeatures.parallelDownloads()) }
     var picking by remember { mutableStateOf(false) }
@@ -242,6 +264,30 @@ internal actual object DownloadDesktopFeatures {
             if (!narrow) picker()
         }
         if (narrow) picker()
+        HorizontalDivider(color = tokens.colors.borderSubtle)
+        Row(
+            modifier = Modifier.fillMaxWidth().toggleable(
+                value = autoWatchLater,
+                role = Role.Switch,
+                onValueChange = { enabled ->
+                    try {
+                        DownloadDesktopFeatures.setAutoDownloadWatchLater(enabled, profileId)
+                        autoWatchLater = enabled
+                        error = null
+                    } catch (e: Exception) { error = e.message ?: "Couldn't save download setting" }
+                },
+            ),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.DownloadForOffline, null, tint = tokens.colors.textSecondary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(Res.string.downloads_auto_watch_later_title), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(Res.string.downloads_auto_watch_later_description),
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
+            }
+            Switch(checked = autoWatchLater, onCheckedChange = null, colors = nuvioSwitchColors())
+        }
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger) }
         recoveredNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted) }
     }
@@ -273,14 +319,8 @@ private fun ParallelDownloadsPicker(value: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-internal suspend fun chooseDownloadFolder(current: String): File? = suspendCancellableCoroutine { continuation ->
-    SwingUtilities.invokeLater {
-        if (!continuation.isActive) return@invokeLater
-        val chooser = JFileChooser(current).apply { fileSelectionMode = JFileChooser.DIRECTORIES_ONLY; dialogTitle = "Choose download folder" }
-        val selected = if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
-        if (continuation.isActive) continuation.resume(selected)
-    }
-}
+internal suspend fun chooseDownloadFolder(current: String): File? =
+    DesktopFileDialogs.folder("Choose download folder", current)
 
 internal fun batchDownloadEpisodes(meta: MetaDetails, selectedIds: Set<String>, today: String): List<MetaVideo> =
     meta.videos.filter { downloadEpisodeKey(it) in selectedIds && it.id.isNotBlank() && it.isReleasedBy(today) }

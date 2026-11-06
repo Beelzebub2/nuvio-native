@@ -115,8 +115,15 @@ actual suspend fun httpRequestRaw(
     followRedirects: Boolean,
     maxResponseBodyBytes: Int,
     bodyBytes: ByteArray?,
+    privateNetworkDenied: Boolean,
 ): RawHttpResponse = withContext(Dispatchers.IO) {
-    val client = if (followRedirects) {
+    val client = if (privateNetworkDenied) {
+        desktopHttpClient.newBuilder()
+            .dns(PluginPublicDns)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+    } else if (followRedirects) {
         desktopHttpClient
     } else {
         desktopHttpClient.newBuilder()

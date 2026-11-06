@@ -73,6 +73,7 @@ private fun PlayerScreenRuntime.prepareP2pReconnect() {
     playbackSnapshotKey = null
     errorMessage = null
     initialLoadCompleted = false
+    hasPlaybackStarted = false
     isScrubbingTimeline = false
     scrubbingPositionMs = null
     cancelNextEpisodeAutoPlay()

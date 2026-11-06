@@ -1,0 +1,6 @@
+package com.nuvio.app.features.remote
+
+import androidx.compose.runtime.Composable
+
+@Composable
+internal actual fun rememberRemoteBluetoothSearch(): (() -> Unit)? = null

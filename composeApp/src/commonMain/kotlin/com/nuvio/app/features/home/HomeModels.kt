@@ -48,6 +48,7 @@ fun HomeCatalogSection.canOpenCatalog(previewLimit: Int): Boolean =
 
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val heroFallbackLoading: Boolean = false,
     val heroItems: List<MetaPreview> = emptyList(),
     val sections: List<HomeCatalogSection> = emptyList(),
     val errorMessage: String? = null,
@@ -64,7 +65,7 @@ internal fun shouldShowHomeHeroSlot(
     hasHeroItems: Boolean,
     isResolvingHeroSources: Boolean,
     hasRenderableHomeRows: Boolean,
-): Boolean = heroEnabled && (hasHeroItems || isResolvingHeroSources || hasRenderableHomeRows)
+): Boolean = heroEnabled && (hasHeroItems || isResolvingHeroSources)
 
 internal data class CatalogRequest(
     val addon: ManagedAddon,

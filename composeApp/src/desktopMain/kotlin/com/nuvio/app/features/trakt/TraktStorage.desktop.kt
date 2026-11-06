@@ -1,6 +1,7 @@
 package com.nuvio.app.features.trakt
 
 import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.storage.DesktopCredentialProtection
 import com.nuvio.app.core.storage.ProfileScopedKey
 
 internal actual object TraktAuthStorage {
@@ -9,11 +10,11 @@ internal actual object TraktAuthStorage {
     private const val payloadKey = "trakt_auth_payload"
 
     actual fun loadPayload(profileId: Int): String? =
-        store.getString(ProfileScopedKey.of(payloadKey, profileId))
+        DesktopCredentialProtection.read(store, ProfileScopedKey.of(payloadKey, profileId))
             ?: migrateLegacyPrimaryProfilePayload(profileId)
 
     actual fun savePayload(profileId: Int, payload: String) {
-        store.putString(ProfileScopedKey.of(payloadKey, profileId), payload)
+        DesktopCredentialProtection.write(store, ProfileScopedKey.of(payloadKey, profileId), payload)
     }
 
     actual fun removeProfile(profileId: Int) {
@@ -23,7 +24,7 @@ internal actual object TraktAuthStorage {
     private fun migrateLegacyPrimaryProfilePayload(profileId: Int): String? {
         if (profileId != 1) return null
         val payload = store.getString(legacyPayloadKey)?.takeIf { it.isNotBlank() } ?: return null
-        store.putString(ProfileScopedKey.of(payloadKey, profileId), payload)
+        DesktopCredentialProtection.write(store, ProfileScopedKey.of(payloadKey, profileId), payload)
         store.remove(legacyPayloadKey)
         return payload
     }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.CollectionsBookmark
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Favorite
@@ -58,6 +59,7 @@ internal sealed class SettingsSearchTarget {
     object SwitchProfile : SettingsSearchTarget()
     object CheckForUpdates : SettingsSearchTarget()
     object Changelog : SettingsSearchTarget()
+    object DesktopRemote : SettingsSearchTarget()
 }
 
 internal data class SettingsSearchEntry(
@@ -207,6 +209,18 @@ internal fun settingsSearchEntries(
         category = accountCategory,
         icon = Icons.Rounded.AccountCircle,
     )
+    if (!isDesktop) {
+        add(
+            key = "pc-controller",
+            title = stringResource(Res.string.remote_pc_controller_title),
+            description = stringResource(Res.string.remote_pc_controller_description),
+            page = accountPage,
+            section = stringResource(Res.string.compose_settings_root_account_section),
+            category = accountCategory,
+            icon = Icons.Rounded.DesktopWindows,
+            target = SettingsSearchTarget.DesktopRemote,
+        )
+    }
     addPage(
         page = SettingsPage.TraktAuthentication,
         key = "tracking",
@@ -436,6 +450,16 @@ internal fun settingsSearchEntries(
             icon = Icons.Rounded.Tune,
         )
     }
+    addRow(
+        page = SettingsPage.Advanced,
+        key = "anonymous-usage-analytics",
+        title = stringResource(Res.string.settings_advanced_usage_analytics),
+        description = stringResource(Res.string.settings_advanced_usage_analytics_subtitle),
+        pageLabel = advancedPage,
+        section = stringResource(Res.string.settings_advanced_section_diagnostics),
+        category = advancedCategory,
+        icon = Icons.Rounded.Tune,
+    )
     if (SentrySettingsRepository.isSupported) {
         addRow(
             page = SettingsPage.Advanced,

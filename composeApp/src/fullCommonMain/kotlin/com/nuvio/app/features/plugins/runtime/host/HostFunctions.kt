@@ -5,7 +5,6 @@ import com.dokar.quickjs.QuickJs
 import com.dokar.quickjs.binding.asyncFunction
 import com.dokar.quickjs.binding.define
 import com.dokar.quickjs.binding.function
-import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import kotlinx.coroutines.delay
 
 private const val MAX_PLUGIN_TIMER_DELAY_MS = 60_000L
@@ -53,7 +52,9 @@ internal class HostFunctions(
 
         runtime.function("__get_scraper_id") { scraperId }
         runtime.function("__get_scraper_settings") { scraperSettingsJson }
-        runtime.function("__get_tmdb_api_key") { TmdbSettingsRepository.effectiveApiKey() }
+        // Legacy plugin API remains defined for compatibility, but must never reveal a
+        // profile's TMDB key to downloaded JavaScript. Plugins can use public metadata.
+        runtime.function("__get_tmdb_api_key") { "" }
         runtime.function("__get_call_args") { callArgsJson }
         runtime.function("__capture_result") { args ->
             onResult(args.getOrNull(0)?.toString() ?: "[]")

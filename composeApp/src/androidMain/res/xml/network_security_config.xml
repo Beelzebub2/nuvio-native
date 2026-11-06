@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="@raw/isrg_root_x1" />
             <certificates src="@raw/isrg_root_x2" />
         </trust-anchors>
     </base-config>
+    <!-- Torrent playback is served by an app-owned loopback HTTP process. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>localhost</domain>
+        <domain>127.0.0.1</domain>
+    </domain-config>
 </network-security-config>

@@ -75,6 +75,14 @@ class HomeScreenTest {
                 hasRenderableHomeRows = false,
             ),
         )
+        assertFalse(
+            shouldShowHomeHeroSlot(
+                heroEnabled = true,
+                hasHeroItems = false,
+                isResolvingHeroSources = false,
+                hasRenderableHomeRows = true,
+            ),
+        )
     }
 
     @Test

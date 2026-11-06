@@ -61,6 +61,8 @@ internal object NativePlayerBridge {
     fun reparentSurface(handle: Long, hostViewPtr: Long): Boolean =
         runCatching { reparentSurfaceNative(handle, hostViewPtr) }.isSuccess
     external fun setPaused(handle: Long, paused: Boolean)
+    /** Windows only: switch the current video filter for a temporary RTX A/B preview. */
+    external fun setRtxCompareOriginal(handle: Long, original: Boolean): Boolean
     external fun seekTo(handle: Long, positionMs: Long)
     external fun seekBy(handle: Long, offsetMs: Long)
     external fun setSpeed(handle: Long, speed: Float)

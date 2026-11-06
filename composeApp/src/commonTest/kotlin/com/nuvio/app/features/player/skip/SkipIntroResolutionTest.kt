@@ -52,9 +52,9 @@ class SkipIntroResolutionTest {
     }
 
     @Test
-    fun alignsAllDownloadedKonosubaOpeningsToTheirOwnFiles() {
-        // Live provider responses and ffprobe chapter boundaries from S02 E2/3/4/5/8/9/10.
-        // E4 has an isolated Anime-Skip marker, and AniSkip belongs to a release shifted 15s.
+    fun alignsProviderOpeningsToMatchingMediaChapters() {
+        // Representative opening markers and matching media chapter boundaries across seven cases.
+        // One fixture has an incomplete marker and a second provider reports shifted boundaries.
         val cases = listOf(
             doubleArrayOf(107.024, 197.489, 107.0, 197.0, 107.662, 195.513),
             doubleArrayOf(54.054, 144.519, 52.0, 143.0, 54.663, 142.844),

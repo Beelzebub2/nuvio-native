@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">Изпращай доклади за сривове и ANR със защитен контекст. Изключено, докато не го включите.</string>
     <string name="theme_gold">Злато</string>
     <string name="theme_jade">Нефрит</string>
     <string name="theme_rose_gold">Розово злато</string>
@@ -549,7 +550,6 @@
     <string name="settings_advanced_remember_last_profile">Запомни последния профил</string>
     <string name="settings_advanced_remember_last_profile_description">Запомни последно избрания профил при стартиране</string>
     <string name="settings_advanced_sentry_reports">Sentry доклади за сривове</string>
-    <string name="settings_advanced_sentry_reports_subtitle">Изпращай доклади за сривове и ANR със защитен контекст. Включено по подразбиране.</string>
     <string name="sentry_enable_dialog_title">Включване на докладите за сривове?</string>
     <string name="sentry_enable_dialog_subtitle">Докладите за сривове помагат да се идентифицират проблеми, специфични за устройството, без да се налага да възпроизвеждате проблема с ADB логове.</string>
     <string name="sentry_disable_dialog_title">Изключване на докладите за сривове?</string>

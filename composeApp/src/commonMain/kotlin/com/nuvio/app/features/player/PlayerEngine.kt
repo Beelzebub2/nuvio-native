@@ -15,6 +15,8 @@ interface PlayerEngineController {
     fun retry()
     fun setPlaybackSpeed(speed: Float)
     fun setMuted(muted: Boolean) {}
+    fun setRemoteVolume(level: Float) {}
+    fun getRemoteVolume(): Float = 1f
     fun getAudioTracks(): List<AudioTrack>
     fun getSubtitleTracks(): List<SubtitleTrack>
     fun getChapterStarts(): List<Double> = emptyList()
@@ -196,6 +198,7 @@ data class PlayerControlsState(
     val themeBorderDefaultColor: String = "rgba(255, 255, 255, .12)",
     val isPlaying: Boolean = false,
     val isLoading: Boolean = false,
+    val hasPlaybackStarted: Boolean = false,
     val isLocked: Boolean = false,
     val lockedOverlayVisible: Boolean = false,
     val controlsVisible: Boolean = true,

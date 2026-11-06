@@ -65,7 +65,7 @@ class AndroidDownloadTransferTest {
             val directory = temporary.newFolder()
             File(directory, "video.mkv.part").writeText("old prefix")
             val output = transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
-                null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
+                "\"version-1\"", onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             assertEquals("replacement", output.readText())
             assertEquals("bytes=10-", server.takeRequest().getHeader("Range"))
             assertNull(server.takeRequest().getHeader("Range"))
@@ -80,9 +80,109 @@ class AndroidDownloadTransferTest {
             val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
             assertFailsWith<IOException> {
                 transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
-                    null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
+                    "\"version-1\"", onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             }
             assertEquals("hello", partial.readText())
+        }
+    }
+
+    @Test
+    fun immutableTorrentResumesWithoutHttpValidators(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/11").setBody(" world"))
+            val directory = temporary.newFolder()
+            File(directory, "video.mkv.part").writeText("hello")
+            val output = transferAndroidDownload(
+                downloadItem(server.url("/native-file").toString()), directory,
+                validator = null, expectedBytes = 11L, immutableTorrent = true,
+                onHeaders = { _, _ -> }, onProgress = { _, _ -> },
+            )
+            assertEquals("hello world", output.readText())
+            assertEquals("bytes=5-", server.takeRequest().getHeader("Range"))
+        }
+    }
+
+    @Test
+    fun noValidatorMeansNoDirectHttpResume(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("replacement"))
+            val directory = temporary.newFolder()
+            File(directory, "video.mkv.part").writeText("untrusted old prefix")
+            val output = transferAndroidDownload(
+                downloadItem(server.url("/video").toString()), directory,
+                validator = null, onHeaders = { _, _ -> }, onProgress = { _, _ -> },
+            )
+            assertEquals("replacement", output.readText())
+            assertNull(server.takeRequest().getHeader("Range"))
+        }
+    }
+
+    @Test
+    fun wrongImmutableTorrentTotalCannotAppendToPartial(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/12").setBody(" world"))
+            val directory = temporary.newFolder()
+            val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
+            assertFailsWith<IOException> {
+                transferAndroidDownload(
+                    downloadItem(server.url("/native-file").toString()), directory,
+                    validator = null, expectedBytes = 11L, immutableTorrent = true,
+                    onHeaders = { _, _ -> }, onProgress = { _, _ -> },
+                )
+            }
+            assertEquals("hello", partial.readText())
+        }
+    }
+
+    @Test
+    fun malformedRangeLengthCannotAppendToPartial(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/11").setBody("short"))
+            val directory = temporary.newFolder()
+            val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
+            assertFailsWith<IOException> {
+                transferAndroidDownload(
+                    downloadItem(server.url("/native-file").toString()), directory,
+                    validator = null, expectedBytes = 11L, immutableTorrent = true,
+                    onHeaders = { _, _ -> }, onProgress = { _, _ -> },
+                )
+            }
+            assertEquals("hello", partial.readText())
+        }
+    }
+
+    @Test
+    fun unsolicitedRangeMustStartAtZero(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/11").setBody(" world"))
+            val directory = temporary.newFolder()
+            assertFailsWith<IOException> {
+                transferAndroidDownload(
+                    downloadItem(server.url("/video").toString()), directory,
+                    validator = null, onHeaders = { _, _ -> }, onProgress = { _, _ -> },
+                )
+            }
+            assertFalse(File(directory, "video.mkv.part").exists())
+        }
+    }
+
+    @Test
+    fun unknownRangeTotalDoesNotBecomeACompletedVideo(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Range", "bytes 5-10/*").setBody(" world"))
+            val directory = temporary.newFolder()
+            val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
+            assertFailsWith<IOException> {
+                transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+                    validator = "\"version-1\"", onHeaders = { _, _ -> }, onProgress = { _, _ -> })
+            }
+            assertEquals("hello", partial.readText())
+            assertFalse(File(directory, "video.mkv").exists())
         }
     }
 

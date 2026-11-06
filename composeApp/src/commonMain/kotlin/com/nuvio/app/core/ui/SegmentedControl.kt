@@ -42,6 +42,7 @@ data class NuvioSegment<T>(
 )
 
 enum class NuvioSegmentedSize(val height: Dp, val horizontalPadding: Dp) {
+    Touch(48.dp, 14.dp),
     Regular(34.dp, 14.dp),
     Compact(30.dp, 12.dp),
     Dense(28.dp, 10.dp),

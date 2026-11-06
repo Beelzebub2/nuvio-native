@@ -3,6 +3,7 @@ package com.nuvio.app.features.collection
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.auth.LocalSettingsImport
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.features.profiles.ProfileRepository
@@ -17,10 +18,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 
 object CollectionSyncService {
@@ -46,6 +50,7 @@ object CollectionSyncService {
 
     suspend fun pullFromServer(profileId: Int) {
         if (ProfileRepository.activeProfileId != profileId) return
+        if (LocalSettingsImport.hasPendingImport(profileId)) return
         runCatching {
             val params = buildJsonObject {
                 put("p_profile_id", profileId)
@@ -102,13 +107,65 @@ object CollectionSyncService {
             if (isSyncingFromRemote) return@launch
             val authState = AuthRepository.state.value
             if (authState !is AuthState.Authenticated || authState.isAnonymous) return@launch
+            if (LocalSettingsImport.hasPendingImport(profileId)) return@launch
             pushToRemote(profileId)
+        }
+    }
+
+    /** Upload an additive guest import without deleting remote collections from another device. */
+    internal suspend fun mergeGuestCollectionsToRemote(
+        profileId: Int,
+        guestPayload: String,
+    ): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return false
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
+        return try {
+            val guest = json.decodeFromString<List<Collection>>(guestPayload)
+            val params = buildJsonObject { put("p_profile_id", profileId) }
+            val remote = SupabaseProvider.client.postgrest
+                .rpc("sync_pull_collections", params)
+                .decodeList<SupabaseCollectionBlob>()
+                .firstOrNull()?.collectionsJson
+            val remoteCollections = if (remote == null || remote == JsonNull) emptyList()
+                else json.decodeFromJsonElement<List<Collection>>(remote)
+            // Preserve account collections made locally while offline as well as
+            // collections already uploaded by other devices.
+            val localCollections = json.decodeFromString<List<Collection>>(
+                CollectionRepository.exportToJson(),
+            )
+            val combined = mergeGuestCollections(
+                mergeGuestCollections(remoteCollections, localCollections),
+                guest,
+            )
+            val combinedJson = CollectionJsonPreserver.merge(
+                json = json,
+                rawCollectionsJson = remote ?: JsonArray(emptyList()),
+                collections = combined,
+            )
+            val current = AuthRepository.state.value as? AuthState.Authenticated
+            if (current == null || current.userId != auth.userId || current.isAnonymous ||
+                ProfileRepository.activeProfileId != profileId) return false
+            SupabaseProvider.client.postgrest.rpc("sync_push_collections", buildJsonObject {
+                put("p_profile_id", profileId)
+                put("p_collections_json", combinedJson)
+                putSyncOriginClientId()
+            })
+            if (AuthRepository.state.value == current && ProfileRepository.activeProfileId == profileId) {
+                CollectionRepository.applyFromRemote(combined, combinedJson)
+            }
+            true
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            log.e(error) { "Could not merge guest collections into account; keeping pending import" }
+            false
         }
     }
 
     private suspend fun pushToRemote(profileId: Int) {
         runCatching {
             if (ProfileRepository.activeProfileId != profileId) return@runCatching
+            if (LocalSettingsImport.hasPendingImport(profileId)) return@runCatching
             val collectionsJson = CollectionRepository.exportToJson()
             if (ProfileRepository.activeProfileId != profileId) return@runCatching
             val jsonElement = runCatching {

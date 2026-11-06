@@ -11,3 +11,7 @@ internal actual fun BuiltInAiringSection(modifier: Modifier, onPosterClick: ((Me
 @Composable
 internal actual fun BuiltInAiringCatalog(window: String, onBack: () -> Unit, onPosterClick: (MetaPreview) -> Unit, onPosterLongClick: (MetaPreview) -> Unit) = Unit
 internal actual suspend fun fetchBuiltInAiringDetails(id: String): MetaDetails? = null
+
+internal actual suspend fun exportBuiltInAiringHiddenTitles(): HiddenAiringSyncState? = null
+internal actual suspend fun applyBuiltInAiringHiddenTitles(titles: kotlinx.serialization.json.JsonArray, expected: kotlinx.serialization.json.JsonArray?) = Unit
+internal actual suspend fun acknowledgeBuiltInAiringHiddenTitles(titles: kotlinx.serialization.json.JsonArray) = Unit

@@ -359,6 +359,26 @@ internal class DesktopP2pSession(
                             }
                         }
                     }
+                    if (reason == DesktopP2pRecoveryReason.NetworkChange) {
+                        // VPN/virtual adapters can change without changing the swarm's
+                        // actual route. A peer count alone is not evidence of a usable
+                        // connection: dead peers can remain listed until timeout. Only
+                        // preserve the HTTP reader if payload is actively arriving.
+                        val swarmStillDownloading = try {
+                            if (!backend.isHealthy()) false else {
+                                val stats = backend.getTorrentStats(session.hash)
+                                stats.peers > 0 && stats.downloadSpeed > 0
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            false
+                        }
+                        if (swarmStillDownloading) {
+                            log.i { "Network interfaces changed but torrent traffic continues; keeping playback" }
+                            reason = null
+                        }
+                    }
                     if (reason != null) {
                         try {
                             if (reason == DesktopP2pRecoveryReason.EngineUnavailable && ++healthRecoveries > 2) {
@@ -391,9 +411,15 @@ internal class DesktopP2pSession(
     }
 
     private suspend fun fail(currentIntent: Long, error: Exception) {
-        withContext(NonCancellable) { backend.stop() }
+        val stopFailure = withContext(NonCancellable) { runCatching { backend.stop() }.exceptionOrNull() }
         activeHash = null
-        publish(currentIntent, P2pStreamingState.Error(error.message ?: localizedP2pUnknownTorrentError()))
+        if (stopFailure != null) log.w(stopFailure) { "Torrent engine cleanup failed after playback error" }
+        // A failed child termination must stay tracked by its backend, but it
+        // cannot prevent the UI from reporting the failure to the viewer.
+        publish(currentIntent, P2pStreamingState.Error(
+            stopFailure?.message?.takeIf { it.isNotBlank() }
+                ?: error.message ?: localizedP2pUnknownTorrentError(),
+        ))
     }
 
     private fun updateStats(currentIntent: Long, stats: TorrServerStats) = synchronized(intentLock) {
@@ -404,13 +430,23 @@ internal class DesktopP2pSession(
             uploadSpeed = stats.uploadSpeed,
             peers = stats.peers,
             seeds = stats.seeds,
-            bufferProgress = stats.preloadedBytes.fractionOf(stats.torrentSize),
+            // TorrServer's preloaded_bytes is cache occupancy for the whole torrent, not
+            // continuous playable bytes ahead of this episode. The player measures its
+            // actual demuxer buffer separately; do not report a false file buffer here.
+            bufferProgress = 0f,
             totalProgress = stats.loadedSize.fractionOf(stats.torrentSize),
             downloadedBytes = stats.loadedSize,
-            verifiedBytes = stats.loadedSize,
-            deliveredBytes = stats.preloadedBytes,
+            // The API does not expose selected-file verified/delivered byte counters.
+            verifiedBytes = 0L,
+            deliveredBytes = 0L,
         )
-        _cacheState.value = P2pCacheUiState(usedBytes = stats.loadedSize, protectedBytes = stats.preloadedBytes, hasMeasurement = true)
+        // loaded_size counts all completed torrent pieces, which can vastly exceed the
+        // cache occupancy. TorrServer exposes cache Filled but not a protected subset.
+        _cacheState.value = P2pCacheUiState(
+            usedBytes = stats.preloadedBytes.coerceAtLeast(0L),
+            protectedBytes = 0L,
+            hasMeasurement = true,
+        )
     }
 
     private fun isCurrent(expected: Long): Boolean = synchronized(intentLock) { intent == expected }
@@ -426,6 +462,7 @@ internal class DesktopP2pSession(
         val filename = request.filename
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90)
         var files: List<TorrServerFile> = emptyList()
+        var metadataReady = false
 
         while (true) {
             ensureCurrent(intent)
@@ -447,12 +484,21 @@ internal class DesktopP2pSession(
                 delay(1_000L)
                 continue
             }
-            if (files.isNotEmpty()) break
+            // TorrServer may expose placeholder file_stats before torrent metadata has
+            // supplied the video names and sizes. Selecting from that partial list can
+            // fail a healthy stream before the real episode is discoverable.
+            val videos = files.filter { file ->
+                file.path.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS
+            }
+            metadataReady = files.isNotEmpty() && videos.none { it.length <= 0L } &&
+                files.none { it.path.isBlank() && it.length > 0L } &&
+                (videos.isNotEmpty() || files.all { it.path.isNotBlank() })
+            if (metadataReady) break
             log.d { "Waiting for torrent metadata..." }
             delay(1_000L)
         }
 
-        if (files.isEmpty()) {
+        if (!metadataReady) {
             throw P2pStreamingException("Torrent metadata timed out after 90 seconds. Check peers or choose another source.")
         }
 

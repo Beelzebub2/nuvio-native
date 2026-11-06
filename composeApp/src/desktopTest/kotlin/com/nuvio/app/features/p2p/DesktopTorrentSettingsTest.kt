@@ -41,6 +41,31 @@ class DesktopTorrentSettingsTest {
         }
     }
 
+    @Test fun playbackPreloadIsSizedForLargeEpisodesWithoutScalingLinearlyWithDiskCache() {
+        val expectedDisk = mapOf(
+            P2pCacheSize.GB_2 to 6,
+            P2pCacheSize.GB_5 to 3,
+            P2pCacheSize.GB_10 to 1,
+        )
+        expectedDisk.forEach { (size, percent) ->
+            val config = desktopTorrentSettings(defaults, P2pSettingsUiState(cacheSize = size), "C:/playback-cache")
+            assertEquals(percent, config.getValue("PreloadCache").jsonPrimitive.int)
+            val preloadBytes = size.bytes * percent / 100
+            assertTrue(preloadBytes in 96L * 1024 * 1024..160L * 1024 * 1024)
+        }
+        val expectedMemory = mapOf(
+            P2pTorrentProfile.SOFT to 50,
+            P2pTorrentProfile.BALANCED to 50,
+            P2pTorrentProfile.FAST to 25,
+        )
+        expectedMemory.forEach { (profile, percent) ->
+            val config = desktopTorrentSettings(defaults, P2pSettingsUiState(
+                torrentProfile = profile, cacheSize = P2pCacheSize.NONE,
+            ), "C:/memory-cache")
+            assertEquals(percent, config.getValue("PreloadCache").jsonPrimitive.int)
+        }
+    }
+
     @Test fun corruptSettingsAreQuarantinedByteForByteWithoutTouchingOtherFiles() {
         val directory = Files.createTempDirectory("nuvio-corrupt-settings-test").toFile()
         try {

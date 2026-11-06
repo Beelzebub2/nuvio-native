@@ -3,6 +3,7 @@ package com.nuvio.app.features.debrid
 import android.content.Context
 import android.content.SharedPreferences
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.core.storage.AndroidCredentialProtection
 import com.nuvio.app.core.sync.decodeSyncBoolean
 import com.nuvio.app.core.sync.decodeSyncInt
 import com.nuvio.app.core.sync.decodeSyncString
@@ -199,13 +200,24 @@ actual object DebridSettingsStorage {
             ?.apply()
     }
 
-    private fun loadString(key: String): String? =
-        preferences?.getString(ProfileScopedKey.of(key), null)
+    private fun loadString(key: String): String? {
+        val scopedKey = ProfileScopedKey.of(key)
+        val stored = preferences?.getString(scopedKey, null) ?: return null
+        if (!key.endsWith("_api_key") && !key.startsWith(pendingDeviceAuthorizationPrefix)) return stored
+        return runCatching {
+            AndroidCredentialProtection.reveal(scopedKey, stored).also { plain ->
+                if (!AndroidCredentialProtection.isProtected(stored)) saveString(key, plain)
+            }
+        }.getOrNull()
+    }
 
     private fun saveString(key: String, value: String) {
         preferences
             ?.edit()
-            ?.putString(ProfileScopedKey.of(key), value)
+            ?.putString(ProfileScopedKey.of(key),
+                if (key.endsWith("_api_key") || key.startsWith(pendingDeviceAuthorizationPrefix))
+                    AndroidCredentialProtection.protect(ProfileScopedKey.of(key), value)
+                else value)
             ?.apply()
     }
 

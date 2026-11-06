@@ -166,8 +166,8 @@ internal fun DesktopSourcesHeader(
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
     Column(
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -195,8 +195,8 @@ internal fun DesktopSourcesHeader(
                     .fillMaxWidth()
                     .background(colors.surface.copy(alpha = 0.6f), RoundedCornerShape(NuvioTokens.Radius.xl))
                     .border(NuvioTokens.Border.thin, colors.accent.copy(alpha = 0.7f), RoundedCornerShape(NuvioTokens.Radius.xl))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -230,6 +230,7 @@ internal fun DesktopSourcesHeader(
                     showFileSizeBadges = badgeSettings.showFileSizeBadges,
                     showAddonLogo = badgeSettings.showAddonLogo,
                     badgePlacement = badgeSettings.badgePlacement,
+                    compact = true,
                     onClick = { onPlay(match.stream) },
                     onSecondaryClick = { position -> onStreamSecondaryClick(match.stream, position) },
                 )

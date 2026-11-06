@@ -9,10 +9,14 @@ internal object SentryEventSanitizer {
     )
 
     fun sanitize(event: SentryEvent): SentryEvent? {
+        val drop = shouldDrop(event)
         event.request = null
         event.user = null
         event.serverName = null
-        return if (shouldDrop(event)) null else event
+        event.message = null
+        event.transaction = null
+        event.exceptions?.forEach { exception -> exception.value = null }
+        return if (drop) null else event
     }
 
     private fun shouldDrop(event: SentryEvent): Boolean =

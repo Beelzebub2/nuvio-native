@@ -202,7 +202,7 @@ fun DetailSeriesContent(
                 summary = currentSeasonSummary,
             )
 
-            if (isDesktop) com.nuvio.app.features.downloads.BatchDownloadAction(meta, currentSeason)
+            if (!com.nuvio.app.isIos) com.nuvio.app.features.downloads.BatchDownloadAction(meta, currentSeason)
 
             AnimatedContent(
                 targetState = currentSeason,
@@ -848,7 +848,7 @@ private fun EpisodeHorizontalCard(
             ?.let(::formatEpisodeRating)
     }
     val formattedDate = remember(video.released) { video.released?.let { formatReleaseDateForDisplay(it) } }
-    val runtimeLabel = remember(video.runtime) { video.runtime?.takeIf { it > 0 }?.let(::formatEpisodeRuntime) }
+    val runtimeLabel = video.runtime?.takeIf { it > 0 }?.let { formatRuntimeFromMinutes(it) }
     val imageUrl = episodeArtworkUrl(video.thumbnail)
     val visibleProgressEntry = progressEntry?.takeIf { it.durationMs > 0L && !it.isCompleted }
     val progressBarHeight = 4.dp
@@ -1130,10 +1130,6 @@ private fun rememberEpisodeHorizontalCardMetrics(maxWidthDp: Float): EpisodeHori
             )
         }
     }
-}
-
-private fun formatEpisodeRuntime(runtimeMinutes: Int): String {
-    return formatRuntimeFromMinutes(runtimeMinutes)
 }
 
 @Composable

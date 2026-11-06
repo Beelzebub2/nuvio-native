@@ -864,6 +864,7 @@ public:
         eventSink = sink;
         eventMethod = method;
         hostHwnd = host;
+        rtxVideoConfigured = nvidiaRtxSuperResolutionEnabled;
 
         auto initState = std::make_shared<InitializationState>();
         auto self = shared_from_this();
@@ -1083,6 +1084,21 @@ public:
         if (!mpv) return;
         int flag = paused ? 1 : 0;
         mpvApi().setProperty(mpv, "pause", MPV_FORMAT_FLAG, &flag);
+    }
+
+    // Compare the actual frame path, without changing the saved playback preference
+    // or recreating the video/stream. mpv reconfigures its video filter at runtime.
+    // Success only means that mpv accepted the change, not that the GPU driver
+    // actually engaged RTX Video Super Resolution.
+    bool setRtxCompareOriginal(bool original) {
+        if (!rtxVideoConfigured || stopping.load()) return false;
+        std::lock_guard<std::mutex> lock(mpvMutex);
+        if (!mpv) return false;
+        return mpvApi().setPropertyString(
+            mpv,
+            "vf",
+            original ? "" : "d3d11vpp=scale=2:scaling-mode=nvidia"
+        ) >= 0;
     }
 
     bool isPaused() {
@@ -1363,6 +1379,7 @@ private:
 
     std::mutex mpvMutex;
     mpv_handle *mpv = nullptr;
+    bool rtxVideoConfigured = false;
     std::thread eventThread;
     std::atomic_bool stopping = false;
     std::atomic_bool shuttingDown = false;
@@ -1722,7 +1739,9 @@ private:
             } else {
                 setMpvOptionStringLocked("vd-lavc-software-fallback", "yes");
             }
-            setMpvOptionStringLocked("vd-lavc-threads", "4");
+            // Allow FFmpeg to select decoder threads for the actual CPU. Four
+            // hard-coded threads can bottleneck high-resolution software fallback.
+            setMpvOptionStringLocked("vd-lavc-threads", "0");
             setMpvOptionStringLocked("tone-mapping", "auto");
             setMpvOptionStringLocked("dither-depth", "auto");
             setMpvOptionStringLocked("deband", "yes");
@@ -1732,6 +1751,16 @@ private:
             setMpvOptionStringLocked("demuxer-max-back-bytes", "256MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
             setMpvOptionStringLocked("cache-secs", "36000");
+            if (sourceUrl.rfind("http://127.0.0.1:", 0) == 0 &&
+                sourceUrl.find("/stream?") != std::string::npos) {
+                // TorrServer's HTTP source can pause for new torrent pieces. Wait for a
+                // real demuxer cushion before playback and after an underrun, rather
+                // than repeatedly resuming after mpv's default one second.
+                setMpvOptionStringLocked("cache", "yes");
+                setMpvOptionStringLocked("cache-pause", "yes");
+                setMpvOptionStringLocked("cache-pause-initial", "yes");
+                setMpvOptionStringLocked("cache-pause-wait", "8");
+            }
             setMpvOptionStringLocked("hr-seek", "no");
 
             int64_t wid = (int64_t)(intptr_t)containerHwnd;
@@ -2108,10 +2137,9 @@ private:
         double effectivePosition = effectiveCachePositionSeconds();
         double cacheTime = doubleProperty("demuxer-cache-time", 0.0);
         if (std::isfinite(cacheTime) && cacheTime > 0.0) {
-            if (cacheTime >= effectivePosition - 5.0) {
-                return std::max(cacheTime - effectivePosition, 0.0);
-            }
-            return cacheTime;
+            // mpv reports the last buffered timestamp, NOT a relative duration.
+            // After a distant seek an old timestamp must never appear as seconds ahead.
+            return std::max(cacheTime - effectivePosition, 0.0);
         }
 
         double cacheDuration = doubleProperty("demuxer-cache-duration", 0.0);
@@ -2744,6 +2772,14 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setPaused(JNIEnv *
     if (player) player->setPaused(paused == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setRtxCompareOriginal(
+    JNIEnv *, jobject, jlong handle, jboolean original
+) {
+    auto player = playerFromHandle(handle);
+    return player && player->setRtxCompareOriginal(original == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_seekTo(JNIEnv *, jobject, jlong handle, jlong positionMs) {
     auto player = playerFromHandle(handle);
@@ -2962,3 +2998,5 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_applySubtitleStyle
         stripSdh == JNI_TRUE
     );
 }
+
+#include "file_dialogs.h"

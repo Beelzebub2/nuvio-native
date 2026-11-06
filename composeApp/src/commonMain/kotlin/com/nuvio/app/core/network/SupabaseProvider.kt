@@ -4,6 +4,7 @@ import com.nuvio.app.core.build.AppVersionConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.annotations.SupabaseInternal
 import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.FlowType
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
@@ -29,6 +30,9 @@ object SupabaseProvider {
     @OptIn(SupabaseInternal::class)
     private fun createClient(): SupabaseClient {
         val configuration = ServerConfigurationRepository.active.value
+        check(configuration.backendUrl.isBlank() || isAllowedAccountServerUrl(configuration.backendUrl)) {
+            "Account server must use HTTPS (except localhost development)"
+        }
         val userAgent = "NuvioMobile/${AppVersionConfig.VERSION_NAME.ifBlank { "dev" }}"
         return createSupabaseClient(
             supabaseUrl = configuration.backendUrl,
@@ -100,7 +104,14 @@ object SupabaseProvider {
                     headers.append(HttpHeaders.UserAgent, userAgent)
                 }
             }
-            install(Auth)
+            install(Auth) {
+                flowType = FlowType.PKCE
+                // Starlit's app handles the OAuth result without exposing
+                // Google client credentials or tokens to a web page.
+                scheme = "nuvio"
+                host = "auth"
+                configurePlatformAuth(configuration.backendUrl)
+            }
             install(Postgrest)
             install(Functions)
             install(Storage)

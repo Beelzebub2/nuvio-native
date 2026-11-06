@@ -94,6 +94,7 @@ internal fun PlayerControlsShell(
     onRuntimeClick: () -> Unit = {},
     releaseInfo: String? = null,
     hideDetails: Boolean = false,
+    showMetadata: Boolean = true,
     onNextEpisodeClick: (() -> Unit)? = null,
     onInteraction: () -> Unit = {},
     showPlaybackControls: Boolean = true,
@@ -111,6 +112,9 @@ internal fun PlayerControlsShell(
     onEpisodesClick: (() -> Unit)? = null,
     onOpenInExternalPlayer: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onHandoffClick: (() -> Unit)? = null,
+    onDiagnosticsClick: (() -> Unit)? = null,
+    onCastInfoClick: (() -> Unit)? = null,
     controlToggles: List<PlayerControlToggle> = emptyList(),
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
@@ -174,6 +178,7 @@ internal fun PlayerControlsShell(
                     metrics = metrics,
                     isLocked = isLocked,
                     showActions = showPlaybackControls,
+                    showMetadata = showMetadata,
                     onSubmitIntroClick = onSubmitIntroClick,
                     parentalWarnings = parentalWarnings,
                     showParentalGuide = showParentalGuide,
@@ -308,6 +313,9 @@ internal fun PlayerControlsShell(
                         onVideoSettingsClick = onVideoSettingsClick,
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onSubmitIntroClick = onSubmitIntroClick,
+                        onHandoffClick = onHandoffClick,
+                        onDiagnosticsClick = onDiagnosticsClick,
+                        onCastInfoClick = onCastInfoClick,
                         onInteraction = onInteraction,
                         toggles = controlToggles,
                     )
@@ -328,6 +336,7 @@ private fun PlayerHeader(
     metrics: PlayerLayoutMetrics,
     isLocked: Boolean,
     showActions: Boolean,
+    showMetadata: Boolean,
     onSubmitIntroClick: (() -> Unit)?,
     parentalWarnings: List<ParentalWarning>,
     showParentalGuide: Boolean,
@@ -340,8 +349,8 @@ private fun PlayerHeader(
 ) {
     val typeScale = MaterialTheme.nuvioTypeScale
     val metadataAlpha by animateFloatAsState(
-        targetValue = if (!showParentalGuide && showActions) 1f else 0f,
-        animationSpec = tween(durationMillis = if (!showParentalGuide && showActions) 260 else 160),
+        targetValue = if (showMetadata && !showParentalGuide && showActions) 1f else 0f,
+        animationSpec = tween(durationMillis = if (showMetadata && !showParentalGuide && showActions) 260 else 160),
         label = "playerHeaderMetadataAlpha",
     )
     Column(modifier = modifier) {

@@ -39,6 +39,9 @@ object ServerConfigurationRepository {
 
     fun saveCustom(configuration: ServerConfiguration): Boolean {
         if (!AppFeaturePolicy.customServerConnectionsEnabled) return false
+        // An empty placeholder is safe while a guest chooses their first server.
+        if (configuration.backendUrl.isBlank() && configuration.publishableKey.isNotBlank()) return false
+        if (!isAllowedAccountServerUrl(configuration.backendUrl)) return false
         if (!ServerConfigurationStorage.saveCustom(configuration)) return false
         _active.value = configuration
         return true
@@ -52,8 +55,22 @@ object ServerConfigurationRepository {
 
     private fun loadActiveConfiguration(): ServerConfiguration {
         if (!AppFeaturePolicy.customServerConnectionsEnabled) return officialConfiguration()
-        return ServerConfigurationStorage.loadCustom() ?: officialConfiguration()
+        return ServerConfigurationStorage.loadCustom()?.takeIf {
+            isAllowedAccountServerUrl(it.backendUrl) &&
+                (it.backendUrl.isNotBlank() || it.publishableKey.isBlank())
+        }
+            ?: officialConfiguration()
     }
+}
+
+/** Applies to saved configurations as well as freshly discovered servers. */
+internal fun isAllowedAccountServerUrl(raw: String): Boolean {
+    if (raw.isBlank()) return true // No server exists yet; SupabaseProvider cannot send credentials.
+    if (raw.contains('@') || raw.contains('\\')) return false
+    val url = runCatching { io.ktor.http.Url(raw) }.getOrNull() ?: return false
+    if (url.host.isBlank() || url.fragment.isNotBlank() || url.parameters.entries().isNotEmpty()) return false
+    return url.protocol.name == "https" ||
+        (url.protocol.name == "http" && url.host.lowercase() in setOf("127.0.0.1", "localhost", "::1"))
 }
 
 internal fun officialConfiguration() = ServerConfiguration(

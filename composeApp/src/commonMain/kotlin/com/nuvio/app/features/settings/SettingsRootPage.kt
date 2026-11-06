@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
@@ -17,6 +18,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.platform.LocalUriHandler
+import com.nuvio.app.isDesktop
+import com.nuvio.app.features.remote.DesktopRemote
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_settings_page_account
 import nuvio.composeapp.generated.resources.compose_settings_page_advanced
@@ -52,6 +55,9 @@ import nuvio.composeapp.generated.resources.about_supporters_contributors_subtit
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import nuvio.composeapp.generated.resources.changelog_title
 import nuvio.composeapp.generated.resources.changelog_description
+import nuvio.composeapp.generated.resources.remote_pc_controller_title
+import nuvio.composeapp.generated.resources.remote_pc_controller_description
+import nuvio.composeapp.generated.resources.remote_pc_unsupported
 import org.jetbrains.compose.resources.stringResource
 
 internal const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
@@ -112,6 +118,22 @@ internal fun LazyListScope.settingsRootContent(
                         isTablet = isTablet,
                         onClick = onTrackingClick,
                     )
+                    if (!isDesktop) {
+                        // The controller is a permanent Settings entry, even when
+                        // discovery has not found any PCs or sign-in is incomplete.
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.remote_pc_controller_title),
+                            description = stringResource(
+                                if (DesktopRemote.transport.supported)
+                                    Res.string.remote_pc_controller_description
+                                else Res.string.remote_pc_unsupported
+                            ),
+                            icon = Icons.Rounded.DesktopWindows,
+                            isTablet = isTablet,
+                            onClick = { DesktopRemote.open() },
+                        )
+                    }
                 }
             }
         }

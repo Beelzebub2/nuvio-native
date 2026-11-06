@@ -35,10 +35,13 @@ class DesktopP2pSessionTest {
     private class Backend : DesktopTorrentBackend {
         var starts = 0
         var stops = 0
+        var stopFailure: Exception? = null
         var running = false
         var failures = 0
         var failAfterMetadata = false
         var healthy = true
+        var peers = 0
+        var downloadSpeed = 0L
         var healthChecks = 0
         var statusDelayMs = 0L
         var statusHttpCode: Int? = null
@@ -46,6 +49,7 @@ class DesktopP2pSessionTest {
         var startupFailures = 0
         var metadata = true
         var files = listOf(TorrServerFile(1, "sample.mp4", 100))
+        val metadataSnapshots = mutableListOf<List<TorrServerFile>>()
         var startGate: CompletableDeferred<Unit>? = null
         val requests = mutableListOf<String>()
         private var callsSinceStart = 0
@@ -68,7 +72,11 @@ class DesktopP2pSessionTest {
             running = true
             preparedSettings = settings
         }
-        override suspend fun stop() { stops += 1; running = false }
+        override suspend fun stop() {
+            stops += 1
+            stopFailure?.let { throw it }
+            running = false
+        }
         override suspend fun addTorrent(magnetLink: String): String {
             requests += magnetLink
             return magnetLink.substringAfter("btih:").substringBefore('&')
@@ -80,8 +88,9 @@ class DesktopP2pSessionTest {
                 failures = (failures - 1).coerceAtLeast(0)
                 throw DesktopTorrentEngineUnavailable("Status unavailable", httpStatusCode = statusHttpCode)
             }
-            return TorrServerStats(0, 0, 0, 0, 10, 20, 100,
-                if (metadata) files else emptyList())
+            val availableFiles = if (metadataSnapshots.isNotEmpty()) metadataSnapshots.removeAt(0) else files
+            return TorrServerStats(downloadSpeed, 0, peers, 0, 10, 20, 100,
+                if (metadata) availableFiles else emptyList())
         }
         override suspend fun isHealthy(): Boolean {
             healthChecks++
@@ -100,6 +109,39 @@ class DesktopP2pSessionTest {
     private fun TestScope.engine(backend: Backend, environment: Environment = Environment()) = DesktopP2pSession(
         backend, backgroundScope, { P2pSettingsUiState(p2pEnabled = true) }, { environment.read(testScheduler.currentTime) },
     )
+
+    @Test fun failedEngineShutdownStillPublishesPlaybackError() = runTest {
+        val backend = Backend().apply {
+            files = listOf(TorrServerFile(1, "first.mp4", 100), TorrServerFile(2, "second.mp4", 100))
+            stopFailure = DesktopTorrentEngineUnavailable("TorrServer child is still running")
+        }
+        val engine = engine(backend)
+        try {
+            assertFailsWith<P2pStreamingException> {
+                engine.startStream(request.copy(filename = null))
+            }
+            val state = assertIs<P2pStreamingState.Error>(engine.state.value)
+            assertTrue(state.message.contains("TorrServer child is still running"))
+        } finally {
+            backend.stopFailure = null
+            engine.shutdown().join()
+        }
+    }
+
+    @Test fun streamingWaitsForIncompleteTorrentFileMetadata() = runTest {
+        val backend = Backend().apply {
+            metadataSnapshots += listOf(TorrServerFile(1, "", 0L))
+            metadataSnapshots += listOf(TorrServerFile(1, "sample.mp4", 0L))
+        }
+        val engine = engine(backend)
+        try {
+            assertTrue(engine.startStream(request).endsWith("index=1"))
+            assertTrue(testScheduler.currentTime >= 2_000L, "Incomplete file metadata must be polled before playback")
+            assertEquals(1, backend.starts, "Waiting for metadata must not restart a healthy engine")
+        } finally {
+            engine.shutdown().join()
+        }
+    }
 
     @Test fun selectingAnEpisodeSourceFromTheSamePackChangesTheActualTorrentFile() = runTest {
         P2pSettingsRepository.ensureLoaded()
@@ -313,6 +355,26 @@ class DesktopP2pSessionTest {
         engine.shutdown().join()
     }
 
+    @Test fun torrentWideCacheOccupancyIsNotMisreportedAsDeliveredVideo() = runTest {
+        val engine = engine(Backend())
+        try {
+            engine.startStream(request)
+            advanceTimeBy(2_001L)
+            runCurrent()
+            val stats = assertIs<P2pStreamingState.Streaming>(engine.state.value)
+            assertEquals(0.2f, stats.totalProgress)
+            assertEquals(0f, stats.bufferProgress)
+            assertEquals(20L, stats.downloadedBytes)
+            assertEquals(0L, stats.verifiedBytes)
+            assertEquals(0L, stats.deliveredBytes)
+            val cache = engine.cacheState.value
+            assertEquals(10L, cache.usedBytes)
+            assertEquals(0L, cache.protectedBytes)
+        } finally {
+            engine.shutdown().join()
+        }
+    }
+
     @Test fun aTemporaryMetadataStatusFailureDoesNotDropPeerDiscovery() = runTest {
         val backend = Backend().apply { failures = 1 }
         val engine = engine(backend)
@@ -425,6 +487,29 @@ class DesktopP2pSessionTest {
         advanceTimeBy(8_000L)
         assertEquals(2, backend.starts)
         engine.stopStream().join()
+    }
+
+    @Test fun virtualInterfaceChangesDoNotInterruptHealthyConnectedPeers() = runTest {
+        val backend = Backend().apply { peers = 4; downloadSpeed = 800_000L }
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        val initialUrl = engine.startStream(request)
+        environment.network = setOf("wifi:192.0.2.1", "vpn:192.0.2.22")
+        advanceTimeBy(10_001L)
+        assertEquals(1, backend.starts, "An unrelated interface must not destroy a connected swarm")
+        assertEquals(initialUrl, assertIs<P2pStreamingState.Streaming>(engine.state.value).localUrl)
+        engine.shutdown().join()
+    }
+
+    @Test fun stalledPeersAfterInterfaceChangeStillTriggerRecovery() = runTest {
+        val backend = Backend().apply { peers = 4; downloadSpeed = 0L }
+        val environment = Environment()
+        val engine = engine(backend, environment)
+        engine.startStream(request)
+        environment.network = setOf("ethernet:192.0.2.3")
+        advanceTimeBy(10_001L)
+        assertEquals(2, backend.starts, "A stale peer count must not suppress real network recovery")
+        engine.shutdown().join()
     }
 
     @Test fun repeatedLocalApiFailuresRecoverAnUnhealthyEngineButZeroPeersDoNot() = runTest {

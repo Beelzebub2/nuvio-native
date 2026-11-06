@@ -7,6 +7,8 @@ data class AppUpdateReleaseSource(
     val includePrereleases: Boolean = false,
     val userAgent: String,
     val privateRepository: Boolean = false,
+    /** Checked only if the primary repository was renamed or is missing. */
+    val fallbackRepositories: List<String> = emptyList(),
 )
 
 data class AppUpdateAssetSelector(

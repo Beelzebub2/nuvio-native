@@ -15,7 +15,8 @@ import java.awt.Desktop
 
 internal data class MalConnectionState(val profileId: Int = -1, val connected: Boolean = false,
     val username: String = "", val clientId: String = "", val busy: Boolean = false,
-    val connecting: Boolean = false, val revision: Long = 0, val error: String? = null)
+    val connecting: Boolean = false, val revision: Long = 0, val error: String? = null,
+    val showTab: Boolean = false)
 
 internal object MyAnimeListRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -38,7 +39,8 @@ internal object MyAnimeListRepository {
         loadedProfile = profile
         val expected = generation
         mutableState.value = MalConnectionState(profileId = profile, revision = expected,
-            clientId = store.getString("client_$profile").orEmpty(), busy = true)
+            clientId = store.getString("client_$profile").orEmpty(), busy = true,
+            showTab = store.getString("show_tab_$profile") == "true")
         loadJob = scope.launch {
             try {
                 val payload = store.getString("tokens_$profile")
@@ -69,6 +71,15 @@ internal object MyAnimeListRepository {
         clearState()
         store.remove("tokens_$profile"); store.remove("username_$profile")
         ensureLoaded()
+    }
+
+    /** Visibility is optional and local to the Starlit profile; it never changes the MAL account. */
+    @Synchronized fun setTabVisible(visible: Boolean) {
+        ensureLoaded()
+        val profile = ProfileRepository.activeProfileId
+        if (visible) check(mutableState.value.connected) { "Connect MyAnimeList before showing its tab." }
+        store.putString("show_tab_$profile", visible.toString())
+        mutableState.value = mutableState.value.copy(showTab = visible)
     }
 
     @Synchronized fun connect(clientId: String, clientSecret: String = "") {
@@ -133,11 +144,14 @@ internal object MyAnimeListRepository {
             })
     }
 
-    private suspend fun <T> authorized(action: suspend (String) -> T): T {
+    private suspend fun <T> authorized(expectedProfileId: Int? = null, action: suspend (String) -> T): T {
         val (profile, expected, loading) = synchronized(this) {
             ensureLoaded()
             check(!mutableState.value.connecting) { "Wait for MyAnimeList sign-in to finish." }
             Triple(ProfileRepository.activeProfileId, generation, loadJob)
+        }
+        check(expectedProfileId == null || profile == expectedProfileId) {
+            "Account changed; retry from the current profile."
         }
         loading?.join()
         return mutex.withLock {
@@ -159,8 +173,26 @@ internal object MyAnimeListRepository {
     }
 
     suspend fun listStatus(id: Int) = authorized { client.listStatus(id, it) }
-    suspend fun update(id: Int, status: MalStatus? = null, score: Int? = null) = authorized { client.update(id, it, status, score) }
+    suspend fun update(id: Int, status: MalStatus? = null, score: Int? = null, isRewatching: Boolean? = null) =
+        authorized { client.update(id, it, status, score, isRewatching) }
+    suspend fun animeList(status: MalStatus? = null, offset: Int = 0) =
+        authorized { client.animeList(it, status, offset) }
     suspend fun search(name: String) = authorized { client.search(name, it) }
+
+    /** Idempotent. Only a genuinely playing title already completed on MAL is changed. */
+    suspend fun markRewatchingIfCompleted(meta: MetaDetails, playbackProfileId: Int) {
+        if (ProfileRepository.activeProfileId != playbackProfileId) return
+        ensureLoaded()
+        synchronized(this) { loadJob }?.join()
+        if (ProfileRepository.activeProfileId != playbackProfileId || !state.value.connected) return
+        val id = resolveId(meta) ?: return
+        // Hold the same per-profile auth mutex across the read and conditional update to avoid
+        // racing a manual status change, and never write into a different Starlit profile.
+        authorized(expectedProfileId = playbackProfileId) { token ->
+            val existing = client.listStatus(id, token)
+            if (shouldMarkMalRewatch(existing)) client.update(id, token, isRewatching = true)
+        }
+    }
     suspend fun resolveId(meta: MetaDetails): Int? {
         val profile = ProfileRepository.activeProfileId
         store.getString("mapping_${profile}_${meta.type}:${meta.id}")?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }

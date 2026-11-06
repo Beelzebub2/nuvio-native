@@ -966,6 +966,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     notCompatibleWithConfigurationCache("Builds a host-local player bridge against WebView2 and libmpv for Windows.")
     enabled = isWindowsHost
     inputs.file(windowsPlayerBridgeSource)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)
     }
@@ -976,6 +977,68 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     outputs.file(windowsPlayerBridgeImportLib)
     outputs.file(windowsPlayerBridgePdb)
     commandLine(windowsPlayerBridgeCommand)
+}
+
+// Windows RFCOMM host runs in a small isolated native helper. Unlike the
+// playback bridge it has no libmpv/WebView2 dependency.
+val windowsBluetoothBridgeSource = layout.projectDirectory.file("src/desktopMain/native/windows/starlit_bluetooth_bridge.cpp")
+val windowsBluetoothBridgeOutput = layout.buildDirectory.file("native/windows/starlit_bluetooth_bridge.exe")
+val windowsBluetoothBridgeObject = layout.buildDirectory.file("native/windows/starlit_bluetooth_bridge.obj")
+val windowsBluetoothBridgeScript = layout.buildDirectory.file("native/windows/build-bluetooth-bridge.bat")
+val bluetoothCompile = listOf(
+    "cl", "/nologo", "/EHsc", "/std:c++17", "/O2", "/MT",
+    "/DWIN32_LEAN_AND_MEAN", "/DNOMINMAX",
+    cmdQuote(windowsBluetoothBridgeSource.asFile.absolutePath),
+    "/Fo${cmdQuote(windowsBluetoothBridgeObject.get().asFile.absolutePath)}",
+    "/Fe${cmdQuote(windowsBluetoothBridgeOutput.get().asFile.absolutePath)}",
+    "/link", "/NOLOGO", "Ws2_32.lib",
+).joinToString(" ")
+val buildWindowsBluetoothBridge = tasks.register<Exec>("buildWindowsBluetoothBridge") {
+    notCompatibleWithConfigurationCache("Uses the installed Visual Studio toolchain.")
+    enabled = isWindowsHost
+    inputs.file(windowsBluetoothBridgeSource)
+    outputs.file(windowsBluetoothBridgeOutput)
+    outputs.file(windowsBluetoothBridgeObject)
+    val commandTemplate = bluetoothCompile.replace("\"", "__DQ__")
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        """
+        ${'$'}ErrorActionPreference = 'Stop'
+        ${'$'}dq = [char]34
+        ${'$'}vcvars = ${psSingleQuote(windowsVcvarsPath.orEmpty())}
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars)) {
+          ${'$'}vswhere = ${psSingleQuote(windowsVsWhere.absolutePath)}
+          if (Test-Path -LiteralPath ${'$'}vswhere) {
+            ${'$'}vcvars = & ${'$'}vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find ${psSingleQuote(windowsVcvarsRelativePath)} | Select-Object -First 1
+          }
+        }
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars) -or -not (Test-Path -LiteralPath ${'$'}vcvars)) {
+          Write-Error 'MSVC C++ compiler is needed to build the Windows Bluetooth remote host.'
+          exit 1
+        }
+        ${'$'}vcvars = ([string]${'$'}vcvars).Trim()
+        ${'$'}bat = ${psSingleQuote(windowsBluetoothBridgeScript.get().asFile.absolutePath)}
+        ${'$'}compile = ${psSingleQuote(commandTemplate)}.Replace('__DQ__', ${'$'}dq)
+        ${'$'}lines = @(
+          '@echo off',
+          ('set {0}VCVARS={1}{0}' -f ${'$'}dq, ${'$'}vcvars),
+          ('call {0}%VCVARS%{0} >nul' -f ${'$'}dq),
+          'if errorlevel 1 exit /b %errorlevel%',
+          ${'$'}compile,
+          'exit /b %ERRORLEVEL%'
+        )
+        Set-Content -LiteralPath ${'$'}bat -Value ${'$'}lines -Encoding ASCII
+        & cmd.exe /d /c ${'$'}bat
+        exit ${'$'}LASTEXITCODE
+        """.trimIndent(),
+    )
+}
+
+tasks.withType<Copy>().configureEach {
+    if (isWindowsHost && name == "desktopProcessResources") {
+        dependsOn(buildWindowsBluetoothBridge)
+        from(windowsBluetoothBridgeOutput) { into("native/windows") }
+    }
 }
 
 val prepareWindowsPlayerRuntime = tasks.register<Sync>("prepareWindowsPlayerRuntime") {
@@ -1217,6 +1280,7 @@ kotlin {
             kotlin.srcDir(generatedRuntimeConfigDir)
         }
         androidMain {
+            kotlin.srcDir("src/jvmSharedMain/kotlin")
             kotlin.srcDir(project.file(androidDistributionSourceDir))
             if (androidDistribution == "full") {
                 kotlin.srcDir(fullCommonSourceDir)
@@ -1226,6 +1290,9 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.appcompat)
                 implementation(libs.androidx.activity.compose)
+                implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+                implementation(libs.androidx.credentials.core)
+                implementation(libs.androidx.credentials.play.services.auth)
                 implementation(libs.androidx.core.splashscreen)
                 implementation(libs.androidx.work.runtime)
                 implementation(libs.coil.gif)
@@ -1255,6 +1322,7 @@ kotlin {
             }
         }
         val desktopMain by getting {
+            kotlin.srcDir("src/jvmSharedMain/kotlin")
             kotlin.srcDir(fullPluginSourceDir)
             kotlin.srcDir(fullTrailerSourceDir)
             kotlin.srcDir(
@@ -1267,10 +1335,12 @@ kotlin {
             resources.srcDir(desktopSentryResourceDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation("com.google.zxing:core:3.5.4")
                 if (!isWindowsHost) {
                     implementation(project(":composeMediaPlayer"))
                 }
                 implementation(libs.kotlinx.coroutines.swing)
+                implementation("net.java.dev.jna:jna:5.19.1")
                 implementation(libs.ktor.client.cio)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.quickjs.kt)
@@ -1279,6 +1349,7 @@ kotlin {
             }
         }
         val androidHostTest by getting {
+            kotlin.srcDir("src/jvmSharedTest/kotlin")
             dependencies {
                 implementation("org.robolectric:robolectric:4.16")
                 implementation("androidx.compose.ui:ui-test-junit4:${libs.versions.composeMultiplatform.get()}")
@@ -1329,6 +1400,7 @@ kotlin {
             implementation(libs.reorderable)
         }
         val desktopTest by getting {
+            kotlin.srcDir("src/jvmSharedTest/kotlin")
             dependencies {
                 implementation(compose.desktop.uiTestJUnit4)
             }
@@ -1362,6 +1434,8 @@ tasks.matching {
 }
 
 tasks.withType<Test>().configureEach {
+    // Robolectric runtime JAR downloads from repo1.maven.org are rate-limited on hosted CI.
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     systemProperty("nuvio.dataDir", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
     systemProperty("nuvio.airingSmoke", providers.gradleProperty("nuvio.airingSmoke").orElse("false").get())
     systemProperty("nuvio.updateSmoke", providers.gradleProperty("nuvio.updateSmoke").orElse("false").get())

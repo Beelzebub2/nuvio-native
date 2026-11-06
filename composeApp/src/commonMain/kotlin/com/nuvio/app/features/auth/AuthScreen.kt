@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,11 +38,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MarkEmailRead
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.DialogHint
+import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogTextField
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.GoogleBrandMark
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,6 +83,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -83,7 +97,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.auth.GoogleOAuthAvailability
+import com.nuvio.app.core.auth.STARLIT_GOOGLE_ORIGIN
 import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.PasskeyRepository
+import com.nuvio.app.core.auth.PasswordRecoveryRepository
+import com.nuvio.app.core.auth.PasswordRecoveryRequestResult
+import com.nuvio.app.core.auth.rememberPasskeyCeremony
 import com.nuvio.app.core.auth.DeviceLinkAuthRepository
 import com.nuvio.app.core.auth.DeviceLinkAuthState
 import com.nuvio.app.core.build.AppFeaturePolicy
@@ -94,7 +114,13 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.action_cancel
+import nuvio.composeapp.generated.resources.action_done
 import nuvio.composeapp.generated.resources.auth_request_account
+import nuvio.composeapp.generated.resources.auth_google_request_access
+import nuvio.composeapp.generated.resources.auth_google_sign_in
+import nuvio.composeapp.generated.resources.auth_google_sign_up
+import nuvio.composeapp.generated.resources.auth_google_approval_notice
 import nuvio.composeapp.generated.resources.auth_request_account_subtitle
 import nuvio.composeapp.generated.resources.auth_request_password_minimum
 import nuvio.composeapp.generated.resources.auth_request_return_to_sign_in
@@ -109,6 +135,15 @@ import nuvio.composeapp.generated.resources.compose_auth_email
 import nuvio.composeapp.generated.resources.compose_auth_or_separator
 import nuvio.composeapp.generated.resources.compose_auth_password
 import nuvio.composeapp.generated.resources.compose_auth_sign_in
+import nuvio.composeapp.generated.resources.auth_sign_in_with_passkey
+import nuvio.composeapp.generated.resources.auth_forgot_password
+import nuvio.composeapp.generated.resources.auth_password_recovery_title
+import nuvio.composeapp.generated.resources.auth_password_recovery_description
+import nuvio.composeapp.generated.resources.auth_password_recovery_send
+import nuvio.composeapp.generated.resources.auth_password_recovery_sent
+import nuvio.composeapp.generated.resources.auth_password_recovery_invalid_email
+import nuvio.composeapp.generated.resources.auth_password_recovery_failed
+import nuvio.composeapp.generated.resources.auth_password_recovery_unavailable
 import nuvio.composeapp.generated.resources.compose_auth_sign_in_subtitle
 import nuvio.composeapp.generated.resources.compose_auth_sign_up
 import nuvio.composeapp.generated.resources.compose_auth_sign_up_subtitle
@@ -200,13 +235,26 @@ fun AuthScreen(
     val serverConnectionState by ServerConnectionController.state.collectAsStateWithLifecycle()
     val backendUrl = serverConnectionState.activeServer.backendUrl
     val isStarlitServer = !serverConnectionState.activeServer.supportsNuvioAccountFeatures
+    val passkeyCeremony = rememberPasskeyCeremony()
+    var serverPasskeysEnabled by remember(backendUrl) { mutableStateOf(false) }
+    LaunchedEffect(backendUrl) {
+        serverPasskeysEnabled = passkeyCeremony != null && PasskeyRepository.isEnabledOnActiveServer()
+    }
+    val passkeyEnabled = isStarlitServer && passkeyCeremony != null && serverPasskeysEnabled &&
+        PasskeyRepository.canUseOnActiveServer()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val uriHandler = LocalUriHandler.current
+    var googleEnabled by remember(backendUrl) { mutableStateOf(false) }
+    LaunchedEffect(backendUrl) { googleEnabled = GoogleOAuthAvailability.isEnabled() }
     var isSignUp by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var isLoading by rememberSaveable { mutableStateOf(false) }
+    // A sign-in coroutine belongs to the current screen instance. Restoring its
+    // busy flag after activity recreation can leave every sign-in action disabled
+    // even though the original request was cancelled with the old composition.
+    var isLoading by remember { mutableStateOf(false) }
     var isRequestPending by rememberSaveable(backendUrl) { mutableStateOf(false) }
     var passwordTooShort by rememberSaveable(backendUrl) { mutableStateOf(false) }
     var lastBackendUrl by remember { mutableStateOf(backendUrl) }
@@ -248,6 +296,42 @@ fun AuthScreen(
                 isLoading = false
             }
         }
+    }
+
+    fun startPasskeySignIn() {
+        val ceremony = passkeyCeremony ?: return
+        if (isLoading || isSignUp || isRequestPending || !passkeyEnabled) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithPasskey(ceremony)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun signInWithGoogle() {
+        if (isLoading || isRequestPending || !googleEnabled) return
+        DeviceLinkAuthRepository.cancel()
+        focusManager.clearFocus(force = true)
+        isLoading = true
+        scope.launch {
+            try {
+                AuthRepository.signInWithGoogle()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun requestAccessWithGoogle() {
+        if (isLoading || isRequestPending || !googleEnabled) return
+        focusManager.clearFocus(force = true)
+        AuthRepository.clearError()
+        uriHandler.openUri("$STARLIT_GOOGLE_ORIGIN/auth/google/request")
     }
 
     fun toggleAuthMode() {
@@ -340,6 +424,8 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                         formPaneWidth = if (compactLargeScreen) 460.dp else formPaneWidth,
                         brandHorizontalPadding = brandHorizontalPadding,
                         formHorizontalPadding = formHorizontalPadding,
@@ -364,6 +450,9 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
+                        onPasskeySignIn = ::startPasskeySignIn,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -381,6 +470,8 @@ fun AuthScreen(
                         authError = authError,
                         deviceLinkAuthState = deviceLinkAuthState,
                         deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
+                        googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                         statusBarTop = statusBarTop,
                         onEmailChange = {
                             email = it
@@ -401,6 +492,9 @@ fun AuthScreen(
                             AuthRepository.signInAnonymously()
                         },
                         onStartDeviceLink = ::startDeviceLink,
+                        onGoogleSignIn = ::signInWithGoogle,
+                        onPasskeySignIn = ::startPasskeySignIn,
+                        onGoogleRequest = ::requestAccessWithGoogle,
                         onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
@@ -483,6 +577,8 @@ private fun AuthMobileLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
+    passkeyEnabled: Boolean,
     statusBarTop: Dp,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
@@ -492,6 +588,9 @@ private fun AuthMobileLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -550,6 +649,8 @@ private fun AuthMobileLayout(
                 authError = authError,
                 deviceLinkAuthState = deviceLinkAuthState,
                 deviceLinkEnabled = deviceLinkEnabled,
+                googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                 metrics = MobileAuthFormMetrics,
                 onEmailChange = onEmailChange,
                 onPasswordChange = onPasswordChange,
@@ -559,6 +660,9 @@ private fun AuthMobileLayout(
                 onReturnToSignIn = onReturnToSignIn,
                 onContinueWithoutAccount = onContinueWithoutAccount,
                 onStartDeviceLink = onStartDeviceLink,
+                onGoogleSignIn = onGoogleSignIn,
+                    onPasskeySignIn = onPasskeySignIn,
+                onGoogleRequest = onGoogleRequest,
                 onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
@@ -581,6 +685,8 @@ private fun AuthLargeLayout(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
+    passkeyEnabled: Boolean,
     formPaneWidth: Dp,
     brandHorizontalPadding: Dp,
     formHorizontalPadding: Dp,
@@ -594,6 +700,9 @@ private fun AuthLargeLayout(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -691,6 +800,8 @@ private fun AuthLargeLayout(
                     authError = authError,
                     deviceLinkAuthState = deviceLinkAuthState,
                     deviceLinkEnabled = deviceLinkEnabled,
+                googleEnabled = googleEnabled,
+                        passkeyEnabled = passkeyEnabled,
                     metrics = formMetrics,
                     scale = scale,
                     onEmailChange = onEmailChange,
@@ -701,6 +812,9 @@ private fun AuthLargeLayout(
                     onReturnToSignIn = onReturnToSignIn,
                     onContinueWithoutAccount = onContinueWithoutAccount,
                     onStartDeviceLink = onStartDeviceLink,
+                    onGoogleSignIn = onGoogleSignIn,
+                    onPasskeySignIn = onPasskeySignIn,
+                    onGoogleRequest = onGoogleRequest,
                     onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
@@ -796,6 +910,8 @@ private fun AuthForm(
     authError: String?,
     deviceLinkAuthState: DeviceLinkAuthState,
     deviceLinkEnabled: Boolean,
+    googleEnabled: Boolean,
+    passkeyEnabled: Boolean,
     metrics: AuthFormMetrics,
     scale: Float = 1f,
     onEmailChange: (String) -> Unit,
@@ -806,6 +922,9 @@ private fun AuthForm(
     onReturnToSignIn: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
     onStartDeviceLink: () -> Unit,
+    onGoogleSignIn: () -> Unit,
+    onPasskeySignIn: () -> Unit,
+    onGoogleRequest: () -> Unit,
     onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
@@ -817,6 +936,13 @@ private fun AuthForm(
             onReturnToSignIn = onReturnToSignIn,
         )
         return
+    }
+    var showRecoveryDialog by remember { mutableStateOf(false) }
+    if (showRecoveryDialog) {
+        PasswordRecoveryDialog(
+            initialEmail = email,
+            onDismiss = { showRecoveryDialog = false },
+        )
     }
     val uriHandler = LocalUriHandler.current
     Column(
@@ -861,6 +987,26 @@ private fun AuthForm(
                 onDone = { onSubmit() },
             ),
         )
+
+        if (!isSignUp && isStarlitServer && PasswordRecoveryRepository.isAvailableOnActiveServer()) {
+            Spacer(modifier = Modifier.height(10.dp * scale))
+            TextButton(
+                onClick = { showRecoveryDialog = true },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .testTag("auth-forgot-password"),
+            ) {
+                Text(
+                    text = stringResource(Res.string.auth_forgot_password),
+                    color = AuthTextPrimary,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = (13f * scale).sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                )
+            }
+        }
 
         if (isSignUp && isStarlitServer) {
             Spacer(modifier = Modifier.height(10.dp * scale))
@@ -937,6 +1083,75 @@ private fun AuthForm(
 
         Spacer(modifier = Modifier.height(metrics.secondaryTop))
 
+        if (!isSignUp && passkeyEnabled) {
+            AuthSecondaryButton(
+                text = stringResource(Res.string.auth_sign_in_with_passkey),
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onClick = onPasskeySignIn,
+            )
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
+
+        if (googleEnabled) {
+            val googleActionLabel = stringResource(if (isSignUp) Res.string.auth_google_sign_up
+                else Res.string.auth_google_sign_in)
+            val googleAction = if (isSignUp) onGoogleRequest else onGoogleSignIn
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Button(
+                    onClick = googleAction,
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .size(60.dp * scale)
+                        .testTag("auth-google-circle")
+                        .semantics { contentDescription = googleActionLabel },
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF4285F4),
+                        disabledContainerColor = Color.White.copy(alpha = 0.5f),
+                    ),
+                ) {
+                    GoogleBrandMark(
+                        modifier = Modifier.size(30.dp * scale),
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp * scale))
+                Text(
+                    text = googleActionLabel,
+                    modifier = Modifier.clickable(enabled = !isLoading, onClick = googleAction),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = AuthTextPrimary,
+                        fontSize = (13f * scale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp * scale))
+                if (isSignUp) {
+                    Text(
+                        text = stringResource(Res.string.auth_google_approval_notice),
+                        color = AuthTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(Res.string.auth_google_request_access),
+                        modifier = Modifier.clickable(enabled = !isLoading, onClick = onGoogleRequest),
+                        color = AuthTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
+
         if (!isSignUp && deviceLinkEnabled) {
             DeviceLinkAuthSection(
                 state = deviceLinkAuthState,
@@ -971,6 +1186,89 @@ private fun AuthForm(
             ),
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+@Composable
+private fun PasswordRecoveryDialog(initialEmail: String, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var address by rememberSaveable { mutableStateOf(initialEmail) }
+    var sending by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<PasswordRecoveryRequestResult?>(null) }
+    val sent = result == PasswordRecoveryRequestResult.SENT
+    val tokens = MaterialTheme.nuvio
+
+    fun submit() {
+        if (sending || sent) return
+        sending = true
+        scope.launch {
+            try {
+                result = PasswordRecoveryRepository.requestPasswordReset(address)
+            } finally {
+                sending = false
+            }
+        }
+    }
+
+    DialogSurface(
+        onDismissRequest = { if (!sending) onDismiss() },
+        title = stringResource(Res.string.auth_password_recovery_title),
+        message = if (sent) null else stringResource(Res.string.auth_password_recovery_description),
+    ) {
+        if (sent) {
+            // After sending, the dialog becomes a confirmation so the next step is obvious.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(tokens.shapes.compactCard)
+                    .background(tokens.colors.accent.copy(alpha = tokens.opacity.selected))
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(Icons.Rounded.MarkEmailRead, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(22.dp))
+                Text(
+                    stringResource(Res.string.auth_password_recovery_sent),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.colors.textPrimary,
+                )
+            }
+        } else {
+            val failure = when (result) {
+                PasswordRecoveryRequestResult.INVALID_EMAIL -> Res.string.auth_password_recovery_invalid_email
+                PasswordRecoveryRequestResult.UNAVAILABLE -> Res.string.auth_password_recovery_unavailable
+                PasswordRecoveryRequestResult.FAILED -> Res.string.auth_password_recovery_failed
+                else -> null
+            }
+            DialogTextField(
+                value = address,
+                onValueChange = { address = it; result = null },
+                label = stringResource(Res.string.compose_auth_email),
+                enabled = !sending,
+                isError = failure != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                modifier = Modifier.testTag("auth-password-recovery-email"),
+            )
+            failure?.let { DialogHint(stringResource(it), isError = true) }
+        }
+        DialogButtons {
+            if (!sent) {
+                DialogButton(
+                    text = stringResource(Res.string.action_cancel),
+                    onClick = onDismiss,
+                    enabled = !sending,
+                )
+            }
+            DialogButton(
+                text = stringResource(if (sent) Res.string.action_done else Res.string.auth_password_recovery_send),
+                onClick = { if (sent) onDismiss() else submit() },
+                style = DialogButtonStyle.Primary,
+                enabled = sent || address.isNotBlank(),
+                loading = sending,
+                modifier = Modifier.testTag("auth-password-recovery-submit"),
+            )
+        }
     }
 }
 

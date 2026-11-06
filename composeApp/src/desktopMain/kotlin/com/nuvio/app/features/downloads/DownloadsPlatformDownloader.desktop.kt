@@ -2,6 +2,7 @@ package com.nuvio.app.features.downloads
 
 import com.nuvio.app.core.storage.DesktopStorage
 import com.nuvio.app.features.p2p.*
+import com.nuvio.app.features.streams.StreamItem
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,9 +16,12 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -29,6 +33,7 @@ private val pathLocks = ConcurrentHashMap<String, Mutex>()
 private val pendingRemovals = ConcurrentHashMap<String, DownloadItem>()
 private val transfers = ConcurrentHashMap<String, Job>()
 private val transferIo = ConcurrentHashMap<String, DownloadIo>()
+private val playbackAwareDownloadLimiter = PlaybackAwareDownloadLimiter()
 private val torrentCacheOwnershipDelegate = lazy {
     DownloadTorrentCacheOwnership(DesktopStorage.cacheDir.resolve("download-torrents")).also { it.scavenge() }
 }
@@ -59,6 +64,7 @@ private val shutdownHook by lazy {
 internal val legacyDownloadsDirectory: File get() = DesktopStorage.rootDir.resolve("downloads").toFile()
 
 internal actual object DownloadsPlatformDownloader {
+    actual val supportsTorrentDownloads: Boolean = true
     actual fun pauseForAccountCleanup() {}
     actual fun restoreItem(item: DownloadItem): DownloadItem = item.copy(bytesPerSecond = 0,
         phase = if (item.status == DownloadStatus.Downloading) "Queued" else null)
@@ -80,26 +86,72 @@ internal actual object DownloadsPlatformDownloader {
                         onSuccess(recovered.toURI().toString(), recovered.length())
                         return@withLock
                     }
-                    val resolved = if (item.sourceSelection != null) withTimeout(120_000L) { resolveDownloadSource(item) } else null
-                    val source = if (resolved == null) item else item.copy(
-                        sourceUrl = resolved.playableDirectUrl.orEmpty(), torrentHash = resolved.p2pInfoHash,
-                        torrentFileIdx = resolved.p2pFileIdx, torrentFilename = resolved.behaviorHints.filename,
-                        torrentTrackers = resolved.p2pTrackers,
-                        sourceHeaders = resolved.behaviorHints.proxyHeaders?.request.orEmpty(),
-                        sourceSubtitles = resolved.externalSubtitles,
-                        streamTitle = resolved.streamLabel, streamSubtitle = resolved.streamSubtitle,
-                        providerName = resolved.addonName, providerAddonId = resolved.addonId)
-                    request.onResolved(source)
-                    val local = if (source.sourceUrl.isNotBlank()) {
-                        check(supportedDesktopDownloadUrl(source.sourceUrl)) { "HLS/DASH playlists and external pages cannot be downloaded. Choose a media file or torrent." }
-                        copyDesktopDownload(source, source.sourceUrl, io, onProgress)
-                    } else {
-                        downloadTorrent(source, io, onProgress)
+                    suspend fun transfer(resolved: StreamItem?): Pair<File, DownloadItem> {
+                        val filenames = resolved?.downloadTorrentFilenameHints().orEmpty()
+                        var source = if (resolved == null) item else item.copy(
+                            sourceUrl = resolved.playableDirectUrl.orEmpty(), torrentHash = resolved.p2pInfoHash,
+                            torrentFileIdx = resolved.p2pFileIdx, torrentFilename = filenames.firstOrNull(),
+                            torrentFilenameAlternates = filenames.drop(1), torrentTrackers = resolved.p2pTrackers,
+                            sourceHeaders = resolved.behaviorHints.proxyHeaders?.request.orEmpty(),
+                            sourceSubtitles = resolved.externalSubtitles,
+                            streamTitle = resolved.streamLabel, streamSubtitle = resolved.streamSubtitle,
+                            providerName = resolved.addonName, providerAddonId = resolved.addonId)
+                        val file = if (source.sourceUrl.isNotBlank()) {
+                            check(supportedDesktopDownloadUrl(source.sourceUrl)) {
+                                "HLS/DASH playlists and external pages cannot be downloaded. Choose a media file or torrent."
+                            }
+                            request.onResolved(source)
+                            copyDesktopDownload(source, source.sourceUrl, io, onProgress)
+                        } else {
+                            downloadTorrent(source, io, onProgress) { selected ->
+                                // Persist the backend-confirmed path. The next retry does not
+                                // need to depend on an add-on's stale filename hint.
+                                source = source.copy(torrentFilename = selected.path, torrentFilenameAlternates = emptyList())
+                                request.onResolved(source)
+                            }
+                        }
+                        return file to source
                     }
+                    val (local, source) = if (item.sourceSelection != null) {
+                        val providerResults = mutableMapOf<String, List<StreamItem>>()
+                        suspend fun freshSelection(): Pair<File, DownloadItem> {
+                            val lookupStartedAt = System.nanoTime()
+                            return downloadUsingAlternativeSources(
+                            choose = { excluded ->
+                                val usedMs = (System.nanoTime() - lookupStartedAt) / 1_000_000L
+                                val remainingMs = (120_000L - usedMs).coerceAtLeast(1L)
+                                withTimeout(remainingMs) { resolveDownloadSource(item, excluded, providerResults) }
+                            },
+                            download = { stream -> transfer(stream) },
+                            )
+                        }
+                        // Interrupted transfers already have a verified torrent identity/path
+                        // or a source-bound HTTP proof. Prefer those saved bytes on retry even
+                        // when the add-on is offline or now offers a different release.
+                        val hasSavedSource = item.sourceUrl.isNotBlank() || !item.torrentHash.isNullOrBlank()
+                        val savedSourceAllowed = if (item.sourceUrl.isNotBlank()) true else {
+                            P2pSettingsRepository.ensureLoaded()
+                            P2pSettingsRepository.uiState.value.p2pEnabled
+                        }
+                        if (hasSavedSource && savedSourceAllowed) {
+                            try { transfer(null) }
+                            catch (mismatch: DownloadTorrentFileSelectionException) { freshSelection() }
+                        } else freshSelection()
+                    } else transfer(null)
                     // Save sidecars while the source is still available, before reporting offline-ready.
                     withTimeoutOrNull(60_000L) { DownloadSubtitles.prepare(source, local.toURI().toString()) }
                     currentCoroutineContext().ensureActive()
-                    recordDesktopDownloadIdentity(source)
+                    if (!recordDesktopDownloadIdentity(source)) {
+                        // The optional catalogue manifest does not cover every valid
+                        // direct media file. Those files still need a verified digest
+                        // in memory before the non-blocking playback lookup can use them.
+                        val proof = readDesktopDownloadProof(local)
+                        check(proof != null && proof.ownerId == source.id &&
+                            proof.fileName == source.fileName &&
+                            verifiedDesktopDownloadContent(local, proof)) {
+                            "Completed file could not be verified; it was preserved"
+                        }
+                    }
                     onSuccess(local.toURI().toString(), local.length())
                 }
             } catch (e: TimeoutCancellationException) { onFailure("Source lookup timed out. Retry or choose another provider.") }
@@ -162,7 +214,10 @@ private fun verifiedPlayableDownload(file: File): File? = runCatching {
             file.parentFile.toPath().toRealPath() != file.parentFile.parentFile.toPath().toRealPath().resolve(proof.ownerId)) return null
     } else if (file.parentFile.canonicalFile != legacyDownloadsDirectory.canonicalFile ||
         !file.name.contains("_${proof.ownerId}.")) return null
-    file.takeIf { verifiedDesktopDownloadContent(it, proof) }
+    // UI/composition and playback availability call this synchronously. Never hash a
+    // multi-GB file while holding their state lock: the IO recovery worker fills the
+    // verified snapshot after checking the entire digest.
+    file.takeIf { verifiedDesktopDownloadContent(it, proof, hashIfUncached = false) }
 }.getOrNull()
 
 internal fun openDownloadDirectory(directory: File): Boolean = runCatching {
@@ -254,13 +309,24 @@ internal class DownloadIo {
         continuation.invokeOnCancellation { future.cancel(true); close() }
         future.whenComplete { response, error ->
             pending.compareAndSet(future, null)
-            if (error != null) { if (continuation.isActive) continuation.resumeWithException(error) }
+            // CompletableFuture wraps request timeouts and connection failures in a
+            // CompletionException. Preserve their IOException type so the transfer's
+            // bounded resume/retry path can handle them instead of failing the queue.
+            if (error != null) { if (continuation.isActive) continuation.resumeWithException(unwrapDownloadHttpFailure(error)) }
             else {
                 body.set(response.body())
                 if (continuation.isActive) continuation.resume(response) else close()
             }
         }
     }
+}
+
+internal fun unwrapDownloadHttpFailure(error: Throwable): Throwable {
+    var failure = error
+    while ((failure is CompletionException || failure is ExecutionException) && failure.cause != null) {
+        failure = failure.cause!!
+    }
+    return failure
 }
 
 /** A restart must durably discard stale bytes before publishing a validator for new bytes. */
@@ -273,7 +339,9 @@ private fun resetDownloadPart(part: File) {
 internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: DownloadIo,
     onProgress: (Long, Long?) -> Unit, expectedSize: Long? = null,
     selectedTorrentFile: TorrServerFile? = null,
-    onAfterPartReset: (() -> Unit)? = null): File {
+    onAfterPartReset: (() -> Unit)? = null,
+    onRecoverMissingTorrent: (suspend () -> Unit)? = null,
+    requestTimeout: Duration = if (selectedTorrentFile == null) Duration.ofSeconds(30) else Duration.ofSeconds(90)): File {
     val file = prepareDownloadPath(item)
     val part = File(file.path + ".part")
     require(!Files.isSymbolicLink(part.toPath()) && !Files.isSymbolicLink(downloadProofFile(file).toPath()))
@@ -290,9 +358,11 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
             var previous = readDesktopDownloadProof(file)?.takeIf {
                 it.ownerId == item.id && it.fileName == item.fileName && it.sourceFingerprint == sourceFingerprint
             }
+            val immutableTorrentFile = selectedTorrentFile != null &&
+                !item.torrentHash.isNullOrBlank() && expectedSize == selectedTorrentFile.length
             // Legacy two-line records do not bind the URL, selected torrent file or redirect.
             // They cannot authorize an append, even if their ETag happens to match a new source.
-            if (offset > 0 && (previous == null || previous.validator.isBlank() ||
+            if (offset > 0 && (previous == null || (previous.validator.isBlank() && !immutableTorrentFile) ||
                     previous.totalBytes <= 0 || offset > previous.totalBytes ||
                     (expectedSize != null && previous.totalBytes != expectedSize))) {
                 resetDownloadPart(part)
@@ -327,12 +397,16 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 }
             }
             suspend fun response(start: Long): HttpResponse<InputStream> {
-                val builder = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(30)).GET()
+                // P2P streams may need more than 30 seconds to discover initial pieces.
+                val builder = HttpRequest.newBuilder(URI(url)).timeout(requestTimeout).GET()
                 item.sourceHeaders.forEach { (key, value) ->
                     if (key.lowercase() !in setOf("range", "if-range", "accept-encoding", "host", "content-length") && key.isNotBlank()) builder.header(key, value)
                 }
                 builder.header("Accept-Encoding", "identity")
-                if (start > 0) { builder.header("Range", "bytes=$start-"); builder.header("If-Range", previous!!.validator) }
+                if (start > 0) {
+                    builder.header("Range", "bytes=$start-")
+                    previous!!.validator.takeIf { it.isNotBlank() }?.let { builder.header("If-Range", it) }
+                }
                 return io.send(builder.build())
             }
             var reply = response(offset)
@@ -345,7 +419,21 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 digest.reset()
                 reply = response(0)
             }
-            check(reply.statusCode() == 200 || reply.statusCode() == 206) { "Download HTTP ${reply.statusCode()}; retry later or choose another source" }
+            val status = reply.statusCode()
+            if (status != 200 && status != 206) {
+                // TorrServer can forget a torrent even while its process stays healthy.
+                // Re-add that magnet before retrying the same verified file/range.
+                if (status == 404 && selectedTorrentFile != null && onRecoverMissingTorrent != null) {
+                    try { onRecoverMissingTorrent() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { throw IOException("Torrent stream could not be restored: ${e.message}", e) }
+                }
+                if (status in setOf(408, 425, 429, 500, 502, 503, 504) ||
+                    (status == 404 && selectedTorrentFile != null)) {
+                    throw IOException("Temporary download HTTP $status")
+                }
+                error("Download HTTP $status; retry later or choose another source")
+            }
             val contentType = reply.headers().firstValue("Content-Type").orElse("").lowercase()
             check(!listOf("text/", "json", "xml", "mpegurl", "dash+xml", "bittorrent").any(contentType::contains)) {
                 "Source returned a playlist or web page, not a downloadable media file"
@@ -353,11 +441,13 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
             val length = reply.headers().firstValueAsLong("Content-Length").orElse(-1)
             val range = reply.headers().firstValue("Content-Range").orElse(null)
             val total: Long?
+            val expectedRangeBytes: Long?
             if (reply.statusCode() == 206) {
                 val parsed = parseDownloadRange(range) ?: error("Invalid Content-Range; file was not appended")
                 check(parsed.first == offset && parsed.second >= offset && parsed.third > parsed.second) { "Unexpected Content-Range offset; file was not appended" }
                 check(length < 0 || length == parsed.second - parsed.first + 1) { "Content-Range length mismatch" }
                 total = parsed.third
+                expectedRangeBytes = parsed.second - parsed.first + 1
             } else {
                 // A server ignoring Range is a new transfer, regardless of a matching ETag.
                 val hadPriorBytes = part.exists() && part.length() > 0L
@@ -366,7 +456,8 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 offset = 0L
                 digest.reset()
                 previous = null
-                total = length.takeIf { it >= 0 }
+                total = length.takeIf { it >= 0 } ?: expectedSize
+                expectedRangeBytes = null
             }
             check(expectedSize == null || total == null || expectedSize == total) { "Torrent file length does not match the selected media" }
             val entity = reply.headers().firstValue("ETag").orElse("").takeIf { !it.startsWith("W/") && it.isNotBlank() }
@@ -439,8 +530,22 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 check(total == null || bytes <= total) { "Source sent more bytes than advertised" }
                                 val now = System.nanoTime()
                                 if (now - lastProgress >= 500_000_000L) { report(bytes); lastProgress = now }
+                                // Throttle only when a P2P playback session is active. The HTTP
+                                // reader applies TCP backpressure to each download's torrent
+                                // process, freeing bandwidth for the live video. The shared
+                                // limiter prevents three jobs each consuming a full allowance.
+                                val state = P2pStreamingEngine.state.value
+                                val playbackActive = state is P2pStreamingState.Connecting ||
+                                    state is P2pStreamingState.Streaming
+                                val pauseNanos = playbackAwareDownloadLimiter.reserveDelayNanos(
+                                    count, playbackActive, now,
+                                )
+                                if (pauseNanos > 0L) TimeUnit.NANOSECONDS.sleep(pauseNanos)
                             }
                             if (stalled.get()) throw IOException("Source stopped sending data; retry to resume")
+                            if (expectedRangeBytes != null && bytes - offset != expectedRangeBytes) {
+                                throw IOException("Incomplete or oversized HTTP range: expected $expectedRangeBytes response bytes")
+                            }
                             if (bytes <= 0 || (total != null && bytes != total) ||
                                 (expectedSize != null && bytes != expectedSize)
                             ) throw IOException("Incomplete media file: received $bytes of $total bytes")
@@ -481,9 +586,12 @@ private fun validateMediaPrefix(buffer: ByteArray, count: Int) {
 }
 private fun String.toLocalFileOrNull(): File? = runCatching { if (startsWith("file:")) File(URI(this)) else File(this) }.getOrNull()
 
-internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit): File =
+internal suspend fun downloadTorrent(item: DownloadItem, io: DownloadIo, progress: (Long, Long?) -> Unit,
+    onSelected: (TorrServerFile) -> Unit = {}): File =
     downloadTorrentFile(item, torrentEngines, { P2pSettingsRepository.ensureLoaded(); P2pSettingsRepository.uiState.value },
-        { url, selected -> copyDesktopDownload(item, url, io, progress, selected.length, selected) })
+        onSelected) { url, selected, restore ->
+        copyDesktopDownload(item, url, io, progress, selected.length, selected, onRecoverMissingTorrent = restore)
+    }
 
 /** TorrServer accepts hexadecimal BTIH; normalize legacy 32-character base32 BTIH first. */
 internal fun canonicalDownloadTorrentHash(infoHash: String): String {
@@ -511,16 +619,42 @@ internal fun canonicalDownloadTorrentHash(infoHash: String): String {
 
 /** Metadata may be delayed or temporarily unavailable while a healthy engine connects to peers. */
 internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend, hash: String,
-    timeoutMs: Long = 90_000L, pollMs: Long = 1_000L): List<TorrServerFile> = withTimeout(timeoutMs) {
+    timeoutMs: Long = 90_000L, pollMs: Long = 1_000L, item: DownloadItem? = null,
+    restoreMissingTorrent: (suspend () -> Unit)? = null): List<TorrServerFile> = withTimeout(timeoutMs) {
     var files: List<TorrServerFile> = emptyList()
-    while (files.isEmpty()) {
+    var missingRecoveries = 0
+    fun ready(): Boolean {
+        val videos = files.filter { file -> file.path.substringAfterLast('.', "").lowercase() in
+            setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts", "m2ts", "wmv", "flv") }
+        if (videos.none { it.path.isNotBlank() && it.length > 0 } ||
+            files.any { it.path.isBlank() && it.length > 0 }) return false
+        val incomplete = videos.filter { it.length <= 0 }
+        if (item == null) return incomplete.isEmpty()
+        val season = item.seasonNumber
+        val episode = item.episodeNumber
+        val names = listOfNotNull(item.torrentFilename) + item.torrentFilenameAlternates
+        return incomplete.none { file ->
+            names.any { it.trim().replace('\\', '/').equals(file.path.replace('\\', '/'), ignoreCase = true) } ||
+                (season != null && episode != null &&
+                    matchesDownloadEpisode(file.path, season, episode, downloadAbsoluteEpisode(item.episodeTitle),
+                        requireSeasonEvidence = false) == true)
+        }
+    }
+    while (!ready()) {
         try {
             files = backend.getTorrentStats(hash).files
         } catch (e: CancellationException) {
             throw e
         } catch (e: DesktopTorrentEngineUnavailable) {
             if (e.httpStatusCode == 404) {
-                throw DesktopTorrentEngineUnavailable("Torrent disappeared from the local engine; retry this source", e, 404)
+                if (restoreMissingTorrent == null || missingRecoveries >= 3) {
+                    throw DesktopTorrentEngineUnavailable("Torrent disappeared from the local engine after reconnecting; choose another source or retry", e, 404)
+                }
+                if (!backend.isHealthy()) throw DesktopTorrentEngineUnavailable("Torrent engine stopped while fetching metadata", e)
+                missingRecoveries++
+                restoreMissingTorrent()
+                delay(pollMs * missingRecoveries)
+                continue
             }
             if (e.httpStatusCode != null && e.httpStatusCode !in 500..599 &&
                 e.httpStatusCode !in listOf(408, 425, 429)) throw e
@@ -528,14 +662,15 @@ internal suspend fun awaitDownloadTorrentMetadata(backend: DesktopTorrentBackend
         } catch (e: IOException) {
             if (!backend.isHealthy()) throw DesktopTorrentEngineUnavailable("Torrent engine stopped while fetching metadata", e)
         }
-        if (files.isEmpty()) delay(pollMs)
+        if (!ready()) delay(pollMs)
     }
     files
 }
 
 /** Reads one file of a torrent through the engine shared by every download of that torrent. */
 internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTorrentEngines,
-    settings: () -> P2pSettingsUiState, copy: suspend (String, TorrServerFile) -> File): File {
+    settings: () -> P2pSettingsUiState, onSelected: (TorrServerFile) -> Unit = {},
+    copy: suspend (String, TorrServerFile, suspend () -> Unit) -> File): File {
     val hash = canonicalDownloadTorrentHash(checkNotNull(item.torrentHash) { "No downloadable media source" })
     val magnet = buildP2pMagnetUri(hash, item.torrentTrackers)
     val selectedSettings = settings()
@@ -548,36 +683,17 @@ internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTo
                 e, e.httpStatusCode)
             throw e
         }
-        val files = awaitDownloadTorrentMetadata(backend, added)
-        val chosen = selectDownloadTorrentFile(files, item.torrentFileIdx, item.torrentFilename)
-        copy(backend.getStreamUrl(magnet, chosen.id), chosen)
+        val restore = suspend { backend.addTorrent(magnet); Unit }
+        val files = awaitDownloadTorrentMetadata(backend, added, item = item, restoreMissingTorrent = restore)
+        val chosen = selectDownloadTorrentFile(files, item.torrentFileIdx, item.torrentFilename,
+            item.seasonNumber, item.episodeNumber, downloadAbsoluteEpisode(item.episodeTitle),
+            item.torrentFilenameAlternates, requireStrongEpisodeEvidence = item.sourceSelection != null)
+        onSelected(chosen)
+        copy(backend.getStreamUrl(magnet, chosen.id), chosen, restore)
     }
-}
-internal fun selectDownloadTorrentFile(files: List<TorrServerFile>, index: Int?, filename: String?): TorrServerFile {
-    val videos = files.filter { it.path.substringAfterLast('.', "").lowercase() in setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts") && it.length > 0 }
-    // TorrServer assigns IDs after sorting paths; an addon's fileIdx uses the torrent's own order.
-    // Resolve the supplied filename first, then pass that file's native ID to /stream.
-    val selected = if (!filename.isNullOrBlank()) {
-        val path = filename.trim().replace('\\', '/')
-        check(path.split('/').none { it == "." || it == ".." || it.isEmpty() }) { "Invalid torrent filename. Choose another source." }
-        val exact = videos.filter { it.path.replace('\\', '/').equals(path, true) }
-        val matches = if (exact.isNotEmpty()) exact else videos.filter {
-            val candidate = it.path.replace('\\', '/')
-            if ('/' in path) candidate.endsWith("/$path", true)
-            else candidate.substringAfterLast('/').equals(path, true)
-        }
-        check(matches.size == 1) { "The requested torrent filename is missing or ambiguous. Choose another episode source." }
-        matches.single()
-    } else videos.singleOrNull()
-    // File indices supplied by add-ons are in original torrent order, while TorrServer
-    // assigns IDs after sorting paths. An index alone cannot disambiguate a season pack.
-    check(selected != null && selected in videos) {
-        "Multi-video torrent needs an exact filename. Choose the episode's source manually."
-    }
-    return selected
 }
 
-internal fun recoverFinalDownload(item: DownloadItem): File? {
+internal fun recoverFinalDownload(item: DownloadItem, verifyActive: () -> Boolean = { true }): File? {
     val file = downloadPath(item)
     if (!file.exists()) return null
     // Inspect the owner even on offline recovery. A file cannot create ownership for itself.
@@ -598,14 +714,14 @@ internal fun recoverFinalDownload(item: DownloadItem): File? {
         if (legacySize != null && file.length() == legacySize) {
             val migrated = DesktopDownloadProof(item.id, item.fileName,
                 downloadSha256Text("legacy-completed\u0000${item.id}\u0000${item.fileName}"),
-                "-", "", legacySize, downloadSha256File(file))
+                "-", "", legacySize, downloadSha256File(file, verifyActive))
             writeDesktopDownloadProof(file, migrated)
             proof = migrated
         }
     }
     check(proof != null && proof.ownerId == item.id && proof.fileName == item.fileName &&
         proof.completedSha256 != null && file.isFile && file.length() == proof.totalBytes &&
-        proof.totalBytes > 0 && verifiedDesktopDownloadContent(file, proof)) {
+        proof.totalBytes > 0 && verifiedDesktopDownloadContent(file, proof, verifyActive = verifyActive)) {
         "Existing destination is missing its verified content proof or its bytes changed; file was preserved"
     }
     return file

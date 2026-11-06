@@ -14,6 +14,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.RemoteChoice
+import com.nuvio.app.features.remote.RemotePlayback
+import com.nuvio.app.features.remote.RemotePlaybackHandoff
+import com.nuvio.app.features.remote.newRemotePlaybackId
+import com.nuvio.app.features.remote.isAllowedFor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -30,6 +43,7 @@ import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.p2p.P2pSettingsRepository
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
@@ -249,10 +263,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     }
     val playerControlsState = PlayerControlsState(
         title = title,
-        episodeText = episodeText,
+        episodeText = if (hasPlaybackStarted) episodeText else "",
         streamTitle = activeStreamTitle,
         providerName = activeProviderName,
-        pauseOverlayEnabled = playerSettingsUiState.pauseOverlayEnabled,
+        pauseOverlayEnabled = playerSettingsUiState.pauseOverlayEnabled && hasPlaybackStarted,
         pauseOverlayWatchingLabel = stringResource(Res.string.compose_player_youre_watching),
         pauseOverlayLogo = logo,
         pauseOverlayEpisodeInfo = if (seasonNumber != null && episodeNumber != null) {
@@ -375,6 +389,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         themeBorderDefaultColor = themeColors.borderDefault.toCssColorString(),
         isPlaying = playbackSnapshot.isPlaying,
         isLoading = playbackSnapshot.isLoading,
+        hasPlaybackStarted = hasPlaybackStarted,
         isLocked = playerControlsLocked,
         lockedOverlayVisible = lockedOverlayVisible,
         controlsVisible = controlsVisible && !playerControlsLocked,
@@ -478,6 +493,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val gestureCallbacks = rememberSurfaceGestureCallbacks()
     val playbackGesturesEnabled = !isDesktop && !isInPip && initialLoadCompleted && errorMessage == null
     val enableSurfaceGestures = !isDesktop && !isInPip
+
+    BindRemotePlayback(playerControlsState)
 
     Box(
         modifier = Modifier
@@ -587,7 +604,12 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
 
         AnimatedVisibility(
-            visible = playerSettingsUiState.pauseOverlayEnabled && pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPip,
+            visible = pauseMetadataEligible(
+                enabled = playerSettingsUiState.pauseOverlayEnabled,
+                hasPlaybackStarted = hasPlaybackStarted,
+                snapshot = playbackSnapshot,
+                hasError = errorMessage != null,
+            ) && pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPip,
             enter = fadeIn(animationSpec = tween(durationMillis = 220)),
             exit = fadeOut(animationSpec = tween(durationMillis = 180)),
         ) {
@@ -684,6 +706,11 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
 private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
     val isInPip = rememberIsInPictureInPicture()
     val controlToggles = playerControlToggles()
+    val remoteConnected = DesktopRemote.connected.collectAsState().value
+    val handoffSentText = stringResource(Res.string.remote_handoff_sent)
+    val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
+    var showPlaybackDiagnostics by remember { mutableStateOf(false) }
+    val showCastHelp = remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPip,
         enter = fadeIn(),
@@ -705,7 +732,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             showRemainingTime = showRemainingTime,
             onRuntimeClick = { showRemainingTime = !showRemainingTime },
             releaseInfo = metaUiState.meta?.takeIf { it.id == parentMetaId }?.releaseInfo,
-            hideDetails = activeSkipInterval != null && !skipIntervalDismissed,
+            hideDetails = !hasPlaybackStarted || (activeSkipInterval != null && !skipIntervalDismissed),
+            showMetadata = hasPlaybackStarted,
             onNextEpisodeClick = if (nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null) {
                 {
                     playNextEpisode()
@@ -781,6 +809,27 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            onHandoffClick = if (!isDesktop && !isIos && remoteConnected &&
+                !activeVideoId.isNullOrBlank() && contentType in setOf("movie", "series")) {
+                {
+                    val request = RemotePlaybackHandoff(
+                        contentType = contentType.orEmpty(),
+                        videoId = activeVideoId.orEmpty(),
+                        parentMetaId = parentMetaId,
+                        title = title,
+                        profileId = ProfileRepository.activeProfileId,
+                        season = activeSeasonNumber,
+                        episode = activeEpisodeNumber,
+                        resumePositionMs = playbackSnapshot.positionMs.coerceIn(0L, 43_200_000L),
+                    )
+                    val sent = DesktopRemote.requestHandoff(request)
+                    NuvioToastController.show(if (sent) handoffSentText else handoffUnavailableText)
+                }
+            } else null,
+            onDiagnosticsClick = { showPlaybackDiagnostics = true },
+            onCastInfoClick = if (!isDesktop && !isIos) {
+                { showCastHelp.value = true }
+            } else null,
             controlToggles = controlToggles,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
@@ -796,6 +845,24 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+    if (showPlaybackDiagnostics) {
+        PlaybackDiagnosticsDialog(
+            snapshot = playbackSnapshot,
+            onDismiss = { showPlaybackDiagnostics = false },
+        )
+    }
+    if (showCastHelp.value) {
+        CastCompatibilityDialog(
+            eligibility = assessCastCompatibility(
+                sourceUrl = activeSourceUrl,
+                sourceHeaders = activeSourceHeaders,
+                isPeerToPeer = !activeTorrentInfoHash.isNullOrBlank() ||
+                    activeStreamType.orEmpty().contains("torrent", ignoreCase = true),
+                hasSeparateAudio = !activeSourceAudioUrl.isNullOrBlank(),
+            ),
+            onDismiss = { showCastHelp.value = false },
         )
     }
 }
@@ -854,6 +921,83 @@ private fun PlayerScreenRuntime.requestBack() {
         } catch (failure: Throwable) {
             playerReleaseSurfaceRetention.finish(releaseAttemptId)
             throw failure
+        }
+    }
+}
+
+@Composable
+private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
+    if (!isDesktop) return
+    val owner = this
+    DisposableEffect(owner) {
+        onDispose {
+            DesktopRemote.dispatch = null
+            DesktopRemote.playback = RemotePlayback()
+            DesktopRemote.transport.disconnect()
+        }
+    }
+    val identity = remember(activePlaybackKey) { newRemotePlaybackId() }
+    val episodeSources = state.episodeStreamItems.filter { it.isEnabled }
+    val sourceContext = episodeStreamsPanelState.selectedEpisode?.id.orEmpty()
+    fun sourceId(item: PlayerControlSourceItem) = "$sourceContext:${item.index}:${item.label.hashCode()}"
+    val remoteState = RemotePlayback(
+        playbackId = identity,
+        title = listOf(state.title, state.episodeText).filter { it.isNotBlank() }.joinToString(" • ").take(250),
+        playing = state.isPlaying,
+        position = state.positionMs,
+        duration = state.durationMs,
+        volume = playerController?.getRemoteVolume() ?: 1f,
+        skip = state.skipPromptVisible,
+        episodes = state.episodeItems.take(2000).map { RemoteChoice(it.id, "${it.code} ${it.title}".take(150), it.isCurrent) },
+        subtitles = listOf(RemoteChoice("off", "Off", isSubtitleOffSelected)) + state.subtitleOptionItems.take(500).map {
+            RemoteChoice(it.id, "${it.title} • ${it.sourceLabel}".take(150), it.isSelected)
+        },
+        sources = episodeSources.take(500).map { RemoteChoice(sourceId(it), "${it.addonName} • ${it.label}".take(180)) },
+        message = when {
+            state.showP2pConsent -> "Confirm P2P streaming on the desktop before continuing."
+            state.episodeStreamsIsLoading -> "Finding episode sources…"
+            state.episodeStreamsVisible && episodeSources.isNotEmpty() -> "Choose an episode source below."
+            state.episodeStreamsVisible -> "No episode sources found. Check the desktop's addons."
+            else -> ""
+        },
+    )
+    SideEffect {
+        DesktopRemote.playback = remoteState
+        DesktopRemote.dispatch = dispatch@ { command ->
+            if (!command.isAllowedFor(remoteState)) return@dispatch
+            val controller = playerController ?: return@dispatch
+            when (command.type) {
+                "play" -> { shouldPlay = true; controller.play() }
+                "pause" -> { shouldPlay = false; controller.pause() }
+                "seek" -> {
+                    val target = command.value.toLong().coerceIn(0, playbackSnapshot.durationMs.coerceAtLeast(0))
+                    finishTimelineScrub(target)
+                    controller.seekTo(target)
+                    scheduleProgressSyncAfterSeek()
+                }
+                "seekBy" -> seekBy(command.value.toLong().coerceIn(-60_000, 60_000))
+                "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, 1f))
+                "mute" -> controller.setMuted(controller.getRemoteVolume() > 0f)
+                "skipInterval" -> handlePlayerControlsEvent("skipInterval", 0.0)
+                "next" -> playNextEpisode()
+                "previous" -> {
+                    val index = state.episodeItems.indexOfFirst { it.isCurrent }
+                    state.episodeItems.getOrNull(index - 1)?.let { handlePlayerControlsEvent("selectEpisode", it.index.toDouble()) }
+                }
+                "episode" -> state.episodeItems.firstOrNull { it.id == command.id }?.let {
+                    handlePlayerControlsEvent("selectEpisode", it.index.toDouble())
+                }
+                "subtitle" -> {
+                    if (command.id == "off") selectUserSubtitleTrack(-1)
+                    else state.subtitleOptionItems.firstOrNull { it.id == command.id }?.let {
+                        handlePlayerControlsEvent(if (it.kind == "addon") "selectAddonSubtitle" else "selectBuiltInSubtitleTrack", it.index.toDouble())
+                    }
+                }
+                "fetchSubtitles" -> { refreshTracks(); fetchAddonSubtitlesForActiveItem() }
+                "source" -> episodeSources.firstOrNull { sourceId(it) == command.id }?.let {
+                    handlePlayerControlsEvent("selectEpisodeStream", it.index.toDouble())
+                }
+            }
         }
     }
 }

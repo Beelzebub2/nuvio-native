@@ -10,6 +10,9 @@ import androidx.activity.SystemBarStyle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.nuvio.app.core.auth.AuthStorage
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.isStarlitOAuthCallback
+import com.nuvio.app.core.auth.GoogleOAuthAvailability
 import com.nuvio.app.core.network.ServerConfigurationStorage
 import com.nuvio.app.core.diagnostics.SentryInitializer
 import com.nuvio.app.core.deeplink.handleAppUrl
@@ -84,6 +87,7 @@ open class MainActivity : AppCompatActivity() {
             ),
         )
         ThemeSettingsStorage.initialize(applicationContext)
+        com.nuvio.app.features.remote.AndroidBluetoothRemoteClient.initialize(applicationContext)
         AppIconPlatform.initialize(applicationContext)
         SentrySettingsStorage.initialize(applicationContext)
         SentryInitializer.start(application)
@@ -194,8 +198,13 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIncomingAppIntent(intent: Intent?) {
-        val appUrl = intent?.dataString?.trim().orEmpty()
+        val incoming = intent ?: return
+        val appUrl = incoming.dataString?.trim().orEmpty()
         if (appUrl.isBlank()) return
+        if (GoogleOAuthAvailability.isOfficialServer() && isStarlitOAuthCallback(appUrl)) {
+            AuthRepository.handleGoogleOAuthCallback(appUrl)
+            return
+        }
         handleAppUrl(appUrl)
     }
 }

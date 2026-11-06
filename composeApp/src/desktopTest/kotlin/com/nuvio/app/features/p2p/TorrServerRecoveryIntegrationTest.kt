@@ -2,6 +2,8 @@ package com.nuvio.app.features.p2p
 
 import com.sun.net.httpserver.HttpServer
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.DatagramSocket
@@ -29,11 +31,74 @@ import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertContentEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class TorrServerRecoveryIntegrationTest {
+    private class UnstoppableProcess : Process() {
+        var canExit = false
+        var forcedStops = 0
+        override fun getOutputStream() = ByteArrayOutputStream()
+        override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+        override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+        override fun waitFor(): Int = if (canExit) 0 else throw IllegalThreadStateException("still running")
+        override fun waitFor(timeout: Long, unit: TimeUnit): Boolean = canExit
+        override fun exitValue(): Int = waitFor()
+        override fun destroy() = Unit
+        override fun destroyForcibly(): Process { forcedStops += 1; return this }
+        override fun isAlive(): Boolean = !canExit
+    }
+
+    @Test fun failedStopDoesNotForgetAnUnterminatedTorrentChild() = runBlocking {
+        val root = Files.createTempDirectory("nuvio-torrserver-stuck-stop").toFile()
+        try {
+            val backend = TorrServerBackend(File(root, "config"), File(root, "pieces"))
+            val binary = backend.javaClass.getDeclaredField("binary").apply { isAccessible = true }.get(backend)
+            val processField = binary.javaClass.getDeclaredField("process").apply { isAccessible = true }
+            val child = UnstoppableProcess()
+            processField.set(binary, child)
+
+            assertFailsWith<DesktopTorrentEngineUnavailable> { backend.stop() }
+            assertSame(child, processField.get(binary), "A live child must remain tracked so cleanup cannot claim its cache")
+            assertEquals(1, child.forcedStops)
+
+            child.canExit = true
+            backend.stop()
+            assertNull(processField.get(binary), "A confirmed dead child can release its ownership")
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun aNewAppLaunchUsesIndependentTorrentState() = runBlocking {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val root = File(System.getProperty("user.dir"))
+        val binary = listOf(
+            File(root, "src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe"),
+            File(root, "composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe"),
+        ).firstOrNull { it.isFile && it.length() > 1_000_000 } ?: error("Bundled engine missing")
+        val dir = Files.createTempDirectory("nuvio-orphan-recovery-test").toFile()
+        val oldDirectory = File(dir, "torrserver")
+        val newDirectory = desktopTorrServerSessionDirectory(File(dir, "cache"))
+        val old = TorrServerBackend(oldDirectory, File(dir, "old-pieces"), binary)
+        val fresh = TorrServerBackend(newDirectory, File(dir, "new-pieces"), binary)
+        val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
+        try {
+            assertFalse(newDirectory.canonicalPath.startsWith(oldDirectory.canonicalPath + File.separator))
+            old.restart(settings)
+            val oldPid = assertNotNull(old.processId)
+            fresh.restart(settings)
+            assertNotEquals(oldPid, fresh.processId)
+            assertTrue(old.isHealthy(), "The previous engine remains independent")
+            assertTrue(fresh.isHealthy(), "A new launch must not share the previous engine's database")
+        } finally {
+            fresh.stop()
+            old.stop()
+            dir.deleteRecursively()
+        }
+    }
+
     @Test fun portSelectionSkipsAnOccupiedUdpPortAndBoundsFailures() {
         DatagramSocket(0).use { occupied ->
             var tries = 0

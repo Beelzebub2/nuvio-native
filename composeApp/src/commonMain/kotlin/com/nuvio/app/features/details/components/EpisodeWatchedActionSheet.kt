@@ -49,6 +49,8 @@ fun EpisodeWatchedActionSheet(
     onToggleWatched: () -> Unit,
     onTogglePreviousWatched: () -> Unit,
     onToggleSeasonWatched: () -> Unit,
+    isSavedForLater: Boolean? = null,
+    onToggleWatchLater: (() -> Unit)? = null,
     showPlayManually: Boolean = false,
     onPlayManually: (() -> Unit)? = null,
 ) {
@@ -117,6 +119,20 @@ fun EpisodeWatchedActionSheet(
                     }
                 },
             )
+            if (isSavedForLater != null && onToggleWatchLater != null) {
+                NuvioBottomSheetActionRow(
+                    icon = if (isSavedForLater) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    title = stringResource(
+                        if (isSavedForLater) Res.string.watch_later_remove else Res.string.watch_later_save,
+                    ),
+                    onClick = {
+                        onToggleWatchLater()
+                        coroutineScope.launch {
+                            dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
+                        }
+                    },
+                )
+            }
             if (showPlayManually && onPlayManually != null) {
                 NuvioBottomSheetActionRow(
                     icon = Icons.Default.PlayArrow,

@@ -3,6 +3,7 @@ package com.nuvio.app.features.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,22 +31,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.network.ServerConfigurationRepository
 import com.nuvio.app.core.build.AppVersionPolicy
 import com.nuvio.app.core.ui.NuvioActionSize
 import com.nuvio.app.core.ui.NuvioCompactActionButton
 import com.nuvio.app.core.ui.NuvioCompactActionTone
+import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.updater.AppUpdaterPlatform
 import com.nuvio.app.features.updater.UpdatePreferences
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.*
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
 import nuvio.composeapp.generated.resources.changelog_description
 import nuvio.composeapp.generated.resources.changelog_title
+import nuvio.composeapp.generated.resources.compose_auth_sign_in
 import nuvio.composeapp.generated.resources.compose_settings_page_licenses_attributions
 import nuvio.composeapp.generated.resources.compose_settings_page_privacy_policy
 import nuvio.composeapp.generated.resources.compose_settings_page_supporters_contributors
@@ -52,6 +59,7 @@ import nuvio.composeapp.generated.resources.compose_settings_root_privacy_policy
 import nuvio.composeapp.generated.resources.settings_account_delete_account
 import nuvio.composeapp.generated.resources.settings_account_delete_account_description
 import nuvio.composeapp.generated.resources.settings_account_not_signed_in
+import nuvio.composeapp.generated.resources.settings_account_loading
 import nuvio.composeapp.generated.resources.settings_account_sign_out
 import nuvio.composeapp.generated.resources.settings_account_status_anonymous
 import nuvio.composeapp.generated.resources.settings_account_status_signed_in
@@ -199,10 +207,12 @@ internal fun LazyListScope.desktopUpdatesContent(
 @Composable
 internal fun DesktopAccountCard(
     authState: AuthState,
+    onSignInClick: () -> Unit,
     onSignOutClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     val authenticated = authState as? AuthState.Authenticated
+    val server by ServerConfigurationRepository.active.collectAsState()
     SettingsGroup(isTablet = true) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
@@ -220,6 +230,7 @@ internal fun DesktopAccountCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = when {
+                        authState is AuthState.Loading -> stringResource(Res.string.settings_account_loading)
                         authenticated == null -> stringResource(Res.string.settings_account_not_signed_in)
                         authenticated.isAnonymous -> stringResource(Res.string.settings_account_status_anonymous)
                         else -> authenticated.email ?: stringResource(Res.string.settings_account_status_signed_in)
@@ -227,7 +238,7 @@ internal fun DesktopAccountCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = tokens.colors.textPrimary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (authenticated != null) {
@@ -243,7 +254,17 @@ internal fun DesktopAccountCard(
                         color = tokens.colors.textMuted,
                     )
                 }
+                if (authenticated != null && !authenticated.isAnonymous && server.backendUrl.isNotBlank()) {
+                    Text(
+                        text = stringResource(Res.string.settings_account_server_detail, server.backendUrl),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.colors.textMuted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
+            if (authState is AuthState.Loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             if (authenticated != null) {
                 NuvioCompactActionButton(
                     label = stringResource(Res.string.settings_account_sign_out),
@@ -252,6 +273,70 @@ internal fun DesktopAccountCard(
                     tone = NuvioCompactActionTone.Ghost,
                     size = NuvioActionSize.Small,
                 )
+            } else if (authState is AuthState.Unauthenticated) {
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.compose_auth_sign_in),
+                    icon = Icons.Rounded.Person,
+                    onClick = onSignInClick,
+                    tone = NuvioCompactActionTone.Ghost,
+                    size = NuvioActionSize.Small,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DesktopPhoneConnectionCard(authState: AuthState) {
+    val connected by com.nuvio.app.features.remote.DesktopRemote.connected.collectAsState()
+    val firewallState by com.nuvio.app.features.remote.DesktopRemote.firewall.state.collectAsState()
+    val server by ServerConfigurationRepository.active.collectAsState()
+    val signedIn = (authState as? AuthState.Authenticated)?.isAnonymous == false
+    // Keep this gate aligned with DesktopRemoteHost, which cannot start for HTTP servers.
+    val canHostRemote = signedIn && server.backendUrl.startsWith("https://")
+    NuvioSurfaceCard(modifier = Modifier.testTag("desktop-account-phone-connection")) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val narrow = maxWidth < 480.dp
+            @Composable
+            fun Details(modifier: Modifier = Modifier) {
+                Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(stringResource(Res.string.remote_qr_phone_remote),
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(if (!signedIn) stringResource(Res.string.remote_qr_sign_in_required)
+                        else if (!canHostRemote) stringResource(Res.string.remote_qr_https_required)
+                        else stringResource(if (connected) Res.string.remote_qr_connected
+                            else Res.string.remote_qr_account_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.nuvio.colors.textSecondary)
+                    if (canHostRemote && !connected && firewallState in setOf(
+                            com.nuvio.app.features.remote.RemoteFirewallState.Blocked,
+                            com.nuvio.app.features.remote.RemoteFirewallState.PublicNetwork,
+                            com.nuvio.app.features.remote.RemoteFirewallState.Failed,
+                        )) {
+                        Text(stringResource(Res.string.remote_firewall_card_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.nuvio.colors.warning)
+                    }
+                }
+            }
+            @Composable
+            fun Action() {
+                NuvioCompactActionButton(
+                    label = stringResource(if (connected) Res.string.remote_qr_manage else Res.string.remote_qr_show),
+                    icon = null,
+                    onClick = { com.nuvio.app.features.remote.DesktopRemote.open() },
+                    enabled = canHostRemote,
+                    tone = NuvioCompactActionTone.Secondary,
+                    size = NuvioActionSize.Small,
+                )
+            }
+            if (narrow) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { Details(); Action() }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Details(Modifier.weight(1f))
+                    Action()
+                }
             }
         }
     }

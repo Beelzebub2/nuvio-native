@@ -122,22 +122,15 @@ class PluginSyncTest {
     }
 
     @Test
-    fun automaticRefreshDoesNotUploadPlugins(): Unit = runBlocking {
+    fun insecureAutomaticRefreshFailsClosedWithoutUploadingPlugins(): Unit = runBlocking {
         seedPlugins()
-        respond(
-            """{"name":"Refreshed plugin","version":"1","scrapers":[{"id":"scraper","name":"Scraper","version":"1","filename":"scraper.js"}]}""",
-        )
-        respond("module.exports = {}")
-
         PluginRepository.refreshAll()
         withTimeout(5_000) {
             PluginRepository.uiState.first { state -> state.repositories.none { it.isRefreshing } }
         }
 
-        assertEquals("Refreshed plugin", PluginRepository.uiState.value.repositories.single().name)
-        repeat(2) {
-            assertEquals("GET", assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)).method)
-        }
+        assertEquals("Cached plugin", PluginRepository.uiState.value.repositories.single().name)
+        assertNotNull(PluginRepository.uiState.value.repositories.single().errorMessage)
         assertNull(server.takeRequest(750, TimeUnit.MILLISECONDS))
     }
 

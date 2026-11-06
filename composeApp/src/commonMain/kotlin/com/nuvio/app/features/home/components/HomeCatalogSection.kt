@@ -15,6 +15,9 @@ import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.watching.application.WatchingState
 
+// Stable lambda lets the lazy shelf reuse its duplicate-safe keys across recompositions.
+private val homePosterStableKey: (MetaPreview) -> Any = { item -> item.stableKey() }
+
 @Composable
 fun HomeCatalogRowSection(
     section: HomeCatalogSection,
@@ -79,7 +82,7 @@ private fun HomeCatalogRowSectionContent(
         onViewAllClick = onViewAllClick,
         onTitleClick = onViewAllClick?.takeIf { isDesktop },
         viewAllPillSize = NuvioViewAllPillSize.Compact,
-        key = { item -> item.stableKey() },
+        key = homePosterStableKey,
     ) { item ->
         HomePosterCard(
             item = item,
@@ -89,6 +92,7 @@ private fun HomeCatalogRowSectionContent(
                 item = item,
                 fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
             ),
+            styleOverride = posterCardStyle,
             onClick = onPosterClick?.let { { it(item) } },
             onLongClick = onPosterLongClick?.let { { it(item) } },
         )

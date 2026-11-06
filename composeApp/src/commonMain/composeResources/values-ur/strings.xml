@@ -1,4 +1,5 @@
 <resources>
+    <string name="settings_advanced_sentry_reports_subtitle">محفوظ سیاق و سباق کے ساتھ کریش اور ANR رپورٹس بھیجیں۔ آپ کے فعال کرنے تک بند رہتا ہے۔</string>
     <string name="theme_gold">سنہری</string>
     <string name="theme_jade">جیڈ</string>
     <string name="theme_rose_gold">روز گولڈ</string>
@@ -553,7 +554,6 @@
     <string name="settings_advanced_remember_last_profile">آخری پروفائل یاد رکھیں</string>
     <string name="settings_advanced_remember_last_profile_description">ایپ شروع ہونے پر آخری منتخب پروفائل یاد رکھیں</string>
     <string name="settings_advanced_sentry_reports">Sentry کریش رپورٹس</string>
-    <string name="settings_advanced_sentry_reports_subtitle">محفوظ context کے ساتھ crash اور ANR reports بھیجیں۔ یہ بطور ڈیفالٹ فعال ہے۔</string>
     <string name="sentry_enable_dialog_title">کریش رپورٹس فعال کریں؟</string>
     <string name="sentry_enable_dialog_subtitle">کریش رپورٹس آپ سے ADB logs کے ذریعے مسئلہ دوبارہ پیدا کروائے بغیر، مخصوص ڈیوائس سے متعلق خرابیوں کی نشاندہی میں مدد دیتی ہیں۔</string>
     <string name="sentry_disable_dialog_title">کریش رپورٹس بند کریں؟</string>

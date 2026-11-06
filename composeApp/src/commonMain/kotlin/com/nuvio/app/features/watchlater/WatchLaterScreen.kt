@@ -33,6 +33,7 @@ import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioSegment
 import com.nuvio.app.core.ui.NuvioSegmentedControl
+import com.nuvio.app.core.ui.NuvioSegmentedSize
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
@@ -64,10 +65,10 @@ import nuvio.composeapp.generated.resources.watch_later_series
 import nuvio.composeapp.generated.resources.watch_later_tip
 import org.jetbrains.compose.resources.stringResource
 
-/** The two desktop Library views. */
+/** The two Library destinations on desktop and mobile. */
 internal enum class LibraryView { Library, WatchLater }
 
-/** Library | Watch Later switch shown under the Library title on desktop. */
+/** Library | Watch Later switch shown under the Library title. */
 @Composable
 internal fun LibraryViewSwitcher(selected: LibraryView, onSelect: (LibraryView) -> Unit, modifier: Modifier = Modifier) {
     val saved by remember { WatchLaterRepository.ensureLoaded(); WatchLaterRepository.items }.collectAsState()
@@ -79,6 +80,7 @@ internal fun LibraryViewSwitcher(selected: LibraryView, onSelect: (LibraryView) 
         selected = selected,
         onSelect = onSelect,
         modifier = modifier,
+        size = if (isDesktop) NuvioSegmentedSize.Regular else NuvioSegmentedSize.Touch,
     )
 }
 

@@ -76,6 +76,10 @@ internal actual object PlatformLocalAccountDataCleaner {
     actual fun wipe() {
         val defaults = NSUserDefaults.standardUserDefaults
 
+        // NSUserDefaults cleanup does not touch Keychain. Clear our device-only
+        // per-profile credentials before another account can use the same profile IDs.
+        IosCredentialStore.clearAll()
+
         plainKeys.forEach(defaults::removeObjectForKey)
 
         (1..MAX_PROFILES).forEach { profileId ->

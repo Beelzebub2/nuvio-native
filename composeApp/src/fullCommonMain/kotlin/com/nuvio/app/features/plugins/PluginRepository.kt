@@ -8,9 +8,12 @@ import co.touchlab.kermit.Logger
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.features.addons.encodeUnsafeHttpUrlCharacters
 import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.plugins.runtime.PluginRuntime
+import com.nuvio.app.features.plugins.runtime.network.requirePublicPluginUrl
+import io.ktor.http.Url
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
@@ -18,6 +21,9 @@ import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
 import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,6 +89,7 @@ actual object PluginRepository {
 
     private var initialized = false
     private var currentProfileId = 1
+    private val refreshJobsLock = SynchronizedObject()
     private val activeRefreshJobs = mutableMapOf<String, Job>()
     private val persistenceGeneration = atomic(0L)
     private val persistenceRevision = atomic(0L)
@@ -281,57 +288,68 @@ actual object PluginRepository {
         if (ensureInitialized) {
             initialize()
         }
-        val existingJob = activeRefreshJobs[manifestUrl]
-        if (existingJob?.isActive == true) return
+        val jobToStart = synchronized(refreshJobsLock) {
+            val existingJob = activeRefreshJobs[manifestUrl]
+            if (existingJob != null && !existingJob.isCompleted) return
 
-        markRefreshing(manifestUrl)
-        var refreshJob: Job? = null
-        refreshJob = scope.launch {
-            try {
-                val result = runCatching {
-                    val previous = _uiState.value.scrapers.associateBy { it.id }
-                    fetchRepositoryData(manifestUrl, previous)
-                }
+            markRefreshing(manifestUrl)
+            var refreshJob: Job? = null
+            refreshJob = scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    val result = runCatching {
+                        val previous = _uiState.value.scrapers.associateBy { it.id }
+                        fetchRepositoryData(manifestUrl, previous)
+                    }
 
-                _uiState.update { state ->
-                    if (state.repositories.none { it.manifestUrl == manifestUrl }) return@update state
-                    result.fold(
-                        onSuccess = { (repo, scrapers) ->
-                            val updatedRepos = state.repositories.map { existing ->
-                                if (existing.manifestUrl == manifestUrl) repo else existing
-                            }
-                            state.copy(
-                                repositories = updatedRepos,
-                                scrapers = state.scrapers.filterNot { it.repositoryUrl == manifestUrl } + scrapers,
-                            )
-                        },
-                        onFailure = { error ->
-                            state.copy(
-                                repositories = state.repositories.map { existing ->
-                                    if (existing.manifestUrl == manifestUrl) {
-                                        existing.copy(
-                                            isRefreshing = false,
-                                            errorMessage = error.message ?: runBlocking { getString(Res.string.plugins_repository_refresh_failed) },
-                                        )
-                                    } else {
-                                        existing
+                    result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                    currentCoroutineContext().ensureActive()
+                    val failureMessage = result.exceptionOrNull()?.let { it.message ?: getString(Res.string.plugins_repository_refresh_failed) }
+                    synchronized(refreshJobsLock) {
+                        if (activeRefreshJobs[manifestUrl] !== refreshJob) return@launch
+
+                        _uiState.update { state ->
+                            if (state.repositories.none { it.manifestUrl == manifestUrl }) return@update state
+                            result.fold(
+                                onSuccess = { (repo, scrapers) ->
+                                    val updatedRepos = state.repositories.map { existing ->
+                                        if (existing.manifestUrl == manifestUrl) repo else existing
                                     }
+                                    state.copy(
+                                        repositories = updatedRepos,
+                                        scrapers = state.scrapers.filterNot { it.repositoryUrl == manifestUrl } + scrapers,
+                                    )
+                                },
+                                onFailure = { error ->
+                                    state.copy(
+                                        repositories = state.repositories.map { existing ->
+                                            if (existing.manifestUrl == manifestUrl) {
+                                                existing.copy(
+                                                    isRefreshing = false,
+                                                    errorMessage = failureMessage,
+                                                )
+                                            } else {
+                                                existing
+                                            }
+                                        },
+                                    )
                                 },
                             )
-                        },
-                    )
-                }
-                persist()
-                if (pushAfterRefresh) {
-                    pushToServer()
-                }
-            } finally {
-                if (activeRefreshJobs[manifestUrl] === refreshJob) {
-                    activeRefreshJobs.remove(manifestUrl)
+                        }
+                        persist()
+                        if (pushAfterRefresh) {
+                            pushToServer()
+                        }
+                    }
+                } finally {
+                    synchronized(refreshJobsLock) {
+                        if (activeRefreshJobs[manifestUrl] === refreshJob) activeRefreshJobs.remove(manifestUrl)
+                    }
                 }
             }
+            activeRefreshJobs[manifestUrl] = refreshJob
+            refreshJob
         }
-        activeRefreshJobs[manifestUrl] = refreshJob
+        jobToStart?.start()
     }
 
     actual fun toggleScraper(scraperId: String, enabled: Boolean) {
@@ -453,9 +471,11 @@ actual object PluginRepository {
     ): Pair<PluginRepositoryItem, List<PluginScraper>> {
         val storageProfileId = currentProfileId
         return withContext(Dispatchers.Default) {
-            val payload = httpGetText(manifestUrl)
+            val payload = fetchPluginSource(manifestUrl)
             val manifest = PluginManifestParser.parse(payload)
             val baseUrl = manifestUrl.substringBefore("?").removeSuffix("/manifest.json")
+
+            var updatedCodeNeedsApproval = false
 
             val scrapers = manifest.scrapers
                 .filter { scraper -> scraper.isSupportedOnCurrentPlatform() }
@@ -466,8 +486,21 @@ actual object PluginRepository {
                         "$baseUrl/${info.filename.trimStart('/')}"
                     }
                     runCatching {
-                        val code = httpGetText(codeUrl)
+                        val safeCodeUrl = requirePublicPluginUrl(codeUrl)
+                        // Code must remain on the explicitly installed repository's origin.
+                        val manifestOrigin = Url(manifestUrl)
+                        val codeOrigin = Url(safeCodeUrl)
+                        require(codeOrigin.host == manifestOrigin.host && codeOrigin.port == manifestOrigin.port &&
+                            codeOrigin.protocol == manifestOrigin.protocol) { "Plugin script changed origin" }
+                        val downloadedCode = fetchPluginSource(safeCodeUrl)
                         val scraperId = "${manifestUrl.lowercase()}:${info.id}"
+                        val previous = previousScrapers[scraperId]
+                        // A repository owner or compromised server cannot silently replace
+                        // previously approved executable JavaScript. Uninstall/reinstall is
+                        // the explicit approval step; the old code remains pinned meanwhile.
+                        val codeChanged = previous != null && previous.code != downloadedCode
+                        if (codeChanged) updatedCodeNeedsApproval = true
+                        val code = if (codeChanged) previous!!.code else downloadedCode
                         val cached = PluginStorage.saveScraperCode(
                             profileId = storageProfileId,
                             scraperId = scraperId,
@@ -477,9 +510,9 @@ actual object PluginRepository {
                         if (!cached) {
                             log.w { "Failed to cache plugin scraper $scraperId" }
                         }
-                        val previous = previousScrapers[scraperId]
                         val enabled = when {
                             !info.enabled -> false
+                            codeChanged -> false
                             previous != null -> previous.enabled
                             else -> info.enabled
                         }
@@ -489,7 +522,7 @@ actual object PluginRepository {
                             repositoryUrl = manifestUrl,
                             name = info.name,
                             description = info.description.orEmpty(),
-                            version = info.version,
+                            version = if (codeChanged) previous!!.version else info.version,
                             filename = info.filename,
                             supportedTypes = info.supportedTypes,
                             enabled = enabled,
@@ -511,7 +544,9 @@ actual object PluginRepository {
                 scraperCount = scrapers.size,
                 lastUpdated = currentEpochMillis(),
                 isRefreshing = false,
-                errorMessage = null,
+                errorMessage = if (updatedCodeNeedsApproval) {
+                    "Plugin code changed. Remove and reinstall this repository only after reviewing the update."
+                } else null,
             )
             repo to scrapers
         }
@@ -638,8 +673,11 @@ actual object PluginRepository {
     }
 
     private fun cancelActiveRefreshes() {
-        activeRefreshJobs.values.forEach(Job::cancel)
-        activeRefreshJobs.clear()
+        val jobs = synchronized(refreshJobsLock) {
+            activeRefreshJobs.values.toList().also { activeRefreshJobs.clear() }
+        }
+        // Detach before cancellation: completion handlers can remove jobs immediately.
+        jobs.forEach(Job::cancel)
     }
 
     private fun ensureStateLoadedForProfile(profileId: Int) {
@@ -717,7 +755,19 @@ actual object PluginRepository {
         val path = withoutFragment.substringBefore("?").trimEnd('/')
         val manifestPath = if (path.endsWith("/manifest.json")) path else "$path/manifest.json"
         val manifestUrl = if (query.isEmpty()) manifestPath else "$manifestPath?$query"
-        return manifestUrl.encodeUnsafeHttpUrlCharacters()
+        return requirePublicPluginUrl(manifestUrl.encodeUnsafeHttpUrlCharacters())
+    }
+
+    private suspend fun fetchPluginSource(url: String): String {
+        val safeUrl = requirePublicPluginUrl(url)
+        val response = httpRequestRaw(
+            method = "GET", url = safeUrl, headers = mapOf("Accept" to "text/plain, application/json"),
+            body = "", followRedirects = false, maxResponseBodyBytes = 1024 * 1024,
+            privateNetworkDenied = true,
+        )
+        check(response.status == 200 && response.body.isNotBlank() &&
+            !response.body.endsWith("\n...[truncated]")) { "Plugin source must be complete HTTPS content" }
+        return response.body
     }
 
     private fun resolveEffectiveProfileId(profileId: Int): Int {

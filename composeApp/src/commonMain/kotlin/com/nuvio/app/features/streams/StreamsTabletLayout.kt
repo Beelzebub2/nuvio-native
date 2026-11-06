@@ -252,7 +252,7 @@ internal fun TabletStreamsLayout(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(12.dp),
                 ) {
                     var qualityFilter by remember(uiState.requestToken) { mutableStateOf<StreamQuality?>(null) }
                     val best = remember(uiState, debridEnabled) { bestMatch(uiState, debridEnabled) }
@@ -286,7 +286,6 @@ internal fun TabletStreamsLayout(
                         modifier = Modifier.weight(1f),
                         groupByQuality = true,
                         qualityFilter = qualityFilter,
-                        excludedStream = best?.stream,
                     )
                 }
             }

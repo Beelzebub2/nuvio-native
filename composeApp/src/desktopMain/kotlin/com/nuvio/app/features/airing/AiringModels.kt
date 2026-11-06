@@ -29,8 +29,19 @@ internal data class AiringSettings(
     val includeEstimated: Boolean = true,
     val hideNsfw: Boolean = true,
     val hidden: List<HiddenAiringTitle> = emptyList(),
+    // Device-local outbox: keep offline hides and restores until the server accepts them.
+    val hiddenSyncPending: Boolean = false,
 ) {
     val hiddenMediaIds: Set<Int> get() = hidden.mapTo(mutableSetOf()) { it.mediaId }
+}
+
+/** Saved lists predate the outbox; upload them once before accepting remote state. */
+internal fun decodeSavedAiringSettings(payload: String): AiringSettings {
+    val json = Json { ignoreUnknownKeys = true }
+    val settings = json.decodeFromString<AiringSettings>(payload)
+    return if (settings.hidden.isNotEmpty() && "hiddenSyncPending" !in json.parseToJsonElement(payload).jsonObject) {
+        settings.copy(hiddenSyncPending = true)
+    } else settings
 }
 
 @Serializable

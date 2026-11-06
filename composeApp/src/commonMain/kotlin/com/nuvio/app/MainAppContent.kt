@@ -29,6 +29,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -55,6 +56,8 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.DeviceSessionRegistration
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
+import com.nuvio.app.core.diagnostics.UsageEvent
 import com.nuvio.app.core.deeplink.AppDeepLink
 import com.nuvio.app.core.deeplink.AppDeepLinkRepository
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
@@ -71,6 +74,7 @@ import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioFloatingPrompt
 import com.nuvio.app.core.ui.NuvioPosterZoomActionOverlay
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioToastHost
 import com.nuvio.app.core.ui.PosterZoomAnchor
@@ -101,6 +105,7 @@ import com.nuvio.app.features.collection.CollectionSyncService
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadStatus
 import com.nuvio.app.features.downloads.DownloadSubtitles
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.home.HomeCatalogSection
@@ -137,6 +142,7 @@ import com.nuvio.app.features.player.LockPlayerToLandscape
 import com.nuvio.app.features.player.HidePlayerSystemBars
 import com.nuvio.app.features.player.rememberExternalPlayerLauncher
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.remote.DesktopRemote
 import com.nuvio.app.features.settings.AccountSettingsScreen
 import com.nuvio.app.features.settings.AddonsSettingsScreen
 import com.nuvio.app.features.settings.ContinueWatchingSettingsScreen
@@ -177,6 +183,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -248,6 +255,15 @@ internal fun MainAppContent(
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
         var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
+        LaunchedEffect(selectedTab) {
+            val event = when (selectedTab) {
+                AppScreenTab.Home -> UsageEvent.Home
+                AppScreenTab.Search -> UsageEvent.Search
+                AppScreenTab.Library, AppScreenTab.WatchLater, AppScreenTab.MyAnimeList -> UsageEvent.Library
+                AppScreenTab.Settings -> UsageEvent.Settings
+            }
+            UsageDiagnostics.track(event)
+        }
         var searchFocusRequestCount by remember { mutableStateOf(0) }
         val homeScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val searchScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -260,6 +276,31 @@ internal fun MainAppContent(
             warmProfileBoundRepositories()
         }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
+        LaunchedEffect(currentRoute) {
+            if (currentRoute is PlayerRoute) {
+                UsageDiagnostics.track(UsageEvent.PlaybackOpened)
+            }
+        }
+        LaunchedEffect(ownsAppRuntime) {
+            if (!ownsAppRuntime) return@LaunchedEffect
+            var previous: Map<String, DownloadStatus>? = null
+            DownloadsRepository.uiState.collect { state ->
+                val current = state.items.associate { it.id to it.status }
+                previous?.let { before ->
+                    for (item in state.items) {
+                        val old = before[item.id]
+                        val event = when {
+                            old == null && item.status == DownloadStatus.Downloading -> UsageEvent.DownloadQueued
+                            old != null && old != DownloadStatus.Completed && item.status == DownloadStatus.Completed -> UsageEvent.DownloadCompleted
+                            old != null && old != DownloadStatus.Failed && item.status == DownloadStatus.Failed -> UsageEvent.DownloadFailed
+                            else -> null
+                        }
+                        if (event != null) UsageDiagnostics.track(event)
+                    }
+                }
+                previous = current
+            }
+        }
         var registeredPlayerSystemBack by remember {
             mutableStateOf<Pair<PlayerRoute, () -> Unit>?>(null)
         }
@@ -423,6 +464,7 @@ internal fun MainAppContent(
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.WatchLater -> Unit
+            AppScreenTab.MyAnimeList -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }
@@ -510,6 +552,12 @@ internal fun MainAppContent(
         )
     }
     launchOverlayState.targetState = launchOverlayVisible
+    val resumePromptLaunchReady = isStartupResumePromptReady(
+        rootContentReady = rootContentReady,
+        splashCurrentState = launchOverlayState.currentState,
+        splashTargetState = launchOverlayState.targetState,
+        splashIsIdle = launchOverlayState.isIdle,
+    )
 
     LaunchedEffect(
         rootContentReady,
@@ -712,13 +760,13 @@ internal fun MainAppContent(
     val continueWatchingPreferencesUiState by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(
-        initialHomeReady,
-        profileSwitchLoading,
+        resumePromptLaunchReady,
         profileState.activeProfile?.profileIndex,
         continueWatchingPreferencesUiState.showResumePromptOnLaunch,
     ) {
         if (!ownsAppRuntime) return@LaunchedEffect
-        if (!initialHomeReady || profileSwitchLoading) return@LaunchedEffect
+        // The home can be ready while the branded splash is still fading away.
+        if (!resumePromptLaunchReady) return@LaunchedEffect
         if (resumePromptItem != null) return@LaunchedEffect
         if (continueWatchingPreferencesUiState.showResumePromptOnLaunch) {
             resumePromptItem = ResumePromptRepository.consumeResumePrompt()
@@ -1086,6 +1134,39 @@ internal fun MainAppContent(
                     startFromBeginning = false,
                 )
             }
+
+        // The desktop never opens a phone-supplied URL. After the PC user
+        // explicitly accepts a metadata-only handoff, open the normal desktop
+        // source picker, including existing addon/rights/P2P-consent checks.
+        val latestOnPlayManually by rememberUpdatedState(onPlayManually)
+        DisposableEffect(isDesktop, activePlaybackProfileId) {
+            if (isDesktop) {
+                DesktopRemote.onAcceptedHandoff = { handoff ->
+                    if (handoff.profileId == ProfileRepository.activeProfileId &&
+                        handoff.profileId == activePlaybackProfileId) {
+                        latestOnPlayManually(
+                            handoff.contentType,
+                            handoff.videoId,
+                            handoff.parentMetaId,
+                            handoff.contentType,
+                            handoff.title,
+                            null,
+                            null,
+                            null,
+                            handoff.season,
+                            handoff.episode,
+                            null,
+                            null,
+                            null,
+                            handoff.resumePositionMs,
+                        )
+                    }
+                }
+            }
+            onDispose {
+                if (isDesktop) DesktopRemote.onAcceptedHandoff = null
+            }
+        }
 
         val onCatalogClick: (HomeCatalogSection) -> Unit = { section ->
             val launchId = CatalogLaunchStore.put(
@@ -2060,6 +2141,9 @@ internal fun MainAppContent(
                 visibleState = launchOverlayState,
                 enter = fadeIn(),
                 exit = fadeOut(androidx.compose.animation.core.tween(400)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(NuvioTokens.Z.launchOverlay),
             ) {
                 AppLaunchOverlay(
                     profile = launchOverlayProfile,
@@ -2068,7 +2152,7 @@ internal fun MainAppContent(
             }
 
             NuvioFloatingPrompt(
-                visible = resumePromptItem != null,
+                visible = resumePromptLaunchReady && resumePromptItem != null,
                 imageUrl = resumePromptItem?.poster ?: resumePromptItem?.imageUrl,
                 title = resumePromptItem?.title.orEmpty(),
                 subtitle = resumePromptItem?.let { localizedContinueWatchingSubtitle(it) }.orEmpty(),

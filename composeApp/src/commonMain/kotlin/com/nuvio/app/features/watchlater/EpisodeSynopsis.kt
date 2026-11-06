@@ -124,7 +124,7 @@ private fun EpisodeHoverCard(
 ) {
     val colors = MaterialTheme.nuvio.colors
     val meta = listOfNotNull(
-        video?.runtime?.takeIf { it > 0 }?.let(::formatRuntimeFromMinutes),
+        video?.runtime?.takeIf { it > 0 }?.let { formatRuntimeFromMinutes(it) },
         video?.released?.let(::formatReleaseDateForDisplay),
     ).joinToString(" · ")
     Surface(

@@ -28,13 +28,14 @@ internal class FetchBridge : HostModule {
             val headersJson = args.getOrNull(2)?.toString() ?: "{}"
             val bodyKind = args.getOrNull(3)?.toString() ?: "none"
             val body = args.getOrNull(4)?.toString() ?: ""
-            val followRedirects = args.getOrNull(5) as? Boolean ?: true
+            // Redirects could take a permitted public URL to a local or metadata endpoint.
+            // Fetching them requires a fresh, independently validated user request.
             try {
-                performNativeFetch(url, method, headersJson, bodyKind, body, followRedirects)
+                performNativeFetch(url, method, headersJson, bodyKind, body)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
-                log.e(t) { "Fetch bridge error for $method $url" }
+                log.w { "Plugin fetch rejected or failed (${t::class.simpleName})" }
                 JsonObject(
                     mapOf(
                         "ok" to JsonPrimitive(false),
@@ -56,8 +57,9 @@ internal class FetchBridge : HostModule {
         headersJson: String,
         bodyKind: String,
         body: String,
-        followRedirects: Boolean,
     ): String {
+        val validatedUrl = requirePublicPluginUrl(url)
+        require(method.uppercase() in setOf("GET", "POST", "HEAD")) { "Unsupported plugin request method" }
         val headers = parseHeaders(headersJson).toMutableMap()
         if (!headers.containsKey("User-Agent")) {
             headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -65,11 +67,12 @@ internal class FetchBridge : HostModule {
 
         val response = httpRequestRaw(
             method = method,
-            url = url,
+            url = validatedUrl,
             headers = headers,
             body = if (bodyKind == "text") body else "",
-            followRedirects = followRedirects,
+            followRedirects = false,
             bodyBytes = decodeBinaryBody(bodyKind, body),
+            privateNetworkDenied = true,
         )
 
         val responseHeaders = response.headers.mapKeys { (key, _) -> key.lowercase() }

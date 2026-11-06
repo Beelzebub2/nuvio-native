@@ -37,6 +37,10 @@ internal actual object PlatformLocalAccountDataCleaner {
         "nuvio_trakt_library",
         "nuvio_trakt_settings",
         "nuvio_watched",
+        "nuvio_watch_later",
+        "nuvio_personal_media",
+        "nuvio_native_airing",
+        "nuvio_android_download_preferences",
         "nuvio_stream_link_cache",
         "nuvio_stream_badge_settings",
         "nuvio_continue_watching_preferences",
@@ -60,6 +64,7 @@ internal actual object PlatformLocalAccountDataCleaner {
 
     actual fun wipe() {
         val context = appContext ?: return
+        com.nuvio.app.features.airing.NativeAiring.reset()
         preferenceNames.forEach { name ->
             check(context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()) {
                 "Could not clear account preferences: $name"
