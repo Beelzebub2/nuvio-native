@@ -39,9 +39,9 @@ internal enum class CastCompatibility {
 }
 
 /**
- * A candidate result is not permission to cast. Real casting still requires
- * sender SDK integration, a properly configured Cast receiver, rights checks
- * and explicit device selection. No network/receiver calls happen here.
+ * A candidate result is not permission to cast. The Android sender still
+ * requires explicit rights confirmation, a supported Cast receiver and
+ * deliberate device selection. No network/receiver calls happen here.
  */
 internal fun assessCastCompatibility(
     sourceUrl: String?,
@@ -58,16 +58,19 @@ internal fun assessCastCompatibility(
     if (sourceHeaders.isNotEmpty()) return CastCompatibility.AuthenticatedHeaders
     if (hasSeparateAudio) return CastCompatibility.SeparateAudio
     if (!url.startsWith("https://", ignoreCase = true)) return CastCompatibility.NonHttpsSource
-    if ('?' in url || '#' in url || url.length > 2048 || '\\' in url)
+    if (url != sourceUrl || '?' in url || '#' in url || url.length > 2048 || '\\' in url ||
+        url.any { it.isWhitespace() || it.code < 32 || it.code == 127 } ||
+        Regex("%(?:0[0-9a-f]|1[0-9a-f]|7f)", RegexOption.IGNORE_CASE).containsMatchIn(url))
         return CastCompatibility.SignedOrOpaqueUrl
 
     val authority = url.substringAfter("://").substringBefore('/')
     val host = authority.lowercase()
-    if (host.length !in 4..253 || !host.contains('.') ||
-        !host.matches(Regex("[a-z0-9.-]+")) ||
-        host.startsWith('.') || host.endsWith('.') || ".." in host ||
-        host.all { it in '0'..'9' || it == '.' } ||
-        listOf(".local", ".localhost", ".lan", ".internal", ".test", ".invalid", ".onion")
+    val labels = host.split('.')
+    if (host.length !in 4..253 || labels.size < 2 ||
+        labels.any { it.length !in 1..63 || !it.matches(Regex("[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")) } ||
+        !labels.last().matches(Regex("[a-z]{2,63}")) ||
+        listOf(".local", ".localhost", ".lan", ".internal", ".test", ".invalid", ".onion",
+            ".home", ".home.arpa", ".localdomain")
             .any { host.endsWith(it) })
         return CastCompatibility.PrivateOrUnknownHost
 
@@ -78,16 +81,33 @@ internal fun assessCastCompatibility(
     return CastCompatibility.PotentiallyCompatibleDirectMedia
 }
 
+/** MIME types accepted by the Default Media Receiver, never inferred from a response body. */
+internal fun eligibleCastMimeType(url: String): String? {
+    if (assessCastCompatibility(url, emptyMap(), isPeerToPeer = false, hasSeparateAudio = false) !=
+        CastCompatibility.PotentiallyCompatibleDirectMedia) return null
+    return when {
+        url.endsWith(".mp4", ignoreCase = true) -> "video/mp4"
+        url.endsWith(".webm", ignoreCase = true) -> "video/webm"
+        url.endsWith(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+        url.endsWith(".mpd", ignoreCase = true) -> "application/dash+xml"
+        else -> null
+    }
+}
+
 @Composable
 internal fun CastCompatibilityDialog(
     eligibility: CastCompatibility,
+    sourceUrl: String?,
+    resumePositionMs: Long,
+    onCastStarted: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     DialogSurface(
         onDismissRequest = onDismiss,
         title = stringResource(Res.string.player_cast_availability_title),
-        message = stringResource(Res.string.player_cast_not_configured),
+        message = stringResource(if (CastSenderSupported) Res.string.player_cast_sender_intro
+            else Res.string.player_cast_not_configured),
     ) {
         // The reason for this source sits in its own panel so it reads as the answer.
         Row(
@@ -117,6 +137,17 @@ internal fun CastCompatibilityDialog(
             )
         }
         DialogHint(stringResource(Res.string.player_cast_alternative))
+        if (CastSenderSupported) {
+            CastSenderControls(
+                // Keep disconnect/remote controls reachable after a source switch,
+                // but never give an ineligible source to the load action.
+                sourceUrl = sourceUrl.takeIf {
+                    eligibility == CastCompatibility.PotentiallyCompatibleDirectMedia
+                }.orEmpty(),
+                resumePositionMs = resumePositionMs,
+                onCastStarted = onCastStarted,
+            )
+        }
         DialogButtons {
             DialogButton(
                 text = stringResource(Res.string.action_close),
@@ -126,3 +157,13 @@ internal fun CastCompatibilityDialog(
         }
     }
 }
+
+/** Android-only Google Cast sender; desktop/iOS deliberately do not advertise discovery. */
+internal expect val CastSenderSupported: Boolean
+
+@Composable
+internal expect fun CastSenderControls(
+    sourceUrl: String,
+    resumePositionMs: Long,
+    onCastStarted: () -> Unit,
+)

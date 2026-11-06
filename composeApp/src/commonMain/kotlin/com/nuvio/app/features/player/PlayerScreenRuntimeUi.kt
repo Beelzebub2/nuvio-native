@@ -862,6 +862,12 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                     activeStreamType.orEmpty().contains("torrent", ignoreCase = true),
                 hasSeparateAudio = !activeSourceAudioUrl.isNullOrBlank(),
             ),
+            sourceUrl = activeSourceUrl,
+            resumePositionMs = playbackSnapshot.positionMs,
+            onCastStarted = {
+                if (playbackSnapshot.isPlaying) togglePlayback()
+                showCastHelp.value = false
+            },
             onDismiss = { showCastHelp.value = false },
         )
     }
