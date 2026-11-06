@@ -12,9 +12,16 @@ internal actual object DownloadStorageManagement {
     private fun store() = PlatformLocalAccountDataCleaner.appContext
         ?.getSharedPreferences(Preferences, Context.MODE_PRIVATE)
     private fun key(profileId: Int) = "profile_${profileId}_quota_bytes"
+    private fun hardKey(profileId: Int) = "profile_${profileId}_hard_quota_enabled"
 
     actual fun availableBytes(): Long? = PlatformLocalAccountDataCleaner.appContext
-        ?.filesDir?.usableSpace?.takeIf { it > 0L }
+        ?.filesDir?.usableSpace?.takeIf { it >= 0L }
+
+    internal fun enforcedQuotaBytes(context: Context, profileId: Int): Long? {
+        val preferences = context.getSharedPreferences(Preferences, Context.MODE_PRIVATE)
+        if (!preferences.getBoolean(hardKey(profileId), false)) return null
+        return preferences.getString(key(profileId), null)?.toLongOrNull()?.takeIf { it > 0L }
+    }
 
     actual fun quotaBytes(profileId: Int): Long? =
         store()?.getString(key(profileId), null)?.toLongOrNull()?.takeIf { it > 0L }
@@ -22,7 +29,18 @@ internal actual object DownloadStorageManagement {
     actual fun setQuotaBytes(profileId: Int, limitBytes: Long?) {
         require(limitBytes == null || limitBytes in (1L shl 30)..(2L shl 40))
         checkNotNull(store()) { "Download storage is unavailable" }.edit()
-            .putString(key(profileId), limitBytes?.toString()).apply()
+            .putString(key(profileId), limitBytes?.toString())
+            .apply { if (limitBytes == null) putBoolean(hardKey(profileId), false) }
+            .apply()
+    }
+
+    actual fun enforceQuota(profileId: Int): Boolean =
+        store()?.getBoolean(hardKey(profileId), false) == true && quotaBytes(profileId) != null
+
+    actual fun setEnforceQuota(profileId: Int, enabled: Boolean) {
+        require(!enabled || quotaBytes(profileId) != null) { "Choose a storage target first" }
+        checkNotNull(store()) { "Download storage is unavailable" }.edit()
+            .putBoolean(hardKey(profileId), enabled).apply()
     }
 
     /** Only files directly inside Starlit's private downloads directory are eligible. */
@@ -30,6 +48,12 @@ internal actual object DownloadStorageManagement {
         if (!item.isPlayable || item.fileName.isBlank() || item.fileName == "." || item.fileName == ".." ||
             '/' in item.fileName || '\\' in item.fileName) return null
         val context = PlatformLocalAccountDataCleaner.appContext ?: return null
+        val transfer = DownloadsPlatformDownloader.managedTransfers().firstOrNull {
+            it.item.id == item.id && it.item.fileName == item.fileName &&
+                it.profileId == com.nuvio.app.features.profiles.ProfileRepository.activeProfileId &&
+                it.item.status == DownloadStatus.Completed && it.item.downloadedBytes == item.downloadedBytes
+        } ?: return null
+        if (transfer.item.localFileUri != item.localFileUri) return null
         val root = File(context.filesDir, "downloads")
         val file = File(root, item.fileName)
         val path = file.toPath()

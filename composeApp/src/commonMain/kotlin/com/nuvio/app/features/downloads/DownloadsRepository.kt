@@ -27,17 +27,24 @@ import kotlinx.atomicfu.locks.synchronized
 
 object DownloadsRepository {
     private const val MaxMobileDownloadAttempts = 3
+    // Do not call suspend Compose resource loading inside a transfer callback
+    // or the queue lock. UI status labels are localized when rendered.
+    private const val QuotaPausedReason = "Paused by your storage limit. Free space or raise the limit before resuming."
     private val lock = SynchronizedObject()
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
     private val _hasUnseenCompleted = MutableStateFlow(false)
     val hasUnseenCompleted: StateFlow<Boolean> = _hasUnseenCompleted.asStateFlow()
     private val activeHandles = mutableMapOf<String, DownloadsTaskHandle>()
+    private var pumpingQueue = false
     private val tokens = mutableMapOf<String, Long>()
     private var generation = 0L
     private var ordinal = 0L
     private var hasLoaded = false
     private var loadedProfile: Int? = null
+    // Cache the profile-scoped opt-in quota. Never repeatedly read platform
+    // settings on the downloader's hot progress callback.
+    private var enforcedQuotaBytes: Long? = null
     private val desktopVerificationScope = CoroutineScope(SupervisorJob() + DownloadDesktopFeatures.verificationDispatcher())
     private var desktopVerificationJob: Job? = null
 
@@ -58,6 +65,7 @@ object DownloadsRepository {
         invalidateTransfers()
         hasLoaded = false
         loadedProfile = null
+        enforcedQuotaBytes = null
         _uiState.value = DownloadsUiState()
         _hasUnseenCompleted.value = false
         notifyLiveStatusPlatform()
@@ -361,33 +369,56 @@ object DownloadsRepository {
      * profile, status, active handles and owned file path while holding the
      * queue lock after the user confirms the exact selection.
      */
-    internal fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
-        synchronized(lock) {
-            removeVerifiedDownloadsLocked(downloadIds, expectedProfileId)
-        }
+    internal suspend fun removeSelectedVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        removeVerifiedDownloads(downloadIds, expectedProfileId, watchedOnly = false)
 
     /** Re-evaluate watched status and file ownership when the confirmation is accepted. */
-    internal fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
-        synchronized(lock) {
+    internal suspend fun removeSelectedVerifiedWatchedEpisodes(downloadIds: Set<String>, expectedProfileId: Int): Int =
+        removeVerifiedDownloads(downloadIds, expectedProfileId, watchedOnly = true)
+
+    private suspend fun removeVerifiedDownloads(downloadIds: Set<String>, expectedProfileId: Int, watchedOnly: Boolean): Int {
+        val safe = synchronized(lock) {
             if (!hasLoaded || loadedProfile != expectedProfileId ||
-                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized 0
-            val watchedIds = watchedDownloadedEpisodeIds(
+                com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return@synchronized emptyList()
+            val watchedIds = if (watchedOnly) watchedDownloadedEpisodeIds(
                 _uiState.value.items,
                 com.nuvio.app.features.watched.WatchedRepository.uiState.value.watchedKeys,
                 com.nuvio.app.features.watchprogress.WatchProgressRepository.uiState.value.entries,
-            )
-            removeVerifiedDownloadsLocked(downloadIds.intersect(watchedIds), expectedProfileId)
+            ) else downloadIds
+            _uiState.value.items.filter { item ->
+                item.id in downloadIds && item.id in watchedIds && item.id !in activeHandles &&
+                    item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+            }
         }
-
-    private fun removeVerifiedDownloadsLocked(downloadIds: Set<String>, expectedProfileId: Int): Int {
-        if (!hasLoaded || loadedProfile != expectedProfileId ||
-            com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId) return 0
-        val safe = _uiState.value.items.filter { item ->
-            item.id in downloadIds && item.id !in activeHandles &&
-                item.isPlayable && DownloadStorageManagement.eligibleCleanupBytes(item) != null
+        var removed = 0
+        for (item in safe) {
+            val unchanged = synchronized(lock) {
+                loadedProfile == expectedProfileId && item.id !in activeHandles && item in _uiState.value.items &&
+                    com.nuvio.app.features.profiles.ProfileRepository.activeProfileId == expectedProfileId
+            }
+            if (!unchanged) continue
+            val deleted = if (isDesktop) DownloadDesktopFeatures.removeVerified(item, expectedProfileId)
+            else synchronized(lock) {
+                if (DownloadStorageManagement.eligibleCleanupBytes(item) != null &&
+                    DownloadsPlatformDownloader.removeFile(item.localFileUri)) {
+                    DownloadsPlatformDownloader.removePartialFile(item.fileName)
+                    true
+                } else false
+            }
+            if (!deleted) continue
+            synchronized(lock) {
+                // Retain accounting until disk removal succeeds. A failed or
+                // cancelled deferred verification must never make bytes free.
+                if (loadedProfile == expectedProfileId && item in _uiState.value.items &&
+                    com.nuvio.app.features.profiles.ProfileRepository.activeProfileId == expectedProfileId) {
+                    publish(_uiState.value.items.filterNot { it.id == item.id })
+                    persist()
+                    removed++
+                    pumpQueue()
+                }
+            }
         }
-        removeItems(safe)
-        return safe.size
+        return removed
     }
 
     private fun removeItem(item: DownloadItem) = removeItems(listOf(item))
@@ -424,6 +455,7 @@ object DownloadsRepository {
         invalidateTransfers()
         hasLoaded = false
         loadedProfile = null
+        enforcedQuotaBytes = null
         val profile = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId
         var hadStoredPayload = false
         val items = try {
@@ -448,6 +480,7 @@ object DownloadsRepository {
         }
         hasLoaded = true
         loadedProfile = profile
+        refreshStorageQuota()
         _hasUnseenCompleted.value = false
         publish(items)
         // An absent profile key must stay absent: account backup restoration uses
@@ -505,10 +538,65 @@ object DownloadsRepository {
     /** Starts queued downloads after the number allowed at once was raised; running ones are left alone. */
     internal fun onParallelLimitChanged() = synchronized(lock) { if (hasLoaded) pumpQueue() }
 
+    private fun refreshStorageQuota() {
+        val profile = loadedProfile
+        enforcedQuotaBytes = if (DownloadStorageManagement.supported && profile != null &&
+            DownloadStorageManagement.enforceQuota(profile)) {
+            DownloadStorageManagement.quotaBytes(profile)
+        } else null
+    }
+
+    /** Re-evaluate explicit per-profile quota changes, never auto-resume paused downloads. */
+    internal fun onStoragePolicyChanged() = synchronized(lock) {
+        if (!hasLoaded) return@synchronized
+        refreshStorageQuota()
+        enforcedQuotaBytes?.let { ceiling ->
+            for (id in activeHandles.keys.toList().asReversed()) {
+                if (!quotaRequiresPause(_uiState.value.items, activeHandles.keys, ceiling)) break
+                holdForQuota(id)
+            }
+        }
+        pumpQueue()
+    }
+
+    /** Preserves partial files and the existing restart/resume semantics. Never deletes media. */
+    private fun holdForQuota(downloadId: String) {
+        tokens.remove(downloadId)
+        val handle = activeHandles.remove(downloadId)
+        // A progress callback may execute on the transfer's own interruptible IO
+        // thread. Persist Paused BEFORE cancelling that job; cancellation can
+        // interrupt the callback before its state update otherwise.
+        mutateItem(downloadId) { item ->
+            item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
+                errorMessage = QuotaPausedReason)
+        }
+        handle?.cancel()
+    }
+
     private fun pumpQueue() {
+        // start() may report progress/completion synchronously. A nested pump
+        // must not start another copy from this iteration's stale queue snapshot.
+        if (pumpingQueue) return
+        pumpingQueue = true
+        try {
         val limit = DownloadDesktopFeatures.parallelDownloads()
         _uiState.value.items.filter { it.status == DownloadStatus.Downloading && it.id !in activeHandles }
-            .take((limit - activeHandles.size).coerceAtLeast(0)).forEach { startDownload(it) }
+            .forEach { item ->
+                if (item.id in activeHandles || _uiState.value.items.none {
+                    it.id == item.id && it.status == DownloadStatus.Downloading
+                }) return@forEach
+                if (activeHandles.size >= limit) return@forEach
+                val ceiling = enforcedQuotaBytes
+                if (ceiling != null && !quotaAllowsDownloadStart(
+                    _uiState.value.items, activeHandles.keys, item.id, ceiling,
+                )) {
+                    mutateItem(item.id) { old ->
+                        old.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
+                            errorMessage = QuotaPausedReason)
+                    }
+                } else startDownload(item)
+            }
+        } finally { pumpingQueue = false }
     }
     private fun startDownload(item: DownloadItem, attempt: Int = 1) {
         val token = ++ordinal
@@ -526,7 +614,7 @@ object DownloadsRepository {
         }
         val rate = DownloadRateMeter()
         var sourceResolved = item.sourceSelection == null
-        val handle = DownloadsPlatformDownloader.start(DownloadPlatformRequest(item, onResolved = { resolved -> synchronized(lock) {
+        val handle = try { DownloadsPlatformDownloader.start(DownloadPlatformRequest(item, onResolved = { resolved -> synchronized(lock) {
             sourceResolved = true
             if (current()) mutateItem(item.id) { original -> original.copy(
                 streamTitle = resolved.streamTitle, streamSubtitle = resolved.streamSubtitle,
@@ -548,9 +636,25 @@ object DownloadsRepository {
                         bytes == 0L -> "Connecting"
                         else -> "Downloading"
                     }
-                    mutateItem(item.id, persist = false) { it.copy(downloadedBytes = bytes, totalBytes = total,
+                    mutateItem(item.id, persist = false) { it.copy(
+                        // Desktop's initial connection signal carries no size.
+                        // Keep the durable partial/reservation until real progress arrives.
+                        downloadedBytes = if (bytes == 0L && total == null) it.downloadedBytes else bytes,
+                        totalBytes = total ?: it.totalBytes,
                         phase = if (!isDesktop && DownloadsPlatformDownloader.supportsTorrentDownloads) it.phase else phase,
                         bytesPerSecond = speed, updatedAtEpochMs = now) }
+                    // Source size becomes known only after a transfer starts
+                    // (and may remain unknown). Pause as soon as the reported
+                    // total or actual bytes exceed the opt-in reserved budget.
+                    val ceiling = enforcedQuotaBytes
+                    if (ceiling != null && quotaRequiresPause(
+                        // This callback proves the transfer is active even if
+                        // its platform handle is still being registered.
+                        _uiState.value.items, activeHandles.keys + item.id, ceiling,
+                    )) {
+                        holdForQuota(item.id)
+                        pumpQueue()
+                    }
                 }
             } },
             onSuccess = { uri, total -> finish { it.copy(status = DownloadStatus.Completed, localFileUri = uri,
@@ -566,6 +670,11 @@ object DownloadsRepository {
                     errorMessage = message.ifBlank { runBlocking { getString(Res.string.download_failed) } }) }
             } },
             onPaused = { finish { it.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0) } })
+        } catch (error: Exception) {
+            finish { it.copy(status = DownloadStatus.Failed, phase = null, bytesPerSecond = 0L,
+                errorMessage = error.message ?: "Download could not start") }
+            return
+        }
         if (current()) activeHandles[item.id] = handle else handle.cancel()
     }
     private fun mutateItem(id: String, persist: Boolean = true, transform: (DownloadItem) -> DownloadItem) {

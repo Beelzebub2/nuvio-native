@@ -750,6 +750,11 @@
     <string name="downloads_storage_target_button">Storage target: %1$s</string>
     <string name="downloads_storage_no_target">No target</string>
     <string name="downloads_storage_target_note">The target is a warning, not a hard download limit. Starlit never deletes offline media automatically.</string>
+    <string name="downloads_storage_enforce_enable">Enforce download limit</string>
+    <string name="downloads_storage_enforce_disable">Disable download limit</string>
+    <string name="downloads_storage_enforce_note_off">A storage target is only a warning until you opt into enforcement. Starlit never deletes downloads automatically.</string>
+    <string name="downloads_storage_enforce_note_on">Enforcement pauses transfers that would exceed the target, without deleting anything. Unknown sizes may briefly overshoot between progress updates. Resume manually after freeing space or raising the limit.</string>
+    <string name="downloads_storage_enforce_paused">Paused by your storage limit. Free space, raise the limit, or disable enforcement before resuming.</string>
     <string name="downloads_storage_review">Review cleanup</string>
     <string name="downloads_storage_suggest_old">Suggest 30+ day files</string>
     <string name="downloads_storage_suggest_target">Suggest to meet target</string>

@@ -275,6 +275,21 @@ internal fun requestDownloadRemoval(item: DownloadItem) {
         }
     }
 }
+internal fun downloadPathLock(item: DownloadItem): Mutex =
+    pathLocks.computeIfAbsent(downloadPath(item).absolutePath) { Mutex() }
+
+internal suspend fun removeVerifiedDesktopDownload(item: DownloadItem, expectedProfileId: Int): Boolean =
+    withContext(Dispatchers.IO) {
+        downloadPathLock(item).withLock { removeVerifiedOwnedDownload(item, expectedProfileId) }
+    }
+
+/** Called under the transfer's path lock immediately before confirmed cleanup. */
+internal fun removeVerifiedOwnedDownload(item: DownloadItem, expectedProfileId: Int): Boolean {
+    if (transfers[item.id]?.isCompleted == false ||
+        com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != expectedProfileId ||
+        DownloadStorageManagement.eligibleCleanupBytes(item) == null) return false
+    return removeOwnedDownload(item)
+}
 internal fun removeOwnedDownload(item: DownloadItem): Boolean = runCatching {
     val file = downloadPath(item)
     val dir = file.parentFile

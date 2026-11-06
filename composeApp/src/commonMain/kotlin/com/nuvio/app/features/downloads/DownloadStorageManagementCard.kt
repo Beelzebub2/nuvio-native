@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,7 @@ import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.launch
 
 private const val Gib = 1L shl 30
 private val StorageTargets = listOf(5L, 10L, 25L, 50L, 100L, 250L, 500L)
@@ -64,6 +66,7 @@ private val StorageTargets = listOf(5L, 10L, 25L, 50L, 100L, 250L, 500L)
 @Composable
 internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId: Int) {
     if (!DownloadStorageManagement.supported) return
+    val scope = rememberCoroutineScope()
 
     val watchedState by remember(profileId) {
         WatchedRepository.ensureLoaded()
@@ -82,6 +85,9 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
         )
     }
     var target by remember(profileId) { mutableStateOf(DownloadStorageManagement.quotaBytes(profileId)) }
+    var hardLimitEnabled by remember(profileId) {
+        mutableStateOf(DownloadStorageManagement.enforceQuota(profileId))
+    }
     var showTargetMenu by remember(profileId) { mutableStateOf(false) }
     var showPreview by remember(profileId) { mutableStateOf(false) }
     var watchedOnly by remember(profileId) { mutableStateOf(false) }
@@ -171,6 +177,8 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                                     DownloadStorageManagement.setQuotaBytes(profileId, bytes)
                                 }.onSuccess {
                                     target = bytes
+                                    if (bytes == null) hardLimitEnabled = false
+                                    DownloadsRepository.onStoragePolicyChanged()
                                     notice = null
                                 }.onFailure { error ->
                                     notice = error.message
@@ -180,6 +188,29 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                         )
                     }
                 }
+            }
+            if (target != null) {
+                NuvioCompactActionButton(
+                    label = stringResource(if (hardLimitEnabled) {
+                        Res.string.downloads_storage_enforce_disable
+                    } else {
+                        Res.string.downloads_storage_enforce_enable
+                    }),
+                    icon = Icons.Rounded.DataUsage,
+                    size = NuvioActionSize.Small,
+                    onClick = {
+                        val enabled = !hardLimitEnabled
+                        runCatching {
+                            DownloadStorageManagement.setEnforceQuota(profileId, enabled)
+                        }.onSuccess {
+                            hardLimitEnabled = enabled
+                            DownloadsRepository.onStoragePolicyChanged()
+                            notice = null
+                        }.onFailure { error ->
+                            notice = error.message
+                        }
+                    },
+                )
             }
             NuvioCompactActionButton(
                 label = stringResource(Res.string.downloads_storage_review),
@@ -205,7 +236,11 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                 },
             )
         }
-        DialogHint(stringResource(Res.string.downloads_storage_target_note))
+        DialogHint(stringResource(if (hardLimitEnabled) {
+            Res.string.downloads_storage_enforce_note_on
+        } else {
+            Res.string.downloads_storage_enforce_note_off
+        }))
         notice?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
         }
@@ -252,17 +287,20 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             onSuggestLeastRecentlyWatched = { selectedIds = leastRecentlyWatchedSuggestions },
             onDismiss = { showPreview = false },
             onConfirm = {
+                showPreview = false
+                notice = "Removing selected verified offline copies…"
+                scope.launch {
                 val removed = if (watchedOnly) {
                     DownloadsRepository.removeSelectedVerifiedWatchedEpisodes(validSelection, profileId)
                 } else {
                     DownloadsRepository.removeSelectedVerifiedDownloads(validSelection, profileId)
                 }
                 notice = if (removed == validSelection.size) {
-                    "Scheduled removal of ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
+                    "Removed ${removed} verified offline ${if (removed == 1) "copy" else "copies"} (${formatDownloadBytes(selectedBytes)} selected)."
                 } else {
-                    "Scheduled removal of ${removed} verified offline copies. Changed or unowned items were preserved."
+                    "Removed ${removed} verified offline copies. Changed, unavailable or unowned items were preserved."
                 }
-                showPreview = false
+                }
             },
         )
     }

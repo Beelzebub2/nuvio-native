@@ -41,10 +41,15 @@ internal class AndroidDownloadScheduler(val context: Context) {
     val directory = File(context.filesDir, "downloads")
     private val locks = ConcurrentHashMap<String, Mutex>()
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val quotaLock = Any()
+    private val quotaProgress = mutableMapOf<String, DownloadItem>()
 
     fun enqueue(item: DownloadItem): AndroidDownloadTransfer {
         val previous = store.get(item.fileName)
-        val transfer = store.begin(item)
+        require(previous != null || !File(directory, item.fileName).exists()) {
+            "An untracked download file already exists; it was preserved"
+        }
+        val transfer = store.begin(item, com.nuvio.app.features.profiles.ProfileRepository.activeProfileId)
         val existing = previous?.generation == transfer.generation
         if (existing && Build.VERSION.SDK_INT >= 34) return transfer
         try {
@@ -160,6 +165,32 @@ internal class AndroidDownloadScheduler(val context: Context) {
         val fileName = transfer.item.fileName
         if (!isActive(transfer)) return@withLock false
         val destination = File(directory, fileName)
+        val profileItems = transfer.profileId?.let { DownloadsStorage.loadProfileItems(context, it) }.orEmpty()
+        // This guard runs in the durable worker, even after the UI observer is
+        // detached or Android recreates the process. Serialize reservations so
+        // simultaneous transfers cannot each spend the same remaining budget.
+        fun checkQuota(bytes: Long, total: Long?) = synchronized(quotaLock) {
+            val current = store.get(fileName)?.takeIf {
+                it.generation == transfer.generation && it.item.status == DownloadStatus.Downloading
+            } ?: throw IllegalStateException("Download was paused or removed")
+            val profile = transfer.profileId ?: return@synchronized
+            val measured = current.item.copy(downloadedBytes = bytes, totalBytes = total)
+            quotaProgress[fileName] = measured
+            val ceiling = DownloadStorageManagement.enforcedQuotaBytes(context, profile) ?: return@synchronized
+            val records = store.transfers.value.values.filter { it.profileId == profile }
+            val items = profileItems.associateBy { it.id }.toMutableMap()
+            records.forEach { record ->
+                items[record.item.id] = quotaProgress[record.item.fileName] ?: record.item
+            }
+            val active = records.filter { it.item.status == DownloadStatus.Downloading }.mapTo(mutableSetOf()) { it.item.id }
+            if (quotaRequiresPause(items.values, active, ceiling)) {
+                store.update(fileName, transfer.generation) {
+                    it.copy(item = measured.copy(status = DownloadStatus.Paused, phase = null,
+                        bytesPerSecond = 0L, errorMessage = "Download paused by your storage limit. Free space or change the limit, then resume."))
+                }?.let(onProgress)
+                throw IllegalStateException("Download paused by storage limit")
+            }
+        }
         val client = if (network != null) {
             downloadHttpClient.newBuilder()
                 .socketFactory(network.socketFactory)
@@ -168,12 +199,15 @@ internal class AndroidDownloadScheduler(val context: Context) {
                 .build()
         } else downloadHttpClient
         try {
+            checkQuota(maxOf(transfer.item.downloadedBytes,
+                File(directory, "$fileName.part").takeIf { it.isFile }?.length() ?: 0L), transfer.item.totalBytes)
             DownloadSubtitles.prepare(transfer.item, destination.toURI().toString())
             currentCoroutineContext().ensureActive()
             if (!isActive(transfer)) return@withLock false
             var lastProgressAt = 0L
             val isTorrent = transfer.item.torrentHash != null && transfer.item.sourceUrl.isBlank()
             val reportProgress: (Long, Long?) -> Unit = { bytes, total ->
+                checkQuota(bytes, total)
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastProgressAt >= 1_000L || (total != null && bytes == total)) {
                     lastProgressAt = now
@@ -193,6 +227,7 @@ internal class AndroidDownloadScheduler(val context: Context) {
                     previousIdentity = transfer.torrentIdentity,
                     onSelected = { file, identity ->
                         check(isActive(transfer)) { "Download was paused" }
+                        checkQuota(store.get(fileName)?.item?.downloadedBytes ?: 0L, file.size)
                         updateActive(transfer) { current ->
                             current.copy(torrentIdentity = identity,
                                 item = current.item.copy(torrentFileIdx = file.index,
@@ -201,6 +236,7 @@ internal class AndroidDownloadScheduler(val context: Context) {
                         }?.let(onProgress)
                     },
                     onHeaders = { total, _ ->
+                        checkQuota(store.get(fileName)?.item?.downloadedBytes ?: 0L, total)
                         updateActive(transfer) { current ->
                             current.copy(validator = null, item = current.item.copy(totalBytes = total))
                         }
@@ -211,6 +247,7 @@ internal class AndroidDownloadScheduler(val context: Context) {
                     item = transfer.item, directory = directory,
                     validator = transfer.validator, client = client,
                     onHeaders = { total, validator ->
+                        checkQuota(store.get(fileName)?.item?.downloadedBytes ?: 0L, total)
                         updateActive(transfer) { current ->
                             current.copy(validator = validator, item = current.item.copy(totalBytes = total))
                         }
@@ -244,6 +281,7 @@ internal class AndroidDownloadScheduler(val context: Context) {
             else fail(transfer, error)
             retry
         } finally {
+            synchronized(quotaLock) { quotaProgress.remove(fileName) }
             if (network != null) withContext(NonCancellable + Dispatchers.IO) { client.connectionPool.evictAll() }
         }
     }

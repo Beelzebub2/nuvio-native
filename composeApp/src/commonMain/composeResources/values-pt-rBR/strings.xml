@@ -573,6 +573,11 @@
     <string name="downloads_storage_target_button">Meta de armazenamento: %1$s</string>
     <string name="downloads_storage_no_target">Sem meta</string>
     <string name="downloads_storage_target_note">A meta mostra avisos e não impede novos downloads. O Starlit nunca apaga conteúdo offline automaticamente.</string>
+    <string name="downloads_storage_enforce_enable">Aplicar limite de downloads</string>
+    <string name="downloads_storage_enforce_disable">Desativar limite de downloads</string>
+    <string name="downloads_storage_enforce_note_off">A meta de armazenamento é apenas um aviso até você ativar o limite. O Starlit nunca apaga downloads automaticamente.</string>
+    <string name="downloads_storage_enforce_note_on">O limite pausa transferências que ultrapassariam a meta, sem apagar arquivos. Tamanhos desconhecidos podem exceder ligeiramente o limite entre atualizações. Retome manualmente após liberar espaço ou aumentar a meta.</string>
+    <string name="downloads_storage_enforce_paused">Download pausado pelo limite de armazenamento. Libere espaço, aumente o limite ou desative-o antes de retomar.</string>
     <string name="downloads_storage_review">Revisar limpeza</string>
     <string name="downloads_storage_suggest_old">Sugerir arquivos com mais de 30 dias</string>
     <string name="downloads_storage_suggest_target">Sugerir até a meta</string>

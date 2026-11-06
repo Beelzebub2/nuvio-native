@@ -624,6 +624,11 @@
     <string name="downloads_storage_target_button">Objetivo de espaço: %1$s</string>
     <string name="downloads_storage_no_target">Sem objetivo</string>
     <string name="downloads_storage_target_note">Este objetivo apenas mostra avisos, não impõe um limite. O Starlit nunca apaga conteúdos offline automaticamente.</string>
+    <string name="downloads_storage_enforce_enable">Aplicar limite de transferências</string>
+    <string name="downloads_storage_enforce_disable">Desativar limite de transferências</string>
+    <string name="downloads_storage_enforce_note_off">O objetivo de armazenamento é apenas um aviso até ativares o limite. O Starlit nunca elimina transferências automaticamente.</string>
+    <string name="downloads_storage_enforce_note_on">O limite pausa as transferências que ultrapassariam o objetivo, sem eliminar ficheiros. Tamanhos desconhecidos podem excedê-lo ligeiramente entre atualizações de progresso. Retoma manualmente após libertares espaço ou aumentares o limite.</string>
+    <string name="downloads_storage_enforce_paused">Transferência pausada pelo limite de armazenamento. Liberta espaço, aumenta o limite ou desativa-o antes de retomar.</string>
     <string name="downloads_storage_review">Rever limpeza</string>
     <string name="downloads_storage_suggest_old">Sugerir ficheiros com mais de 30 dias</string>
     <string name="downloads_storage_suggest_target">Sugerir até ao objetivo</string>
