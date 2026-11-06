@@ -3,6 +3,7 @@ package com.nuvio.app.features.remote
 import com.nuvio.app.core.windows.WindowsCom
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -15,6 +16,17 @@ import org.junit.Assume.assumeTrue
 
 class WindowsRemoteFirewallTest {
     private val executable = """C:\Program Files\Starlit\Starlit.exe"""
+
+    @Test
+    fun existingFirewallRuleNamesMustBeUnambiguouslyOwnedBeforeReplacement() {
+        WindowsFirewallCom.requireOwnedRuleNames(emptyMap())
+        WindowsFirewallCom.requireOwnedRuleNames(mapOf(FIREWALL_TCP_RULE to listOf(true)))
+        for (owners in listOf(listOf(false), listOf(true, false), listOf(true, true))) {
+            assertFailsWith<IllegalStateException> {
+                WindowsFirewallCom.requireOwnedRuleNames(mapOf(FIREWALL_TCP_RULE to owners))
+            }
+        }
+    }
 
     private fun rule(
         action: String = "Allow",

@@ -60,6 +60,13 @@ internal object WindowsFirewallCom {
     private const val ENUM_NEXT = 3
     private const val MAX_RULES = 50_000
 
+    /** INetFwRules.Add overwrites matching rule names, so reject foreign or ambiguous IDs. */
+    internal fun requireOwnedRuleNames(ownership: Map<String, List<Boolean>>) {
+        check(ownership.values.all { owners -> owners.size == 1 && owners[0] }) {
+            "Refusing to replace an unrelated or duplicate Windows Firewall rule"
+        }
+    }
+
     const val NET_FW_RULE_DIR_IN = 1
     const val NET_FW_ACTION_BLOCK = 0
     const val NET_FW_ACTION_ALLOW = 1
@@ -114,15 +121,18 @@ internal object WindowsFirewallCom {
                             val ours = runCatching {
                                 rule.getInt(RULE_DIRECTION, "Direction") == NET_FW_RULE_DIR_IN &&
                                     rule.getInt(RULE_ACTION, "Action") == NET_FW_ACTION_ALLOW &&
-                                    rule.getString(RULE_GROUPING, "Grouping") == FIREWALL_GROUP
+                                    rule.getString(RULE_GROUPING, "Grouping") == FIREWALL_GROUP &&
+                                    rule.getString(RULE_APPLICATION, "ApplicationName")
+                                        ?.equals(program, ignoreCase = true) == true
                             }.getOrDefault(false)
                             ownership.getOrPut(name) { mutableListOf() } += ours
                         }
                     }
-                    // Remove deletes by name, so only do it when every rule with that name is ours.
+                    // Add also replaces by name: reject collisions BEFORE changing any rule.
+                    requireOwnedRuleNames(ownership)
                     for ((name, owners) in ownership) {
-                        if (owners.all { it }) repeat(owners.size) {
-                            WindowsCom.withBstr(name) { rules.call(RULES_REMOVE, it) }
+                        if (owners.isNotEmpty()) WindowsCom.withBstr(name) {
+                            checkHresult("Rules.Remove", rules.call(RULES_REMOVE, it))
                         }
                     }
                     addRule(rules, FIREWALL_TCP_RULE, NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program)
