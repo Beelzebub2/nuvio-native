@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
@@ -119,7 +120,17 @@ class DownloadQuotaLifecycleTest {
                 "Quota fixture", null, null, null, null, null, null, null,
                 StreamItem(name = "1080p", url = "http://127.0.0.1:${server.address.port}/video.mp4",
                     addonName = "Fixture", addonId = "fixture")))
-            waitFor { DownloadsRepository.uiState.value.items.singleOrNull()?.status == DownloadStatus.Paused }
+            try {
+                waitFor { DownloadsRepository.uiState.value.items.singleOrNull()?.status == DownloadStatus.Paused }
+            } catch (timedOut: TimeoutCancellationException) {
+                val state = DownloadsRepository.uiState.value.items.singleOrNull()
+                throw AssertionError(
+                    "Oversize transfer did not pause: requests=${requests.get()}, " +
+                        "status=${state?.status}, phase=${state?.phase}, " +
+                        "size=${state?.totalBytes}, error=${state?.errorMessage}",
+                    timedOut,
+                )
+            }
             val paused = DownloadsRepository.uiState.value.items.single()
             assertEquals(gib + 1L, paused.totalBytes)
             assertFalse(downloadPath(paused).exists())
