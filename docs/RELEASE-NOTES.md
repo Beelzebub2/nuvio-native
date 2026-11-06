@@ -1,3 +1,43 @@
+## Starlit 1.11.1
+
+### Windows security and antivirus compatibility
+
+- **Avoid suspicious background scripts:** Windows desktop now uses native Windows APIs instead of hidden or encoded PowerShell to inspect the firewall, protect saved credentials and update shortcut icons. This removes startup behavior correlated with Microsoft Defender's `Bearfoos.A!ml` classification of version 1.11.0. A fresh Defender verdict for the new executable is not yet guaranteed.
+- **Keep existing account connections:** Credential protection uses Windows DPAPI in-process. Tokens encrypted by older Starlit versions remain readable, preserving saved sign-ins and MyAnimeList connections.
+- **Safer phone remote firewall approval:** A read-only Windows Firewall inspection runs in-process. Explicitly choosing firewall access prompts for administrator approval to relaunch Starlit for one fixed task rather than running elevated PowerShell. New TCP 47789 and UDP 47788 inbound allowances remain limited to local-subnet traffic on Private and Domain networks. Existing Block rules and unrelated or ambiguously owned firewall rules are not overwritten. Public networks remain restricted, and existing Block rules may still require manual review.
+- **Update shortcut icons without scripts:** Shortcut icons use the native Windows shell APIs. Starlit updates writable per-user shortcuts and skips administrator-owned shortcuts rather than launching elevated scripts.
+
+### Validation
+
+- PR #142 passed Windows desktop-auth, Android Full and Play Store, iOS Kotlin, GitGuardian and public source-security checks. Regression tests cover legacy DPAPI compatibility, firewall-rule inspection and identity safeguards, and prevention of hidden PowerShell launch patterns.
+- The tag-triggered release pipeline validates the version, tests the Windows desktop build and installer, builds and signs Android APKs, checks installation and file hashes, and publishes only after those jobs pass. A new Microsoft Defender classification and Windows publisher code signing remain separate follow-ups.
+
+## Starlit 1.11.0
+
+### MyAnimeList rewatching and library
+
+- **Automatically recognize rewatches:** On desktop, starting playback of a completed anime in a connected MyAnimeList account marks it as rewatching without clearing its completed status, score or watched-episode count. Updates are guarded against duplicate requests and switching profiles.
+- **Browse MyAnimeList in Starlit:** An optional desktop MyAnimeList tab lets you explore watching, completed, on-hold, dropped and planned anime, with posters, progress, ratings, status filters, paging and refresh. The tab is off by default and can be enabled when wanted.
+- **Control rewatching yourself:** Anime details also offer a manual rewatch toggle. Android and iOS MyAnimeList behavior is unchanged by this feature.
+
+### Optional diagnostics and privacy
+
+- **Choose which diagnostics to share:** A first-use prompt offers separate, off-by-default switches for anonymous usage analytics and crash reports. Existing Sentry crash-reporting preferences are preserved, and both choices can be changed later in Settings > Advanced.
+- **Understand which versions are in use:** When opted in and the server is configured, Starlit reports limited app-version, platform, navigation and download event codes to the self-hosted OpenObserve service. A random installation identifier is pseudonymized at the gateway; media titles, watch history, search terms, account identities and URLs are not exported.
+- **No interruption if diagnostics are unavailable:** Analytics can be turned off at any time, which cancels queued events and resets the local identifier. An unconfigured collector or network failure does not interrupt Starlit. MyAnimeList tab visits are correctly categorized in usage diagnostics.
+
+### PC controller and Windows firewall
+
+- **Dedicated phone controller page:** The Android PC controller opens a full-screen Settings page with Remote, Downloads and PCs tabs, plus clearer connection options.
+- **Separate desktop pairing window:** Connect phone opens a modeless window with the pairing QR code, local IP addresses, setup steps and confirmation code. You can continue using Starlit while pairing your phone.
+- **Safer Windows firewall guidance:** The remote window checks Windows Firewall without administrator access and explains when inbound connections are blocked. With a single explicit administrator confirmation, Starlit can add app-specific TCP 47789 and UDP 47788 inbound rules on Private/Domain networks limited to the local subnet. The same approval disables inbound Block rules that target the Starlit executable, such as those Windows creates when its own firewall prompt is cancelled; other rules are left unchanged. Public-network restrictions remain in place.
+
+### Validation
+
+- MyAnimeList feature validation included 11 targeted desktop tests, desktop Kotlin compilation, and Android, iOS and source-security checks. The new diagnostics gateway passed 14 targeted Node tests covering ingestion, quotas, consent-related behavior and failure handling.
+- The controller and firewall changes passed a 1,907-test Windows desktop suite, Android Full/Play Store, iOS Kotlin, desktop and security CI. Actual two-device pairing and the elevated firewall-approval path still need hardware/UAC acceptance tests.
+- The tag-triggered release workflow tests the Windows installer and signed Android APKs, verifies checksums and publishes only after all required jobs pass. The public privacy page covers opt-in diagnostics; configuring the OpenObserve ingestion service remains a separate deployment requirement.
+
 ## Starlit 1.10.0
 
 ### Safer download storage cleanup
