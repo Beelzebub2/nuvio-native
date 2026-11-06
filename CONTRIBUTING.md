@@ -141,6 +141,27 @@ Opening a feature request does **not** mean a pull request will be accepted for 
 
 ## Before opening a PR
 
+### Reuse existing behavior; avoid conflicts
+
+Before implementing a change, search the current `Dev` branch and relevant open PRs for
+the **user-visible behavior**, not just the proposed function or feature name. Follow the
+existing UI action through its command, validation, handler and platform implementation.
+
+- Reuse existing player, remote and platform actions; a new entry point must not create a
+  second command, state owner or handler for the same operation.
+- When adding a control to a screen, check its transport buttons, menus and contextual
+  actions first. Keep one visible action for the same operation on that screen.
+- If extending a protocol, preserve existing commands and backward compatibility. Add
+  new state only when the existing state cannot describe the required behavior.
+- Work in an isolated branch/worktree based on current `Dev`. Inspect `git diff` and
+  overlapping open PRs before editing, and refresh the merge base before delivery. Never
+  overwrite unrelated work or bypass conflicts by discarding other changes.
+- Add focused tests where duplication is possible (for example, assert a single action
+  for an operation). Confirm relevant checks and review the final diff before merging.
+
+The PR template requires a short existing-functionality and overlap audit. A clean Git
+merge alone does **not** prove there are no duplicate features or conflicting behavior.
+
 Please make sure your PR is all of the following:
 
 - Allowed by this policy

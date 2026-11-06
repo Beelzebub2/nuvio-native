@@ -990,7 +990,6 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                 "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, 1f))
                 "mute" -> controller.setMuted(controller.getRemoteVolume() > 0f)
                 "skipInterval" -> handlePlayerControlsEvent("skipInterval", 0.0)
-                "skipIntro" -> handlePlayerControlsEvent("skipInterval", 0.0)
                 "next" -> playNextEpisode()
                 "previous" -> {
                     val index = state.episodeItems.indexOfFirst { it.isCurrent }

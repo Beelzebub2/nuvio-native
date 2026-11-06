@@ -753,8 +753,6 @@
     <string name="remote_playback_fullscreen_enter">Ecrã inteiro</string>
     <string name="remote_playback_fullscreen_exit">Sair do ecrã inteiro</string>
     <string name="remote_playback_skip_intro">Saltar introdução</string>
-    <string name="remote_playback_skip_intro_unavailable">Disponível durante a introdução</string>
-    <string name="remote_playback_next_unavailable">Sem episódio seguinte disponível</string>
     <string name="remote_playback_quick_actions">Ações rápidas</string>
     <string name="remote_playback_episodes">Episódios</string>
     <string name="remote_playback_subtitles">Legendas</string>

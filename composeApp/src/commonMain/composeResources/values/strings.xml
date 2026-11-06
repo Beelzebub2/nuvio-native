@@ -880,8 +880,6 @@
     <string name="remote_playback_fullscreen_enter">Fullscreen</string>
     <string name="remote_playback_fullscreen_exit">Exit fullscreen</string>
     <string name="remote_playback_skip_intro">Skip intro</string>
-    <string name="remote_playback_skip_intro_unavailable">Available during the intro</string>
-    <string name="remote_playback_next_unavailable">No next episode available</string>
     <string name="remote_playback_quick_actions">Quick actions</string>
     <string name="remote_playback_episodes">Episodes</string>
     <string name="remote_playback_subtitles">Subtitles</string>

@@ -129,16 +129,25 @@ class RemoteControllerUiTest {
         onNodeWithText("Severance · S2 E3 · Who Is Alive?").assertIsDisplayed()
         onNodeWithContentDescription("Pause").assertIsDisplayed()
         onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsEnabled()
-        onNodeWithTag("remote-skip-intro").performScrollTo().assertIsEnabled()
-        onNodeWithTag("remote-next-episode").performScrollTo().assertIsEnabled()
+        onNodeWithTag("remote-skip-interval").performScrollTo().assertIsEnabled()
+        onNodeWithText("Skip intro").performScrollTo().assertIsDisplayed()
+        onNodeWithContentDescription("Next episode").assertIsEnabled()
+        onAllNodesWithTag("remote-toggle-fullscreen").assertCountEquals(1)
+        onAllNodesWithTag("remote-skip-interval").assertCountEquals(1)
+        onAllNodesWithContentDescription("Next episode").assertCountEquals(1)
         capture("pc-controller-remote")
         runOnIdle {
             DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(
                 skipIntro = false, nextEpisodeAvailable = false, fullscreen = true,
             )
         }
-        onNodeWithTag("remote-skip-intro").performScrollTo().assertIsNotEnabled()
-        onNodeWithTag("remote-next-episode").performScrollTo().assertIsNotEnabled()
+        onNodeWithText("Skip intro or credits").performScrollTo().assertIsDisplayed()
+        onAllNodesWithTag("remote-skip-interval").assertCountEquals(1)
+        onNodeWithContentDescription("Next episode").assertIsNotEnabled()
+        runOnIdle {
+            DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(skip = false)
+        }
+        onNodeWithTag("remote-skip-interval").assertDoesNotExist()
         onNodeWithText("Exit fullscreen").performScrollTo().assertIsDisplayed()
         onNodeWithText("Downloads").performClick()
         onNodeWithText("Open the same profile on your PC and phone to manage its downloads.").assertIsDisplayed()
@@ -154,8 +163,8 @@ class RemoteControllerUiTest {
         show(desktopLayout = false)
         onNodeWithTag("remote-toggle-fullscreen").assertIsEnabled()
         onNodeWithText("Exit fullscreen").assertIsDisplayed()
-        onNodeWithTag("remote-skip-intro").assertDoesNotExist()
-        onNodeWithTag("remote-next-episode").assertDoesNotExist()
+        onNodeWithTag("remote-skip-interval").assertDoesNotExist()
+        onNodeWithContentDescription("Next episode").assertDoesNotExist()
         onNodeWithText("Nothing playing yet").assertIsDisplayed()
         capture("pc-controller-idle-fullscreen")
     }
