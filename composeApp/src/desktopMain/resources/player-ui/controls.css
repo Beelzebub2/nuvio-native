@@ -2126,6 +2126,54 @@ button:disabled {
   transform: translateX(100%);
 }
 
+.diagnostics-panel {
+  min-width: min(420px, 100%);
+  overflow-y: auto;
+}
+
+.diagnostics-note {
+  margin: 16px 0 20px;
+  color: var(--theme-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.diagnostics-table {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--theme-border-default);
+  border-radius: 16px;
+  background: var(--theme-surface-card);
+}
+
+.diagnostics-table > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--theme-border-default);
+}
+
+.diagnostics-table > div:last-child { border-bottom: none; }
+.diagnostics-table dt { color: var(--theme-text-secondary); font-size: 14px; }
+.diagnostics-table dd {
+  margin: 0;
+  text-align: right;
+  color: var(--theme-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-actions {
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#diagnosticsCopyStatus { color: var(--theme-text-secondary); font-size: 13px; }
+
 .player-side-modal.modal-visible .player-side-panel {
   transform: translateX(0);
 }

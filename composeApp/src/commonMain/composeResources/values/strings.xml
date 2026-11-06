@@ -781,6 +781,7 @@
     <string name="player_diagnostics_network_checking">Checking</string>
     <string name="player_diagnostics_copy">Copy sanitized report</string>
     <string name="player_diagnostics_copied">Diagnostics report copied</string>
+    <string name="player_diagnostics_rebuffers">Buffering events while open (includes seeks)</string>
     <string name="player_diagnostics_help">Only measurements reported by the player are shown. A small or empty buffer while loading can indicate slow source delivery, a weak network, or a busy decoder. Signed media URLs, headers and account data are never collected here.</string>
     <string name="player_cast_availability_title">Casting availability</string>
     <string name="player_cast_not_configured">Chromecast and Android TV casting are not configured in this build. Starlit cannot send this media to a Cast receiver yet.</string>

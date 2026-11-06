@@ -1,0 +1,92 @@
+name: Check playback diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'composeApp/src/**/features/player/**'
+      - 'composeApp/src/desktopMain/native/**'
+      - 'composeApp/src/desktopMain/resources/player-ui/**'
+      - 'tests/native-play*.test.*'
+      - '.github/workflows/playback-diagnostics-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playback-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Test sanitized reports, opt-in and lifecycle
+        run: node --test tests/native-player-diagnostics.test.cjs
+      - name: Test native missing values and disabled sampling
+        run: |
+          c++ -std=c++17 tests/native-playback-metrics.test.cpp -o "$RUNNER_TEMP/playback-metrics-test"
+          "$RUNNER_TEMP/playback-metrics-test"
+      - name: Install Linux native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libmpv-dev libwebkit2gtk-4.1-dev libgtk-3-dev libx11-dev libxcomposite-dev libxext-dev
+      - name: Compile and link Linux native player
+        if: runner.os == 'Linux'
+        run: |
+          c++ -std=c++17 -shared -fPIC -O2 -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            $(pkg-config --cflags mpv webkit2gtk-4.1 gtk+-3.0 x11 xcomposite xext) \
+            composeApp/src/desktopMain/native/linux/player_bridge.cpp -o "$RUNNER_TEMP/libplayer_bridge.so" \
+            $(pkg-config --libs mpv webkit2gtk-4.1 gtk+-3.0 x11 xcomposite xext) -lpthread
+      - name: Compile macOS native player
+        if: runner.os == 'macOS'
+        run: |
+          xcrun clang++ -std=c++17 -fobjc-arc -ObjC++ -c \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/darwin" \
+            -IcomposeApp/src/desktopMain/native/macos/include \
+            composeApp/src/desktopMain/native/macos/player_bridge.mm -o "$RUNNER_TEMP/player_bridge.o"
+
+  desktop-diagnostics:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install WebView2 build SDK
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.4078.44 -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
+          "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.1.0.4078.44" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build Windows native bridge and test diagnostics and player lifecycle
+        shell: pwsh
+        run: >-
+          ./gradlew.bat :composeApp:desktopTest
+          "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT"
+          --tests '*PlaybackDiagnosticsTest*'
+          --tests '*NativePlayerStartupTest*' --tests '*NativePlayerControllerTeardownTest*'
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --max-workers=2 --no-configuration-cache --no-daemon --console=plain
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playback-diagnostics-test-results
+          path: composeApp/build/reports/tests/desktopTest/
+          if-no-files-found: warn

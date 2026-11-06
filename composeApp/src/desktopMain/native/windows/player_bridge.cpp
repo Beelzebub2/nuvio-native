@@ -57,6 +57,8 @@ typedef struct mpv_event {
 } mpv_event;
 }
 
+#include "../playback_diagnostics.h"
+
 namespace {
 
 HMODULE gModule = nullptr;
@@ -1401,6 +1403,7 @@ private:
     jmethodID eventMethod = nullptr;
 
     std::atomic_bool controlsWebReady = false;
+    bool diagnosticsEnabled = false;
     std::atomic_bool layoutSubviewsPending = false;
     std::mutex controlsMutex;
     std::string pendingControlsJson;
@@ -1875,6 +1878,12 @@ private:
         double duration = doubleProperty("duration", 0.0);
         double position = doubleProperty("time-pos", 0.0);
         double volumeLevel = volume();
+        PlaybackDiagnosticsMetrics diagnostics;
+        {
+            std::lock_guard<std::mutex> lock(mpvMutex);
+            diagnostics = readPlaybackDiagnostics(mpv, diagnosticsEnabled,
+                mpvApi().getProperty, mpvApi().freeValue);
+        }
         bool paused = isPaused();
         bool loading = isLoading();
         std::string audioTracks = audioTracksJson();
@@ -1884,6 +1893,12 @@ private:
         script << "window.playerUpdate({duration:" << duration
                << ",position:" << position
                << ",volumeLevel:" << volumeLevel
+               << ",videoWidth:" << diagnostics.width
+               << ",videoHeight:" << diagnostics.height
+               << ",bufferAheadSeconds:" << diagnostics.bufferAhead
+               << ",playbackSpeed:" << diagnostics.speed
+               << ",decoderMode:" << diagnostics.decoder
+               << ",seeking:" << (diagnostics.seeking ? "true" : "false")
                << ",paused:" << (paused ? "true" : "false")
                << ",loading:" << (loading ? "true" : "false")
                << ",audioTracks:" << audioTracks
@@ -1898,6 +1913,11 @@ private:
         if (type.empty()) return;
         double value = extractJsonNumber(messageJson, L"value", 0.0);
 
+        if (type == "diagnosticsVisible") {
+            diagnosticsEnabled = value >= 0.5;
+            syncControls();
+            return;
+        }
         if (type == "controlsReady") {
             controlsWebReady.store(true);
             flushPendingControlsJsonIfReady();

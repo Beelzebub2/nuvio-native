@@ -28,6 +28,9 @@
     <symbol id="icon-build" viewBox="0 0 24 24">
       <path d="M22 19.59 12.41 10 14 8.41l1.17 1.17 2.83-2.83-1.17-1.17L19.66 2.75A6 6 0 0 0 12.2 10.2L2.3 20.1a1 1 0 0 0 0 1.41l.19.19a1 1 0 0 0 1.41 0l9.9-9.9A6 6 0 0 0 21.25 4.34l-2.83 2.83 1.17 1.17-2.83 2.83L15.59 10 14 11.59 20.41 18 22 19.59Z"/>
     </symbol>
+    <symbol id="icon-diagnostics" viewBox="0 0 24 24">
+      <path d="M12 7h.01M11 11h1v6m0-15a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
     <symbol id="icon-flag" viewBox="0 0 24 24">
       <path d="M5 21V4.6c0-.38.21-.72.55-.89 2.15-1.08 4.18.32 6.12.32 1.58 0 3.1-.72 5.26-.72.55 0 1 .45 1 1v9.72c0 .41-.25.78-.63.93-2.03.8-3.79.1-5.46.1-1.94 0-3.55 1.13-5.84.38V21H5Z"/>
     </symbol>
@@ -143,6 +146,7 @@
         <nav class="header-actions" aria-label="Player actions">
           <button class="header-button" id="submitIntroButton" data-command="submitIntro" aria-label="Submit intro"><svg><use href="#icon-flag"></use></svg></button>
           <button class="header-button" id="videoSettingsButton" data-command="videoSettings" aria-label="Video settings"><svg><use href="#icon-build"></use></svg></button>
+          <button class="header-button" id="diagnosticsButton" data-command="diagnostics" aria-label="Playback diagnostics" title="Playback diagnostics"><svg><use href="#icon-diagnostics"></use></svg></button>
           <button class="header-button pip-lock-button" id="pipLockButton" type="button" aria-pressed="false" aria-label="Lock player controls"><svg><use href="#icon-lock"></use></svg></button>
           <button class="header-button" id="pipButton" data-command="pictureInPicture" aria-label=""><svg><use href="#icon-pip"></use></svg></button>
           <button class="header-button" id="fullscreenButton" data-command="toggleFullscreen" aria-label="Enter fullscreen"><svg><use id="fullscreenIcon" href="#icon-fullscreen"></use></svg></button>
@@ -259,6 +263,31 @@
         <div class="track-panel audio-rail-panel">
           <div class="track-header" id="speedPanelTitle">Playback Speed</div>
           <div class="track-list" id="speedOptionList"></div>
+        </div>
+      </section>
+      <section class="modal-layer player-side-modal" id="diagnosticsModal" aria-label="Playback diagnostics" hidden>
+        <div class="track-panel player-side-panel diagnostics-panel">
+          <div class="track-header-row">
+            <div class="track-title" id="diagnosticsTitle">Playback diagnostics</div>
+            <button class="panel-button" id="diagnosticsCloseButton" type="button">Close</button>
+          </div>
+          <p class="diagnostics-note">Live, on-device measurements only. Unavailable values are not estimated. Copied reports never contain source URLs, credentials, or local file paths.</p>
+          <dl class="diagnostics-table">
+            <div><dt>State</dt><dd id="diagnosticsPhase">Unavailable</dd></div>
+            <div><dt>Video resolution</dt><dd id="diagnosticsResolution">Unavailable</dd></div>
+            <div><dt>Position / duration</dt><dd id="diagnosticsTime">Unavailable</dd></div>
+            <div><dt>Buffered ahead</dt><dd id="diagnosticsBuffer">Unavailable</dd></div>
+            <div><dt>Playback speed</dt><dd id="diagnosticsSpeed">Unavailable</dd></div>
+            <div><dt>Rebuffers while diagnostics open</dt><dd id="diagnosticsRebuffers">0</dd></div>
+            <div><dt>Video decoder</dt><dd id="diagnosticsDecoder">Unavailable</dd></div>
+            <div><dt>Source throughput</dt><dd id="diagnosticsThroughput">Unavailable</dd></div>
+            <div><dt>Network connection hint</dt><dd id="diagnosticsNetwork">Unavailable</dd></div>
+          </dl>
+          <p class="diagnostics-note" id="diagnosticsAdvice">For stutters, compare another authorized source and share the sanitized report.</p>
+          <div class="modal-actions diagnostics-actions">
+            <button class="panel-button primary" id="diagnosticsCopyButton" type="button">Copy sanitized report</button>
+            <span id="diagnosticsCopyStatus" role="status" aria-live="polite"></span>
+          </div>
         </div>
       </section>
       <section class="modal-layer player-rail-modal" id="audioModal" aria-label="Audio tracks" hidden>
@@ -470,6 +499,7 @@
     </div>
   </div>
 
+  <script src="diagnostics.js"></script>
   <script src="controls.js"></script>
 </body>
 </html>
