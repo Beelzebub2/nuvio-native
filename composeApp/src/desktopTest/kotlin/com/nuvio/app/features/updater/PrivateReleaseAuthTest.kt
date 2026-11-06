@@ -7,6 +7,11 @@ import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 
 class PrivateReleaseAuthTest {
+    @Test fun renamedRepositoryIsPreferredWithLegacyFallback() {
+        assertEquals("starlit", AppUpdaterPlatform.releaseSource.repo)
+        assertTrue("nuvio-native" in AppUpdaterPlatform.releaseSource.fallbackRepositories)
+    }
+
     @Test fun publicUpdateUrlsAreRestrictedToOurReleaseAndKnownAssetHosts() {
         for (repo in listOf("nuvio-native", "starlit")) {
             val valid = "https://github.com/Beelzebub2/$repo/releases/download/v1.9.2/Starlit-Windows-x64-1.9.2.exe"

@@ -57,9 +57,9 @@ actual object AppUpdaterPlatform {
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
-        repo = "nuvio-native",
-        // Both aliases remain available after #29 changes the preferred repository.
-        fallbackRepositories = listOf("nuvio-native", "starlit"),
+        repo = "starlit",
+        // Old installed clients and historic release URLs must remain supported.
+        fallbackRepositories = listOf("starlit", "nuvio-native"),
         channelBranch = null,
         includePrereleases = true,
         userAgent = "NuvioNative",

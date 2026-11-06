@@ -67,7 +67,7 @@ class ReleaseNotesTest {
             ## What's Changed
             ### Features
             - New feature from a merged PR.
-            **Full Changelog**: https://github.com/Beelzebub2/nuvio-native/compare/v1.0.21...v1.0.22
+            **Full Changelog**: https://github.com/Beelzebub2/starlit/compare/v1.0.21...v1.0.22
         """.trimIndent()
         val releases = parseReleaseNotes(notes, "Starlit 1.0.22", "v1.0.22")
         assertEquals(2, releases.size)

@@ -34,7 +34,7 @@ class UpdateBannerUiTest {
         tag = "v1.0.26",
         title = "Starlit 1.0.26",
         notes = "## Starlit 1.0.26\n\n- Faster startup.",
-        releaseUrl = "https://github.com/Beelzebub2/nuvio-native/releases/tag/v1.0.26",
+        releaseUrl = "https://github.com/Beelzebub2/starlit/releases/tag/v1.0.26",
         assetName = "Starlit-1.0.26.msi",
         assetUrl = "https://example.invalid/Starlit-1.0.26.msi",
         assetSizeBytes = 131_400_000L,
