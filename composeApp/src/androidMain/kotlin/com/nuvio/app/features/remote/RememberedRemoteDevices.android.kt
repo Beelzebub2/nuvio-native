@@ -23,13 +23,15 @@ internal actual object RememberedRemoteDeviceStore {
         val encoded = prefs()?.getString(key(account), null) ?: return emptyList()
         if (encoded.length > 16_384) return emptyList()
         json.decodeFromString<List<RememberedRemoteDevice>>(encoded).asSequence()
-            .filter { it.address.length in 7..15 && it.address.all { ch -> ch in '0'..'9' || ch == '.' } }
+            .mapNotNull { device -> normalizeRememberedRemoteAddress(device.address, device.bluetooth)?.let {
+                device.copy(address = it)
+            } }
             .map { it.copy(
                 name = it.name.trim().take(80),
                 lastSeenEpochMs = it.lastSeenEpochMs.coerceAtLeast(0L),
-                wakeMac = it.wakeMac?.let(::normalizedWakeMac),
+                wakeMac = if (it.bluetooth) null else it.wakeMac?.let(::normalizedWakeMac),
             ) }
-            .distinctBy { it.address }.take(10).toList()
+            .distinctBy { it.bluetooth to it.address }.take(10).toList()
     }.getOrDefault(emptyList())
 
     actual fun write(account: RemoteAccount, devices: List<RememberedRemoteDevice>) {

@@ -5,4 +5,7 @@ internal actual fun createDesktopRemoteTransport(): DesktopRemoteTransport =
         bluetoothHost = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
             WindowsBluetoothRemoteHost()
         else null,
+        bluetoothTrustStore = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
+            WindowsRemoteBluetoothTrustStore
+        else null,
     )
