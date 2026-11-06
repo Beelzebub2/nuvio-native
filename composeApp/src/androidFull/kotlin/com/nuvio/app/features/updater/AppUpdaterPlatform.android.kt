@@ -10,8 +10,8 @@ actual object AppUpdaterPlatform {
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
-        repo = "nuvio-native",
-        fallbackRepositories = listOf("nuvio-native", "starlit"),
+        repo = "starlit",
+        fallbackRepositories = listOf("starlit", "nuvio-native"),
         userAgent = "Starlit-Android",
     )
 

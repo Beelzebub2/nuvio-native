@@ -28,7 +28,7 @@ class ChangelogUiTest {
 
         ## Features
         - **Clear version cards** with selectable text and `inline code`.
-        - Read the [release details](https://github.com/Beelzebub2/nuvio-native/releases/tag/v2.0.0).
+        - Read the [release details](https://github.com/Beelzebub2/starlit/releases/tag/v2.0.0).
 
         Starlit 1.9.0 improves playback.
 
@@ -52,7 +52,7 @@ class ChangelogUiTest {
             CompositionLocalProvider(LocalUriHandler provides uriHandler) {
             NuvioTheme { Surface {
                 if (open.value) ReleaseNotesDialog(fixture, "Release notes", "Starlit 2.0.0", "v2.0.0", "Available update",
-                    onDismiss = { open.value = false }, releaseUrl = "https://github.com/Beelzebub2/nuvio-native/releases/tag/v2.0.0")
+                    onDismiss = { open.value = false }, releaseUrl = "https://github.com/Beelzebub2/starlit/releases/tag/v2.0.0")
             } }
             }
         }
@@ -66,7 +66,7 @@ class ChangelogUiTest {
         compose.onNodeWithText("Historical change.").assertDoesNotExist()
         compose.onNodeWithText("View on GitHub").assertIsDisplayed()
         compose.onNodeWithText("View on GitHub").performClick()
-        compose.runOnIdle { assertEquals("https://github.com/Beelzebub2/nuvio-native/releases/tag/v2.0.0", openedUrl) }
+        compose.runOnIdle { assertEquals("https://github.com/Beelzebub2/starlit/releases/tag/v2.0.0", openedUrl) }
         compose.onNodeWithContentDescription("Close").performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
     }
