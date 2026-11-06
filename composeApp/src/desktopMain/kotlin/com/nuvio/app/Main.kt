@@ -24,6 +24,7 @@ import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.deeplink.handleAppUrl
 import com.nuvio.app.core.diagnostics.SentryInitializer
+import com.nuvio.app.core.windows.runElevatedHelperTask
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.ProvideDesktopWindowInsets
 import com.nuvio.app.features.discordrpc.DiscordPresenceManager
@@ -47,6 +48,7 @@ import com.nuvio.app.features.settings.transparentPreviewResource
 import com.nuvio.app.features.updater.AppUpdaterPlatform
 import java.awt.Desktop
 import javax.imageio.ImageIO
+import kotlin.system.exitProcess
 import java.awt.Color as AwtColor
 import javax.swing.JComponent
 
@@ -54,6 +56,10 @@ private val NuvioDesktopNativeBackground = AwtColor(0x0D, 0x0D, 0x0D)
 private const val MacosDarkAquaAppearance = "NSAppearanceNameDarkAqua"
 
 fun main(args: Array<String>) {
+    // An elevated one-shot helper (for example adding firewall rules after the user
+    // approved UAC) does its task and exits before any app startup.
+    runElevatedHelperTask(args)?.let { exitProcess(it) }
+
     // Smoke-player harnesses are isolated diagnostic windows, not a second normal app.
     val smokePlayerUrl = (System.getProperty("nuvio.desktop.smokePlayerUrl")
         ?: System.getenv("NUVIO_DESKTOP_SMOKE_PLAYER_URL"))?.takeIf(String::isNotBlank)
