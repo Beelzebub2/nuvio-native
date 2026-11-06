@@ -336,6 +336,87 @@ class DesktopRemoteProtocolTest {
     }
 
     @Test
+    fun bluetoothPcIsRememberedSeparatelyFromLanAndCannotBeUsedAsWakeAddress() {
+        val lan = rememberRemoteDevice(emptyList(), "Home", "192.168.1.20", 100)
+        val bluetooth = rememberRemoteDevice(lan, "Office|PC", "a4:b5:c6:d7:e8:f9", 200, bluetooth = true)
+        assertEquals(2, bluetooth.size)
+        assertEquals("A4:B5:C6:D7:E8:F9", bluetooth.first().address)
+        assertTrue(bluetooth.first().bluetooth)
+        assertEquals("Office PC", bluetooth.first().name)
+        assertNull(bluetooth.first().wakeMac)
+        assertEquals(lan.single(), bluetooth.last())
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "my-pc.local", 300, bluetooth = true))
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "01:02:03:04:05", 300, bluetooth = true))
+        assertEquals(bluetooth, rememberRemoteDevice(bluetooth, "invalid", "00:00:00:00:00:00", 300, bluetooth = true))
+        val updated = rememberRemoteDevice(bluetooth, "New Name", "A4:B5:C6:D7:E8:F9", 400, bluetooth = true)
+        assertEquals(2, updated.size)
+        assertEquals(400, updated.first().lastSeenEpochMs)
+    }
+
+    @Test
+    fun bluetoothTrustRequiresBothProofsAndRemainsAccountScoped() = runBlocking {
+        val store = object : RemoteBluetoothTrustStore {
+            val values = mutableMapOf<String, RemoteBluetoothTrust>()
+            private fun key(account: RemoteAccount, entry: String) = remoteBluetoothTrustKey(account, entry)
+            override fun read(account: RemoteAccount, entry: String) = values[key(account, entry)]
+            override fun write(account: RemoteAccount, entry: String, trust: RemoteBluetoothTrust) {
+                values[key(account, entry)] = trust
+            }
+            override fun delete(account: RemoteAccount, entry: String) {
+                values.remove(key(account, entry))
+            }
+        }
+        val account = RemoteAccount("owner", "https://account.example", "public")
+        val btAddress = "A4:B5:C6:D7:E8:F9"
+
+        withPeers { host, phone ->
+            assertTrue(host.supportsTrustedReconnect)
+            assertTrue(phone.supportsTrustedReconnect)
+            assertEquals(host.code, phone.code)
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertFalse(hostResume.await())
+            assertFalse(phoneResume.await())
+            // These calls are permitted only *after* the normal two-person,
+            // same-account, server-verified authorization has succeeded.
+            val hostEnroll = async(Dispatchers.IO) {
+                enrollBluetoothTrust(host.channel, account, true, null, store)
+            }
+            val phoneEnroll = async(Dispatchers.IO) {
+                enrollBluetoothTrust(phone.channel, account, false, btAddress, store)
+            }
+            hostEnroll.await()
+            phoneEnroll.await()
+        }
+        val saved = requireNotNull(store.read(account, "phone:$btAddress"))
+        assertEquals(saved, store.read(account, "host:${saved.id}"))
+        assertNull(store.read(account.copy(userId = "another"), "phone:$btAddress"))
+        assertNull(store.read(account.copy(server = "https://another.example"), "phone:$btAddress"))
+
+        withPeers { host, phone ->
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertTrue(hostResume.await(), "The desktop must verify the phone's transcript-bound proof")
+            assertTrue(phoneResume.await(), "The phone must verify the desktop's transcript-bound proof")
+            assertNotEquals(
+                remoteBluetoothTrustProof(saved, host.transcript, "phone"),
+                remoteBluetoothTrustProof(saved, host.transcript, "desktop"),
+            )
+            assertNotEquals(
+                remoteBluetoothTrustProof(saved, host.transcript, "phone"),
+                remoteBluetoothTrustProof(saved, randomRemoteBytes(), "phone"),
+            )
+        }
+        store.delete(account, "phone:$btAddress")
+        withPeers { host, phone ->
+            val hostResume = async(Dispatchers.IO) { resumeBluetoothTrust(host, account, true, null, store) }
+            val phoneResume = async(Dispatchers.IO) { resumeBluetoothTrust(phone, account, false, btAddress, store) }
+            assertFalse(hostResume.await())
+            assertFalse(phoneResume.await())
+        }
+    }
+
+    @Test
     fun wakePacketUsesOnlyUnicastMacAndStandard102ByteLayout() {
         assertEquals("02:12:34:56:78:9A", normalizedWakeMac("02-12-34-56-78-9a"))
         val packet = requireNotNull(wakeMagicPacket("02:12:34:56:78:9A"))

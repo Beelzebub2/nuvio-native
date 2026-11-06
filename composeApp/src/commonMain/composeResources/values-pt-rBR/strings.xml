@@ -660,7 +660,7 @@
     <string name="remote_pc_check_ip">Procurar PC neste endereço</string>
     <string name="remote_pc_desktop_addresses">Endereço local do PC: %1$s</string>
     <string name="remote_pc_saved_devices">PCs pareados anteriormente</string>
-    <string name="remote_pc_saved_notice">Os PCs salvos guardam apenas o endereço local. Para reconectar, é preciso confirmar um novo código nos dois dispositivos.</string>
+    <string name="remote_pc_saved_notice">Os PCs salvos estão prontos para reconectar. Pelo Bluetooth, não é preciso confirmar outro código se os dois dispositivos mantiverem as chaves de pareamento protegidas. Pela rede local, a confirmação continua necessária.</string>
     <string name="remote_pc_forget">Esquecer</string>
     <string name="remote_pc_wake">Ligar PC</string>
     <string name="remote_pc_set_wake_mac">Configurações de Wake-on-LAN</string>

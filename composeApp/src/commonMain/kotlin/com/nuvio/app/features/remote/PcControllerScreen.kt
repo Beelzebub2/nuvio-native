@@ -330,15 +330,20 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
     var macDraft by remember(saved.wakeMac) { mutableStateOf(saved.wakeMac.orEmpty()) }
     var macError by remember { mutableStateOf(false) }
     val tokens = MaterialTheme.nuvio
+    val connect = {
+        if (saved.bluetooth) DesktopRemote.transport.connect(
+            RemoteDesktop(saved.address, 0, saved.name, bluetooth = true),
+        ) else DesktopRemote.transport.discover(saved.address)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         RemoteDeviceRow(
             name = saved.name,
             detail = saved.address,
-            icon = Icons.Rounded.History,
+            icon = if (saved.bluetooth) Icons.AutoMirrored.Rounded.BluetoothSearching else Icons.Rounded.History,
             enabled = enabled,
-            onClick = { DesktopRemote.transport.discover(saved.address) },
+            onClick = connect,
         ) {
-            saved.wakeMac?.let { mac ->
+            if (!saved.bluetooth) saved.wakeMac?.let { mac ->
                 IconButton(onClick = { DesktopRemote.transport.wake(saved.address, mac) }) {
                     Icon(Icons.Rounded.PowerSettingsNew, contentDescription = stringResource(Res.string.remote_pc_wake),
                         tint = tokens.colors.accent)
@@ -353,13 +358,15 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
                     MenuItem(
                         text = stringResource(Res.string.remote_pc_connect),
                         enabled = enabled,
-                        onClick = { menuOpen = false; DesktopRemote.transport.discover(saved.address) },
+                        onClick = { menuOpen = false; connect() },
                     )
-                    MenuItem(
-                        text = stringResource(Res.string.remote_pc_set_wake_mac),
-                        selected = editingWake,
-                        onClick = { menuOpen = false; editingWake = !editingWake; macError = false },
-                    )
+                    if (!saved.bluetooth) {
+                        MenuItem(
+                            text = stringResource(Res.string.remote_pc_set_wake_mac),
+                            selected = editingWake,
+                            onClick = { menuOpen = false; editingWake = !editingWake; macError = false },
+                        )
+                    }
                     MenuItem(
                         text = stringResource(Res.string.remote_pc_forget),
                         onClick = { menuOpen = false; DesktopRemote.forget(saved.address) },
