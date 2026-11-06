@@ -1,10 +1,11 @@
 package com.nuvio.app.features.downloads
 
 import android.content.Context
+import android.system.Os
+import android.system.OsConstants
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import java.io.File
 import java.net.URI
-import java.nio.file.Files
 
 internal actual object DownloadStorageManagement {
     actual val supported: Boolean = true
@@ -56,13 +57,22 @@ internal actual object DownloadStorageManagement {
         if (transfer.item.localFileUri != item.localFileUri) return null
         val root = File(context.filesDir, "downloads")
         val file = File(root, item.fileName)
-        val path = file.toPath()
-        if (!Files.isRegularFile(path) || Files.isSymbolicLink(path) ||
-            Files.isSymbolicLink(root.toPath()) ||
-            file.canonicalFile.parentFile != root.canonicalFile) return null
+        if (!isPrivateStarlitDownloadFile(root, file)) return null
         val recordedUri = item.localFileUri ?: return null
         if (File(URI(recordedUri)).canonicalFile != file.canonicalFile) return null
         if (file.length() <= 0L || file.length() != item.downloadedBytes) return null
         file.length()
     }.getOrNull()
 }
+
+/**
+ * Android supports API 24+, but java.nio.file.Files is only available from
+ * API 26. lstat is supported from API 21 and does not follow the final symlink.
+ * Only regular files immediately inside the real app-private downloads
+ * directory are eligible for cleanup, never external, nested or linked files.
+ */
+internal fun isPrivateStarlitDownloadFile(root: File, file: File): Boolean = runCatching {
+    OsConstants.S_ISDIR(Os.lstat(root.path).st_mode) &&
+        OsConstants.S_ISREG(Os.lstat(file.path).st_mode) &&
+        file.canonicalFile.parentFile == root.canonicalFile
+}.getOrDefault(false)

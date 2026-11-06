@@ -150,12 +150,29 @@ internal actual object DownloadsPlatformDownloader {
 
     actual fun removeFile(localFileUri: String?): Boolean {
         if (localFileUri.isNullOrBlank()) return false
-        val file = localFileUri.toLocalFileOrNull() ?: return false
-        return runCatching { file.delete() }.getOrDefault(false)
+        // Queue records (including imported/legacy records) are not proof of
+        // ownership. Never delete an arbitrary file:// path, another profile's
+        // completed download, or a symlink on the strength of a saved URI.
+        return runCatching {
+            val context = appContext ?: return false
+            val scheduler = downloadScheduler ?: return false
+            val file = localFileUri.toLocalFileOrNull() ?: return false
+            val root = File(context.filesDir, "downloads")
+            if (!isPrivateStarlitDownloadFile(root, file)) return false
+            val owned = scheduler.store.get(file.name) ?: return false
+            if (owned.profileId != com.nuvio.app.features.profiles.ProfileRepository.activeProfileId ||
+                owned.item.status != DownloadStatus.Completed ||
+                owned.item.localFileUri?.toLocalFileOrNull()?.canonicalFile != file.canonicalFile) return false
+            file.delete()
+        }.getOrDefault(false)
     }
 
     actual fun removePartialFile(destinationFileName: String): Boolean {
         val scheduler = downloadScheduler ?: return false
+        if (destinationFileName.isBlank() || destinationFileName == "." ||
+            destinationFileName == ".." || '/' in destinationFileName || '\\' in destinationFileName) return false
+        val transfer = scheduler.store.get(destinationFileName) ?: return false
+        if (transfer.profileId != com.nuvio.app.features.profiles.ProfileRepository.activeProfileId) return false
         scheduler.remove(destinationFileName)
         return true
     }
