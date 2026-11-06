@@ -45,7 +45,10 @@ class DesktopRemoteProtocolTest {
         try {
             host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
             withTimeout(5_000) {
-                while (!DesktopRemote.hostFailure.value) delay(25)
+                // Other remote tests share DesktopRemote's status flows. Only
+                // accept a failure belonging to this listener and its port.
+                while (!DesktopRemote.hostFailure.value ||
+                    !DesktopRemote.status.value.contains("TCP port $port")) delay(25)
             }
             assertFalse(DesktopRemote.hostReady.value)
             assertContains(DesktopRemote.status.value, "TCP port $port")
