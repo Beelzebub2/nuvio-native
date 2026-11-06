@@ -126,10 +126,25 @@ class DownloadQuotaLifecycleTest {
                 waitFor { DownloadsRepository.uiState.value.items.singleOrNull()?.status == DownloadStatus.Paused }
             } catch (timedOut: TimeoutCancellationException) {
                 val state = DownloadsRepository.uiState.value.items.singleOrNull()
+                // Keep CI failures actionable without printing any media URL,
+                // token, account or private file path.
+                fun internalState(name: String): Any? = runCatching {
+                    DownloadsRepository::class.java.getDeclaredField(name).apply {
+                        isAccessible = true
+                    }.get(DownloadsRepository)
+                }.getOrNull()
+                val activeIds = (internalState("activeHandles") as? Map<*, *>)?.keys
+                val tokenIds = (internalState("tokens") as? Map<*, *>)?.keys
+                val reservationWouldExceed = state?.let {
+                    quotaRequiresPause(listOf(it), setOf(it.id), gib)
+                }
                 throw AssertionError(
                     "Oversize transfer did not pause: requests=${requests.get()}, " +
                         "status=${state?.status}, phase=${state?.phase}, " +
-                        "size=${state?.totalBytes}, error=${state?.errorMessage}",
+                        "size=${state?.totalBytes}, error=${state?.errorMessage}, " +
+                        "cachedQuota=${internalState("enforcedQuotaBytes")}, " +
+                        "activeIds=$activeIds, tokenIds=$tokenIds, " +
+                        "reservationWouldExceed=$reservationWouldExceed",
                     timedOut,
                 )
             }
