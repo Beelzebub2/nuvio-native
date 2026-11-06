@@ -559,11 +559,17 @@ object DownloadsRepository {
     /** Preserves partial files and the existing restart/resume semantics. Never deletes media. */
     private fun holdForQuota(downloadId: String) {
         tokens.remove(downloadId)
-        activeHandles.remove(downloadId)?.cancel()
+        val handle = activeHandles.remove(downloadId)
+        // A progress callback may execute on the transfer's own interruptible IO
+        // thread. Persist Paused BEFORE cancelling that job; cancellation can
+        // interrupt the callback before its state update otherwise.
         mutateItem(downloadId) { item ->
             item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
-                errorMessage = runBlocking { getString(Res.string.downloads_storage_enforce_paused) })
+                errorMessage = runCatching {
+                    runBlocking { getString(Res.string.downloads_storage_enforce_paused) }
+                }.getOrDefault("Paused: download storage limit reached"))
         }
+        handle?.cancel()
     }
 
     private fun pumpQueue() {
