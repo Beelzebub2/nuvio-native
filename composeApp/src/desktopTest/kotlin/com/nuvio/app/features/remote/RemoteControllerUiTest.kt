@@ -30,6 +30,8 @@ class RemoteControllerUiTest {
         DesktopRemote.connected.value = false
         DesktopRemote.pairing.value = null
         DesktopRemote.hostReady.value = false
+        DesktopRemote.hostFailure.value = false
+        DesktopRemote.discoveryReady.value = false
         DesktopRemote.remotePlayback.value = RemotePlayback()
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.remembered.value = emptyList()
@@ -116,11 +118,24 @@ class RemoteControllerUiTest {
         runOnIdle { firewall.flow.value = RemoteFirewallState.PublicNetwork }
         onNodeWithText("Open network settings").performClick()
         runOnIdle { assertEquals(1, firewall.settingsOpened) }
+        runOnIdle { firewall.flow.value = RemoteFirewallState.Unverified }
+        onNodeWithText("Couldn't check Windows Firewall").assertIsDisplayed()
         runOnIdle { firewall.flow.value = RemoteFirewallState.Allowed }
         onNodeWithText("Windows Firewall lets phones on private networks reach this PC.").assertIsDisplayed()
         capture("phone-remote-firewall-allowed")
         runOnIdle { firewall.flow.value = RemoteFirewallState.NotNeeded }
         onNodeWithTag("remote-firewall-card").assertDoesNotExist()
+    }
+
+    @Test
+    fun desktopExplainsOccupiedPortInsteadOfShowingAnIndefiniteSpinner() = runDesktopComposeUiTest(width = 900, height = 680) {
+        DesktopRemote.hostReady.value = false
+        DesktopRemote.hostFailure.value = true
+        DesktopRemote.status.value = remoteHostFailureMessage(java.net.BindException("Address already in use"))
+        show(desktopLayout = true, firewall = FakeFirewall(RemoteFirewallState.Unverified))
+        onNodeWithText("Not ready").assertIsDisplayed()
+        onNodeWithText("Couldn't check Windows Firewall").assertIsDisplayed()
+        onNodeWithText(DesktopRemote.status.value).assertIsDisplayed()
     }
 
     @Test

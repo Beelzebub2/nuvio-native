@@ -17,6 +17,8 @@ internal enum class RemoteFirewallState {
     Allowed,
     /** Inbound traffic to the remote ports is blocked; [RemoteFirewallAccess.requestAccess] can fix it. */
     Blocked,
+    /** Windows rules could not be inspected; do not claim that the firewall is blocking the PC. */
+    Unverified,
     /** The rules allow private networks, but the active network is marked Public. */
     PublicNetwork,
     /** Waiting for the user to answer the operating system's administrator prompt. */

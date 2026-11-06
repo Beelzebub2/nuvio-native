@@ -81,6 +81,9 @@ internal object DesktopRemote {
     val connected = MutableStateFlow(false)
     val scanning = MutableStateFlow(false)
     val hostReady = MutableStateFlow(false)
+    val hostFailure = MutableStateFlow(false)
+    /** True only if UDP discovery is listening; QR/manual-IP still work without it. */
+    val discoveryReady = MutableStateFlow(false)
     val bluetoothHostReady = MutableStateFlow(false)
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())

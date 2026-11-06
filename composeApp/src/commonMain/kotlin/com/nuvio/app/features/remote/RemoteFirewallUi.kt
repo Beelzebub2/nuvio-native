@@ -77,6 +77,22 @@ internal fun RemoteFirewallCard(firewall: RemoteFirewallAccess, modifier: Modifi
             )
             CheckAgainButton(firewall)
         }
+        RemoteFirewallState.Unverified -> FirewallNotice(
+            modifier = modifier,
+            tone = RemoteTone.Warning,
+            icon = Icons.Rounded.GppMaybe,
+            title = stringResource(Res.string.remote_firewall_unverified_title),
+            body = stringResource(Res.string.remote_firewall_unverified_body),
+        ) {
+            CheckAgainButton(firewall)
+            NuvioCompactActionButton(
+                label = stringResource(Res.string.remote_firewall_allow),
+                icon = Icons.Rounded.Security,
+                tone = NuvioCompactActionTone.Ghost,
+                size = NuvioActionSize.Small,
+                onClick = firewall::requestAccess,
+            )
+        }
         RemoteFirewallState.PublicNetwork -> FirewallNotice(
             modifier = modifier,
             tone = RemoteTone.Warning,

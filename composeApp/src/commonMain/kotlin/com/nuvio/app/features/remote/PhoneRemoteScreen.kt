@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.BluetoothDisabled
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.WifiOff
@@ -46,6 +47,8 @@ internal fun PhoneRemoteScreen(
     val status by DesktopRemote.status.collectAsState()
     val connected by DesktopRemote.connected.collectAsState()
     val hostReady by DesktopRemote.hostReady.collectAsState()
+    val hostFailure by DesktopRemote.hostFailure.collectAsState()
+    val discoveryReady by DesktopRemote.discoveryReady.collectAsState()
     val bluetoothHostReady by DesktopRemote.bluetoothHostReady.collectAsState()
     val disconnectedStatus = stringResource(Res.string.remote_disconnected_status)
     Column(Modifier.fillMaxSize()) {
@@ -91,15 +94,15 @@ internal fun PhoneRemoteScreen(
                     RemotePairingPanel(pairing, pairingConfirmed, onConfirmPairing, onRejectPairing)
                 } else if (wide) {
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        QrPanel(addresses, hostReady, status, Modifier.width(320.dp))
+                        QrPanel(addresses, hostReady, hostFailure, status, Modifier.width(320.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            DetailsColumn(addresses, firewall, hostReady, connected, bluetoothHostReady)
+                            DetailsColumn(addresses, firewall, hostReady, discoveryReady, connected, bluetoothHostReady)
                         }
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        QrPanel(addresses, hostReady, status, Modifier.fillMaxWidth())
-                        DetailsColumn(addresses, firewall, hostReady, connected, bluetoothHostReady)
+                        QrPanel(addresses, hostReady, hostFailure, status, Modifier.fillMaxWidth())
+                        DetailsColumn(addresses, firewall, hostReady, discoveryReady, connected, bluetoothHostReady)
                     }
                 }
             }
@@ -131,7 +134,7 @@ internal fun PhoneRemoteScreen(
 }
 
 @Composable
-private fun QrPanel(addresses: List<String>, hostReady: Boolean, status: String, modifier: Modifier) {
+private fun QrPanel(addresses: List<String>, hostReady: Boolean, hostFailure: Boolean, status: String, modifier: Modifier) {
     val tokens = MaterialTheme.nuvio
     RemoteCard(modifier, contentPadding = 20.dp, spacing = 14.dp) {
         Text(stringResource(Res.string.remote_window_scan_title), style = MaterialTheme.typography.titleMedium,
@@ -139,7 +142,7 @@ private fun QrPanel(addresses: List<String>, hostReady: Boolean, status: String,
         when {
             hostReady && addresses.isNotEmpty() -> DesktopPairingQr(addresses)
             hostReady -> QrPlaceholder(Icons.Rounded.WifiOff, stringResource(Res.string.remote_qr_no_network))
-            else -> QrPlaceholder(null, status)
+            else -> QrPlaceholder(if (hostFailure) Icons.Rounded.ErrorOutline else null, status)
         }
     }
 }
@@ -170,6 +173,7 @@ private fun DetailsColumn(
     addresses: List<String>,
     firewall: RemoteFirewallAccess,
     hostReady: Boolean,
+    discoveryReady: Boolean,
     connected: Boolean,
     bluetoothHostReady: Boolean,
 ) {
@@ -184,6 +188,15 @@ private fun DetailsColumn(
         }
     }
     RemoteFirewallCard(firewall)
+    if (hostReady && !discoveryReady) {
+        RemoteCard(tone = RemoteTone.Warning) {
+            Text(
+                stringResource(Res.string.remote_discovery_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textPrimary,
+            )
+        }
+    }
     RemoteCard {
         Text(stringResource(Res.string.remote_window_steps_title), style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
