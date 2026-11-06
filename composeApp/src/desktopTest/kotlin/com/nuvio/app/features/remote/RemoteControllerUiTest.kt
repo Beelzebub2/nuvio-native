@@ -103,28 +103,79 @@ class RemoteControllerUiTest {
     }
 
     @Test
-    fun desktopWindowAsksForFirewallAccessWhenBlocked() = runDesktopComposeUiTest(width = 900, height = 680) {
+    fun desktopWindowOffersNetworkHelpOnlyWhenRequested() = runDesktopComposeUiTest(width = 900, height = 680) {
         DesktopRemote.hostReady.value = true
+        DesktopRemote.discoveryReady.value = true
         DesktopRemote.status.value = "Ready to pair with your phone on this local network."
         val firewall = FakeFirewall(RemoteFirewallState.Blocked)
         show(desktopLayout = true, firewall = firewall)
         onNodeWithTag("desktop-pairing-qr").assertIsDisplayed()
-        onNodeWithText("Windows Firewall is blocking your phone").assertIsDisplayed()
+        onNodeWithTag("remote-firewall-card").assertDoesNotExist()
+        runOnIdle { assertEquals(0, firewall.refreshes) }
+        onNodeWithTag("remote-network-help").performScrollTo().performClick()
+        onNodeWithText("Connection permission isn't confirmed").performScrollTo().assertIsDisplayed()
         runOnIdle { assertEquals(1, firewall.refreshes) }
-        capture("phone-remote-firewall-blocked")
-        onNodeWithTag("remote-firewall-allow").performClick()
+        onNodeWithTag("remote-firewall-allow").performScrollTo()
+        capture("phone-remote-network-help")
+        onNodeWithTag("remote-firewall-allow").performScrollTo().performClick()
         runOnIdle { assertEquals(1, firewall.requests) }
-        onNodeWithText("Approve the Windows prompt to let Starlit through the firewall…").assertIsDisplayed()
+        onNodeWithText("Approve the Windows prompt to let Starlit through the firewall…").performScrollTo().assertIsDisplayed()
         runOnIdle { firewall.flow.value = RemoteFirewallState.PublicNetwork }
-        onNodeWithText("Open network settings").performClick()
+        onNodeWithText("Open network settings").performScrollTo().performClick()
         runOnIdle { assertEquals(1, firewall.settingsOpened) }
         runOnIdle { firewall.flow.value = RemoteFirewallState.Unverified }
-        onNodeWithText("Couldn't check Windows Firewall").assertIsDisplayed()
+        onNodeWithText("Couldn't check Windows Firewall").performScrollTo().assertIsDisplayed()
         runOnIdle { firewall.flow.value = RemoteFirewallState.Allowed }
-        onNodeWithText("Windows Firewall lets phones on private networks reach this PC.").assertIsDisplayed()
+        onNodeWithText("Windows rules allow local connections and automatic discovery. Your phone still needs a working network route to this PC.")
+            .performScrollTo().assertIsDisplayed()
         capture("phone-remote-firewall-allowed")
         runOnIdle { firewall.flow.value = RemoteFirewallState.NotNeeded }
         onNodeWithTag("remote-firewall-card").assertDoesNotExist()
+    }
+
+    @Test
+    fun connectedPhoneHidesIrrelevantLanDiagnostics() = runDesktopComposeUiTest(width = 900, height = 680) {
+        DesktopRemote.hostReady.value = true
+        val firewall = FakeFirewall(RemoteFirewallState.Blocked)
+        show(desktopLayout = true, firewall = firewall)
+        onNodeWithTag("remote-network-help").performScrollTo().performClick()
+        runOnIdle { DesktopRemote.connected.value = true }
+        for (state in listOf(RemoteFirewallState.Blocked, RemoteFirewallState.PublicNetwork,
+            RemoteFirewallState.Unverified, RemoteFirewallState.DiscoveryRestricted)) {
+            runOnIdle { firewall.flow.value = state }
+            onNodeWithTag("remote-firewall-card").assertDoesNotExist()
+            onNodeWithTag("remote-network-help").assertDoesNotExist()
+        }
+        onNodeWithText("A phone is connected to this desktop.").performScrollTo().assertIsDisplayed()
+        capture("phone-remote-connected-no-warning")
+    }
+
+    @Test
+    fun udpRuleWarningKeepsQrPairingAvailable() = runDesktopComposeUiTest(width = 900, height = 760) {
+        DesktopRemote.hostReady.value = true
+        DesktopRemote.discoveryReady.value = true
+        show(desktopLayout = true, firewall = FakeFirewall(RemoteFirewallState.DiscoveryRestricted))
+        onNodeWithTag("desktop-pairing-qr").assertIsDisplayed()
+        onNodeWithTag("remote-network-help").performScrollTo().performClick()
+        onNodeWithText("Try QR or an IP address").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Connection permission isn't confirmed").assertDoesNotExist()
+        onNodeWithText("Allow through firewall").performScrollTo()
+        capture("phone-remote-discovery-restricted")
+    }
+
+    @Test
+    fun idleDesktopNeverShowsAStartupFirewallPrompt() = runDesktopComposeUiTest(width = 900, height = 680) {
+        DesktopRemote.hostReady.value = true
+        DesktopRemote.visible.value = false
+        val firewall = FakeFirewall(RemoteFirewallState.PublicNetwork)
+        setContent { NuvioTheme { DesktopRemoteDialogs(desktopLayout = true, firewall = firewall, inline = true) } }
+        mainClock.advanceTimeBy(5_000)
+        onNodeWithText("Let your phone find this PC?").assertDoesNotExist()
+        onNodeWithTag("remote-firewall-card").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(0, firewall.refreshes)
+            assertEquals(0, firewall.requests)
+        }
     }
 
     @Test
@@ -134,7 +185,8 @@ class RemoteControllerUiTest {
         DesktopRemote.status.value = remoteHostFailureMessage(java.net.BindException("Address already in use"))
         show(desktopLayout = true, firewall = FakeFirewall(RemoteFirewallState.Unverified))
         onNodeWithText("Not ready").assertIsDisplayed()
-        onNodeWithText("Couldn't check Windows Firewall").assertIsDisplayed()
+        onNodeWithTag("remote-network-help").assertDoesNotExist()
+        onNodeWithTag("remote-firewall-card").assertDoesNotExist()
         onNodeWithText(DesktopRemote.status.value).assertIsDisplayed()
     }
 

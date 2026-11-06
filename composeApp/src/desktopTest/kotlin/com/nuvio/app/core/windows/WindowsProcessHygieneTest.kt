@@ -14,6 +14,25 @@ import org.junit.Assume.assumeTrue
 class WindowsProcessHygieneTest {
     private val windows = System.getProperty("os.name").startsWith("Windows")
 
+    @Test
+    fun networkSettingsUsesTheWindowsProtocolHandlerWithoutElevation() {
+        for (succeeded in listOf(true, false)) {
+            var calls = 0
+            assertEquals(succeeded, WindowsElevation.openNetworkSettings { info ->
+                calls++
+                assertEquals("open", info.lpVerb.toString())
+                assertEquals("ms-settings:network-status", info.lpFile.toString())
+                assertNull(info.lpParameters)
+                assertNull(info.hwnd)
+                assertEquals(1, info.nShow)
+                assertEquals(0x100 or 0x400, info.fMask)
+                assertEquals(info.size(), info.cbSize)
+                succeeded
+            })
+            assertEquals(1, calls)
+        }
+    }
+
     /**
      * Antivirus engines (Windows Defender's Trojan:Win32/Bearfoos.A!ml) flagged Starlit
      * for starting hidden, encoded or elevated PowerShell. App code must use in-process

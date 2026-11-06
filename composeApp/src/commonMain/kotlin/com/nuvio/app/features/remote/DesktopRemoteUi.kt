@@ -25,7 +25,7 @@ internal fun DesktopRemoteSettingsButton() {
 
 /**
  * Everything the remote shows outside its Settings entry: the controller window,
- * the pairing code check, desktop playback approval and the firewall prompt.
+ * the pairing code check and desktop playback approval.
  */
 @Composable
 internal fun DesktopRemoteDialogs(
@@ -50,9 +50,6 @@ internal fun DesktopRemoteDialogs(
     // Reopening after Wi-Fi/DHCP changes refreshes both the QR and its manual-IP fallback.
     val hostAddresses = remember(visible, hostReady) {
         if (desktopLayout && visible) localAddresses() else emptyList()
-    }
-    LaunchedEffect(visible, desktopLayout) {
-        if (visible && desktopLayout) firewall.refresh()
     }
 
     if (visible) {
@@ -102,6 +99,5 @@ internal fun DesktopRemoteDialogs(
                 onReject = { DesktopRemote.pendingHandoff.value = null },
             )
         }
-        RemoteFirewallStartupPrompt(firewall, suppressed = visible || pairing != null)
     }
 }

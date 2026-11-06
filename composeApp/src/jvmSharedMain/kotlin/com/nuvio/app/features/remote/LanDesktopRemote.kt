@@ -7,6 +7,7 @@ import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.BindException
+import java.net.ConnectException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -43,6 +44,15 @@ internal fun remoteHostFailureMessage(error: Exception, port: Int = REMOTE_LAN_P
     is BindException -> "TCP port $port is already in use or unavailable. Close another Starlit instance or app using this port. Starlit will retry automatically."
     is SecurityException -> "Windows or security software denied access to TCP port $port. Check app permissions. Starlit will retry automatically."
     else -> "The phone remote listener stopped unexpectedly. Starlit will retry automatically."
+}
+
+/** A TCP failure identifies the failed endpoint, not which router, VPN or firewall caused it. */
+internal fun remoteConnectionFailureMessage(error: Exception, address: String, port: Int): String = when (error) {
+    is ConnectException -> "The connection to $address:$port was refused. Open Phone remote on the PC and check its current IP address."
+    is SocketTimeoutException -> "No response from $address:$port. Check the PC's IP address and same-network access; guest Wi-Fi, a VPN, or a firewall may prevent the connection."
+    is SecurityException -> "This device denied local-network access. Check Starlit's network permissions, then try again."
+    is IllegalArgumentException -> "Choose a private IPv4 address on this device's local network."
+    else -> "Could not reach Starlit at $address:$port. Check the PC, its current IP address, and local-network access."
 }
 
 /** Do not share the fixed remote port with another process on Windows. */
@@ -148,6 +158,7 @@ internal class LanDesktopRemote(
     private val discoveryPort: Int = DISCOVERY_PORT,
     private val uiDispatcher: CoroutineDispatcher = Dispatchers.Main,
     private val bluetoothTrustStore: RemoteBluetoothTrustStore? = null,
+    private val openDiscoverySocket: (Int) -> DatagramSocket = ::bindRemoteDiscoverySocket,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
@@ -350,68 +361,71 @@ internal class LanDesktopRemote(
             "Checking Starlit on ${targetAddress.hostAddress}…" else "Searching the local network for Starlit PCs…"
         currentScope.launch {
             try {
-                DatagramSocket().use { socket ->
-                    withContext(uiDispatcher) {
-                        check(scope === currentScope)
-                        scanSocket = socket
-                    }
-                    socket.broadcast = targetAddress == null
-                    socket.soTimeout = 300
-                    val challenge = randomRemoteBytes().joinToString("") { "%02x".format(it) }
-                    val request = "$REMOTE_PROTOCOL $challenge ${discoveryAccountHint(expected, challenge)}".toByteArray()
-                    val broadcasts = if (targetAddress == null)
-                        remoteBroadcastTargets(localInterfaces().mapNotNull { it.broadcast })
-                    else listOf(targetAddress)
-                    var sent = false
-                    // Retry once for packet loss or a desktop listener starting up,
-                    // while retaining the existing three-second bounded scan.
-                    repeat(2) { attempt ->
-                        broadcasts.forEach { destination ->
-                            if (runCatching {
-                                socket.send(DatagramPacket(request, request.size, destination, DISCOVERY_PORT))
-                            }.isSuccess) sent = true
-                        }
-                        if (attempt == 0) delay(250)
-                    }
-                    check(sent) { "No LAN broadcast path available." }
-                    // Manual IP and saved devices must not depend on the UDP
-                    // response, which Windows firewalls commonly block.
-                    val directTargets = if (targetAddress != null) listOf(targetAddress)
-                        else DesktopRemote.remembered.value.mapNotNull { strictRemoteIpv4(it.address) }
-                            .filter(::isRemoteLanPeer)
-                    probeRemoteTargets(directTargets, currentScope, expected)
-                    val end = System.nanoTime() + 2_000_000_000L
-                    while (System.nanoTime() < end && currentCoroutineContext().isActive) {
-                        val packet = DatagramPacket(ByteArray(512), 512)
-                        try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
-                        if (!isRemoteLanPeer(packet.address) ||
-                            (targetAddress != null && packet.address != targetAddress)) continue
-                        val fields = String(packet.data, 0, packet.length, Charsets.UTF_8).split('|', limit = 4)
-                        if (fields.size != 4 || fields[0] != REMOTE_PROTOCOL || fields[1] != challenge) continue
-                        val port = fields[2].toIntOrNull()?.takeIf { it in 1024..65535 } ?: continue
-                        val peer = RemoteDesktop(packet.address.hostAddress!!, port, fields[3].take(80))
+                // Direct TCP works independently of UDP socket creation, permission or packet delivery.
+                val directTargets = if (targetAddress != null) listOf(targetAddress)
+                    else DesktopRemote.remembered.value.mapNotNull { strictRemoteIpv4(it.address) }
+                        .filter(::isRemoteLanPeer)
+                probeRemoteTargets(directTargets, currentScope, expected)
+                try {
+                    openDiscoverySocket(0).use { socket ->
                         withContext(uiDispatcher) {
                             check(scope === currentScope)
-                            DesktopRemote.desktops.value = DesktopRemote.desktops.value.filterNot { it.address == peer.address } + peer
+                            scanSocket = socket
+                        }
+                        socket.broadcast = targetAddress == null
+                        socket.soTimeout = 300
+                        val challenge = randomRemoteBytes().joinToString("") { "%02x".format(it) }
+                        val request = "$REMOTE_PROTOCOL $challenge ${discoveryAccountHint(expected, challenge)}".toByteArray()
+                        val broadcasts = if (targetAddress == null)
+                            remoteBroadcastTargets(localInterfaces().mapNotNull { it.broadcast })
+                        else listOf(targetAddress)
+                        var sent = false
+                        // Retry once for packet loss or a desktop listener starting up,
+                        // while retaining the existing three-second bounded scan.
+                        repeat(2) { attempt ->
+                            broadcasts.forEach { destination ->
+                                if (runCatching {
+                                    socket.send(DatagramPacket(request, request.size, destination, discoveryPort))
+                                }.isSuccess) sent = true
+                            }
+                            if (attempt == 0) delay(250)
+                        }
+                        val end = System.nanoTime() + 2_000_000_000L
+                        while (sent && System.nanoTime() < end && currentCoroutineContext().isActive) {
+                            val packet = DatagramPacket(ByteArray(512), 512)
+                            try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
+                            if (!isRemoteLanPeer(packet.address) ||
+                                (targetAddress != null && packet.address != targetAddress)) continue
+                            val fields = String(packet.data, 0, packet.length, Charsets.UTF_8).split('|', limit = 4)
+                            if (fields.size != 4 || fields[0] != REMOTE_PROTOCOL || fields[1] != challenge) continue
+                            val port = fields[2].toIntOrNull()?.takeIf { it in 1024..65535 } ?: continue
+                            val peer = RemoteDesktop(packet.address.hostAddress!!, port, fields[3].take(80))
+                            withContext(uiDispatcher) {
+                                check(scope === currentScope)
+                                DesktopRemote.desktops.value = DesktopRemote.desktops.value.filterNot { it.address == peer.address } + peer
+                            }
                         }
                     }
-                    if (deepScan && targetAddress == null) {
-                        withContext(uiDispatcher) {
-                            if (scope === currentScope) DesktopRemote.status.value = "Checking local PCs directly…"
-                        }
-                        val candidates = localInterfaces().take(2)
-                            .flatMap { remoteSubnetCandidates(it.address.address, it.networkPrefixLength.toInt()) }
-                            .distinctBy { it.hostAddress }
-                            .filter(::isRemoteLanPeer)
-                        probeRemoteTargets(candidates, currentScope, expected)
+                } catch (cancelled: CancellationException) { throw cancelled
+                } catch (_: Exception) {
+                    // Broadcast is optional. Saved/manual targets and the bounded TCP scan still work.
+                }
+                if (deepScan && targetAddress == null) {
+                    withContext(uiDispatcher) {
+                        if (scope === currentScope) DesktopRemote.status.value = "Checking local PCs directly…"
                     }
+                    val candidates = localInterfaces().take(2)
+                        .flatMap { remoteSubnetCandidates(it.address.address, it.networkPrefixLength.toInt()) }
+                        .distinctBy { it.hostAddress }
+                        .filter(::isRemoteLanPeer)
+                    probeRemoteTargets(candidates, currentScope, expected)
                 }
                 withContext(uiDispatcher) {
                     check(scope === currentScope)
                     DesktopRemote.status.value = if (DesktopRemote.desktops.value.isEmpty()) {
                         if (targetAddress == null)
-                            "No desktops found. Open Starlit on your PC, sign in, and allow TCP $REMOTE_LAN_PORT and UDP $DISCOVERY_PORT through its private-network firewall. Guest Wi-Fi may block discovery."
-                        else "Could not reach Starlit at ${targetAddress.hostAddress}:$REMOTE_LAN_PORT. Check the PC's private-network firewall."
+                            "No desktops found. Open Phone remote on the PC and try its QR code or current IP address. Use the same account and local network; guest Wi-Fi, a VPN, or a firewall may prevent access."
+                        else "Could not reach Starlit at ${targetAddress.hostAddress}:$listenPort. Check the PC's current IP address and local-network access. Guest Wi-Fi, a VPN, or a firewall may prevent access."
                     } else "Choose your desktop."
                 }
             } catch (error: CancellationException) { throw error
@@ -440,7 +454,7 @@ internal class LanDesktopRemote(
                     currentCoroutineContext().ensureActive()
                     val reachable = runCatching {
                         Socket().use { socket ->
-                            socket.connect(InetSocketAddress(address, REMOTE_LAN_PORT), 350)
+                            socket.connect(InetSocketAddress(address, listenPort), 350)
                             socket.soTimeout = 700
                             val nonce = randomRemoteBytes().joinToString("") { "%02x".format(it) }
                             socket.getOutputStream().write(remoteTcpProbe(expected, nonce))
@@ -453,7 +467,7 @@ internal class LanDesktopRemote(
                         val addressText = address.hostAddress.orEmpty()
                         if (DesktopRemote.desktops.value.none { it.address == addressText }) {
                             val knownName = DesktopRemote.remembered.value.firstOrNull { it.address == addressText }?.name
-                            DesktopRemote.desktops.value += RemoteDesktop(addressText, REMOTE_LAN_PORT, knownName ?: "Starlit PC")
+                            DesktopRemote.desktops.value += RemoteDesktop(addressText, listenPort, knownName ?: "Starlit PC")
                         }
                     }
                 }
@@ -469,7 +483,7 @@ internal class LanDesktopRemote(
             val activeListener = bindRemoteTcpListener(listenPort)
                 .also { listener = it; server = it }
             currentCoroutineContext().ensureActive()
-            val udp = runCatching { bindRemoteDiscoverySocket(discoveryPort) }
+            val udp = runCatching { openDiscoverySocket(discoveryPort) }
                 .getOrNull()?.also { udpSocket = it; discovery = it }
             currentCoroutineContext().ensureActive()
             withContext(uiDispatcher) {
@@ -483,18 +497,29 @@ internal class LanDesktopRemote(
             }
             coroutineScope {
                 if (udp != null) launch {
-                    while (isActive) {
-                        val packet = DatagramPacket(ByteArray(256), 256)
-                        try { udp.receive(packet) } catch (_: SocketTimeoutException) { continue }
-                        if (!isRemoteLanPeer(packet.address)) continue
-                        val request = String(packet.data, 0, packet.length, Charsets.UTF_8)
-                        val fields = request.split(' ', limit = 3)
-                        if (fields.size != 3 || fields[0] != REMOTE_PROTOCOL) continue
-                        val challenge = fields[1]
-                        if (!challenge.matches(Regex("[0-9a-f]{64}")) || fields[2] != discoveryAccountHint(expected, challenge)) continue
-                        val label = runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("Starlit desktop").replace('|', ' ').take(80)
-                        val response = "$REMOTE_PROTOCOL|$challenge|${activeListener.localPort}|$label".toByteArray()
-                        udp.send(DatagramPacket(response, response.size, packet.address, packet.port))
+                    try {
+                        while (isActive) {
+                            val packet = DatagramPacket(ByteArray(256), 256)
+                            try { udp.receive(packet) } catch (_: SocketTimeoutException) { continue }
+                            if (!isRemoteLanPeer(packet.address)) continue
+                            val request = String(packet.data, 0, packet.length, Charsets.UTF_8)
+                            val fields = request.split(' ', limit = 3)
+                            if (fields.size != 3 || fields[0] != REMOTE_PROTOCOL) continue
+                            val challenge = fields[1]
+                            if (!challenge.matches(Regex("[0-9a-f]{64}")) || fields[2] != discoveryAccountHint(expected, challenge)) continue
+                            val label = runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("Starlit desktop").replace('|', ' ').take(80)
+                            val response = "$REMOTE_PROTOCOL|$challenge|${activeListener.localPort}|$label".toByteArray()
+                        // A failed reply to one peer must not disable discovery for everyone else.
+                        runCatching { udp.send(DatagramPacket(response, response.size, packet.address, packet.port)) }
+                        }
+                    } catch (cancelled: CancellationException) { throw cancelled
+                    } catch (_: Exception) {
+                        // An optional discovery worker must never cancel TCP sessions or Bluetooth.
+                        withContext(uiDispatcher) {
+                            if (scope === ownerScope) DesktopRemote.discoveryReady.value = false
+                        }
+                    } finally {
+                        runCatching { udp.close() }
                     }
                 }
                 if (bluetoothHost != null) {
@@ -610,7 +635,7 @@ internal class LanDesktopRemote(
         connection = currentScope.launch {
             var ownedSocket: Socket? = null
             try {
-                val address = InetAddress.getByName(desktop.address)
+                val address = requireNotNull(strictRemoteIpv4(desktop.address))
                 require(isRemoteLanPeer(address)) { "Desktop must be on the same local network." }
                 val socket = Socket().also { ownedSocket = it }
                 withContext(uiDispatcher) {
@@ -620,9 +645,10 @@ internal class LanDesktopRemote(
                 socket.connect(InetSocketAddress(address, desktop.port), 5_000)
                 session(socket, expected, false, epoch)
             } catch (error: CancellationException) { throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 withContext(NonCancellable + uiDispatcher) {
-                    if (sessionEpoch.get() == epoch) DesktopRemote.status.value = "Could not connect. Check the desktop and its private-network firewall."
+                    if (sessionEpoch.get() == epoch) DesktopRemote.status.value =
+                        remoteConnectionFailureMessage(error, desktop.address, desktop.port)
                 }
             } finally {
                 ownedSocket?.let { socket -> runCatching { socket.close() }; sockets.remove(socket) }
@@ -736,10 +762,19 @@ internal class LanDesktopRemote(
             } finally {
                 runCatching { closeTransport() }
             }
-        } catch (error: CancellationException) { throw error
-        } catch (_: Exception) {
+        } catch (_: TimeoutCancellationException) {
             withContext(NonCancellable + uiDispatcher) {
-                if (sessionEpoch.get() == epoch) DesktopRemote.status.value = "Remote disconnected. Pair again; both devices must use the same active account and server."
+                if (sessionEpoch.get() == epoch) DesktopRemote.status.value =
+                    "Pairing timed out. Reconnect, compare the code, and confirm on both devices."
+            }
+        } catch (error: CancellationException) { throw error
+        } catch (error: Exception) {
+            withContext(NonCancellable + uiDispatcher) {
+                if (sessionEpoch.get() == epoch) DesktopRemote.status.value = when {
+                    DesktopRemote.connected.value -> "Remote disconnected. Check local-network access and reconnect."
+                    error is SocketTimeoutException -> "Pairing timed out. Reconnect, compare the code, and confirm on both devices."
+                    else -> "Pairing failed. Compare and confirm the code on both devices; use the same active account and server."
+                }
             }
         } finally {
             runCatching { closeTransport() }

@@ -2,14 +2,18 @@ package com.nuvio.app.features.remote
 
 import java.io.*
 import java.net.BindException
+import java.net.ConnectException
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
 import kotlin.test.*
+import org.junit.Assume.assumeTrue
 
 class DesktopRemoteProtocolTest {
     @Test
@@ -34,6 +38,24 @@ class DesktopRemoteProtocolTest {
     fun securityFailuresAreNotMislabelledAsFirewallRules() {
         assertContains(remoteHostFailureMessage(SecurityException("denied")), "denied access")
         assertContains(remoteHostFailureMessage(IllegalStateException("other")), "retry automatically")
+    }
+
+    @Test
+    fun connectionErrorsNameTheFailedEndpointWithoutGuessingTheCause() {
+        val address = "192.168.1.50"
+        assertContains(remoteConnectionFailureMessage(ConnectException(), address, 47789), "was refused")
+        val timeout = remoteConnectionFailureMessage(SocketTimeoutException(), address, 47789)
+        assertContains(timeout, "$address:47789")
+        assertContains(timeout, "guest Wi-Fi, a VPN, or a firewall may")
+        assertFalse(timeout.contains("firewall is blocking"))
+        assertContains(remoteConnectionFailureMessage(SecurityException(), address, 47789), "network permissions")
+        assertContains(remoteConnectionFailureMessage(IllegalArgumentException(), address, 47789), "private IPv4")
+    }
+
+    private fun localTestAddress(): String {
+        val addresses = LanDesktopRemote().localAddresses()
+        assumeTrue("A private local interface is needed to exercise the production peer restriction", addresses.isNotEmpty())
+        return addresses.first()
     }
 
     @Test
@@ -66,6 +88,7 @@ class DesktopRemoteProtocolTest {
 
     @Test
     fun udpDiscoveryFailureDoesNotPreventQrOrManualIpPairing() = runBlocking {
+        val address = localTestAddress()
         val tcpPort = ServerSocket(0).use { it.localPort }
         val occupiedUdp = DatagramSocket(0)
         val host = LanDesktopRemote(listenPort = tcpPort, discoveryPort = occupiedUdp.localPort, uiDispatcher = Dispatchers.Default)
@@ -76,9 +99,81 @@ class DesktopRemoteProtocolTest {
             }
             assertFalse(DesktopRemote.discoveryReady.value)
             assertContains(DesktopRemote.status.value, "QR")
+            // Exercise the actual host, its LAN guard and the committed encrypted handshake.
+            // No approval or account token is supplied, so no commands can be accepted.
+            withContext(Dispatchers.IO) {
+                Socket(address, tcpPort).use { phone ->
+                    phone.soTimeout = 5_000
+                    val pairing = openRemoteChannel(phone, host = false)
+                    withTimeout(5_000) {
+                        while (DesktopRemote.pairing.value == null) delay(25)
+                    }
+                    assertEquals(pairing.code, DesktopRemote.pairing.value?.code)
+                    assertFalse(DesktopRemote.connected.value)
+                }
+            }
         } finally {
             host.stop()
             occupiedUdp.close()
+        }
+    }
+
+    @Test
+    fun discoveryWorkerFailureKeepsTheProductionTcpListenerAlive() = runBlocking {
+        val address = localTestAddress()
+        val tcpPort = ServerSocket(0).use { it.localPort }
+        val udp = DatagramSocket(0).apply { soTimeout = 1_000 }
+        val account = RemoteAccount("account", "https://example.org", "publishable")
+        val host = LanDesktopRemote(listenPort = tcpPort, uiDispatcher = Dispatchers.Default,
+            openDiscoverySocket = { udp })
+        try {
+            host.start(account, host = true)
+            withTimeout(5_000) { while (!DesktopRemote.hostReady.value || !DesktopRemote.discoveryReady.value) delay(25) }
+            udp.close() // A receive failure after the listener has already started.
+            withTimeout(5_000) { while (DesktopRemote.discoveryReady.value) delay(25) }
+            assertTrue(DesktopRemote.hostReady.value)
+            assertFalse(DesktopRemote.hostFailure.value)
+            withContext(Dispatchers.IO) {
+                Socket(address, tcpPort).use { phone ->
+                    phone.soTimeout = 5_000
+                    val nonce = "a".repeat(64)
+                    phone.getOutputStream().write(remoteTcpProbe(account, nonce))
+                    phone.getOutputStream().flush()
+                    assertEquals(1, phone.getInputStream().read())
+                }
+            }
+        } finally {
+            host.stop()
+            udp.close()
+        }
+    }
+
+    @Test
+    fun manualTcpDiscoveryWorksWhenUdpSocketCreationIsDenied() = runBlocking {
+        val address = localTestAddress()
+        val account = RemoteAccount("account", "https://example.org", "publishable")
+        bindRemoteTcpListener(0).use { listener ->
+            val response = async(Dispatchers.IO) {
+                listener.accept().use { socket ->
+                    socket.soTimeout = 5_000
+                    val probe = ByteArray(132)
+                    DataInputStream(socket.getInputStream()).readFully(probe)
+                    assertTrue(validRemoteTcpProbe(account, probe))
+                    socket.getOutputStream().write(1)
+                    socket.getOutputStream().flush()
+                }
+            }
+            val phone = LanDesktopRemote(listenPort = listener.localPort, uiDispatcher = Dispatchers.Default,
+                openDiscoverySocket = { throw SocketException("UDP denied") })
+            try {
+                phone.start(account, host = false)
+                phone.discover(localIp = address)
+                withTimeout(5_000) { while (DesktopRemote.scanning.value) delay(25) }
+                response.await()
+                assertEquals(listOf(address), DesktopRemote.desktops.value.map { it.address })
+                assertEquals(listener.localPort, DesktopRemote.desktops.value.single().port)
+                assertEquals("Choose your desktop.", DesktopRemote.status.value)
+            } finally { phone.stop() }
         }
     }
 
@@ -433,7 +528,7 @@ class DesktopRemoteProtocolTest {
     }
 
     private suspend fun withPeers(block: suspend CoroutineScope.(RemotePairingChannel, RemotePairingChannel) -> Unit) = coroutineScope {
-        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { listener ->
+        bindRemoteTcpListener(0).use { listener ->
             Socket("127.0.0.1", listener.localPort).use { phone ->
                 listener.accept().use { host ->
                     host.soTimeout = 5000

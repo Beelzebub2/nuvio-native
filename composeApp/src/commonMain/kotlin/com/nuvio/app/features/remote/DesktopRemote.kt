@@ -214,8 +214,6 @@ internal fun DesktopRemoteHost() {
             DesktopRemote.accountChanged(remoteAccount)
             DesktopRemote.handoffAccount = remoteAccount
             DesktopRemote.transport.start(remoteAccount, isDesktop)
-            // Phones can only find a PC whose firewall lets them in; check while it starts listening.
-            if (isDesktop) DesktopRemote.firewall.refresh()
         } else {
             DesktopRemote.accountChanged(null)
             DesktopRemote.handoffAccount = null

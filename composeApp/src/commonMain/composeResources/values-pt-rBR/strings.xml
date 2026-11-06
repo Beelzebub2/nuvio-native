@@ -668,7 +668,7 @@
     <string name="remote_pc_controller_title">Controle do PC</string>
     <string name="remote_pc_controller_description">Encontre e controle PCs com Starlit na sua rede local.</string>
     <string name="remote_pc_search_local_network">Procurar na rede local</string>
-    <string name="remote_pc_no_devices_hint">Nenhum PC encontrado? Mantenha o Starlit aberto no PC e verifique a mesma conta, a rede Wi-Fi e a permissão no firewall para redes privadas.</string>
+    <string name="remote_pc_no_devices_hint">Nenhum PC encontrado? Abra o Controle pelo celular no PC e tente o QR code ou o endereço IP atual. Use a mesma conta e rede local.</string>
     <string name="remote_pc_unsupported">O controle do PC está disponível no Android. Ainda não é possível procurar neste dispositivo.</string>
     <string name="remote_pc_found_devices">PCs na sua rede</string>
     <string name="remote_pc_manual_ip_hint">A busca falhou? Informe o endereço IPv4 local do PC para procurá-lo diretamente. Os dispositivos devem usar a mesma rede e conta Starlit.</string>
@@ -1635,7 +1635,25 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O controle por Bluetooth está disponível. Pareie o celular com este PC nas configurações Bluetooth e procure PCs no celular.</string>
     <string name="remote_bluetooth_host_unavailable">O controle por Bluetooth não está disponível neste PC. A conexão pela rede local continua funcionando.</string>
-    <string name="remote_discovery_unavailable">A descoberta automática por UDP está indisponível porque não foi possível iniciar a porta 47788. Você ainda pode parear pelo QR code ou digitando o endereço IP deste PC.</string>
+    <string name="remote_discovery_unavailable">A descoberta automática por UDP está indisponível. Você ainda pode parear pelo QR code ou digitando o endereço IP deste PC.</string>
+    <string name="remote_network_help">Problemas para conectar?</string>
+    <string name="remote_network_help_body">Tente primeiro o QR code ou o endereço IP deste PC. Os dois dispositivos precisam da mesma conta e de uma rede local que permita a comunicação. Uma rede Wi-Fi de convidados, VPN ou software de segurança pode impedir a conexão. O controle usa TCP 47789; UDP 47788 apenas ajuda a descoberta automática.</string>
+    <string name="remote_firewall_allowed">As regras do Windows permitem conexões locais e descoberta automática. O celular ainda precisa de uma conexão de rede funcional com este PC.</string>
+    <string name="remote_firewall_discovery_title">Tente o QR code ou o endereço IP</string>
+    <string name="remote_firewall_discovery_body">As regras do Windows permitem conexões TCP, mas a permissão para descoberta UDP não foi confirmada. O pareamento por QR code ou IP pode funcionar sem UDP. Se necessário, solicite abaixo as regras para redes privadas.</string>
+    <string name="remote_firewall_blocked_title">Permissão de conexão não confirmada</string>
+    <string name="remote_firewall_blocked_body">O Starlit não confirmou uma regra TCP para esta rede. Tente primeiro o QR code ou o IP do PC. Se a conexão falhar em uma rede doméstica confiável, solicite as regras do Starlit para redes privadas. O Windows pede autorização de administrador; políticas da organização ainda podem se aplicar.</string>
+    <string name="remote_firewall_public_title">Esta rede está definida como Pública</string>
+    <string name="remote_firewall_public_body">As regras do Starlit se aplicam a redes Privadas e de Domínio. Tente primeiro o QR code ou o IP do PC. Se necessário, defina como Privada apenas uma rede confiável, como a sua rede doméstica. Mantenha redes Wi-Fi públicas ou compartilhadas como Públicas.</string>
+    <string name="remote_firewall_allow">Permitir no firewall</string>
+    <string name="remote_firewall_check_again">Verificar novamente</string>
+    <string name="remote_firewall_open_settings">Abrir configurações de rede</string>
+    <string name="remote_firewall_checking">Verificando o Firewall do Windows…</string>
+    <string name="remote_firewall_requesting">Aprove a solicitação do Windows para permitir o Starlit no firewall…</string>
+    <string name="remote_firewall_failed_title">Não foi possível atualizar o Firewall do Windows</string>
+    <string name="remote_firewall_failed_body">A solicitação foi cancelada ou falhou. Tente novamente ou permita o Starlit em Segurança do Windows → Firewall e proteção de rede.</string>
+    <string name="remote_firewall_try_again">Tentar novamente</string>
+    <string name="remote_pc_troubleshoot_firewall">No PC, abra Configurações → Conta → Controle pelo celular → Problemas para conectar? para verificar a rede e solicitar, se necessário, permissão do firewall para redes privadas.</string>
     <string name="remote_firewall_unverified_title">Não foi possível verificar o Firewall do Windows</string>
-    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as configurações do firewall e não sabe se o Windows está bloqueando o celular. Verifique novamente ou selecione Permitir no firewall para solicitar autorização.</string>
+    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as configurações do firewall. Isso não prova que o celular esteja bloqueado. Tente o QR code ou o IP do PC e, se necessário, verifique novamente ou solicite permissão para redes privadas.</string>
 </resources>

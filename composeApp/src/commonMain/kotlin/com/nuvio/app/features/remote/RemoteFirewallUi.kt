@@ -16,18 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.nuvio.app.core.ui.DialogButton
-import com.nuvio.app.core.ui.DialogButtonStyle
-import com.nuvio.app.core.ui.DialogButtons
-import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.NuvioActionSize
 import com.nuvio.app.core.ui.NuvioCompactActionButton
 import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.nuvio
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -59,6 +52,22 @@ internal fun RemoteFirewallCard(firewall: RemoteFirewallAccess, modifier: Modifi
                 Text(stringResource(Res.string.remote_firewall_allowed), style = MaterialTheme.typography.bodyMedium,
                     color = tokens.colors.textPrimary, modifier = Modifier.weight(1f))
             }
+        }
+        RemoteFirewallState.DiscoveryRestricted -> FirewallNotice(
+            modifier = modifier,
+            tone = RemoteTone.Warning,
+            icon = Icons.Rounded.Lan,
+            title = stringResource(Res.string.remote_firewall_discovery_title),
+            body = stringResource(Res.string.remote_firewall_discovery_body),
+        ) {
+            CheckAgainButton(firewall)
+            NuvioCompactActionButton(
+                label = stringResource(Res.string.remote_firewall_allow),
+                icon = Icons.Rounded.Security,
+                tone = NuvioCompactActionTone.Ghost,
+                size = NuvioActionSize.Small,
+                onClick = firewall::requestAccess,
+            )
         }
         RemoteFirewallState.Blocked -> FirewallNotice(
             modifier = modifier,
@@ -165,56 +174,4 @@ private fun CheckAgainButton(firewall: RemoteFirewallAccess) {
         size = NuvioActionSize.Small,
         onClick = firewall::refresh,
     )
-}
-
-/**
- * Asks once, shortly after the PC starts listening, when the firewall would hide it
- * from phones. "Not now" is remembered; the Phone remote window still offers the fix.
- */
-@Composable
-internal fun RemoteFirewallStartupPrompt(firewall: RemoteFirewallAccess, suppressed: Boolean) {
-    val state by firewall.state.collectAsState()
-    val hostReady by DesktopRemote.hostReady.collectAsState()
-    val needsHelp = state == RemoteFirewallState.Blocked || state == RemoteFirewallState.PublicNetwork
-    var handled by remember { mutableStateOf(false) }
-    var show by remember { mutableStateOf(false) }
-    LaunchedEffect(hostReady, needsHelp, handled, suppressed) {
-        show = false
-        // Someone who already saw the firewall card in the open window needs no second ask.
-        if (suppressed && needsHelp) handled = true
-        if (!hostReady || !needsHelp || handled || suppressed) return@LaunchedEffect
-        if (withContext(Dispatchers.Default) { RemoteFirewallPromptMemory.dismissed() }) return@LaunchedEffect
-        // Let startup screens settle before asking.
-        delay(2_500)
-        show = true
-    }
-    if (!show || handled) return
-    val blocked = state == RemoteFirewallState.Blocked
-    DialogSurface(
-        onDismissRequest = { handled = true },
-        title = stringResource(Res.string.remote_firewall_prompt_title),
-        message = stringResource(
-            if (blocked) Res.string.remote_firewall_prompt_blocked else Res.string.remote_firewall_prompt_public,
-        ),
-    ) {
-        DialogButtons {
-            DialogButton(
-                text = stringResource(Res.string.remote_firewall_not_now),
-                onClick = {
-                    handled = true
-                    RemoteFirewallPromptMemory.dismiss()
-                },
-            )
-            DialogButton(
-                text = stringResource(
-                    if (blocked) Res.string.remote_firewall_allow else Res.string.remote_firewall_open_settings,
-                ),
-                style = DialogButtonStyle.Primary,
-                onClick = {
-                    handled = true
-                    if (blocked) firewall.requestAccess() else firewall.openNetworkSettings()
-                },
-            )
-        }
-    }
 }
