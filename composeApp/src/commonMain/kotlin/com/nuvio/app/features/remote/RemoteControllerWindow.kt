@@ -12,9 +12,3 @@ internal expect fun RemoteControllerWindow(
     onClose: () -> Unit,
     content: @Composable () -> Unit,
 )
-
-/** Remembers that the user turned down the startup firewall prompt, so it asks only once. */
-internal expect object RemoteFirewallPromptMemory {
-    fun dismissed(): Boolean
-    fun dismiss()
-}

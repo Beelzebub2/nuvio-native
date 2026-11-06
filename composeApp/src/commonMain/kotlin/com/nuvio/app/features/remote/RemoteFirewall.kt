@@ -5,17 +5,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Whether the operating system lets phones on the local network reach this PC's
- * remote ports (UDP 47788 discovery, TCP 47789 sessions).
+ * Advisory Windows rule inspection, not an end-to-end reachability test.
+ * TCP 47789 carries sessions; UDP 47788 only helps automatic discovery.
  */
 internal enum class RemoteFirewallState {
     /** Nothing to ask for: not a desktop host, or the OS needs no extra permission. */
     NotNeeded,
     /** A check is running. */
     Checking,
-    /** Phones on a private network can reach the remote ports. */
+    /** Matching rules allow both protocols on an active profile; routing may still prevent a connection. */
     Allowed,
-    /** Inbound traffic to the remote ports is blocked; [RemoteFirewallAccess.requestAccess] can fix it. */
+    /** TCP is allowed on an active profile; UDP discovery permission could not be confirmed. */
+    DiscoveryRestricted,
+    /** No complete TCP allow rule was found; this alone cannot prove the phone is blocked. */
     Blocked,
     /** Windows rules could not be inspected; do not claim that the firewall is blocking the PC. */
     Unverified,

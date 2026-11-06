@@ -16,7 +16,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.awt.SwingDialog
-import com.nuvio.app.core.storage.DesktopStorage
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import java.awt.Dialog.ModalityType
@@ -74,9 +73,3 @@ internal actual fun RemoteControllerWindow(
 private fun remoteOwnerWindow(): Window? =
     KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
         ?: Window.getWindows().firstOrNull { it.isDisplayable && it.isVisible && it.owner == null }
-
-internal actual object RemoteFirewallPromptMemory {
-    private val store by lazy { DesktopStorage.store("desktop_remote") }
-    actual fun dismissed(): Boolean = store.getBoolean("firewall_prompt_dismissed") == true
-    actual fun dismiss() = store.putBoolean("firewall_prompt_dismissed", true)
-}

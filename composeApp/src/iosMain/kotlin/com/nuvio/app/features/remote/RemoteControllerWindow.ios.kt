@@ -34,9 +34,3 @@ internal actual fun RemoteControllerWindow(
         ) { content() }
     }
 }
-
-// Phones never host the PC firewall, so there is nothing to remember.
-internal actual object RemoteFirewallPromptMemory {
-    actual fun dismissed(): Boolean = true
-    actual fun dismiss() = Unit
-}

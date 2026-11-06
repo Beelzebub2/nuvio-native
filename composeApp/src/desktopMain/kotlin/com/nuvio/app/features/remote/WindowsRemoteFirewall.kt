@@ -328,7 +328,7 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
         }.filter { it.isNotEmpty() }.distinct()
         if (activeProfiles.isEmpty()) return@runCatching RemoteFirewallState.Unverified
 
-        fun allowedOn(profile: String): Boolean {
+        fun allowedOn(profile: String, protocol: String, port: Int): Boolean {
             val policy = profiles.singleOrNull { it.name == profile } ?: return false
             if (!policy.enabled) return true
             if (!policy.allowInboundRules) return false
@@ -340,23 +340,24 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
             val blocked = matching.any { rule ->
                 rule.action.equals("Block", ignoreCase = true) &&
                     (rule.service.isAnyFilter() || rule.service.equals("Unknown", ignoreCase = true)) &&
-                    (rule.mightBlockPort("TCP", FIREWALL_SESSION_PORT) ||
-                        rule.mightBlockPort("UDP", FIREWALL_DISCOVERY_PORT))
+                    rule.mightBlockPort(protocol, port)
             }
             if (blocked) return false
-            fun allowed(protocol: String, port: Int): Boolean = matching.any { rule ->
+            return matching.any { rule ->
                 rule.action.equals("Allow", ignoreCase = true) &&
                     (rule.isProgramSpecific(executable) || rule.isProgramAgnostic()) &&
                     rule.matchesPort(protocol, port, explicitPortOnly = rule.isProgramAgnostic()) &&
                     rule.allowsLocalSubnet()
             }
-            return allowed("TCP", FIREWALL_SESSION_PORT) && allowed("UDP", FIREWALL_DISCOVERY_PORT)
         }
 
         when {
-            activeProfiles.any(::allowedOn) -> RemoteFirewallState.Allowed
+            activeProfiles.any { allowedOn(it, "TCP", FIREWALL_SESSION_PORT) &&
+                allowedOn(it, "UDP", FIREWALL_DISCOVERY_PORT) } -> RemoteFirewallState.Allowed
+            activeProfiles.any { allowedOn(it, "TCP", FIREWALL_SESSION_PORT) } -> RemoteFirewallState.DiscoveryRestricted
             activeProfiles.all { it == "public" } &&
-                (allowedOn("private") || allowedOn("domain")) -> RemoteFirewallState.PublicNetwork
+                (allowedOn("private", "TCP", FIREWALL_SESSION_PORT) ||
+                    allowedOn("domain", "TCP", FIREWALL_SESSION_PORT)) -> RemoteFirewallState.PublicNetwork
             else -> RemoteFirewallState.Blocked
         }
     }.getOrDefault(RemoteFirewallState.Unverified)

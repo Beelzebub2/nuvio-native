@@ -719,7 +719,7 @@
     <string name="remote_pc_controller_title">Controlar PC</string>
     <string name="remote_pc_controller_description">Procura e controla PCs com Starlit na tua rede local.</string>
     <string name="remote_pc_search_local_network">Procurar na rede local</string>
-    <string name="remote_pc_no_devices_hint">Não aparecem PCs? Mantém o Starlit aberto no PC e confirma que ambos usam a mesma conta, rede Wi-Fi e que a firewall permite ligações privadas.</string>
+    <string name="remote_pc_no_devices_hint">Não aparecem PCs? Abre o Controlo por telemóvel no PC e tenta o código QR ou o endereço IP atual. Usa a mesma conta e rede local.</string>
     <string name="remote_pc_unsupported">O controlo do PC só está disponível no Android. Ainda não é possível procurar neste dispositivo.</string>
     <string name="remote_pc_found_devices">PCs na tua rede</string>
     <string name="remote_pc_manual_ip_hint">A procura falhou? Introduz o endereço IPv4 local do PC para o procurar diretamente. Ambos devem estar na mesma rede e conta Starlit.</string>
@@ -2162,7 +2162,25 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O comando por Bluetooth está disponível. Emparelha o telemóvel com este PC nas definições Bluetooth e procura PCs no telemóvel.</string>
     <string name="remote_bluetooth_host_unavailable">O comando por Bluetooth não está disponível neste PC. A ligação pela rede local continua a funcionar.</string>
-    <string name="remote_discovery_unavailable">A deteção automática por UDP não está disponível porque a porta 47788 não pôde ser iniciada. Podes emparelhar através do código QR ou introduzir o endereço IP deste PC.</string>
+    <string name="remote_discovery_unavailable">A deteção automática por UDP não está disponível. Podes emparelhar através do código QR ou introduzir o endereço IP deste PC.</string>
+    <string name="remote_network_help">Problemas com a ligação?</string>
+    <string name="remote_network_help_body">Tenta primeiro o código QR ou o endereço IP deste PC. Ambos os dispositivos precisam da mesma conta e de uma rede local que permita a comunicação. Uma rede Wi-Fi de convidados, VPN ou software de segurança pode impedir a ligação. O controlo usa TCP 47789; UDP 47788 apenas ajuda a deteção automática.</string>
+    <string name="remote_firewall_allowed">As regras do Windows permitem ligações locais e deteção automática. O telemóvel ainda precisa de uma ligação de rede funcional a este PC.</string>
+    <string name="remote_firewall_discovery_title">Tenta o QR ou o endereço IP</string>
+    <string name="remote_firewall_discovery_body">As regras do Windows permitem ligações TCP, mas a permissão para deteção UDP não está confirmada. O emparelhamento por QR ou IP pode funcionar sem UDP. Se necessário, pede abaixo as regras para redes privadas.</string>
+    <string name="remote_firewall_blocked_title">Permissão de ligação não confirmada</string>
+    <string name="remote_firewall_blocked_body">O Starlit não confirmou uma regra TCP para esta rede. Tenta primeiro o QR ou o endereço IP do PC. Se a ligação falhar numa rede doméstica de confiança, pede as regras do Starlit para redes privadas. O Windows pede autorização de administrador; podem aplicar-se políticas da organização.</string>
+    <string name="remote_firewall_public_title">Esta rede está definida como Pública</string>
+    <string name="remote_firewall_public_body">As regras do Starlit aplicam-se a redes Privadas e de Domínio. Tenta primeiro o QR ou o endereço IP do PC. Se necessário, define como Privada apenas uma rede em que confies, como a tua rede doméstica. Mantém as redes Wi-Fi públicas ou partilhadas como Públicas.</string>
+    <string name="remote_firewall_allow">Permitir na firewall</string>
+    <string name="remote_firewall_check_again">Verificar novamente</string>
+    <string name="remote_firewall_open_settings">Abrir definições de rede</string>
+    <string name="remote_firewall_checking">A verificar a Firewall do Windows…</string>
+    <string name="remote_firewall_requesting">Aprova o pedido do Windows para permitir o Starlit na firewall…</string>
+    <string name="remote_firewall_failed_title">Não foi possível atualizar a Firewall do Windows</string>
+    <string name="remote_firewall_failed_body">O pedido foi cancelado ou falhou. Tenta novamente ou permite o Starlit em Segurança do Windows → Firewall e proteção de rede.</string>
+    <string name="remote_firewall_try_again">Tentar novamente</string>
+    <string name="remote_pc_troubleshoot_firewall">No PC, abre Definições → Conta → Controlo por telemóvel → Problemas com a ligação? para verificar a rede e pedir, se necessário, permissão da firewall para redes privadas.</string>
     <string name="remote_firewall_unverified_title">Não foi possível verificar a Firewall do Windows</string>
-    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as definições da firewall, pelo que não sabe se o Windows está a bloquear o telemóvel. Verifica novamente ou escolhe Permitir na firewall para pedir autorização.</string>
+    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as definições da firewall. Isto não prova que o telemóvel esteja bloqueado. Tenta o QR ou o endereço IP do PC e, se necessário, verifica novamente ou pede permissão para redes privadas.</string>
 </resources>

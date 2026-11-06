@@ -110,6 +110,23 @@ class WindowsRemoteFirewallTest {
     }
 
     @Test
+    fun tcpPermissionDoesNotDependOnUdpDiscoveryPermission() {
+        for (udp in listOf(
+            emptyArray(),
+            arrayOf(rule(action = "Block", protocol = "UDP", localPort = "47788")),
+        )) {
+            assertEquals(RemoteFirewallState.DiscoveryRestricted, parseWindowsFirewallState(
+                snapshot(rule(protocol = "TCP", localPort = "47789"), *udp), executable,
+            ))
+        }
+        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState(snapshot(
+            rule(protocol = "TCP", localPort = "47789"),
+            rule(action = "Block", protocol = "TCP", localPort = "47789"),
+            rule(protocol = "UDP", localPort = "47788"),
+        ), executable))
+    }
+
+    @Test
     fun normalizedProgramScopedRuleAllowsBothProtocols() {
         val json = snapshot(
             rule(program = """c:/PROGRAM FILES/Starlit/./Starlit.exe""", protocol = "Any", localPort = "Any"),

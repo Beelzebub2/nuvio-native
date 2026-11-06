@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.NuvioCompactActionButton
+import com.nuvio.app.core.ui.NuvioCompactActionTone
 import com.nuvio.app.core.ui.nuvio
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -187,8 +190,7 @@ private fun DetailsColumn(
             }
         }
     }
-    RemoteFirewallCard(firewall)
-    if (hostReady && !discoveryReady) {
+    if (hostReady && !discoveryReady && !connected) {
         RemoteCard(tone = RemoteTone.Warning) {
             Text(
                 stringResource(Res.string.remote_discovery_unavailable),
@@ -232,6 +234,24 @@ private fun DetailsColumn(
                     else Res.string.remote_bluetooth_host_unavailable,
                 ),
             )
+        }
+    }
+    if (hostReady && !connected) {
+        var showNetworkHelp by remember { mutableStateOf(false) }
+        LaunchedEffect(showNetworkHelp) {
+            if (showNetworkHelp) firewall.refresh()
+        }
+        NuvioCompactActionButton(
+            label = stringResource(Res.string.remote_network_help),
+            icon = Icons.Rounded.Lan,
+            tone = NuvioCompactActionTone.Ghost,
+            modifier = Modifier.testTag("remote-network-help"),
+            onClick = { showNetworkHelp = !showNetworkHelp },
+        )
+        if (showNetworkHelp) {
+            Text(stringResource(Res.string.remote_network_help_body),
+                style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary)
+            RemoteFirewallCard(firewall)
         }
     }
 }

@@ -289,7 +289,6 @@ internal fun DesktopAccountCard(
 @Composable
 internal fun DesktopPhoneConnectionCard(authState: AuthState) {
     val connected by com.nuvio.app.features.remote.DesktopRemote.connected.collectAsState()
-    val firewallState by com.nuvio.app.features.remote.DesktopRemote.firewall.state.collectAsState()
     val server by ServerConfigurationRepository.active.collectAsState()
     val signedIn = (authState as? AuthState.Authenticated)?.isAnonymous == false
     // Keep this gate aligned with DesktopRemoteHost, which cannot start for HTTP servers.
@@ -308,15 +307,6 @@ internal fun DesktopPhoneConnectionCard(authState: AuthState) {
                             else Res.string.remote_qr_account_description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.nuvio.colors.textSecondary)
-                    if (canHostRemote && !connected && firewallState in setOf(
-                            com.nuvio.app.features.remote.RemoteFirewallState.Blocked,
-                            com.nuvio.app.features.remote.RemoteFirewallState.PublicNetwork,
-                            com.nuvio.app.features.remote.RemoteFirewallState.Failed,
-                        )) {
-                        Text(stringResource(Res.string.remote_firewall_card_warning),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.nuvio.colors.warning)
-                    }
                 }
             }
             @Composable
