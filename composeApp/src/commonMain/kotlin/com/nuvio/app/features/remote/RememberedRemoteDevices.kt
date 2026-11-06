@@ -12,6 +12,7 @@ internal data class RememberedRemoteDevice(
     val address: String,
     val lastSeenEpochMs: Long,
     val wakeMac: String? = null,
+    val bluetooth: Boolean = false,
 )
 
 internal expect object RememberedRemoteDeviceStore {
@@ -24,16 +25,36 @@ internal fun rememberRemoteDevice(
     name: String,
     address: String,
     nowEpochMs: Long,
+    bluetooth: Boolean = false,
 ): List<RememberedRemoteDevice> {
-    val safeAddress = address.trim()
-    if (safeAddress.length !in 7..15 || safeAddress.any { it !in '0'..'9' && it != '.' })
-        return existing
+    val safeAddress = normalizeRememberedRemoteAddress(address, bluetooth) ?: return existing
     val safeName = name.trim().replace('|', ' ').take(80).ifBlank { "Starlit PC" }
     val latest = RememberedRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
-        wakeMac = existing.firstOrNull { it.address == safeAddress }?.wakeMac,
+        wakeMac = if (bluetooth) null else existing.firstOrNull {
+            !it.bluetooth && it.address == safeAddress
+        }?.wakeMac,
+        bluetooth = bluetooth,
     )
-    return (listOf(latest) + existing.filterNot { it.address == safeAddress }).take(10)
+    return (listOf(latest) + existing.filterNot {
+        it.bluetooth == bluetooth && it.address == safeAddress
+    }).take(10)
+}
+
+/** Validate saved discovery hints without accepting DNS names, URLs or arbitrary routes. */
+internal fun normalizeRememberedRemoteAddress(value: String, bluetooth: Boolean): String? {
+    val address = value.trim()
+    if (bluetooth) {
+        val parts = address.split(':')
+        if (parts.size != 6 || parts.any { it.length != 2 ||
+                it.any { ch -> ch !in '0'..'9' && ch !in 'a'..'f' && ch !in 'A'..'F' } }) return null
+        if (parts.all { it == "00" }) return null
+        return address.uppercase()
+    }
+    val parts = address.split('.')
+    if (parts.size != 4 || parts.any { it.isEmpty() || it.length > 3 ||
+            it.any { ch -> ch !in '0'..'9' } || (it.toIntOrNull() ?: 256) > 255 }) return null
+    return address
 }
 
 /** Reject multicast, broadcast and invalid MAC addresses before any packet is sent. */
