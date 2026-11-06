@@ -96,9 +96,15 @@ class DownloadQuotaLifecycleTest {
                     exchange.responseHeaders.add("Content-Type", "video/mp4")
                     exchange.responseHeaders.add("ETag", "\"quota\"")
                     exchange.sendResponseHeaders(200, gib + 1L)
-                    exchange.responseBody.flush()
-                    gate.await(8, TimeUnit.SECONDS)
-                    exchange.responseBody.close()
+                    // The downloader waits for a validated media prefix before
+                    // reporting the discovered Content-Length. Send a real MP4
+                    // ftyp prefix rather than blocking with an empty body.
+                    exchange.responseBody.use { response ->
+                        response.write(byteArrayOf(0, 0, 0, 16, 102, 116, 121, 112,
+                            105, 115, 111, 109, 1, 2, 3, 4))
+                        response.flush()
+                        gate.await(8, TimeUnit.SECONDS)
+                    }
                 }
             }
             start()
