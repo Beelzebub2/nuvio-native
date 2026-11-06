@@ -1,3 +1,32 @@
+## Starlit 1.12.0
+
+### Android Google Cast
+
+- **Play eligible videos on a Cast-enabled TV:** Android can select a Google Cast receiver and send compatible, public, unsigned HTTPS MP4/WebM/HLS/DASH streams after explicit confirmation that you have playback rights and choose **Play on TV**. Once loaded, the local player pauses; basic TV pause/resume and disconnect controls are available.
+- **Keep private sources private:** Torrent/P2P, local and private-network addresses, authenticated or signed URLs, DRM-restricted media and proxy/transcoding are not supported. Opening the picker or selecting a TV never starts playback without the separate confirmation.
+
+### Offline download storage limits
+
+- **Optional limits for each profile:** Desktop and Android can enforce a selected download storage target instead of only warning about it. Known-size downloads are reserved against the quota; queued or running downloads pause when they would exceed the configured budget.
+- **No automatic file deletion:** Limits are off by default, paused downloads need an explicit Resume, and cleanup still requires a preview and confirmation. Unknown-size transfers may briefly exceed a target before progress is measured; this is a best-effort app-level limit, not a filesystem guarantee.
+
+### Playback diagnostics
+
+- **Inspect playback problems:** The desktop player offers measured playback state, buffer, speed, decoder mode and rebuffer metrics; Android exposes available decoder and buffering details. Unsupported measurements are marked unavailable rather than guessed.
+- **Copy a sanitized report:** Diagnostic sampling is scoped to the open panel; reports exclude media titles, source URLs, credentials and private paths. These panel metrics are not automatically uploaded and are separate from opt-in usage analytics.
+
+### PC remote connection and update reliability
+
+- **Remember approved Bluetooth PCs:** After the initial code confirmation, Android and Windows store a protected trust key to reconnect without asking to pair again on every visit to PC Control. Account verification remains required, and Forget removes the local trust. Older clients fall back to the existing pairing flow.
+- **Recover LAN hosting:** The Windows PC remote listener retries transient TCP port 47789 failures, keeps manual/QR pairing available if UDP discovery cannot start and distinguishes unknown firewall state from an actual block.
+- **Prepare for the Starlit repository rename:** The updater prefers the future Beelzebub2/starlit releases location while retaining fallback to Beelzebub2/nuvio-native and support for existing installation and update links.
+
+### Validation and limitations
+
+- Android Full/Play Store, desktop, iOS Kotlin and repository security checks passed for the included feature and fix PRs (#131, #132, #134, #144, #145). The separate release pipeline validates the version and notes, runs desktop and installer tests, builds signed Android APKs, and checks artifact hashes before publication.
+- Real-device acceptance is still outstanding for Chromecast/Google Cast playback, Android-to-Windows Bluetooth trust and reconnection, and storage quota behavior during long/background downloads. Google Cast receiver compatibility depends on the receiver, media format and rights; the optional sender is not a torrent relay.
+- Windows installers are not yet publisher-code-signed, and a new Microsoft Defender verdict after the earlier antivirus-heuristic mitigations has not been independently established.
+
 ## Starlit 1.11.1
 
 ### Windows security and antivirus compatibility
