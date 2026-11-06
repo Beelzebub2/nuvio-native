@@ -891,9 +891,11 @@
     <string name="remote_playback_options">Playback options</string>
     <string name="remote_pc_status_connected">Connected</string>
     <string name="remote_pc_status_searching">Searching</string>
+    <string name="remote_pc_status_connecting">Connecting</string>
     <string name="remote_pc_status_idle">Not connected</string>
     <string name="remote_pc_hero_idle_title">Find your Starlit PC</string>
-    <string name="remote_pc_hero_searching_title">Looking for PCs on your network</string>
+    <string name="remote_pc_hero_searching_title">Looking for your PC</string>
+    <string name="remote_pc_hero_connecting_title">Connecting to your PC</string>
     <string name="remote_pc_hero_connected_title">Your phone is a remote</string>
     <string name="remote_pc_ways_to_connect">Ways to connect</string>
     <string name="remote_pc_tile_qr_caption">Point at the code in Phone remote on your PC.</string>
