@@ -315,14 +315,25 @@ class WindowsRemoteFirewallTest {
 
     @Test
     fun malformedOrMissingDataFailsClosed() {
-        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState("{broken", executable))
-        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState("""{"rules":[] }""", executable))
-        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState(
+        assertEquals(RemoteFirewallState.Unverified, parseWindowsFirewallState("{broken", executable))
+        assertEquals(RemoteFirewallState.Unverified, parseWindowsFirewallState("""{"rules":[] }""", executable))
+        assertEquals(RemoteFirewallState.Unverified, parseWindowsFirewallState(
             """{"rules":[],"networks":[{"category":"Private"}]}""", executable,
         ))
-        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState(
+        assertEquals(RemoteFirewallState.Unverified, parseWindowsFirewallState(
             snapshot(rule(localPort = "47789"), networks = emptyList()), executable,
         ))
+    }
+
+    @Test
+    fun failedNativeComSnapshotDoesNotPretendFirewallHasBlockedThePhone() {
+        assertEquals(RemoteFirewallState.Unverified, checkedWindowsFirewallState(null, executable))
+        assertEquals(RemoteFirewallState.Unverified, checkedWindowsFirewallState("", executable))
+        assertEquals(RemoteFirewallState.Blocked, checkedWindowsFirewallState(snapshot(), executable))
+        assertEquals(RemoteFirewallState.Allowed, checkedWindowsFirewallState(snapshot(
+            rule(protocol = "TCP", localPort = "47789"),
+            rule(protocol = "UDP", localPort = "47788"),
+        ), executable))
     }
 
     /** A rule as Windows Firewall's COM API reports it, defaulting to an unrestricted inbound Allow. */

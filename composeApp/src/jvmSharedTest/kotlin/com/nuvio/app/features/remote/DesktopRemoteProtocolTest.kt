@@ -1,6 +1,8 @@
 package com.nuvio.app.features.remote
 
 import java.io.*
+import java.net.BindException
+import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -10,6 +12,73 @@ import kotlinx.coroutines.*
 import kotlin.test.*
 
 class DesktopRemoteProtocolTest {
+    @Test
+    fun occupiedRemotePortHasActionableMessageAndCanBeReboundAfterRelease() {
+        val blocker = ServerSocket(0)
+        val port = blocker.localPort
+        try {
+            val failure = assertFailsWith<BindException> {
+                bindRemoteTcpListener(port).close()
+            }
+            assertContains(remoteHostFailureMessage(failure, port), "Close another Starlit instance")
+            assertContains(remoteHostFailureMessage(failure, port), "$port")
+        } finally {
+            blocker.close()
+        }
+        bindRemoteTcpListener(port).use { listener ->
+            assertEquals(port, listener.localPort)
+        }
+    }
+
+    @Test
+    fun securityFailuresAreNotMislabelledAsFirewallRules() {
+        assertContains(remoteHostFailureMessage(SecurityException("denied")), "denied access")
+        assertContains(remoteHostFailureMessage(IllegalStateException("other")), "retry automatically")
+    }
+
+    @Test
+    fun desktopHostRecoversAfterTemporaryPortConflictWithoutSigningInAgain() = runBlocking {
+        val occupied = ServerSocket(0)
+        val port = occupied.localPort
+        val udpPort = DatagramSocket(0).use { it.localPort }
+        val host = LanDesktopRemote(listenPort = port, discoveryPort = udpPort)
+        try {
+            host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
+            withTimeout(5_000) {
+                while (!DesktopRemote.hostFailure.value) delay(25)
+            }
+            assertFalse(DesktopRemote.hostReady.value)
+            assertContains(DesktopRemote.status.value, "TCP port $port")
+            occupied.close()
+            withTimeout(10_000) {
+                while (!DesktopRemote.hostReady.value) delay(25)
+            }
+            assertTrue(DesktopRemote.discoveryReady.value)
+            assertFalse(DesktopRemote.hostFailure.value)
+        } finally {
+            host.stop()
+            occupied.close()
+        }
+    }
+
+    @Test
+    fun udpDiscoveryFailureDoesNotPreventQrOrManualIpPairing() = runBlocking {
+        val tcpPort = ServerSocket(0).use { it.localPort }
+        val occupiedUdp = DatagramSocket(0)
+        val host = LanDesktopRemote(listenPort = tcpPort, discoveryPort = occupiedUdp.localPort)
+        try {
+            host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
+            withTimeout(5_000) {
+                while (!DesktopRemote.hostReady.value) delay(25)
+            }
+            assertFalse(DesktopRemote.discoveryReady.value)
+            assertContains(DesktopRemote.status.value, "QR")
+        } finally {
+            host.stop()
+            occupiedUdp.close()
+        }
+    }
+
     @Test
     fun controllerOpensEvenWhenNoDesktopsHaveBeenDiscovered() {
         val wasVisible = DesktopRemote.visible.value

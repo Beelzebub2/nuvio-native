@@ -279,7 +279,8 @@ private fun FirewallRule.mightBlockPort(protocol: String, port: Int): Boolean =
 
 /**
  * Windows resolves rules per profile and prioritizes matching inbound Block rules.
- * Incomplete snapshots fail closed so the user is still offered the fix.
+ * Incomplete rule filters fail closed (never Allowed). Invalid snapshots are
+ * Unverified, because inspection failure is not proof of a firewall block.
  */
 internal fun parseWindowsFirewallState(json: String, executable: String): RemoteFirewallState =
     runCatching {
@@ -327,7 +328,7 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
             val item = entry as? JsonObject ?: error("Invalid network")
             profileName(item.requiredString("category"))
         }.filter { it.isNotEmpty() }.distinct()
-        if (activeProfiles.isEmpty()) return@runCatching RemoteFirewallState.Blocked
+        if (activeProfiles.isEmpty()) return@runCatching RemoteFirewallState.Unverified
 
         fun allowedOn(profile: String): Boolean {
             val policy = profiles.singleOrNull { it.name == profile } ?: return false
@@ -360,7 +361,10 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
                 (allowedOn("private") || allowedOn("domain")) -> RemoteFirewallState.PublicNetwork
             else -> RemoteFirewallState.Blocked
         }
-    }.getOrDefault(RemoteFirewallState.Blocked)
+    }.getOrDefault(RemoteFirewallState.Unverified)
+
+internal fun checkedWindowsFirewallState(output: String?, executable: String): RemoteFirewallState =
+    output?.let { parseWindowsFirewallState(it, executable) } ?: RemoteFirewallState.Unverified
 
 /** A late check can never overwrite a newer state or a pending UAC request. */
 internal object WindowsRemoteFirewall : RemoteFirewallAccess {
@@ -383,10 +387,10 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
         scope.launch {
             val result = runCatching {
                 val executable = ProcessHandle.current().info().command().orElse(null)
-                    ?: return@runCatching RemoteFirewallState.Blocked
+                    ?: return@runCatching RemoteFirewallState.Unverified
                 // Read in-process through the firewall's COM API; no PowerShell is started.
-                parseWindowsFirewallState(WindowsFirewallCom.snapshotJson(), executable)
-            }.getOrDefault(RemoteFirewallState.Blocked)
+                checkedWindowsFirewallState(WindowsFirewallCom.snapshotJson(), executable)
+            }.getOrDefault(RemoteFirewallState.Unverified)
             synchronized(lock) {
                 if (generation == ticket) mutableState.value = result
             }

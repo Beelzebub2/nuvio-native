@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.BindException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -29,9 +30,43 @@ import com.nuvio.app.features.profiles.ProfileRepository
 
 private const val DISCOVERY_PORT = 47788
 internal const val REMOTE_LAN_PORT = 47789
+private const val HOST_RETRY_DELAY_MS = 3_000L
 private const val PAIRING_TIMEOUT = 90_000L
 private val TCP_PROBE_MARKER = "STRP".toByteArray(Charsets.US_ASCII)
 private val wireJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Binding a socket is independent of Windows Firewall permission. A port
+ * conflict must not direct users into an endless administrator prompt.
+ */
+internal fun remoteHostFailureMessage(error: Exception, port: Int = REMOTE_LAN_PORT): String = when (error) {
+    is BindException -> "TCP port $port is already in use or unavailable. Close another Starlit instance or app using this port. Starlit will retry automatically."
+    is SecurityException -> "Windows or security software denied access to TCP port $port. Check app permissions. Starlit will retry automatically."
+    else -> "The phone remote listener stopped unexpectedly. Starlit will retry automatically."
+}
+
+/** Do not share the fixed remote port with another process on Windows. */
+internal fun bindRemoteTcpListener(port: Int): ServerSocket = ServerSocket().apply {
+    try {
+        reuseAddress = false
+        bind(InetSocketAddress(port))
+        soTimeout = 1000
+    } catch (error: Exception) {
+        runCatching { close() }
+        throw error
+    }
+}
+
+private fun bindRemoteDiscoverySocket(port: Int): DatagramSocket = DatagramSocket(null).apply {
+    try {
+        reuseAddress = false
+        bind(InetSocketAddress(port))
+        soTimeout = 1000
+    } catch (error: Exception) {
+        runCatching { close() }
+        throw error
+    }
+}
 
 // A nonce-bound discovery filter, never an authentication proof; account verification follows pairing.
 private fun discoveryAccountHint(account: RemoteAccount, nonce: String): String =
@@ -109,6 +144,8 @@ internal fun wakeMagicPacket(mac: String): ByteArray? {
 internal class LanDesktopRemote(
     private val bluetoothClient: RemoteBluetoothClient? = null,
     private val bluetoothHost: RemoteBluetoothHost? = null,
+    private val listenPort: Int = REMOTE_LAN_PORT,
+    private val discoveryPort: Int = DISCOVERY_PORT,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
@@ -139,11 +176,20 @@ internal class LanDesktopRemote(
         this.host = host
         val currentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = currentScope
-        if (host) currentScope.launch { listen(account, currentScope) }
+        if (host) currentScope.launch {
+            // A transient port conflict during an updater restart must not
+            // strand the Phone remote window until the next sign-in.
+            while (isActive) {
+                listen(account, currentScope)
+                delay(HOST_RETRY_DELAY_MS)
+            }
+        }
     }
 
     override fun stop() {
         DesktopRemote.hostReady.value = false
+        DesktopRemote.hostFailure.value = false
+        DesktopRemote.discoveryReady.value = false
         DesktopRemote.bluetoothHostReady.value = false
         scope?.cancel()
         scope = null
@@ -409,22 +455,20 @@ internal class LanDesktopRemote(
         var udpSocket: DatagramSocket? = null
         var localBluetoothListener: ServerSocket? = null
         try {
-            val activeListener = ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(REMOTE_LAN_PORT))
-                soTimeout = 1000
-            }.also { listener = it; server = it }
+            val activeListener = bindRemoteTcpListener(listenPort)
+                .also { listener = it; server = it }
             currentCoroutineContext().ensureActive()
-            val udp = runCatching { DatagramSocket(null).apply {
-                reuseAddress = true
-                bind(InetSocketAddress(DISCOVERY_PORT))
-                soTimeout = 1000
-            } }.getOrNull()?.also { udpSocket = it; discovery = it }
+            val udp = runCatching { bindRemoteDiscoverySocket(discoveryPort) }
+                .getOrNull()?.also { udpSocket = it; discovery = it }
             currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main) {
                 check(scope === ownerScope)
                 DesktopRemote.hostReady.value = true
-                DesktopRemote.status.value = "Ready to pair with your phone on this local network."
+                DesktopRemote.hostFailure.value = false
+                DesktopRemote.discoveryReady.value = udp != null
+                DesktopRemote.status.value = if (udp != null)
+                    "Ready to pair with your phone on this local network."
+                else "Ready for QR pairing. Automatic UDP discovery is unavailable; use the QR code or enter this PC's IP address."
             }
             coroutineScope {
                 if (udp != null) launch {
@@ -443,11 +487,17 @@ internal class LanDesktopRemote(
                     }
                 }
                 if (bluetoothHost != null) {
-                    localBluetoothListener = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).also {
+                    // Bluetooth is optional: failure to create its loopback
+                    // relay must never take down the working LAN listener.
+                    localBluetoothListener = runCatching {
+                        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+                    }.getOrNull()?.also {
                         it.soTimeout = 1000
                         bluetoothListener = it
                     }
-                    val enabled = runCatching { bluetoothHost.start(localBluetoothListener!!.localPort) }.getOrDefault(false)
+                    val enabled = localBluetoothListener?.let { relay ->
+                        runCatching { bluetoothHost.start(relay.localPort) }.getOrDefault(false)
+                    } ?: false
                     withContext(Dispatchers.Main) {
                         if (scope === ownerScope) DesktopRemote.bluetoothHostReady.value = enabled
                     }
@@ -492,9 +542,14 @@ internal class LanDesktopRemote(
                 }
             }
         } catch (error: CancellationException) { throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             withContext(NonCancellable + Dispatchers.Main) {
-                if (scope === ownerScope) DesktopRemote.status.value = "Desktop remote could not listen on the LAN. Check your firewall or another Starlit instance."
+                if (scope === ownerScope) {
+                    DesktopRemote.hostFailure.value = true
+                    DesktopRemote.status.value = if (listener == null)
+                        remoteHostFailureMessage(error, listenPort)
+                    else "The phone remote connection stopped unexpectedly. Starlit will retry automatically."
+                }
             }
         } finally {
             runCatching { listener?.close() }
@@ -505,6 +560,7 @@ internal class LanDesktopRemote(
             withContext(NonCancellable + Dispatchers.Main) {
                 if (scope === ownerScope) {
                     DesktopRemote.hostReady.value = false
+                    DesktopRemote.discoveryReady.value = false
                     DesktopRemote.bluetoothHostReady.value = false
                 }
             }
