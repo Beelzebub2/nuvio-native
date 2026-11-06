@@ -1,3 +1,26 @@
+## Starlit 1.12.2
+
+### Account creation and email verification
+
+- **Create an account without administrator approval:** New Starlit users can register with email and a password of at least 12 characters. GoTrue requires email confirmation before password-based access; no owner review queue is involved.
+- **Use an existing Google identity:** When the official account server has Google enabled, verified Google sign-in can also create an account. Existing device pairing, authenticated syncing, and third-party authorization confirmations remain separate security decisions.
+- **Keep registration feedback accurate:** The app explains the confirmation-email step rather than showing a manual-approval or pending-review message.
+
+### Phone remote playback actions
+
+- **Control fullscreen from your phone:** The remote can request fullscreen on the connected Starlit PC instead of only changing its phone interface.
+- **Skip introductions and advance episodes:** The phone remote exposes skip intro and next episode through the existing authenticated playback-control protocol, rather than introducing duplicate commands.
+
+### Authentication security
+
+- **Keep passwords out of Android saved state:** Password input is stored only in transient Compose memory and is not written into saved-instance-state bundles.
+- **Avoid sensitive auth details in logs:** Sign-in and sign-up failures show safe messages without forwarding raw HTTP authentication exceptions to diagnostics. Automated security checks protect against reintroducing password persistence.
+
+### Validation and release process
+
+- Account registration PR #152, phone remote PR #153, and authentication security PR #155 were merged to Dev. The security PR passed Android Full, Android Play Store, desktop-auth, iOS Kotlin, and source/history security checks.
+- The tag-triggered release workflow rechecks versioning, tests the desktop application and metadata gateway, builds the Windows installer, signs Android packages, performs install/uninstall smoke checks, and publishes artifacts only after required jobs succeed.
+
 ## Starlit 1.12.1
 
 ### Phone remote connection reliability
