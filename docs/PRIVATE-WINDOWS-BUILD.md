@@ -16,7 +16,7 @@ The in-app updater reads the public GitHub release feed without an account token
 
 The public-release updater does not request or send GitHub credentials. Installer redirects are limited to the approved release and asset-download hosts. Every downloaded installer must have GitHub's SHA-256 digest and pass verification before installation.
 
-Starlit builds configured with an account server connect to that server automatically. With a build that offers **Request account**, you can submit an account request from the sign-in screen and wait for owner approval before signing in and syncing with Android. Approved accounts can sign in on each device; guest mode and saved custom-server choices remain available. The account server is selected at build time, as described in the [account-server guide](ANDROID.md#servers-and-account-sync).
+Starlit builds configured with an account server connect to that server automatically. On the official server, choose **Create account**, verify your email address, then sign in on each device to sync with Android; Google sign-in can also create accounts when enabled. Guest mode and saved custom-server choices remain available. The account server is selected at build time, as described in the [account-server guide](ANDROID.md#servers-and-account-sync).
 
 ### Repository rename compatibility rollout
 

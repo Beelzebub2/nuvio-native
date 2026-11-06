@@ -47,7 +47,7 @@ object AuthRepository {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    /** Neutral auth messages, such as an account that is waiting for the server owner's approval. */
+    /** Neutral auth messages, such as an email verification reminder. */
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
@@ -239,47 +239,29 @@ object AuthRepository {
     }
 
     suspend fun signUpWithEmail(email: String, password: String): Result<Unit> {
-        val isStarlitRequest = !ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures
+        val isOfficialServer = !ServerConfigurationRepository.active.value.supportsNuvioAccountFeatures
         return runCatching {
             _error.value = null
             _notice.value = null
-            if (isStarlitRequest) {
+            if (isOfficialServer) {
                 require(password.length >= 12) { getString(Res.string.auth_request_password_minimum) }
-                // Account requests must never adopt a remote session before owner approval.
-                cancelRemoteSessionRequest()
-                changingSession = true
-            } else {
-                expectRemoteSession()
             }
-            try {
-                SupabaseProvider.client.auth.signUpWith(Email) {
-                    this.email = email
-                    this.password = password
-                }
-                if (isStarlitRequest) {
-                    if (SupabaseProvider.client.auth.currentSessionOrNull() != null) {
-                        SupabaseProvider.client.auth.clearSession()
-                        val message = getString(Res.string.auth_request_unexpected_session)
-                        _error.value = message
-                        error(message)
-                    }
-                    _notice.value = getString(Res.string.auth_request_submitted_subtitle)
-                } else if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
-                    // Other servers can require email confirmation before sign-in.
-                    cancelRemoteSessionRequest()
-                    _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
-                }
-            } finally {
-                if (isStarlitRequest) changingSession = false
+            // GoTrue creates the account immediately; unverified emails receive no session.
+            // A server that already verified the identity can return a real session.
+            expectRemoteSession()
+            SupabaseProvider.client.auth.signUpWith(Email) {
+                this.email = email
+                this.password = password
+            }
+            if (SupabaseProvider.client.auth.currentSessionOrNull() == null) {
+                cancelRemoteSessionRequest()
+                _notice.value = getString(Res.string.auth_sign_up_pending_confirmation)
             }
             Unit
         }.onFailure { e ->
             cancelRemoteSessionRequest()
             log.e(e) { "Email sign-up failed" }
-            _error.value = (if (isStarlitRequest && e.isApprovalNotificationFailure()) {
-                getString(Res.string.auth_request_notification_failed)
-            } else null)
-                ?: e.safeAuthErrorDescription()
+            _error.value = e.safeAuthErrorDescription()
                 ?: (e as? IllegalArgumentException)?.message
                 ?: _error.value
                 ?: getString(Res.string.auth_sign_up_failed)
@@ -301,7 +283,7 @@ object AuthRepository {
             ?: getString(Res.string.auth_sign_in_failed)
     }
 
-    /** Approved Google identities only. GoTrue signup is disabled on the Starlit server. */
+    /** Verified Google identities can create an account or sign into an existing one. */
     suspend fun signInWithGoogle(): Result<Unit> = runCatching {
         _error.value = null
         _notice.value = null
@@ -323,7 +305,7 @@ object AuthRepository {
      */
     internal suspend fun prepareGoogleAccountLink(password: String, redirectUrl: String = "nuvio://auth"): Result<String> = runCatching {
         val account = requireNotNull(_state.value as? AuthState.Authenticated)
-        require(!account.isAnonymous) { "Sign in to your approved account first" }
+        require(!account.isAnonymous) { "Sign in to your account first" }
         check(pendingGoogleLink == null) { "Complete or cancel the current Google linking request first" }
         check(GoogleOAuthAvailability.isEnabled()) { "Google linking is not enabled on this server" }
         val client = SupabaseProvider.client
@@ -704,12 +686,6 @@ object AuthRepository {
             current = current.cause
         }
         return null
-    }
-
-    private fun Throwable.isApprovalNotificationFailure(): Boolean {
-        val errorCode = findCause<RestException>()?.error?.trim()?.lowercase().orEmpty()
-        return errorCode.endsWith("_failed") &&
-            ("notification" in errorCode || "notifier" in errorCode || "notify" in errorCode)
     }
 
     private fun Throwable.safeAuthErrorDescription(): String? =

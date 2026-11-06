@@ -1,4 +1,11 @@
 <resources>
+    <string name="auth_google_sign_in_failed">N?o foi poss?vel entrar com o Google. Tente novamente.</string>
+    <string name="auth_sign_up_pending_confirmation">Verifique sua caixa de entrada e confirme o e-mail antes de entrar.</string>
+    <string name="auth_request_submitted_detail">Abra o link de confirma??o enviado por e-mail e entre com sua nova conta.</string>
+    <string name="auth_request_submitted_subtitle">Confirme seu endere?o de e-mail para concluir o cadastro no Starlit.</string>
+    <string name="auth_request_submitted_title">Verifique seu e-mail</string>
+    <string name="auth_request_account_subtitle">Crie uma conta com e-mail e senha. Confirme seu endere?o de e-mail para come?ar a sincronizar.</string>
+    <string name="auth_request_account">Criar conta</string>
     <string name="compose_settings_page_advanced">Avançadas</string>
     <string name="settings_advanced_usage_analytics">Estatísticas de uso</string>
     <string name="settings_advanced_usage_analytics_subtitle">Versão, plataforma e uso de funcionalidades com um ID aleatório da instalação. Desativado até você permitir.</string>
@@ -42,8 +49,6 @@
     <string name="auth_password_recovery_unavailable">A recuperação de senha só está disponível no servidor oficial do Starlit.</string>
     <string name="auth_google_sign_in">Entrar com o Google</string>
     <string name="auth_google_sign_up">Cadastrar com o Google</string>
-    <string name="auth_google_approval_notice">Novas contas ainda precisam de aprovação.</string>
-    <string name="auth_google_request_access">Solicitar acesso com o Google (sujeito a aprovação)</string>
     <string name="auth_google_link_title">Conta Google</string>
     <string name="auth_google_link_description">Vincule o Google à sua conta Starlit para entrar sem perder sua biblioteca ou histórico.</string>
     <string name="auth_google_link_button">Vincular Google</string>
