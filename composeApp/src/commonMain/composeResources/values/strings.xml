@@ -845,7 +845,7 @@
     <string name="remote_pc_check_ip">Find PC at this address</string>
     <string name="remote_pc_desktop_addresses">Local PC address: %1$s</string>
     <string name="remote_pc_saved_devices">Previously paired PCs</string>
-    <string name="remote_pc_saved_notice">Saved entries remember only the PC's local address. Reconnecting still requires a new code confirmation on both devices.</string>
+    <string name="remote_pc_saved_notice">Saved PCs are ready to reconnect. Previously approved Bluetooth PCs do not need another code when both devices still have their protected pairing keys. LAN connections still require confirmation.</string>
     <string name="remote_pc_forget">Forget</string>
     <string name="remote_pc_wake">Wake PC</string>
     <string name="remote_pc_set_wake_mac">Wake-on-LAN settings</string>

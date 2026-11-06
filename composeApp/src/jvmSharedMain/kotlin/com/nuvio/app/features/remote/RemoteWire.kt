@@ -22,6 +22,11 @@ internal const val REMOTE_PROTOCOL = "starlit-remote/1"
 internal const val MAX_REMOTE_FRAME = 1_048_576
 private val random = SecureRandom()
 internal fun randomRemoteBytes() = ByteArray(32).also(random::nextBytes)
+// Backward-compatible capability markers, inside otherwise random 32-byte contributions.
+// Old peers ignore them and use the original confirmation flow. Both markers must be
+// present before either peer exchanges any resume messages.
+private val TRUSTED_HOST_MARKER = "STH2!".toByteArray(Charsets.US_ASCII)
+private val TRUSTED_PHONE_MARKER = "STP2!".toByteArray(Charsets.US_ASCII)
 internal fun remoteHash(vararg values: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").run {
     update(REMOTE_PROTOCOL.toByteArray(Charsets.UTF_8))
     values.forEach { update(it) }
@@ -63,7 +68,12 @@ internal fun remoteTranscript(key: ByteArray, commitment: ByteArray, encrypted: 
 internal fun remotePairingCode(transcript: ByteArray): String =
     ((ByteBuffer.wrap(transcript).int.toLong() and 0xffffffffL) % 1_000_000).toString().padStart(6, '0')
 
-internal data class RemotePairingChannel(val channel: RemoteCipherChannel, val code: String)
+internal data class RemotePairingChannel(
+    val channel: RemoteCipherChannel,
+    val code: String,
+    val transcript: ByteArray = byteArrayOf(),
+    val supportsTrustedReconnect: Boolean = false,
+)
 
 internal fun openRemoteChannel(socket: Socket, host: Boolean): RemotePairingChannel =
     openRemoteChannel(socket.getInputStream(), socket.getOutputStream(), host)
@@ -72,10 +82,11 @@ internal fun openRemoteChannel(socket: Socket, host: Boolean): RemotePairingChan
 internal fun openRemoteChannel(source: InputStream, destination: OutputStream, host: Boolean): RemotePairingChannel {
     val input = DataInputStream(source)
     val output = DataOutputStream(destination)
+    var trustedReconnectSupported = false
     val transcript = if (host) {
         val keys = remoteRsaKeys()
         val publicKey = keys.public.encoded
-        val nonce = randomRemoteBytes()
+        val nonce = randomRemoteBytes().also { TRUSTED_HOST_MARKER.copyInto(it) }
         val commitment = remoteHash(publicKey, nonce)
         output.writeUTF(REMOTE_PROTOCOL)
         output.writeFrame(publicKey)
@@ -83,18 +94,28 @@ internal fun openRemoteChannel(source: InputStream, destination: OutputStream, h
         // Both contributions are fixed before the desktop reveals its committed random nonce.
         val encrypted = input.readFrame(256).also { require(it.size == 256) }
         val secret = decryptRemoteSecret(keys.private, encrypted)
+        trustedReconnectSupported = secret.copyOfRange(0, TRUSTED_PHONE_MARKER.size)
+            .contentEquals(TRUSTED_PHONE_MARKER)
         output.writeFrame(nonce)
         remoteTranscript(publicKey, commitment, encrypted, nonce, secret)
     } else {
         require(input.readUTF() == REMOTE_PROTOCOL)
         val publicKey = input.readFrame(512)
         val commitment = input.readFrame(32).also { require(it.size == 32) }
-        val secret = randomRemoteBytes()
+        val secret = randomRemoteBytes().also { TRUSTED_PHONE_MARKER.copyInto(it) }
         val encrypted = encryptRemoteSecret(publicKey, secret)
         output.writeFrame(encrypted)
-        remoteTranscript(publicKey, commitment, encrypted, input.readFrame(32), secret)
+        val nonce = input.readFrame(32)
+        trustedReconnectSupported = nonce.copyOfRange(0, TRUSTED_HOST_MARKER.size)
+            .contentEquals(TRUSTED_HOST_MARKER)
+        remoteTranscript(publicKey, commitment, encrypted, nonce, secret)
     }
-    return RemotePairingChannel(RemoteCipherChannel(input, output, transcript, host), remotePairingCode(transcript))
+    return RemotePairingChannel(
+        RemoteCipherChannel(input, output, transcript, host),
+        remotePairingCode(transcript),
+        transcript,
+        trustedReconnectSupported,
+    )
 }
 
 /** Directional keys and strict counters prevent reflection, nonce reuse and replay. */

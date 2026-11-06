@@ -716,7 +716,7 @@
     <string name="remote_pc_check_ip">Procurar PC neste endereço</string>
     <string name="remote_pc_desktop_addresses">Endereço local do PC: %1$s</string>
     <string name="remote_pc_saved_devices">PCs anteriormente emparelhados</string>
-    <string name="remote_pc_saved_notice">Os PCs guardados só incluem o endereço local. Para voltar a ligar, tens de confirmar um novo código em ambos os dispositivos.</string>
+    <string name="remote_pc_saved_notice">Os PCs guardados estão prontos para voltar a ligar. No Bluetooth, não é preciso confirmar outro código se ambos os dispositivos mantiverem as chaves de emparelhamento protegidas. Pela rede local, continua a ser necessária confirmação.</string>
     <string name="remote_pc_forget">Esquecer</string>
     <string name="remote_pc_wake">Ligar PC</string>
     <string name="remote_pc_set_wake_mac">Definições de Wake-on-LAN</string>

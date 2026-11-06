@@ -54,6 +54,8 @@ internal actual object PlatformLocalAccountDataCleaner {
         "nuvio_collections",
         "nuvio_plugins",
         "nuvio_member_access",
+        "starlit_remembered_remote_pcs",
+        "starlit_bluetooth_remote_trust",
     )
 
     internal var appContext: Context? = null
