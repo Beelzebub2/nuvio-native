@@ -943,12 +943,22 @@ internal class LanDesktopRemote(
                             if (command.type == "downloadPause") DownloadsRepository.pauseDownload(task.id)
                             else DownloadsRepository.resumeDownload(task.id)
                         }
+                    } else if (command.type == "setFullscreen") {
+                        val fullscreenActions = DesktopRemote.fullscreenActions
+                        if (fullscreenActions != null &&
+                            command.profileId == ProfileRepository.activeProfileId &&
+                            command.isAllowedFor(DesktopRemote.playback.copy(fullscreenSupported = true)) &&
+                            fullscreenActions.isFullscreen() != (command.value == 1.0)) {
+                            fullscreenActions.toggle()
+                        }
                     } else if (command.type != "state" &&
                         command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
                         DesktopRemote.dispatch?.invoke(command)
                     }
                     val profileId = ProfileRepository.activeProfileId
                     DesktopRemote.playback.copy(
+                        fullscreenSupported = DesktopRemote.fullscreenActions != null,
+                        fullscreen = DesktopRemote.fullscreenActions?.isFullscreen() == true,
                         downloadProfileId = profileId,
                         downloads = if (command.profileId == profileId)
                             remoteDownloadSnapshot(DownloadsRepository.uiState.value, profileId)

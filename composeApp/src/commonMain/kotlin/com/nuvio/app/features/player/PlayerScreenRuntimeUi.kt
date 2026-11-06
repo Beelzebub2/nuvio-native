@@ -954,6 +954,11 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         duration = state.durationMs,
         volume = playerController?.getRemoteVolume() ?: 1f,
         skip = state.skipPromptVisible,
+        skipIntro = state.skipPromptVisible &&
+            com.nuvio.app.features.player.skip.AutoSkipSegmentType.fromSkipIntervalType(
+                activeSkipInterval?.type.orEmpty(),
+            ) == com.nuvio.app.features.player.skip.AutoSkipSegmentType.INTRO,
+        nextEpisodeAvailable = isSeries && nextEpisodeInfo?.hasAired == true && !playerControlsLocked,
         episodes = state.episodeItems.take(2000).map { RemoteChoice(it.id, "${it.code} ${it.title}".take(150), it.isCurrent) },
         subtitles = listOf(RemoteChoice("off", "Off", isSubtitleOffSelected)) + state.subtitleOptionItems.take(500).map {
             RemoteChoice(it.id, "${it.title} • ${it.sourceLabel}".take(150), it.isSelected)
@@ -985,6 +990,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                 "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, 1f))
                 "mute" -> controller.setMuted(controller.getRemoteVolume() > 0f)
                 "skipInterval" -> handlePlayerControlsEvent("skipInterval", 0.0)
+                "skipIntro" -> handlePlayerControlsEvent("skipInterval", 0.0)
                 "next" -> playNextEpisode()
                 "previous" -> {
                     val index = state.episodeItems.indexOfFirst { it.isCurrent }

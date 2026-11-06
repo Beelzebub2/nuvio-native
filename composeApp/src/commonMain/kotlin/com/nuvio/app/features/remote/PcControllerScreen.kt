@@ -19,6 +19,9 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.automirrored.rounded.Help
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Keyboard
@@ -465,6 +468,7 @@ private fun TroubleshootingCard(expandByDefault: Boolean) {
 private fun RemotePlaybackPage() {
     val playback by DesktopRemote.remotePlayback.collectAsState()
     val tokens = MaterialTheme.nuvio
+    RemotePlaybackQuickActions(playback)
     if (playback.playbackId.isEmpty()) {
         EmptyState(
             icon = Icons.Rounded.Tv,
@@ -486,6 +490,55 @@ private fun RemotePlaybackPage() {
         VolumeRow(playback)
     }
     PlaybackOptions(playback)
+}
+
+@Composable
+private fun RemotePlaybackQuickActions(playback: RemotePlayback) {
+    val tiles = buildList<@Composable (Modifier) -> Unit> {
+        if (playback.fullscreenSupported) add { modifier ->
+            RemoteActionTile(
+                icon = if (playback.fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                label = stringResource(
+                    if (playback.fullscreen) Res.string.remote_playback_fullscreen_exit
+                    else Res.string.remote_playback_fullscreen_enter,
+                ),
+                caption = null,
+                selected = playback.fullscreen,
+                modifier = modifier.testTag("remote-toggle-fullscreen"),
+                onClick = { DesktopRemote.command("setFullscreen", if (playback.fullscreen) 0.0 else 1.0) },
+            )
+        }
+        if (playback.playbackId.isNotEmpty()) {
+            add { modifier ->
+                RemoteActionTile(
+                    icon = Icons.Rounded.FastForward,
+                    label = stringResource(Res.string.remote_playback_skip_intro),
+                    caption = if (playback.skipIntro) null
+                        else stringResource(Res.string.remote_playback_skip_intro_unavailable),
+                    enabled = playback.skipIntro,
+                    modifier = modifier.testTag("remote-skip-intro"),
+                    onClick = { DesktopRemote.command("skipIntro") },
+                )
+            }
+            add { modifier ->
+                RemoteActionTile(
+                    icon = Icons.Rounded.SkipNext,
+                    label = stringResource(Res.string.remote_playback_next),
+                    caption = if (playback.nextEpisodeAvailable) null
+                        else stringResource(Res.string.remote_playback_next_unavailable),
+                    enabled = playback.nextEpisodeAvailable,
+                    modifier = modifier.testTag("remote-next-episode"),
+                    onClick = { DesktopRemote.command("next") },
+                )
+            }
+        }
+    }
+    if (tiles.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        RemoteSectionHeader(stringResource(Res.string.remote_playback_quick_actions))
+        if (tiles.size == 1) tiles.single()(Modifier.fillMaxWidth())
+        else RemoteTileGrid(tiles)
+    }
 }
 
 @Composable
@@ -528,13 +581,17 @@ private fun TransportRow(playback: RemotePlayback) {
                 modifier = Modifier.size(36.dp))
         }
         TransportButton(Icons.Rounded.Forward10, stringResource(Res.string.remote_playback_forward)) { DesktopRemote.command("seekBy", 10_000.0) }
-        TransportButton(Icons.Rounded.SkipNext, stringResource(Res.string.remote_playback_next)) { DesktopRemote.command("next") }
+        TransportButton(
+            Icons.Rounded.SkipNext,
+            stringResource(Res.string.remote_playback_next),
+            enabled = playback.nextEpisodeAvailable,
+        ) { DesktopRemote.command("next") }
     }
 }
 
 @Composable
-private fun TransportButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+private fun TransportButton(icon: ImageVector, description: String, enabled: Boolean = true, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp)) {
         Icon(icon, contentDescription = description, tint = MaterialTheme.nuvio.colors.textPrimary, modifier = Modifier.size(28.dp))
     }
 }
@@ -579,7 +636,7 @@ private fun PlaybackOptions(playback: RemotePlayback) {
     val subtitlesTitle = stringResource(Res.string.remote_playback_subtitles)
     val sourcesTitle = stringResource(Res.string.remote_playback_sources)
     val tiles = buildList<@Composable (Modifier) -> Unit> {
-        if (playback.skip) add { modifier ->
+        if (playback.skip && !playback.skipIntro) add { modifier ->
             RemoteActionTile(Icons.Rounded.SkipNext, stringResource(Res.string.remote_playback_skip), null,
                 primary = true, modifier = modifier, onClick = { DesktopRemote.command("skipInterval") })
         }

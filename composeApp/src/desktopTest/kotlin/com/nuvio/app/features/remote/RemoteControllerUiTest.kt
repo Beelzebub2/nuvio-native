@@ -118,6 +118,9 @@ class RemoteControllerUiTest {
             duration = 3_120_000,
             volume = 0.62f,
             skip = true,
+            skipIntro = true,
+            nextEpisodeAvailable = true,
+            fullscreenSupported = true,
             episodes = listOf(RemoteChoice("e3", "Episode 3", selected = true), RemoteChoice("e4", "Episode 4")),
             subtitles = listOf(RemoteChoice("s1", "English", selected = true)),
         )
@@ -125,12 +128,36 @@ class RemoteControllerUiTest {
         onNodeWithText("Now playing on your PC".uppercase()).assertIsDisplayed()
         onNodeWithText("Severance · S2 E3 · Who Is Alive?").assertIsDisplayed()
         onNodeWithContentDescription("Pause").assertIsDisplayed()
+        onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsEnabled()
+        onNodeWithTag("remote-skip-intro").performScrollTo().assertIsEnabled()
+        onNodeWithTag("remote-next-episode").performScrollTo().assertIsEnabled()
         capture("pc-controller-remote")
+        runOnIdle {
+            DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(
+                skipIntro = false, nextEpisodeAvailable = false, fullscreen = true,
+            )
+        }
+        onNodeWithTag("remote-skip-intro").performScrollTo().assertIsNotEnabled()
+        onNodeWithTag("remote-next-episode").performScrollTo().assertIsNotEnabled()
+        onNodeWithText("Exit fullscreen").performScrollTo().assertIsDisplayed()
         onNodeWithText("Downloads").performClick()
         onNodeWithText("Open the same profile on your PC and phone to manage its downloads.").assertIsDisplayed()
         onNodeWithText("PCs").performClick()
         onNodeWithText("Disconnect").assertIsDisplayed()
         capture("pc-controller-pcs-connected")
+    }
+
+    @Test
+    fun fullscreenWorksWhenConnectedPcIsIdle() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(fullscreenSupported = true, fullscreen = true)
+        show(desktopLayout = false)
+        onNodeWithTag("remote-toggle-fullscreen").assertIsEnabled()
+        onNodeWithText("Exit fullscreen").assertIsDisplayed()
+        onNodeWithTag("remote-skip-intro").assertDoesNotExist()
+        onNodeWithTag("remote-next-episode").assertDoesNotExist()
+        onNodeWithText("Nothing playing yet").assertIsDisplayed()
+        capture("pc-controller-idle-fullscreen")
     }
 
     @Test

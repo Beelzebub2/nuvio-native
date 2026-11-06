@@ -27,6 +27,10 @@ internal data class RemotePlayback(
     val duration: Long = 0,
     val volume: Float = 1f,
     val skip: Boolean = false,
+    val skipIntro: Boolean = false,
+    val nextEpisodeAvailable: Boolean = false,
+    val fullscreenSupported: Boolean = false,
+    val fullscreen: Boolean = false,
     val episodes: List<RemoteChoice> = emptyList(),
     val subtitles: List<RemoteChoice> = emptyList(),
     val sources: List<RemoteChoice> = emptyList(),
@@ -53,6 +57,12 @@ internal data class RemoteDesktop(
 )
 internal data class RemotePairing(val code: String, val peer: String)
 internal data class RemoteAccount(val userId: String, val server: String, val publishableKey: String)
+
+/** Desktop-window actions are independent of whether a video is currently open. */
+internal interface RemoteFullscreenActions {
+    fun isFullscreen(): Boolean
+    fun toggle()
+}
 
 internal interface DesktopRemoteTransport {
     val supported: Boolean
@@ -100,6 +110,7 @@ internal object DesktopRemote {
     // Accessed only on the UI dispatcher, including dispatch from the transport.
     var playback = RemotePlayback()
     var dispatch: ((RemoteCommand) -> Unit)? = null
+    var fullscreenActions: RemoteFullscreenActions? = null
     private var activeAccount: RemoteAccount? = null
     // Only the active desktop content navigator can accept a pending request.
     var onAcceptedHandoff: ((RemotePlaybackHandoff) -> Unit)? = null
