@@ -706,6 +706,12 @@
     <string name="remote_playback_skip">Pular abertura ou créditos</string>
     <string name="remote_playback_previous">Episódio anterior</string>
     <string name="remote_playback_next">Próximo episódio</string>
+    <string name="remote_playback_fullscreen_enter">Tela cheia</string>
+    <string name="remote_playback_fullscreen_exit">Sair da tela cheia</string>
+    <string name="remote_playback_skip_intro">Pular abertura</string>
+    <string name="remote_playback_skip_intro_unavailable">Disponível durante a abertura</string>
+    <string name="remote_playback_next_unavailable">Nenhum próximo episódio disponível</string>
+    <string name="remote_playback_quick_actions">Ações rápidas</string>
     <string name="remote_playback_episodes">Episódios</string>
     <string name="remote_playback_subtitles">Legendas</string>
     <string name="remote_playback_find_subtitles">Buscar legendas nos addons</string>

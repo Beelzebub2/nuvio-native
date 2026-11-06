@@ -40,6 +40,9 @@ import com.nuvio.app.features.player.desktop.configureMacosWindowBeforePeer
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
 import com.nuvio.app.features.player.desktop.preloadNativePlayerBridgeAsync
 import com.nuvio.app.features.player.desktop.registerDesktopAppFullscreenToggle
+import com.nuvio.app.features.player.desktop.toggleDesktopAppFullscreen
+import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.RemoteFullscreenActions
 import com.nuvio.app.features.player.desktop.trackMaximizedBoundsForCurrentScreen
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.settings.AppIconRepository
@@ -253,9 +256,17 @@ private fun runDesktopApplication(args: Array<String>, singleInstance: DesktopSi
                             fullscreenController.isFullscreen(window, windowState)
                     },
                 )
+                val remoteFullscreenActions = object : RemoteFullscreenActions {
+                    override fun isFullscreen(): Boolean = fullscreenController.isFullscreen(window, windowState)
+                    override fun toggle() = toggleDesktopAppFullscreen(window)
+                }
+                DesktopRemote.fullscreenActions = remoteFullscreenActions
                 val uninstallFullscreenShortcuts = installDesktopAppFullscreenShortcuts(window)
                 val untrackMaximizedBounds = window.trackMaximizedBoundsForCurrentScreen()
                 onDispose {
+                    if (DesktopRemote.fullscreenActions === remoteFullscreenActions) {
+                        DesktopRemote.fullscreenActions = null
+                    }
                     fullscreenController.dispose(window)
                     uninstallFullscreenShortcuts()
                     untrackMaximizedBounds()
