@@ -16,7 +16,11 @@ internal class RemoteBluetoothConnection(
 
 internal interface RemoteBluetoothClient {
     val supported: Boolean
-    fun discover(onFound: (RemoteDesktop) -> Unit, onFailure: (String) -> Unit)
+    /**
+     * Reports nearby PCs, then calls [onFinished] once when the search ends:
+     * null if it ran, or why it could not. Nothing is reported after [stop].
+     */
+    fun discover(onFound: (RemoteDesktop) -> Unit, onFinished: (failure: String?) -> Unit)
     suspend fun connect(address: String): RemoteBluetoothConnection
     fun stop()
 }
