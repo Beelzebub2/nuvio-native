@@ -16,7 +16,7 @@
 
 - **Dedicated phone controller page:** The Android PC controller opens a full-screen Settings page with Remote, Downloads and PCs tabs, plus clearer connection options.
 - **Separate desktop pairing window:** Connect phone opens a modeless window with the pairing QR code, local IP addresses, setup steps and confirmation code. You can continue using Starlit while pairing your phone.
-- **Safer Windows firewall guidance:** The remote window checks Windows Firewall without administrator access and explains when inbound connections are blocked. With a single explicit administrator confirmation, Starlit can add app-specific TCP 47789 and UDP 47788 inbound rules on Private/Domain networks limited to the local subnet; existing block rules are preserved. Public-network restrictions remain in place.
+- **Safer Windows firewall guidance:** The remote window checks Windows Firewall without administrator access and explains when inbound connections are blocked. With a single explicit administrator confirmation, Starlit can add app-specific TCP 47789 and UDP 47788 inbound rules on Private/Domain networks limited to the local subnet. The same approval disables inbound Block rules that target the Starlit executable, such as those Windows creates when its own firewall prompt is cancelled; other rules are left unchanged. Public-network restrictions remain in place.
 
 ### Validation
 
