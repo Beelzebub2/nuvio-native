@@ -1,18 +1,32 @@
 package com.nuvio.app.features.remote
 
-import java.util.Base64
+import com.nuvio.app.core.windows.WindowsCom
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.junit.Assume.assumeTrue
 
 class WindowsRemoteFirewallTest {
     private val executable = """C:\Program Files\Starlit\Starlit.exe"""
+
+    @Test
+    fun existingFirewallRuleNamesMustBeUnambiguouslyOwnedBeforeReplacement() {
+        WindowsFirewallCom.requireOwnedRuleNames(emptyMap())
+        WindowsFirewallCom.requireOwnedRuleNames(mapOf(FIREWALL_TCP_RULE to listOf(true)))
+        for (owners in listOf(listOf(false), listOf(true, false), listOf(true, true))) {
+            assertFailsWith<IllegalStateException> {
+                WindowsFirewallCom.requireOwnedRuleNames(mapOf(FIREWALL_TCP_RULE to owners))
+            }
+        }
+    }
 
     private fun rule(
         action: String = "Allow",
@@ -311,41 +325,170 @@ class WindowsRemoteFirewallTest {
         ))
     }
 
+    /** A rule as Windows Firewall's COM API reports it, defaulting to an unrestricted inbound Allow. */
+    private fun comRule(
+        action: Result<Int> = Result.success(WindowsFirewallCom.NET_FW_ACTION_ALLOW),
+        profiles: Result<Int> = Result.success(WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE),
+        applicationName: Result<String?> = Result.success(null),
+        protocol: Result<Int> = Result.success(WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP),
+        localPorts: Result<String?> = Result.success("47789"),
+        remotePorts: Result<String?> = Result.success("*"),
+        localAddresses: Result<String?> = Result.success("*"),
+        remoteAddresses: Result<String?> = Result.success("*"),
+        serviceName: Result<String?> = Result.success(null),
+        interfacesRestricted: Result<Boolean> = Result.success(false),
+        interfaceTypes: Result<String?> = Result.success("All"),
+        secureFlags: Result<Int> = Result.success(0),
+        owner: Result<String?> = Result.success(null),
+        packageId: Result<String?> = Result.success(null),
+        localUsers: Result<String?> = Result.success(null),
+        remoteUsers: Result<String?> = Result.success(null),
+        remoteMachines: Result<String?> = Result.success(null),
+    ) = WindowsFirewallRuleRecord(
+        action, profiles, applicationName, protocol, localPorts, remotePorts, localAddresses, remoteAddresses,
+        serviceName, interfacesRestricted, interfaceTypes, secureFlags, owner, packageId, localUsers, remoteUsers,
+        remoteMachines,
+    )
+
+    private val allProfilesOn = listOf(
+        WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN,
+        WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE,
+        WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC,
+    ).map { WindowsFirewallProfileRecord(it, enabled = true, blockAllInbound = false) }
+
+    private fun comState(
+        vararg rules: WindowsFirewallRuleRecord,
+        active: Int = WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE,
+        profiles: List<WindowsFirewallProfileRecord> = allProfilesOn,
+    ) = parseWindowsFirewallState(windowsFirewallSnapshotJson(rules.toList(), active, profiles), executable)
+
+    /** The two rules Starlit adds, as COM reports them back. */
+    private fun starlitRules(program: String = executable) = arrayOf(
+        comRule(
+            applicationName = Result.success(program),
+            profiles = Result.success(WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN or WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE),
+            remoteAddresses = Result.success("LocalSubnet"),
+        ),
+        comRule(
+            applicationName = Result.success(program),
+            profiles = Result.success(WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN or WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE),
+            protocol = Result.success(WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP),
+            localPorts = Result.success("47788"),
+            remoteAddresses = Result.success("LocalSubnet"),
+        ),
+    )
+
     @Test
-    fun inspectionUsesBoundedPortRecoveryAndChecksAdditionalFirewallFilters() {
-        val script = windowsFirewallInspectionScript(executable)
-        assertContains(script, "Get-NetFirewallPortFilter -PolicyStore ActiveStore -ErrorAction Stop")
-        assertContains(script, "Get-NetFirewallPortFilter -ErrorAction Stop")
-        assertContains(script, "portFallbackBudget = 24")
-        assertContains(script, "Sort-Object -Property")
-        assertContains(script, "targetProgram = 'C:\\Program Files\\Starlit\\Starlit.exe'")
-        listOf("Address", "Service", "Interface", "InterfaceType", "Security").forEach { filter ->
-            assertContains(script, "Get-NetFirewall${filter}Filter -PolicyStore ActiveStore")
-        }
-        assertContains(script, "Get-NetFirewallProfile -PolicyStore ActiveStore")
+    fun comSnapshotOfStarlitRulesAllowsThePhoneRemote() {
+        assertEquals(RemoteFirewallState.Allowed, comState(*starlitRules()))
+        assertEquals(RemoteFirewallState.Allowed, comState(*starlitRules(), active = WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN))
+        assertEquals(RemoteFirewallState.Blocked, comState(*starlitRules("""C:\Other\App.exe""")))
+        assertEquals(RemoteFirewallState.Blocked, comState())
     }
 
     @Test
-    fun scriptsEscapeQuotesAndRoundTripUtf16EncodedCommand() {
-        val path = """C:\Program Files\O'Brien\Aplicação 日本語 ¤ __GROUP__\Starlit.exe"""
-        val inspection = windowsFirewallInspectionScript(path)
-        assertContains(inspection, """¤targetProgram = 'C:\Program Files\O''Brien\Aplicação 日本語 ¤ __GROUP__\Starlit.exe'""".replaceFirst('¤', '$'))
-        val elevated = windowsFirewallElevatedScript(path)
-        assertContains(elevated, """¤program = 'C:\Program Files\O''Brien\Aplicação 日本語 ¤ __GROUP__\Starlit.exe'""".replaceFirst('¤', '$'))
-        assertContains(elevated, "-LocalPort 47789 -Profile Domain,Private -RemoteAddress LocalSubnet")
-        assertContains(elevated, "-LocalPort 47788 -Profile Domain,Private -RemoteAddress LocalSubnet")
-        assertContains(elevated, "Get-NetFirewallRule -PolicyStore PersistentStore -Group")
-        assertContains(elevated, "Action -eq 'Allow'")
-        assertFalse(elevated.contains("Disable-NetFirewallRule"))
-        assertFalse(elevated.contains("-Action Block"))
+    fun comSnapshotMapsNetworksAndProfilePolicy() {
+        assertEquals(
+            RemoteFirewallState.PublicNetwork,
+            comState(*starlitRules(), active = WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC),
+        )
+        val shieldsUp = allProfilesOn.map { it.copy(blockAllInbound = true) }
+        assertEquals(RemoteFirewallState.Blocked, comState(*starlitRules(), profiles = shieldsUp))
+        val firewallOff = allProfilesOn.map { it.copy(enabled = false) }
+        assertEquals(RemoteFirewallState.Allowed, comState(profiles = firewallOff))
+        // A profile Windows would not report can never prove access.
+        assertEquals(RemoteFirewallState.Blocked, comState(*starlitRules(), profiles = allProfilesOn.filter { it.type != WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE }))
 
-        val launcher = windowsFirewallElevationLauncherScript(path)
-        assertContains(launcher, "-Verb RunAs -WindowStyle Hidden -Wait -PassThru")
-        val match = Regex("""-EncodedCommand', '([A-Za-z0-9+/=]+)'""").find(launcher)
-        val childEncoded = assertNotNull(match).groupValues[1]
-        val decodedChild = String(Base64.getDecoder().decode(childEncoded), Charsets.UTF_16LE)
-        assertEquals(elevated, decodedChild)
-        val parentEncoded = encodeWindowsPowerShell(launcher)
-        assertEquals(launcher, String(Base64.getDecoder().decode(parentEncoded), Charsets.UTF_16LE))
+        val json = Json.parseToJsonElement(windowsFirewallSnapshotJson(
+            listOf(comRule(profiles = Result.success(WindowsFirewallCom.NET_FW_PROFILE2_ALL))),
+            WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN or WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC,
+            allProfilesOn,
+        )).jsonObject
+        assertEquals("\"Any\"", json["rules"]!!.jsonArray[0].jsonObject["profile"].toString())
+        assertEquals(2, json["networks"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun comBlockRulesStillOverrideStarlitRules() {
+        val anyPortBlock = comRule(
+            action = Result.success(WindowsFirewallCom.NET_FW_ACTION_BLOCK),
+            profiles = Result.success(WindowsFirewallCom.NET_FW_PROFILE2_ALL),
+            protocol = Result.success(WindowsFirewallCom.NET_FW_IP_PROTOCOL_ANY),
+            localPorts = Result.success(null),
+        )
+        assertEquals(RemoteFirewallState.Blocked, comState(*starlitRules(), anyPortBlock))
+        val unreadablePortBlock = anyPortBlock.copy(
+            applicationName = Result.success(executable),
+            localPorts = Result.failure(IllegalStateException("Access is denied")),
+        )
+        assertEquals(RemoteFirewallState.Blocked, comState(*starlitRules(), unreadablePortBlock))
+        val otherPortBlock = anyPortBlock.copy(
+            protocol = Result.success(WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP),
+            localPorts = Result.success("8080"),
+        )
+        assertEquals(RemoteFirewallState.Allowed, comState(*starlitRules(), otherPortBlock))
+        // Rules owned by a user or an app package are skipped, as before.
+        assertEquals(RemoteFirewallState.Allowed, comState(*starlitRules(), anyPortBlock.copy(owner = Result.success("S-1-5-21-1"))))
+        assertEquals(RemoteFirewallState.Allowed, comState(*starlitRules(), anyPortBlock.copy(packageId = Result.success("S-1-15-2-1"))))
+    }
+
+    @Test
+    fun unreadableOrRestrictedComPropertiesCannotProveAccess() {
+        val failure = Result.failure<Nothing>(IllegalStateException("Access is denied"))
+        val variants = listOf<(WindowsFirewallRuleRecord) -> WindowsFirewallRuleRecord>(
+            { it.copy(action = failure) },
+            { it.copy(applicationName = failure) },
+            { it.copy(protocol = failure) },
+            { it.copy(localPorts = failure) },
+            { it.copy(remotePorts = failure) },
+            { it.copy(remoteAddresses = failure) },
+            { it.copy(serviceName = failure) },
+            { it.copy(interfacesRestricted = failure) },
+            { it.copy(interfacesRestricted = Result.success(true)) },
+            { it.copy(interfaceTypes = Result.success("Wireless")) },
+            { it.copy(secureFlags = failure) },
+            { it.copy(secureFlags = Result.success(1)) },
+            { it.copy(remoteUsers = Result.success("O:LSD:(A;;CC;;;S-1-5-21-1)")) },
+            { it.copy(remoteMachines = failure) },
+        )
+        val (tcp, udp) = starlitRules()
+        for (change in variants) {
+            assertEquals(RemoteFirewallState.Blocked, comState(change(tcp), udp))
+        }
+    }
+
+    @Test
+    fun liveFirewallIsReadInProcess() {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val snapshot = Json.parseToJsonElement(WindowsFirewallCom.snapshotJson()).jsonObject
+        assertEquals(3, snapshot["profiles"]!!.jsonArray.size)
+        assertTrue(snapshot["networks"]!!.jsonArray.isNotEmpty())
+        // Every Windows install ships enabled inbound rules (for example Core Networking).
+        assertTrue(snapshot["rules"]!!.jsonArray.isNotEmpty())
+        parseWindowsFirewallState(snapshot.toString(), executable)
+    }
+
+    @Test
+    fun starlitRulesRoundTripThroughComWithoutChangingTheFirewall() {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val program = """C:\Program Files\O'Brien\Aplicação 日本語\Starlit.exe"""
+        val records = WindowsCom.withApartment {
+            listOf(
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_TCP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program, WindowsFirewallCom::recordOf),
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_UDP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program, WindowsFirewallCom::recordOf),
+            )
+        }
+        val tcp = records[0]
+        assertEquals(WindowsFirewallCom.NET_FW_ACTION_ALLOW, tcp.action.getOrThrow())
+        assertEquals(WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN or WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE, tcp.profiles.getOrThrow())
+        assertEquals(program, tcp.applicationName.getOrThrow())
+        assertEquals(WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, tcp.protocol.getOrThrow())
+        assertEquals("47789", tcp.localPorts.getOrThrow())
+        assertEquals("47788", records[1].localPorts.getOrThrow())
+        assertEquals("LocalSubnet", tcp.remoteAddresses.getOrThrow())
+        assertEquals(
+            RemoteFirewallState.Allowed,
+            parseWindowsFirewallState(windowsFirewallSnapshotJson(records, WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE, allProfilesOn), program),
+        )
     }
 }

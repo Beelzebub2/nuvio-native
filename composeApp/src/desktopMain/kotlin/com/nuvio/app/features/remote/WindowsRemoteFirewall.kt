@@ -1,14 +1,13 @@
 package com.nuvio.app.features.remote
 
+import com.nuvio.app.core.windows.ELEVATED_TASK_ARGUMENT
+import com.nuvio.app.core.windows.PHONE_REMOTE_FIREWALL_TASK
+import com.nuvio.app.core.windows.WindowsElevation
 import java.awt.Desktop
-import java.io.ByteArrayOutputStream
 import java.net.URI
-import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
-import java.util.Base64
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,193 +15,156 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.swing.Swing
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
-private const val FIREWALL_GROUP = "Starlit phone remote"
-private const val FIREWALL_DISCOVERY_PORT = 47788
-private const val FIREWALL_SESSION_PORT = 47789
+internal const val FIREWALL_GROUP = "Starlit phone remote"
+internal const val FIREWALL_TCP_RULE = "Starlit phone remote TCP"
+internal const val FIREWALL_UDP_RULE = "Starlit phone remote UDP"
+internal const val FIREWALL_DISCOVERY_PORT = 47788
+internal const val FIREWALL_SESSION_PORT = 47789
 
-/** All firewall output is structured, including empty rule/profile arrays. */
-internal fun windowsFirewallInspectionScript(executable: String): String = """
-    ¤ErrorActionPreference = 'Stop'
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(¤false)
-    ¤targetProgram = __PROGRAM__
-    ¤inbound = @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Enabled True)
-    ¤apps = @{}
-    Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤apps[[string]¤_.InstanceID] = ¤_
-    }
-    ¤ports = @{}
-    # Bulk port queries can intermittently omit a filter. Retry once, then use
-    # a bounded associated-rule lookup. Unresolved ports stay Unknown.
-    for (¤attempt = 0; ¤attempt -lt 2; ¤attempt++) {
-        try {
-            Get-NetFirewallPortFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object {
-                ¤ports[[string]¤_.InstanceID] = ¤_
-            }
-        } catch { }
-        if (@(¤inbound | Where-Object { -not ¤ports.ContainsKey([string]¤_.Name) }).Count -eq 0) { break }
-    }
-    ¤addresses = @{}
-    Get-NetFirewallAddressFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤addresses[[string]¤_.InstanceID] = ¤_
-    }
-    ¤services = @{}
-    Get-NetFirewallServiceFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤services[[string]¤_.InstanceID] = ¤_
-    }
-    ¤interfaces = @{}
-    Get-NetFirewallInterfaceFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤interfaces[[string]¤_.InstanceID] = ¤_
-    }
-    ¤interfaceTypes = @{}
-    Get-NetFirewallInterfaceTypeFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤interfaceTypes[[string]¤_.InstanceID] = ¤_
-    }
-    ¤securityFilters = @{}
-    Get-NetFirewallSecurityFilter -PolicyStore ActiveStore -ErrorAction SilentlyContinue | ForEach-Object {
-        ¤securityFilters[[string]¤_.InstanceID] = ¤_
-    }
-    # Budget is spent on our own rules first, followed by any other rules that
-    # could affect this executable, before inaccessible packaged-app rules.
-    ¤priorityRules = @(¤inbound | Sort-Object -Property {
-        ¤app = ¤apps[[string]¤_.Name]
-        ¤candidate = if (¤null -ne ¤app) { [string]¤app.Program } else { '' }
-        ¤package = if (¤null -ne ¤app) { [string]¤app.Package } else { '' }
-        if ([string]¤_.Group -eq '__GROUP__') { 0 }
-        elseif (¤candidate -eq ¤targetProgram) { 1 }
-        elseif ((¤candidate -eq 'Any' -or ¤candidate -eq '*') -and
-            [string]::IsNullOrWhiteSpace([string]¤_.Owner) -and
-            (¤package -eq '' -or ¤package -eq '*' -or ¤package -eq 'Any')) {
-            if (¤_.Action -eq 'Block') { 2 } else { 3 }
-        } else { 4 }
-    })
-    ¤portFallbackBudget = 24
-    foreach (¤rule in ¤priorityRules) {
-        if (¤ports.ContainsKey([string]¤rule.Name) -or ¤portFallbackBudget -le 0) { continue }
-        ¤portFallbackBudget--
-        for (¤attempt = 0; ¤attempt -lt 2; ¤attempt++) {
-            try {
-                ¤found = @(¤rule | Get-NetFirewallPortFilter -ErrorAction Stop)
-                if (¤found.Count -eq 1) {
-                    ¤ports[[string]¤rule.Name] = ¤found[0]
-                    break
-                }
-            } catch { }
-        }
-    }
-    ¤rules = @(
-        foreach (¤rule in ¤inbound) {
-            ¤app = ¤apps[[string]¤rule.Name]
-            ¤port = ¤ports[[string]¤rule.Name]
-            ¤address = ¤addresses[[string]¤rule.Name]
-            ¤service = ¤services[[string]¤rule.Name]
-            ¤interface = ¤interfaces[[string]¤rule.Name]
-            ¤interfaceType = ¤interfaceTypes[[string]¤rule.Name]
-            ¤security = ¤securityFilters[[string]¤rule.Name]
-            ¤program = if (¤null -ne ¤app -and -not [string]::IsNullOrWhiteSpace([string]¤app.Program)) {
-                [string]¤app.Program
-            } else { 'Unknown' }
-            ¤protocol = if (¤null -ne ¤port -and -not [string]::IsNullOrWhiteSpace([string]¤port.Protocol)) {
-                [string]¤port.Protocol
-            } else { 'Unknown' }
-            ¤localPort = if (¤null -ne ¤port -and -not [string]::IsNullOrWhiteSpace((@(¤port.LocalPort) -join ','))) {
-                @(¤port.LocalPort) -join ','
-            } else { 'Unknown' }
-            ¤package = if (¤null -ne ¤app) { [string]¤app.Package } else { '' }
-            if ([string]::IsNullOrWhiteSpace(¤package) -or ¤package -eq '*' -or ¤package -eq 'Any') { ¤package = '' }
-            [PSCustomObject]@{
-                enabled = ¤true
-                action = [string]¤rule.Action
-                profile = [string]¤rule.Profile
-                program = ¤program
-                protocol = ¤protocol
-                localPort = ¤localPort
-                owner = -not [string]::IsNullOrWhiteSpace([string]¤rule.Owner)
-                package = ¤package
-                remotePort = if (¤null -ne ¤port) { @(¤port.RemotePort) -join ',' } else { 'Unknown' }
-                localAddress = if (¤null -ne ¤address) { @(¤address.LocalAddress) -join ',' } else { 'Unknown' }
-                remoteAddress = if (¤null -ne ¤address) { @(¤address.RemoteAddress) -join ',' } else { 'Unknown' }
-                service = if (¤null -ne ¤service) { [string]¤service.Service } else { 'Unknown' }
-                interfaceAlias = if (¤null -ne ¤interface) { @(¤interface.InterfaceAlias) -join ',' } else { 'Unknown' }
-                interfaceType = if (¤null -ne ¤interfaceType) { @(¤interfaceType.InterfaceType) -join ',' } else { 'Unknown' }
-                authentication = if (¤null -ne ¤security) { [string]¤security.Authentication } else { 'Unknown' }
-                encryption = if (¤null -ne ¤security) { [string]¤security.Encryption } else { 'Unknown' }
-                overrideBlockRules = if (¤null -ne ¤security) { [string]¤security.OverrideBlockRules } else { 'Unknown' }
-                localUser = if (¤null -ne ¤security) { @(¤security.LocalUser) -join ',' } else { 'Unknown' }
-                remoteUser = if (¤null -ne ¤security) { @(¤security.RemoteUser) -join ',' } else { 'Unknown' }
-                remoteMachine = if (¤null -ne ¤security) { @(¤security.RemoteMachine) -join ',' } else { 'Unknown' }
-            }
-        }
-    )
-    ¤networks = @(
-        Get-NetConnectionProfile | Where-Object {
-            [string]¤_.IPv4Connectivity -ne 'Disconnected'
-        } | ForEach-Object {
-            [PSCustomObject]@{ category = [string]¤_.NetworkCategory }
-        }
-    )
-    ¤profiles = @(
-        Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object {
-            [PSCustomObject]@{
-                name = [string]¤_.Name
-                enabled = [string]¤_.Enabled
-                allowInboundRules = [string]¤_.AllowInboundRules
-            }
-        }
-    )
-    [PSCustomObject]@{ rules = ¤rules; networks = ¤networks; profiles = ¤profiles } |
-        ConvertTo-Json -Depth 5 -Compress
-""".trimIndent()
-    .replace('¤', '$')
-    .replace("__GROUP__", FIREWALL_GROUP)
-    .replace("__PROGRAM__", powerShellString(executable))
+/**
+ * One enabled inbound rule as the Windows Firewall COM API reports it. A failed
+ * Result means Windows refused to report that property; it becomes "Unknown",
+ * which can never prove access but can still block it.
+ */
+internal data class WindowsFirewallRuleRecord(
+    val action: Result<Int>,
+    val profiles: Result<Int>,
+    val applicationName: Result<String?>,
+    val protocol: Result<Int>,
+    val localPorts: Result<String?>,
+    val remotePorts: Result<String?>,
+    val localAddresses: Result<String?>,
+    val remoteAddresses: Result<String?>,
+    val serviceName: Result<String?>,
+    val interfacesRestricted: Result<Boolean>,
+    val interfaceTypes: Result<String?>,
+    val secureFlags: Result<Int>,
+    val owner: Result<String?>,
+    val packageId: Result<String?>,
+    val localUsers: Result<String?>,
+    val remoteUsers: Result<String?>,
+    val remoteMachines: Result<String?>,
+)
 
-internal fun encodeWindowsPowerShell(script: String): String =
-    Base64.getEncoder().encodeToString(script.toByteArray(StandardCharsets.UTF_16LE))
+internal data class WindowsFirewallProfileRecord(val type: Int, val enabled: Boolean, val blockAllInbound: Boolean)
 
-private fun powerShellString(value: String): String = "'" + value.replace("'", "''") + "'"
+private const val UNKNOWN = "Unknown"
 
-/** This script is only run after the user's explicit request and a single UAC prompt. */
-internal fun windowsFirewallElevatedScript(executable: String): String {
-    require(executable.isNotBlank())
-    return """
-        ¤ErrorActionPreference = 'Stop'
-        ¤program = __PROGRAM__
-        ¤group = '__GROUP__'
-        # Only replace our prior inbound Allow rules. Never alter a Block rule,
-        # including an administrator's policy targeting this executable.
-        Get-NetFirewallRule -PolicyStore PersistentStore -Group ¤group -ErrorAction SilentlyContinue |
-            Where-Object {
-                ¤_.Direction -eq 'Inbound' -and ¤_.Action -eq 'Allow' -and
-                (¤_.DisplayName -eq 'Starlit phone remote TCP' -or ¤_.DisplayName -eq 'Starlit phone remote UDP')
-            } | Remove-NetFirewallRule -ErrorAction Stop
-        New-NetFirewallRule -DisplayName 'Starlit phone remote TCP' -Group ¤group -Direction Inbound -Action Allow -Enabled True -Program ¤program -Protocol TCP -LocalPort 47789 -Profile Domain,Private -RemoteAddress LocalSubnet -ErrorAction Stop | Out-Null
-        New-NetFirewallRule -DisplayName 'Starlit phone remote UDP' -Group ¤group -Direction Inbound -Action Allow -Enabled True -Program ¤program -Protocol UDP -LocalPort 47788 -Profile Domain,Private -RemoteAddress LocalSubnet -ErrorAction Stop | Out-Null
-    """.trimIndent()
-        .replace("__GROUP__", FIREWALL_GROUP)
-        .replace('¤', '$')
-        .replace("__PROGRAM__", powerShellString(executable))
+private fun Result<String?>.orAny(): String = fold(
+    { value -> value?.trim()?.takeUnless { it.isEmpty() || it == "*" } ?: "Any" },
+    { UNKNOWN },
+)
+
+private fun Result<String?>.orEmptyText(): String = fold({ it?.trim().orEmpty() }, { UNKNOWN })
+
+private fun firewallActionText(action: Result<Int>): String = when (action.getOrNull()) {
+    WindowsFirewallCom.NET_FW_ACTION_ALLOW -> "Allow"
+    WindowsFirewallCom.NET_FW_ACTION_BLOCK -> "Block"
+    else -> UNKNOWN
 }
 
-/** No app path enters the command line; only ASCII base64 is passed to PowerShell. */
-internal fun windowsFirewallElevationLauncherScript(executable: String): String {
-    val encoded = encodeWindowsPowerShell(windowsFirewallElevatedScript(executable))
-    return """
-        ¤ErrorActionPreference = 'Stop'
-        try {
-            ¤child = Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '__ENCODED__')
-            if (¤null -eq ¤child) { exit 1 }
-            exit [int]¤child.ExitCode
-        } catch {
-            exit 1
-        }
-    """.trimIndent().replace("__ENCODED__", encoded).replace('¤', '$')
+private fun firewallProfileText(profiles: Result<Int>): String {
+    val mask = profiles.getOrNull() ?: return UNKNOWN
+    val all = WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN or WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE or
+        WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC
+    if (mask == WindowsFirewallCom.NET_FW_PROFILE2_ALL || mask and all == all) return "Any"
+    return listOfNotNull(
+        "Domain".takeIf { mask and WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN != 0 },
+        "Private".takeIf { mask and WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE != 0 },
+        "Public".takeIf { mask and WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC != 0 },
+    ).joinToString(", ")
+}
+
+private fun firewallProtocolText(protocol: Result<Int>): String = when (val value = protocol.getOrNull()) {
+    null -> UNKNOWN
+    WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP -> "TCP"
+    WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP -> "UDP"
+    WindowsFirewallCom.NET_FW_IP_PROTOCOL_ANY -> "Any"
+    else -> value.toString()
+}
+
+/**
+ * Renders the firewall state in the format [parseWindowsFirewallState] reads, so the
+ * rule evaluation stays the same however the data was collected.
+ */
+internal fun windowsFirewallSnapshotJson(
+    rules: List<WindowsFirewallRuleRecord>,
+    activeProfileTypes: Int,
+    profiles: List<WindowsFirewallProfileRecord>,
+): String = buildJsonObject {
+    put("rules", buildJsonArray {
+        for (rule in rules) add(buildJsonObject {
+            val secureFlags = rule.secureFlags.getOrNull()
+            val ipsec = when (secureFlags) {
+                null -> UNKNOWN
+                0 -> "NotRequired"
+                else -> "Required"
+            }
+            put("enabled", true)
+            put("action", firewallActionText(rule.action))
+            put("profile", firewallProfileText(rule.profiles))
+            put("program", rule.applicationName.orAny())
+            put("protocol", firewallProtocolText(rule.protocol))
+            put("localPort", rule.localPorts.orAny())
+            // Rules owned by a user or an app package are skipped by the parser.
+            put("owner", !rule.owner.getOrNull().isNullOrBlank())
+            put("package", rule.packageId.getOrNull()?.trim()?.takeUnless { it == "*" || it.equals("Any", true) }.orEmpty())
+            put("remotePort", rule.remotePorts.orAny())
+            put("localAddress", rule.localAddresses.orAny())
+            put("remoteAddress", rule.remoteAddresses.orAny())
+            put("service", rule.serviceName.fold({ it?.trim()?.takeUnless(String::isEmpty) ?: "Any" }, { UNKNOWN }))
+            put("interfaceAlias", rule.interfacesRestricted.fold({ if (it) "Restricted" else "Any" }, { UNKNOWN }))
+            put("interfaceType", rule.interfaceTypes.fold(
+                { value -> value?.trim()?.takeUnless { it.isEmpty() || it.equals("All", true) } ?: "Any" },
+                { UNKNOWN },
+            ))
+            put("authentication", ipsec)
+            put("encryption", ipsec)
+            put("overrideBlockRules", when (secureFlags) {
+                null -> UNKNOWN
+                0 -> "False"
+                else -> "True"
+            })
+            put("localUser", rule.localUsers.orEmptyText())
+            put("remoteUser", rule.remoteUsers.orEmptyText())
+            put("remoteMachine", rule.remoteMachines.orEmptyText())
+        })
+    })
+    put("networks", buildJsonArray {
+        if (activeProfileTypes and WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN != 0) add(buildJsonObject { put("category", "DomainAuthenticated") })
+        if (activeProfileTypes and WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE != 0) add(buildJsonObject { put("category", "Private") })
+        if (activeProfileTypes and WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC != 0) add(buildJsonObject { put("category", "Public") })
+    })
+    put("profiles", buildJsonArray {
+        for (profile in profiles) add(buildJsonObject {
+            put("name", when (profile.type) {
+                WindowsFirewallCom.NET_FW_PROFILE2_DOMAIN -> "Domain"
+                WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE -> "Private"
+                else -> "Public"
+            })
+            put("enabled", if (profile.enabled) "True" else "False")
+            put("allowInboundRules", if (profile.blockAllInbound) "False" else "True")
+        })
+    })
+}.toString()
+
+/** Runs in the elevated helper started by [WindowsRemoteFirewall.requestAccess]. */
+internal fun allowPhoneRemoteThroughWindowsFirewall() {
+    val executable = ProcessHandle.current().info().command().orElse(null)
+    check(!executable.isNullOrBlank()) { "Unknown Starlit executable" }
+    WindowsFirewallCom.allowPhoneRemote(executable)
 }
 
 private data class FirewallRule(
@@ -400,7 +362,7 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
         }
     }.getOrDefault(RemoteFirewallState.Blocked)
 
-/** A late subprocess can never overwrite a newer state or a pending UAC request. */
+/** A late check can never overwrite a newer state or a pending UAC request. */
 internal object WindowsRemoteFirewall : RemoteFirewallAccess {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -422,9 +384,8 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
             val result = runCatching {
                 val executable = ProcessHandle.current().info().command().orElse(null)
                     ?: return@runCatching RemoteFirewallState.Blocked
-                val output = runWindowsPowerShell(windowsFirewallInspectionScript(executable), 40)
-                    ?: return@runCatching RemoteFirewallState.Blocked
-                parseWindowsFirewallState(output, executable)
+                // Read in-process through the firewall's COM API; no PowerShell is started.
+                parseWindowsFirewallState(WindowsFirewallCom.snapshotJson(), executable)
             }.getOrDefault(RemoteFirewallState.Blocked)
             synchronized(lock) {
                 if (generation == ticket) mutableState.value = result
@@ -440,10 +401,10 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
             generation
         }
         scope.launch {
+            val owner = runCatching { withContext(Dispatchers.Swing) { WindowsElevation.activeWindowHandle() } }.getOrNull()
+            // Starlit restarts itself elevated for this one task, behind a single UAC prompt.
             val succeeded = runCatching {
-                val executable = ProcessHandle.current().info().command().orElse(null)
-                    ?: return@runCatching false
-                runWindowsPowerShell(windowsFirewallElevationLauncherScript(executable), 180) != null
+                WindowsElevation.runSelf(listOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_FIREWALL_TASK), 180, owner)
             }.getOrDefault(false)
             if (succeeded) scheduleRefresh(requestGeneration = ticket)
             else synchronized(lock) {
@@ -463,48 +424,5 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
                 }
             }
         }
-    }
-}
-
-/**
- * Drain concurrently to avoid filling the child's stdout pipe. Kill timed-out
- * checks and reject truncated output without blocking the UI or any caller.
- */
-private fun runWindowsPowerShell(script: String, timeoutSeconds: Long): String? {
-    val process = ProcessBuilder(
-        "powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-        "-EncodedCommand", encodeWindowsPowerShell(script),
-    ).redirectErrorStream(true).start()
-    val output = ByteArrayOutputStream()
-    val overflow = AtomicBoolean(false)
-    val readFailed = AtomicBoolean(false)
-    val reader = Thread({
-        try {
-            process.inputStream.use { input ->
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    if (output.size() + count <= 1_500_000) output.write(buffer, 0, count)
-                    else overflow.set(true)
-                }
-            }
-        } catch (_: Exception) {
-            readFailed.set(true)
-        }
-    }, "starlit-firewall-powershell-output").apply {
-        isDaemon = true
-        start()
-    }
-    try {
-        process.outputStream.close()
-        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) return null
-        reader.join(1000)
-        if (reader.isAlive || overflow.get() || readFailed.get() || process.exitValue() != 0)
-            return null
-        return output.toString(StandardCharsets.UTF_8.name())
-    } finally {
-        if (process.isAlive) process.destroyForcibly()
-        runCatching { process.inputStream.close() }
     }
 }
