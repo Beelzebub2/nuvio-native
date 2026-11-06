@@ -41,7 +41,7 @@ class DesktopRemoteProtocolTest {
         val occupied = ServerSocket(0)
         val port = occupied.localPort
         val udpPort = DatagramSocket(0).use { it.localPort }
-        val host = LanDesktopRemote(listenPort = port, discoveryPort = udpPort)
+        val host = LanDesktopRemote(listenPort = port, discoveryPort = udpPort, uiDispatcher = Dispatchers.Default)
         try {
             host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
             withTimeout(5_000) {
@@ -65,7 +65,7 @@ class DesktopRemoteProtocolTest {
     fun udpDiscoveryFailureDoesNotPreventQrOrManualIpPairing() = runBlocking {
         val tcpPort = ServerSocket(0).use { it.localPort }
         val occupiedUdp = DatagramSocket(0)
-        val host = LanDesktopRemote(listenPort = tcpPort, discoveryPort = occupiedUdp.localPort)
+        val host = LanDesktopRemote(listenPort = tcpPort, discoveryPort = occupiedUdp.localPort, uiDispatcher = Dispatchers.Default)
         try {
             host.start(RemoteAccount("account", "https://example.org", "publishable"), host = true)
             withTimeout(5_000) {
