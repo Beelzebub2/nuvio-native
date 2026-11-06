@@ -116,6 +116,8 @@ class DownloadQuotaLifecycleTest {
             DownloadDesktopFeatures.setDirectory(root)
             DownloadStorageManagement.setQuotaBytes(profile, gib)
             DownloadStorageManagement.setEnforceQuota(profile, true)
+            assertEquals(gib, DownloadStorageManagement.quotaBytes(profile))
+            assertTrue(DownloadStorageManagement.enforceQuota(profile), "The active profile's hard quota must be enabled")
             assertEquals(DownloadEnqueueResult.Started, DownloadsRepository.enqueueFromStream("movie", "quota-video", "quota-meta", "movie",
                 "Quota fixture", null, null, null, null, null, null, null,
                 StreamItem(name = "1080p", url = "http://127.0.0.1:${server.address.port}/video.mp4",

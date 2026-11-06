@@ -641,7 +641,9 @@ object DownloadsRepository {
                     // total or actual bytes exceed the opt-in reserved budget.
                     val ceiling = enforcedQuotaBytes
                     if (ceiling != null && quotaRequiresPause(
-                        _uiState.value.items, activeHandles.keys, ceiling,
+                        // This callback proves the transfer is active even if
+                        // its platform handle is still being registered.
+                        _uiState.value.items, activeHandles.keys + item.id, ceiling,
                     )) {
                         holdForQuota(item.id)
                         pumpQueue()
