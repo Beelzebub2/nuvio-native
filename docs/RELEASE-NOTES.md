@@ -1,3 +1,17 @@
+## Starlit 1.11.1
+
+### Windows security and antivirus compatibility
+
+- **Avoid suspicious background scripts:** Windows desktop now uses native Windows APIs instead of hidden or encoded PowerShell to inspect the firewall, protect saved credentials and update shortcut icons. This removes startup behavior correlated with Microsoft Defender's `Bearfoos.A!ml` classification of version 1.11.0. A fresh Defender verdict for the new executable is not yet guaranteed.
+- **Keep existing account connections:** Credential protection uses Windows DPAPI in-process. Tokens encrypted by older Starlit versions remain readable, preserving saved sign-ins and MyAnimeList connections.
+- **Safer phone remote firewall approval:** A read-only Windows Firewall inspection runs in-process. Explicitly choosing firewall access prompts for administrator approval to relaunch Starlit for one fixed task rather than running elevated PowerShell. New TCP 47789 and UDP 47788 inbound allowances remain limited to local-subnet traffic on Private and Domain networks. Existing Block rules and unrelated or ambiguously owned firewall rules are not overwritten. Public networks remain restricted, and existing Block rules may still require manual review.
+- **Update shortcut icons without scripts:** Shortcut icons use the native Windows shell APIs. Starlit updates writable per-user shortcuts and skips administrator-owned shortcuts rather than launching elevated scripts.
+
+### Validation
+
+- PR #142 passed Windows desktop-auth, Android Full and Play Store, iOS Kotlin, GitGuardian and public source-security checks. Regression tests cover legacy DPAPI compatibility, firewall-rule inspection and identity safeguards, and prevention of hidden PowerShell launch patterns.
+- The tag-triggered release pipeline validates the version, tests the Windows desktop build and installer, builds and signs Android APKs, checks installation and file hashes, and publishes only after those jobs pass. A new Microsoft Defender classification and Windows publisher code signing remain separate follow-ups.
+
 ## Starlit 1.11.0
 
 ### MyAnimeList rewatching and library
