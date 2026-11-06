@@ -51,6 +51,8 @@ import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ForwardingRenderer
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -229,7 +231,6 @@ private fun ExoPlayerSurface(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val latestOnSnapshot = rememberUpdatedState(onSnapshot)
     val latestOnError = rememberUpdatedState(onError)
     val latestOnInitialPositionHandled = rememberUpdatedState(onInitialPositionHandled)
     val latestPlayWhenReady = rememberUpdatedState(playWhenReady)
@@ -263,6 +264,10 @@ private fun ExoPlayerSurface(
         initialPositionRequestKey.orEmpty(),
     )
     val playbackDiagnostics = remember(playerSourceKey) { PlaybackDiagnostics() }
+    val activeDecoder = remember(playerSourceKey) { mutableStateOf(PlaybackDecoderMode.Unknown) }
+    val latestOnSnapshot = rememberUpdatedState<(PlayerPlaybackSnapshot) -> Unit> { snapshot ->
+        onSnapshot(snapshot.copy(decoderMode = activeDecoder.value))
+    }
     var subtitleDelayMs by remember(playerSourceKey) { mutableStateOf(0) }
     var selectedExternalSubtitleMimeType by remember(playerSourceKey) { mutableStateOf<String?>(null) }
     val latestSubtitleDelayMs = rememberUpdatedState(subtitleDelayMs)
@@ -679,11 +684,39 @@ private fun ExoPlayerSurface(
             }
 
         }
+        val decoderListener = object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                // Classify the actual platform codec once per initialization.
+                // Names never enter the snapshot or the copyable report.
+                activeDecoder.value = if (Build.VERSION.SDK_INT >= 29) runCatching {
+                    android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS).codecInfos
+                        .firstOrNull { it.name == decoderName }?.let {
+                            when {
+                                it.isHardwareAccelerated -> PlaybackDecoderMode.Hardware
+                                it.isSoftwareOnly -> PlaybackDecoderMode.Software
+                                else -> PlaybackDecoderMode.Unknown
+                            }
+                        } ?: PlaybackDecoderMode.Unknown
+                }.getOrDefault(PlaybackDecoderMode.Unknown) else PlaybackDecoderMode.Unknown
+                dispatchExoPlayerSnapshot()
+            }
+
+            override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+                activeDecoder.value = PlaybackDecoderMode.Unknown
+            }
+        }
+        exoPlayer.addAnalyticsListener(decoderListener)
         exoPlayer.addListener(listener)
         onDispose {
             PlayerPictureInPictureManager.registerPausePlaybackCallback(null)
             PlayerPictureInPictureManager.registerTogglePlaybackCallback(null)
             exoPlayer.removeListener(listener)
+            exoPlayer.removeAnalyticsListener(decoderListener)
             playerViewRef?.keepScreenOn = false
             subtitleSelectionJob?.cancel()
             sidecarController.stopSidecarAddonSubtitle(clearView = true)
@@ -1429,6 +1462,7 @@ private class NuvioLibmpvView(
         val videoHeight = mpv.getPropertyInt("video-out-params/dh")
             ?: mpv.getPropertyInt("video-params/dh")
             ?: 0
+        val measuredPlaybackSpeed = mpv.getPropertyDouble("speed")?.toFloat()
         return PlayerPlaybackSnapshot(
             isLoading = isLoading,
             isPlaying = !paused && !isLoading && !idle && !ended,
@@ -1436,9 +1470,15 @@ private class NuvioLibmpvView(
             durationMs = durationMs,
             positionMs = positionMs,
             bufferedPositionMs = maxOf(positionMs, cachePositionMs),
-            playbackSpeed = (mpv.getPropertyDouble("speed") ?: 1.0).toFloat(),
+            playbackSpeed = measuredPlaybackSpeed?.takeIf { it.isFinite() && it > 0f } ?: 1f,
+            measuredPlaybackSpeed = measuredPlaybackSpeed,
             videoWidth = videoWidth,
             videoHeight = videoHeight,
+            decoderMode = when (mpv.getPropertyString("hwdec-current")) {
+                null, "" -> PlaybackDecoderMode.Unknown
+                "no" -> PlaybackDecoderMode.Software
+                else -> PlaybackDecoderMode.Hardware
+            },
         )
     }
 

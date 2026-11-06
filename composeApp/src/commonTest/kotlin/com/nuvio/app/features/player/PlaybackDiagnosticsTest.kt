@@ -41,7 +41,7 @@ class PlaybackDiagnosticsTest {
         assertEquals(0L, data.positionSeconds)
         assertEquals(0L, data.bufferAheadSeconds)
         assertEquals(null, data.durationSeconds)
-        assertEquals(1f, data.playbackSpeed)
+        assertEquals(null, data.playbackSpeed)
         val text = data.toString()
         assertFalse(text.contains("http"))
         assertFalse(text.contains("Authorization"))
@@ -63,6 +63,35 @@ class PlaybackDiagnosticsTest {
         listOf("https://", "file://", "Authorization", "Bearer ", "password",
             "sourceUrl", "accessToken", "Bitwarden", "cookies", "\\Users\\").forEach {
             assertFalse(report.contains(it, ignoreCase = true), it)
+        }
+    }
+
+    @Test
+    fun diagnosticSessionIgnoresStartupAndCountsEachBufferTransitionOnce() {
+        val session = PlaybackDiagnosticsSession()
+        val loading = PlayerPlaybackSnapshot(isLoading = true)
+        val playing = PlayerPlaybackSnapshot(isLoading = false, isPlaying = true)
+        assertEquals(0, session.update(loading))
+        assertEquals(0, session.update(playing))
+        assertEquals(1, session.update(loading))
+        assertEquals(1, session.update(loading))
+        assertEquals(1, session.update(playing))
+        assertEquals(2, session.update(loading))
+        assertEquals(2, session.update(loading.copy(isEnded = true)))
+        assertEquals(0, PlaybackDiagnosticsSession().update(loading))
+    }
+
+    @Test
+    fun decoderOutputContainsOnlyFixedClassificationAndSpeedNeverGuessesInvalidValues() {
+        val missing = PlayerPlaybackSnapshot(playbackSpeed = 1f, measuredPlaybackSpeed = null)
+        assertEquals(1f, missing.playbackSpeed)
+        assertEquals(null, missing.safePlaybackMetrics().playbackSpeed)
+        for (mode in PlaybackDecoderMode.entries) {
+            val metrics = PlayerPlaybackSnapshot(decoderMode = mode, playbackSpeed = Float.POSITIVE_INFINITY)
+                .safePlaybackMetrics()
+            assertEquals(null, metrics.playbackSpeed)
+            assertTrue(safeDiagnosticsReport(metrics, NetworkCondition.Unknown, -20).contains("Decoder: ${mode.name}"))
+            assertTrue(safeDiagnosticsReport(metrics, NetworkCondition.Unknown, -20).contains("includes seeks): 0"))
         }
     }
 }

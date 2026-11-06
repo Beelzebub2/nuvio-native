@@ -1624,4 +1624,7 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O controle por Bluetooth está disponível. Pareie o celular com este PC nas configurações Bluetooth e procure PCs no celular.</string>
     <string name="remote_bluetooth_host_unavailable">O controle por Bluetooth não está disponível neste PC. A conexão pela rede local continua funcionando.</string>
+    <string name="remote_discovery_unavailable">A descoberta automática por UDP está indisponível porque não foi possível iniciar a porta 47788. Você ainda pode parear pelo QR code ou digitando o endereço IP deste PC.</string>
+    <string name="remote_firewall_unverified_title">Não foi possível verificar o Firewall do Windows</string>
+    <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as configurações do firewall e não sabe se o Windows está bloqueando o celular. Verifique novamente ou selecione Permitir no firewall para solicitar autorização.</string>
 </resources>
