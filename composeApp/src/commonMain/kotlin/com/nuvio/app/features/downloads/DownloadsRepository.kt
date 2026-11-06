@@ -27,6 +27,9 @@ import kotlinx.atomicfu.locks.synchronized
 
 object DownloadsRepository {
     private const val MaxMobileDownloadAttempts = 3
+    // Do not call suspend Compose resource loading inside a transfer callback
+    // or the queue lock. UI status labels are localized when rendered.
+    private const val QuotaPausedReason = "Paused by your storage limit. Free space or raise the limit before resuming."
     private val lock = SynchronizedObject()
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
@@ -565,9 +568,7 @@ object DownloadsRepository {
         // interrupt the callback before its state update otherwise.
         mutateItem(downloadId) { item ->
             item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
-                errorMessage = runCatching {
-                    runBlocking { getString(Res.string.downloads_storage_enforce_paused) }
-                }.getOrDefault("Paused: download storage limit reached"))
+                errorMessage = QuotaPausedReason)
         }
         handle?.cancel()
     }
@@ -591,7 +592,7 @@ object DownloadsRepository {
                 )) {
                     mutateItem(item.id) { old ->
                         old.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
-                            errorMessage = runBlocking { getString(Res.string.downloads_storage_enforce_paused) })
+                            errorMessage = QuotaPausedReason)
                     }
                 } else startDownload(item)
             }
