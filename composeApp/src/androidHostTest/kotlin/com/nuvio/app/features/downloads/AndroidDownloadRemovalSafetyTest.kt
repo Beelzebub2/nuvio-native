@@ -1,6 +1,9 @@
 package com.nuvio.app.features.downloads
 
 import android.app.Application
+import android.os.Build
+import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import com.nuvio.app.features.profiles.ProfileRepository
 import java.io.File
@@ -36,6 +39,12 @@ class AndroidDownloadRemovalSafetyTest {
         // the first scheduler. Align their roots before testing ownership.
         DownloadsPlatformDownloader.scheduler(scheduler.context)
         PlatformLocalAccountDataCleaner.initialize(scheduler.context)
+        // API < 34 cancellation uses WorkManager, which a Robolectric plain
+        // Application does not initialize automatically like the real app.
+        if (Build.VERSION.SDK_INT < 34 &&
+            runCatching { WorkManager.getInstance(scheduler.context) }.isFailure) {
+            WorkManagerTestInitHelper.initializeTestWorkManager(scheduler.context)
+        }
         val name = "owned-${UUID.randomUUID()}.mkv"
         val file = File(scheduler.directory.apply { mkdirs() }, name)
         file.writeText("test owned media")
