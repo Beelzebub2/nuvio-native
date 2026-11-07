@@ -535,7 +535,7 @@
     <string name="compose_settings_root_general_section">ОБЩИ</string>
     <string name="compose_settings_root_integrations_description">Управлявай наличните интеграции</string>
     <string name="compose_settings_root_notifications_description">Управлявай известия за излизане на епизоди и изпрати тестово известие.</string>
-    <string name="compose_settings_root_privacy_policy_description">Научете как Nuvio използва вашите данни</string>
+    <string name="compose_settings_root_privacy_policy_description">Научете как Starlit използва вашите данни</string>
     <string name="compose_settings_root_streams_description">Показване на резултатите от източници и правила за URL на значки.</string>
     <string name="compose_settings_root_switch_profile_description">Избери профил за гледане.</string>
     <string name="compose_settings_root_switch_profile_title">Смени профила</string>

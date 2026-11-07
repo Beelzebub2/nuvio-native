@@ -2092,7 +2092,7 @@
     <string name="compose_player_languages">Języki</string>
     <string name="compose_settings_page_privacy_policy">Polityka prywatności</string>
     <string name="compose_settings_page_tracking">Śledzenie</string>
-    <string name="compose_settings_root_privacy_policy_description">Dowiedz się, jak Nuvio obsługuje Twoje dane</string>
+    <string name="compose_settings_root_privacy_policy_description">Dowiedz się, jak Starlit obsługuje Twoje dane</string>
     <string name="compose_settings_root_tracking_description">Połącz serwisy śledzenia i wybierz, który zasila Bibliotekę i Kontynuuj oglądanie.</string>
     <string name="settings_licenses_attributions_section_ui">BIBLIOTEKI UI</string>
     <string name="settings_licenses_attributions_haze_title">Haze 1.7.2</string>

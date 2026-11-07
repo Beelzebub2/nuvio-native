@@ -2000,7 +2000,7 @@
     <string name="compose_player_languages">Jazyky</string>
     <string name="compose_settings_page_privacy_policy">Zásady ochrany osobních údajů</string>
     <string name="compose_settings_page_tracking">Sledování</string>
-    <string name="compose_settings_root_privacy_policy_description">Zjistěte, jak Nuvio nakládá s vašimi daty</string>
+    <string name="compose_settings_root_privacy_policy_description">Zjistěte, jak Starlit nakládá s vašimi daty</string>
     <string name="compose_settings_root_tracking_description">Připojte služby pro sledování a vyberte, která bude zdrojem pro Knihovnu a Pokračovat ve sledování.</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTIKA</string>
     <string name="settings_advanced_sentry_reports">Hlášení pádů Sentry</string>
