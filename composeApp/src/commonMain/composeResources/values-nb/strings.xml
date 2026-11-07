@@ -661,7 +661,7 @@
     <string name="compose_settings_root_general_section">GENERELT</string>
     <string name="compose_settings_root_integrations_description">Administrer tilgjengelige integrasjoner</string>
     <string name="compose_settings_root_notifications_description">Administrer episodevarsler og send testvarsel.</string>
-    <string name="compose_settings_root_privacy_policy_description">Se hvordan Nuvio håndterer dataene dine</string>
+    <string name="compose_settings_root_privacy_policy_description">Se hvordan Starlit håndterer dataene dine</string>
     <string name="compose_settings_root_streams_description">Visning av strømresultater og regler for badge-URL-er.</string>
     <string name="compose_settings_root_switch_profile_description">Bytt til en annen profil.</string>
     <string name="compose_settings_root_switch_profile_title">Bytt profil</string>

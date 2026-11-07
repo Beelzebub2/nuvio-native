@@ -539,7 +539,7 @@
     <string name="compose_settings_root_general_section">عمومی</string>
     <string name="compose_settings_root_integrations_description">دستیاب انٹیگریشنز کا نظم کریں</string>
     <string name="compose_settings_root_notifications_description">اقساط کی ریلیز کی اطلاعات کا نظم کریں اور آزمائشی نوٹیفکیشن بھیجیں۔</string>
-    <string name="compose_settings_root_privacy_policy_description">جانیں کہ Nuvio آپ کے ڈیٹا کو کیسے سنبھالتا ہے</string>
+    <string name="compose_settings_root_privacy_policy_description">جانیں کہ Starlit آپ کے ڈیٹا کو کیسے سنبھالتا ہے</string>
     <string name="compose_settings_root_streams_description">اسٹریم کے نتائج کی نمائش اور Badge URL کے قواعد۔</string>
     <string name="compose_settings_root_switch_profile_description">دوسرا پروفائل منتخب کریں۔</string>
     <string name="compose_settings_root_switch_profile_title">پروفائل بدلیں</string>
