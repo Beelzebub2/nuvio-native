@@ -2,6 +2,8 @@
     <string name="auth_google_sign_in_failed">N?o foi poss?vel iniciar sess?o com o Google. Tenta novamente.</string>
     <string name="auth_sign_up_pending_confirmation">Verifica a tua caixa de entrada e confirma o e-mail antes de iniciares sess?o.</string>
     <string name="settings_advanced_usage_analytics">Estatísticas de utilização</string>
+    <string name="settings_root_privacy_section">PRIVACIDADE E DIAGNÓSTICOS</string>
+    <string name="compose_settings_root_privacy_policy_description">Sabe como o Starlit trata os teus dados</string>
     <string name="settings_advanced_usage_analytics_subtitle">Versão, plataforma e utilização de funcionalidades com identificador aleatório da instalação. Desativado até autorizares.</string>
     <string name="settings_advanced_sentry_reports">Relatórios de falhas (Sentry)</string>
     <string name="settings_advanced_sentry_reports_subtitle">Envia relatórios de falhas e bloqueios (ANR) com informação técnica limitada. Desativado até autorizares.</string>

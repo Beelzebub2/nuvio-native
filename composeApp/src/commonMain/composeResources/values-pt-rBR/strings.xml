@@ -8,6 +8,8 @@
     <string name="auth_request_account">Criar conta</string>
     <string name="compose_settings_page_advanced">Avançadas</string>
     <string name="settings_advanced_usage_analytics">Estatísticas de uso</string>
+    <string name="settings_root_privacy_section">PRIVACIDADE E DIAGNÓSTICOS</string>
+    <string name="compose_settings_root_privacy_policy_description">Saiba como o Starlit trata seus dados</string>
     <string name="settings_advanced_usage_analytics_subtitle">Versão, plataforma e uso de funcionalidades com um ID aleatório da instalação. Desativado até você permitir.</string>
     <string name="settings_advanced_sentry_reports">Relatórios de falhas (Sentry)</string>
     <string name="settings_advanced_sentry_reports_subtitle">Envia relatórios de falhas e travamentos (ANR) com informações técnicas limitadas. Desativado até você permitir.</string>

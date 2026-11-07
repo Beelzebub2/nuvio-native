@@ -105,6 +105,7 @@ class DesktopSettingsUiTest {
         onNodeWithText("Import add-ons").assertIsDisplayed()
         capture("04-addons-transfer")
         open("Advanced")
+        onNodeWithText("Usage statistics").performScrollTo().assertIsDisplayed()
         capture("05-advanced")
     }
 
@@ -131,6 +132,11 @@ class DesktopSettingsUiTest {
         open("Collections")
         onNodeWithContentDescription("Switch profile").performClick()
         assertEquals(listOf("check-updates", "collections", "switch-profile"), clicks)
+    }
+
+    @Test
+    fun privacyPolicyOpensTheOfficialStarlitWebsite() {
+        assertEquals("https://starlit.rrmtools.uk/privacy/", PRIVACY_POLICY_URL)
     }
 
     @Test
