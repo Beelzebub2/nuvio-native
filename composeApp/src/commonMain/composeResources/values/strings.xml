@@ -891,6 +891,7 @@
     <string name="remote_playback_idle_body">Start a video on your PC and its controls show up here.</string>
     <string name="remote_playback_options">Playback options</string>
     <string name="remote_pc_status_connected">Connected</string>
+    <string name="remote_pc_connected_to">Connected to %1$s</string>
     <string name="remote_pc_status_searching">Searching</string>
     <string name="remote_pc_status_connecting">Connecting</string>
     <string name="remote_pc_status_idle">Not connected</string>
@@ -912,7 +913,7 @@
     <string name="remote_pc_troubleshoot_title">Can't find your PC?</string>
     <string name="remote_pc_troubleshoot_open">Starlit is open on the PC and signed in to the same account.</string>
     <string name="remote_pc_troubleshoot_network">Both devices are on the same Wi-Fi or Ethernet network, not a guest network.</string>
-    <string name="remote_pc_troubleshoot_firewall">On the PC, open Settings → Account → Phone remote → Trouble connecting? for network checks and optional private-network firewall permission.</string>
+    <string name="remote_pc_troubleshoot_firewall">On the PC, make sure Windows trusts this network as Private. Then open Settings → Account → Phone remote → Trouble connecting? to check the firewall rules.</string>
     <string name="remote_pc_troubleshoot_fallback">Still nothing? Scan the QR code or enter the PC's address.</string>
     <string name="remote_window_subtitle">Control playback on this PC from Starlit on your Android phone.</string>
     <string name="remote_window_scan_title">Scan with your phone</string>

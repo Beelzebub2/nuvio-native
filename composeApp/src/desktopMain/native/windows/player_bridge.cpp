@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <clocale>
 #include <condition_variable>
 #include <cctype>
 #include <cstdint>
@@ -1707,6 +1708,12 @@ private:
         MpvApi &api = mpvApi();
         {
             std::lock_guard<std::mutex> lock(mpvMutex);
+            // libmpv parses numeric options using the C locale. On Windows,
+            // decimal-comma locales can make mpv_create fail before playback starts.
+            // Set only the C runtime numeric category; JVM formatting is separate.
+            if (setlocale(LC_NUMERIC, "C") == nullptr) {
+                throw std::runtime_error("Could not configure the mpv numeric locale.");
+            }
             mpv = api.create();
             if (!mpv) {
                 throw std::runtime_error("mpv_create failed.");
@@ -1750,9 +1757,19 @@ private:
             setMpvOptionStringLocked("deband", "yes");
             setMpvOptionStringLocked("scale", "spline36");
             setMpvOptionStringLocked("cscale", "spline36");
-            setMpvOptionStringLocked("demuxer-max-bytes", "512MiB");
-            setMpvOptionStringLocked("demuxer-max-back-bytes", "256MiB");
+            // Retain Starlit's generous cushion for local P2P readers: unlike a
+            // CDN, a torrent can pause while waiting for the next piece. Avoid
+            // spending the same amount of RAM on regular HTTP and local files.
+            const bool isLoopbackReader =
+                sourceUrl.rfind("http://127.0.0.1:", 0) == 0 ||
+                sourceUrl.rfind("http://localhost:", 0) == 0 ||
+                sourceUrl.rfind("http://[::1]:", 0) == 0;
+            setMpvOptionStringLocked("demuxer-max-bytes", isLoopbackReader ? "512MiB" : "150MiB");
+            setMpvOptionStringLocked("demuxer-max-back-bytes", isLoopbackReader ? "256MiB" : "50MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
+            // Preserve Starlit's prior prefetch time horizon for every source.
+            // The reduced byte caps above already bound memory for regular HTTP;
+            // changing both limits at once could regress playback on shaky links.
             setMpvOptionStringLocked("cache-secs", "36000");
             if (sourceUrl.rfind("http://127.0.0.1:", 0) == 0 &&
                 sourceUrl.find("/stream?") != std::string::npos) {

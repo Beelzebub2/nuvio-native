@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -51,6 +52,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.DialogHint
 import com.nuvio.app.core.ui.DialogTextField
@@ -82,10 +85,15 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
         DesktopRemote.transport.disconnect()
         DesktopRemote.status.value = disconnectedStatus
     }
+    // Keep each destination's scroll position when the user switches tabs.
+    val remoteScroll = rememberScrollState()
+    val downloadsScroll = rememberScrollState()
+    val pcsScroll = rememberScrollState()
     Column(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
             .testTag("pc-controller-screen"),
     ) {
         Row(
@@ -134,8 +142,11 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
-        // Each tab keeps its own scroll position.
-        val scroll = key(shownTab) { rememberScrollState() }
+        val scroll = when (shownTab) {
+            PcControllerTab.Remote -> remoteScroll
+            PcControllerTab.Downloads -> downloadsScroll
+            PcControllerTab.Pcs -> pcsScroll
+        }
         Column(
             Modifier
                 .weight(1f)
@@ -163,6 +174,8 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
+    val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
+    val activeDetail = activeDesktop?.name?.let { stringResource(Res.string.remote_pc_connected_to, it) }
     val tokens = MaterialTheme.nuvio
     // Searching or connecting: other ways to connect wait until it ends.
     val busy = scanning || connecting
@@ -190,7 +203,11 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                     fontWeight = FontWeight.SemiBold,
                     color = tokens.colors.textPrimary,
                 )
-                val detail = if (DesktopRemote.transport.supported) status else stringResource(Res.string.remote_pc_unsupported)
+                val detail = when {
+                    !DesktopRemote.transport.supported -> stringResource(Res.string.remote_pc_unsupported)
+                    connected && activeDetail != null -> activeDetail
+                    else -> status
+                }
                 if (detail.isNotBlank()) {
                     Text(detail, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
                 }
@@ -208,19 +225,25 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     }
     if (!DesktopRemote.transport.supported) return
 
-    ConnectOptions(busy = busy)
+    // A concurrent discovery can update the search message, but never replace
+    // the connected PC's identity in the status hero.
+    ConnectOptions(busy = busy, scanStatus = status.takeIf { connected && scanning })
 
     if (desktops.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_found_devices))
             desktops.forEach { desktop ->
-                RemoteDeviceRow(
-                    name = desktop.name,
-                    detail = desktop.address,
-                    icon = Icons.Rounded.Computer,
-                    enabled = !connecting,
-                    onClick = { DesktopRemote.transport.connect(desktop) },
-                )
+                key(desktop.bluetooth, desktop.address) {
+                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
+                    RemoteDeviceRow(
+                        name = desktop.name,
+                        detail = desktop.address,
+                        icon = Icons.Rounded.Computer,
+                        enabled = !connecting,
+                        active = active,
+                        onClick = { DesktopRemote.transport.connect(desktop) },
+                    )
+                }
             }
         }
     }
@@ -228,20 +251,35 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_bluetooth_found_devices))
             bluetoothDesktops.forEach { desktop ->
-                RemoteDeviceRow(
-                    name = desktop.name,
-                    detail = stringResource(Res.string.remote_bluetooth_device, desktop.address),
-                    icon = Icons.AutoMirrored.Rounded.BluetoothSearching,
-                    enabled = !connecting,
-                    onClick = { DesktopRemote.transport.connect(desktop) },
-                )
+                key(desktop.bluetooth, desktop.address) {
+                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
+                    RemoteDeviceRow(
+                        name = desktop.name,
+                        detail = stringResource(Res.string.remote_bluetooth_device, desktop.address),
+                        icon = Icons.AutoMirrored.Rounded.BluetoothSearching,
+                        enabled = !connecting,
+                        active = active,
+                        onClick = { DesktopRemote.transport.connect(desktop) },
+                    )
+                }
             }
         }
     }
     if (savedPcs.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_saved_devices))
-            savedPcs.forEach { saved -> SavedPcRow(saved, enabled = !busy) }
+            savedPcs.forEach { saved ->
+                // Pairing updates move a saved PC to the top. Preserve its own menu
+                // and Wake-on-LAN editor instead of moving that UI onto another row.
+                key(saved.bluetooth, saved.address) {
+                    SavedPcRow(
+                        saved = saved,
+                        enabled = !busy,
+                        active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth),
+                        onDisconnect = onDisconnect,
+                    )
+                }
+            }
             DialogHint(stringResource(Res.string.remote_pc_saved_notice))
         }
     }
@@ -250,7 +288,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
 
 /** QR, network search, Bluetooth and manual address as one grid of choices. */
 @Composable
-private fun ConnectOptions(busy: Boolean) {
+private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
     var manualIp by rememberSaveable { mutableStateOf("") }
     var manualOpen by rememberSaveable { mutableStateOf(false) }
     var qrError by remember { mutableStateOf(false) }
@@ -313,6 +351,7 @@ private fun ConnectOptions(busy: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         RemoteSectionHeader(stringResource(Res.string.remote_pc_ways_to_connect))
         RemoteTileGrid(tiles)
+        if (scanStatus != null) DialogHint(scanStatus)
         if (qrError) DialogHint(stringResource(Res.string.remote_qr_scan_failed), isError = true)
         AnimatedVisibility(visible = manualOpen) {
             RemoteCard {
@@ -324,6 +363,7 @@ private fun ConnectOptions(busy: Boolean) {
                     onValueChange = { manualIp = it.take(45) },
                     label = stringResource(Res.string.remote_pc_manual_ip_label),
                     placeholder = "192.168.1.20",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
                     modifier = Modifier.fillMaxWidth().testTag("desktop-remote-manual-ip"),
                 )
                 NuvioCompactActionButton(
@@ -340,23 +380,26 @@ private fun ConnectOptions(busy: Boolean) {
 }
 
 @Composable
-private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
+private fun SavedPcRow(
+    saved: RememberedRemoteDevice,
+    enabled: Boolean,
+    active: Boolean,
+    onDisconnect: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     var editingWake by remember { mutableStateOf(false) }
     var macDraft by remember(saved.wakeMac) { mutableStateOf(saved.wakeMac.orEmpty()) }
     var macError by remember { mutableStateOf(false) }
     val tokens = MaterialTheme.nuvio
-    val connect = {
-        if (saved.bluetooth) DesktopRemote.transport.connect(
-            RemoteDesktop(saved.address, 0, saved.name, bluetooth = true),
-        ) else DesktopRemote.transport.discover(saved.address)
-    }
+    val connect = { connectRememberedRemoteDevice(DesktopRemote.transport, saved) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         RemoteDeviceRow(
             name = saved.name,
             detail = saved.address,
             icon = if (saved.bluetooth) Icons.AutoMirrored.Rounded.BluetoothSearching else Icons.Rounded.History,
             enabled = enabled,
+            active = active,
+            modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = connect,
         ) {
             if (!saved.bluetooth) saved.wakeMac?.let { mac ->
@@ -365,6 +408,14 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
                         tint = tokens.colors.accent)
                 }
             }
+            if (active) {
+                Text(
+                    stringResource(Res.string.remote_pc_status_connected),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tokens.colors.textSecondary,
+                    maxLines = 1,
+                )
+            }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(Res.string.remote_pc_more_options, saved.name),
@@ -372,9 +423,9 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
                 }
                 Menu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     MenuItem(
-                        text = stringResource(Res.string.remote_pc_connect),
+                        text = stringResource(if (active) Res.string.remote_disconnect else Res.string.remote_pc_connect),
                         enabled = enabled,
-                        onClick = { menuOpen = false; connect() },
+                        onClick = { menuOpen = false; if (active) onDisconnect() else connect() },
                     )
                     if (!saved.bluetooth) {
                         MenuItem(
@@ -418,13 +469,17 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
 
 @Composable
 private fun TroubleshootingCard(expandByDefault: Boolean) {
-    var expanded by rememberSaveable(expandByDefault) { mutableStateOf(expandByDefault) }
+    var expanded by rememberSaveable { mutableStateOf(expandByDefault) }
+    var userToggled by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(expandByDefault) {
+        if (expandByDefault && !userToggled) expanded = true
+    }
     val tokens = MaterialTheme.nuvio
     RemoteCard(contentPadding = 0.dp, spacing = 0.dp) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button) { expanded = !expanded }
+                .clickable(role = Role.Button) { userToggled = true; expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,

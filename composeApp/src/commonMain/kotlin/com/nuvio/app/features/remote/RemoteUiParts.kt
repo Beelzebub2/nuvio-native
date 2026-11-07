@@ -206,6 +206,7 @@ internal fun RemoteDeviceRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    active: Boolean = false,
     trailing: @Composable (RowScope.() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -216,7 +217,7 @@ internal fun RemoteDeviceRow(
             .clip(shape)
             .background(tokens.colors.surface)
             .border(tokens.borders.thin, tokens.colors.borderSubtle, shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .then(if (active) Modifier else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick))
             .alpha(if (enabled) 1f else 0.5f)
             .padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -229,7 +230,10 @@ internal fun RemoteDeviceRow(
             Text(detail, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
-        if (trailing != null) trailing() else {
+        if (trailing != null) trailing() else if (active) {
+            Text(stringResource(Res.string.remote_pc_status_connected), style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold, color = tokens.colors.textSecondary)
+        } else {
             Text(stringResource(Res.string.remote_pc_connect), style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold, color = tokens.colors.accent)
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null,
@@ -257,7 +261,7 @@ internal fun <T> RemoteTabs(tabs: List<Pair<T, String>>, selected: T, onSelect: 
             Box(
                 Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(48.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (isSelected) tokens.colors.accent.copy(alpha = tokens.opacity.selected) else Color.Transparent)
                     .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(key) }),

@@ -344,6 +344,24 @@ internal fun unwrapDownloadHttpFailure(error: Throwable): Throwable {
     return failure
 }
 
+/** Only network failures get an extended retry budget; local filesystem errors do not. */
+private class RetryableDownloadNetworkFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+/** A new byte range resets the outage budget; idle failures back off to 30 seconds. */
+internal class DesktopDownloadRetryBudget(initialBytes: Long = 0L) {
+    private var failuresWithoutProgress = 0
+    private var lastBytes = initialBytes
+
+    fun delayAfterFailure(partialBytes: Long, networkFailure: Boolean): Long? {
+        if (partialBytes > lastBytes) failuresWithoutProgress = 0
+        lastBytes = partialBytes
+        failuresWithoutProgress++
+        val maxFailures = if (networkFailure) 10 else 3
+        if (failuresWithoutProgress >= maxFailures) return null
+        return (2_000L shl (failuresWithoutProgress - 1).coerceAtMost(4)).coerceAtMost(30_000L)
+    }
+}
+
 /** A restart must durably discard stale bytes before publishing a validator for new bytes. */
 private fun resetDownloadPart(part: File) {
     check(!Files.isSymbolicLink(part.toPath())) { "Download partial must not be a symbolic link" }
@@ -356,7 +374,8 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
     selectedTorrentFile: TorrServerFile? = null,
     onAfterPartReset: (() -> Unit)? = null,
     onRecoverMissingTorrent: (suspend () -> Unit)? = null,
-    requestTimeout: Duration = if (selectedTorrentFile == null) Duration.ofSeconds(30) else Duration.ofSeconds(90)): File {
+    requestTimeout: Duration = if (selectedTorrentFile == null) Duration.ofSeconds(30) else Duration.ofSeconds(90),
+    onRetryDelay: suspend (Long) -> Unit = { delay(it) }): File {
     val file = prepareDownloadPath(item)
     val part = File(file.path + ".part")
     require(!Files.isSymbolicLink(part.toPath()) && !Files.isSymbolicLink(downloadProofFile(file).toPath()))
@@ -364,7 +383,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
     // Completed-file recovery verifies an actual content digest instead of trusting length alone.
     recoverFinalDownload(item)?.let { return it }
     check(!file.exists()) { "Destination file already exists; it was not overwritten" }
-    var attempts = 0
+    val retryBudget = DesktopDownloadRetryBudget(part.takeIf { it.isFile }?.length() ?: 0L)
     var entityRestarts = 0
     while (true) {
         currentCoroutineContext().ensureActive()
@@ -422,7 +441,11 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                     builder.header("Range", "bytes=$start-")
                     previous!!.validator.takeIf { it.isNotBlank() }?.let { builder.header("If-Range", it) }
                 }
-                return io.send(builder.build())
+                return try {
+                    io.send(builder.build())
+                } catch (e: IOException) {
+                    throw RetryableDownloadNetworkFailure("Download connection interrupted", e)
+                }
             }
             var reply = response(offset)
             if (reply.statusCode() == 416) {
@@ -445,7 +468,7 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                 }
                 if (status in setOf(408, 425, 429, 500, 502, 503, 504) ||
                     (status == 404 && selectedTorrentFile != null)) {
-                    throw IOException("Temporary download HTTP $status")
+                    throw RetryableDownloadNetworkFailure("Temporary download HTTP $status")
                 }
                 error("Download HTTP $status; retry later or choose another source")
             }
@@ -519,7 +542,9 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                                 val prefix = ByteArrayOutputStream()
                                 while (prefix.size() < 256) {
                                     transferContext.ensureActive()
-                                    val next = input.read()
+                                    val next = try { input.read() } catch (e: IOException) {
+                                        throw RetryableDownloadNetworkFailure("Download connection interrupted", e)
+                                    }
                                     if (next < 0) break
                                     lastRead.set(System.nanoTime())
                                     prefix.write(next)
@@ -535,7 +560,9 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
                             }
                             while (true) {
                                 transferContext.ensureActive()
-                                val count = input.read(buffer)
+                                val count = try { input.read(buffer) } catch (e: IOException) {
+                                    throw RetryableDownloadNetworkFailure("Download connection interrupted", e)
+                                }
                                 if (count < 0) break
                                 lastRead.set(System.nanoTime())
 
@@ -581,8 +608,11 @@ internal suspend fun copyDesktopDownload(item: DownloadItem, url: String, io: Do
         } catch (e: CancellationException) { io.close(); throw e }
         catch (e: IOException) {
             io.close()
-            if (++attempts >= 3) throw IOException("Transfer interrupted or destination unavailable: ${e.message}", e)
-            delay(attempts * 2_000L)
+            val retryDelay = retryBudget.delayAfterFailure(
+                part.takeIf { it.isFile }?.length() ?: 0L,
+                networkFailure = e is RetryableDownloadNetworkFailure,
+            ) ?: throw IOException("Transfer interrupted or destination unavailable: ${e.message}", e)
+            onRetryDelay(retryDelay)
         } catch (e: Exception) { io.close(); throw e }
     }
 }
