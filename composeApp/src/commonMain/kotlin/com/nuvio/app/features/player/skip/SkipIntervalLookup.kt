@@ -10,8 +10,9 @@ internal fun resolveSkipIntervalLookup(
     videoId: String?,
     season: Int?,
     episode: Int?,
+    fallbackImdbId: String? = null,
 ): SkipIntervalLookup? {
-    val normalizedId = videoId?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val normalizedId = videoId?.trim().orEmpty()
     val parts = normalizedId.split(':')
 
     return when {
@@ -29,7 +30,7 @@ internal fun resolveSkipIntervalLookup(
             SkipIntervalLookup.Kitsu(kitsuId = kitsuId, episode = resolvedEpisode)
         }
 
-        parts.firstOrNull()?.startsWith("tt", ignoreCase = true) == true -> {
+        parts.firstOrNull()?.matches(Regex("tt[0-9]+", RegexOption.IGNORE_CASE)) == true -> {
             val resolvedSeason = season ?: parts.getOrNull(1)?.toIntOrNull() ?: return null
             val resolvedEpisode = episode ?: parts.getOrNull(2)?.toIntOrNull() ?: return null
             SkipIntervalLookup.Imdb(
@@ -39,6 +40,14 @@ internal fun resolveSkipIntervalLookup(
             )
         }
 
-        else -> null
+        else -> {
+            val imdbId = fallbackImdbId?.trim()
+                ?.takeIf { it.matches(Regex("tt[0-9]+", RegexOption.IGNORE_CASE)) } ?: return null
+            SkipIntervalLookup.Imdb(
+                imdbId = imdbId,
+                season = season?.takeIf { it >= 0 } ?: return null,
+                episode = episode?.takeIf { it > 0 } ?: return null,
+            )
+        }
     }
 }

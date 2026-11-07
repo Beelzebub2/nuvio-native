@@ -26,11 +26,9 @@ import com.nuvio.app.features.player.skip.AutoSkipSegmentType
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.PlayerNextEpisodeRules
 import com.nuvio.app.features.player.skip.SkipIntroRepository
-import com.nuvio.app.features.player.skip.SkipIntervalLookup
 import com.nuvio.app.features.player.skip.alignOpeningsToChapters
 import com.nuvio.app.features.player.skip.autoSkipKey
 import com.nuvio.app.features.player.skip.autoSkipKeysCompletedBy
-import com.nuvio.app.features.player.skip.resolveSkipIntervalLookup
 import com.nuvio.app.features.player.skip.shouldAutoSkip
 import com.nuvio.app.features.player.skip.internalSkipAction
 import com.nuvio.app.features.player.skip.intervalsAtSeekPositions
@@ -532,6 +530,8 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         parentMetaType,
         contentType,
         playerSettingsUiState.skipIntroEnabled,
+        playerMeta?.imdbId,
+        metaUiState.meta?.imdbId,
     ) {
         providerSkipIntervals = emptyList()
         skipIntervals = emptyList()
@@ -547,46 +547,17 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
 
         if (!playerSettingsUiState.skipIntroEnabled) return@LaunchedEffect
 
-        if ((contentType ?: parentMetaType).equals("movie", ignoreCase = true)) {
-            providerSkipIntervals = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, activeVideoId)
-            return@LaunchedEffect
-        }
-
-        val lookup = resolveSkipIntervalLookup(
+        val metadataImdbId = (metaUiState.meta ?: playerMeta)
+            ?.takeIf { it.id == parentMetaId }
+            ?.imdbId
+        providerSkipIntervals = SkipIntroRepository.getSkipIntervalsForContent(
+            mediaType = contentType ?: parentMetaType,
+            contentId = parentMetaId,
             videoId = activeVideoId,
+            metadataImdbId = metadataImdbId,
             season = activeSeasonNumber,
             episode = activeEpisodeNumber,
-        ) ?: return@LaunchedEffect
-
-        launch {
-            val imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
-                ?: (metaUiState.meta ?: playerMeta)
-                    ?.takeIf { it.id == parentMetaId }
-                    ?.imdbId
-                    ?.takeIf { it.startsWith("tt") }
-            val intervals = when (lookup) {
-                is SkipIntervalLookup.Imdb -> SkipIntroRepository.getSkipIntervals(
-                    imdbId = lookup.imdbId,
-                    season = lookup.season,
-                    episode = lookup.episode,
-                )
-                is SkipIntervalLookup.Mal -> SkipIntroRepository.getSkipIntervalsForMal(
-                    malId = lookup.malId,
-                    episode = lookup.episode,
-                    imdbId = imdbFromContent,
-                    imdbSeason = activeSeasonNumber,
-                    imdbEpisode = activeEpisodeNumber ?: lookup.episode,
-                )
-                is SkipIntervalLookup.Kitsu -> SkipIntroRepository.getSkipIntervalsForKitsu(
-                    kitsuId = lookup.kitsuId,
-                    episode = lookup.episode,
-                    imdbId = imdbFromContent,
-                    imdbSeason = activeSeasonNumber,
-                    imdbEpisode = activeEpisodeNumber ?: lookup.episode,
-                )
-            }
-            providerSkipIntervals = intervals
-        }
+        )
     }
 
     LaunchedEffect(

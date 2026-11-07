@@ -42,4 +42,24 @@ class SkipIntervalLookupTest {
         assertNull(resolveSkipIntervalLookup("tmdb:123", season = 1, episode = 2))
         assertNull(resolveSkipIntervalLookup("mal:62322", season = 1, episode = null))
     }
+
+    @Test
+    fun genericTvVideoIdsUseResolvedParentImdbIdWithoutOverridingAnimeIds() {
+        val show = SkipIntervalLookup.Imdb("tt9876543", season = 2, episode = 5)
+        assertEquals(show, resolveSkipIntervalLookup("tmdb:12345:2:5", 2, 5, "tt9876543"))
+        assertEquals(show, resolveSkipIntervalLookup(null, 2, 5, "tt9876543"))
+        assertEquals(show, resolveSkipIntervalLookup("opaque-add-on-id", 2, 5, "tt9876543"))
+        assertEquals(
+            SkipIntervalLookup.Mal("62322", episode = 5),
+            resolveSkipIntervalLookup("mal:62322:5", 2, 5, "tt9876543"),
+        )
+    }
+
+    @Test
+    fun fallbackRejectsMissingEpisodeAndUntrustedImdbValues() {
+        assertNull(resolveSkipIntervalLookup("tmdb:123", 1, null, "tt9876543"))
+        assertNull(resolveSkipIntervalLookup("tmdb:123", 1, 3, "tt9876543&season=999"))
+        assertNull(resolveSkipIntervalLookup("tmdb:123", -1, 3, "tt9876543"))
+        assertNull(resolveSkipIntervalLookup("tmdb:123", 1, 0, "tt9876543"))
+    }
 }
