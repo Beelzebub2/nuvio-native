@@ -277,16 +277,28 @@ internal fun findPreferredAudioTrackIndex(
     languages: List<String>,
 ): Int {
     for (preferred in languages) {
-        val taggedIndex = tracks.indexOfFirst {
+        val normalizedPreferred = normalizeLanguageCode(preferred) ?: continue
+
+        // An explicit pt-PT preference must not be beaten by a previously
+        // listed pt-BR track (and vice versa). The primary language still
+        // provides a fallback when there is no exact regional match.
+        val exactIndex = tracks.indexOfFirst {
+            normalizeLanguageCode(it.language) == normalizedPreferred
+        }
+        if (exactIndex >= 0) return exactIndex
+
+        val regionalIndex = tracks.indexOfFirst {
             languageMatchesPreference(it.language, preferred)
         }
-        if (taggedIndex >= 0) return taggedIndex
+        if (regionalIndex >= 0) return regionalIndex
 
-        // Some media omit the language field but name the track, e.g.
-        // "Portuguese 5.1". Reuse Starlit's existing label matcher only there.
+        // Untagged media may name the track, e.g. "Portuguese 5.1".
+        // Never override a conflicting explicit language using its label.
         val namedIndex = tracks.indexOfFirst {
-            normalizeLanguageCode(it.language) == null &&
-                audioTrackMatchesLanguage(it, preferred)
+            normalizeLanguageCode(it.language).let { code ->
+                (code == null || code == "und" || code == "unknown") &&
+                    audioTrackMatchesLanguage(it, preferred)
+            }
         }
         if (namedIndex >= 0) return namedIndex
     }
