@@ -5,8 +5,12 @@ import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.lang_arabic
 import nuvio.composeapp.generated.resources.lang_bengali
 import nuvio.composeapp.generated.resources.lang_bulgarian
+import nuvio.composeapp.generated.resources.lang_chinese_simplified
+import nuvio.composeapp.generated.resources.lang_chinese_traditional
 import nuvio.composeapp.generated.resources.lang_czech
 import nuvio.composeapp.generated.resources.lang_english
+import nuvio.composeapp.generated.resources.lang_filipino
+import nuvio.composeapp.generated.resources.lang_finnish
 import nuvio.composeapp.generated.resources.lang_french
 import nuvio.composeapp.generated.resources.lang_german
 import nuvio.composeapp.generated.resources.lang_greek
@@ -14,6 +18,9 @@ import nuvio.composeapp.generated.resources.lang_hebrew
 import nuvio.composeapp.generated.resources.lang_hungarian
 import nuvio.composeapp.generated.resources.lang_indonesian
 import nuvio.composeapp.generated.resources.lang_italian
+import nuvio.composeapp.generated.resources.lang_korean
+import nuvio.composeapp.generated.resources.lang_malay
+import nuvio.composeapp.generated.resources.lang_persian
 import nuvio.composeapp.generated.resources.lang_polish
 import nuvio.composeapp.generated.resources.lang_portuguese_brazil
 import nuvio.composeapp.generated.resources.lang_portuguese_portugal
@@ -21,7 +28,13 @@ import nuvio.composeapp.generated.resources.lang_romanian
 import nuvio.composeapp.generated.resources.lang_russian
 import nuvio.composeapp.generated.resources.lang_slovak
 import nuvio.composeapp.generated.resources.lang_spanish
+import nuvio.composeapp.generated.resources.lang_swahili
+import nuvio.composeapp.generated.resources.lang_swedish
+import nuvio.composeapp.generated.resources.lang_tamil
+import nuvio.composeapp.generated.resources.lang_telugu
+import nuvio.composeapp.generated.resources.lang_thai
 import nuvio.composeapp.generated.resources.lang_turkish
+import nuvio.composeapp.generated.resources.lang_ukrainian
 import nuvio.composeapp.generated.resources.lang_urdu
 import nuvio.composeapp.generated.resources.lang_norwegian
 import nuvio.composeapp.generated.resources.lang_dutch
@@ -38,8 +51,12 @@ enum class AppLanguage(
     ARABIC("ar", Res.string.lang_arabic),
     BENGALI("bn", Res.string.lang_bengali),
     BULGARIAN("bg", Res.string.lang_bulgarian),
+    CHINESE_SIMPLIFIED("zh-CN", Res.string.lang_chinese_simplified),
+    CHINESE_TRADITIONAL("zh-TW", Res.string.lang_chinese_traditional),
     CZECH("cs", Res.string.lang_czech),
     ENGLISH("en", Res.string.lang_english),
+    FILIPINO("fil", Res.string.lang_filipino),
+    FINNISH("fi", Res.string.lang_finnish),
     FRENCH("fr", Res.string.lang_french),
     GERMAN("de", Res.string.lang_german),
     GREEK("el", Res.string.lang_greek),
@@ -47,6 +64,9 @@ enum class AppLanguage(
     HUNGARIAN("hu", Res.string.lang_hungarian),
     INDONESIAN("id", Res.string.lang_indonesian),
     ITALIAN("it", Res.string.lang_italian),
+    KOREAN("ko", Res.string.lang_korean),
+    MALAY("ms", Res.string.lang_malay),
+    PERSIAN("fa", Res.string.lang_persian),
     POLISH("pl", Res.string.lang_polish),
     PORTUGUESE_BRAZIL("pt-BR", Res.string.lang_portuguese_brazil),
     PORTUGUESE("pt", Res.string.lang_portuguese_portugal),
@@ -54,7 +74,13 @@ enum class AppLanguage(
     RUSSIAN("ru", Res.string.lang_russian),
     SLOVAK("sk", Res.string.lang_slovak),
     SPANISH("es", Res.string.lang_spanish),
+    SWAHILI("sw", Res.string.lang_swahili),
+    SWEDISH("sv", Res.string.lang_swedish),
+    TAMIL("ta", Res.string.lang_tamil),
+    TELUGU("te", Res.string.lang_telugu),
+    THAI("th", Res.string.lang_thai),
     TURKISH("tr", Res.string.lang_turkish),
+    UKRAINIAN("uk", Res.string.lang_ukrainian),
     URDU("ur", Res.string.lang_urdu),
     NORWEGIAN("nb", Res.string.lang_norwegian),
     DUTCH("nl", Res.string.lang_dutch),
@@ -64,7 +90,7 @@ enum class AppLanguage(
 
     fun isRightToLeft(): Boolean {
         val languageCode = if (this == DEVICE) DeviceLanguagePreferences.preferredLanguageCodes().firstOrNull() else code
-        return languageCode?.substringBefore('-') in setOf(ARABIC.code, HEBREW.code, URDU.code)
+        return languageCode?.substringBefore('-') in setOf(ARABIC.code, HEBREW.code, PERSIAN.code, URDU.code)
     }
 
     companion object {
