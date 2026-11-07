@@ -393,6 +393,7 @@ class DesktopDownloadsTest {
     @Test fun truncatedResponseRetriesAreBoundedAndNeverFinalized() = runBlocking {
         val root = Files.createTempDirectory("download-truncated").toFile()
         val calls = AtomicInteger()
+        val appRetries = AtomicInteger()
         val http = server { exchange ->
             calls.incrementAndGet()
             exchange.responseHeaders.add("ETag", "\"fixture\"")
@@ -407,15 +408,20 @@ class DesktopDownloadsTest {
                 assertFails {
                     withTimeout(15_000) {
                         copyDesktopDownload(download, download.sourceUrl, io, { _, _ -> },
-                            onRetryDelay = { /* avoid elapsed time in a bounded-retry regression test */ })
+                            onRetryDelay = {
+                                appRetries.incrementAndGet() // avoid elapsed time while counting app-managed retries
+                            })
                     }
                 }
             } finally { io.close() }
             // Gives up with its own error after the bounded retries instead of hitting the timeout.
-            // The request count is not exact: the JDK client may add or lose one on a cut-off connection.
+            // Java HttpClient can transparently reissue a cut-off GET, so raw server request
+            // counts are not the app's retry budget (the JDK may send multiple GETs per attempt).
             assertIs<IOException>(error)
             assertTrue(error.message.orEmpty().startsWith("Transfer interrupted"), error.message)
-            assertTrue(calls.get() in 2..11, "requests: ${calls.get()}")
+            assertTrue(appRetries.get() in 2..9, "app-managed retries: ${appRetries.get()}")
+            assertTrue(calls.get() >= appRetries.get() + 1,
+                "server requests: ${calls.get()}, app-managed retries: ${appRetries.get()}")
             assertFalse(downloadPath(download).exists())
         } finally { http.stop(0); root.deleteRecursively() }
     }
