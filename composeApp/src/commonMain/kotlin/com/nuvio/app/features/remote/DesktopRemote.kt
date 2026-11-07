@@ -55,6 +55,16 @@ internal data class RemoteDesktop(
     val name: String,
     val bluetooth: Boolean = false,
 )
+
+/** A connected LAN endpoint and a Bluetooth endpoint are distinct, even if their PC names match. */
+internal fun isActiveRemoteDesktop(
+    connected: Boolean,
+    active: RemoteDesktop?,
+    address: String,
+    bluetooth: Boolean,
+): Boolean = connected && active != null && active.bluetooth == bluetooth &&
+    active.address.equals(address, ignoreCase = bluetooth)
+
 internal data class RemotePairing(val code: String, val peer: String)
 internal data class RemoteAccount(val userId: String, val server: String, val publishableKey: String)
 
@@ -93,6 +103,8 @@ internal object DesktopRemote {
     val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
+    /** The verified PC endpoint for the current phone-side session, not merely the last saved PC. */
+    val activeDesktop = MutableStateFlow<RemoteDesktop?>(null)
     /** A network or Bluetooth search is running. */
     val scanning = MutableStateFlow(false)
     /** The phone is opening a connection, until the code check appears or it connects. */

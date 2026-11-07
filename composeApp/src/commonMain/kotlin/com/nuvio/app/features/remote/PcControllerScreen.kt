@@ -163,6 +163,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
+    val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
     val tokens = MaterialTheme.nuvio
     // Searching or connecting: other ways to connect wait until it ends.
     val busy = scanning || connecting
@@ -214,11 +215,13 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_found_devices))
             desktops.forEach { desktop ->
+                val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
                 RemoteDeviceRow(
                     name = desktop.name,
                     detail = desktop.address,
                     icon = Icons.Rounded.Computer,
                     enabled = !connecting,
+                    active = active,
                     onClick = { DesktopRemote.transport.connect(desktop) },
                 )
             }
@@ -228,11 +231,13 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_bluetooth_found_devices))
             bluetoothDesktops.forEach { desktop ->
+                val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
                 RemoteDeviceRow(
                     name = desktop.name,
                     detail = stringResource(Res.string.remote_bluetooth_device, desktop.address),
                     icon = Icons.AutoMirrored.Rounded.BluetoothSearching,
                     enabled = !connecting,
+                    active = active,
                     onClick = { DesktopRemote.transport.connect(desktop) },
                 )
             }
@@ -241,7 +246,14 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     if (savedPcs.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_saved_devices))
-            savedPcs.forEach { saved -> SavedPcRow(saved, enabled = !busy) }
+            savedPcs.forEach { saved ->
+                SavedPcRow(
+                    saved = saved,
+                    enabled = !busy,
+                    active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth),
+                    onDisconnect = onDisconnect,
+                )
+            }
             DialogHint(stringResource(Res.string.remote_pc_saved_notice))
         }
     }
@@ -340,7 +352,12 @@ private fun ConnectOptions(busy: Boolean) {
 }
 
 @Composable
-private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
+private fun SavedPcRow(
+    saved: RememberedRemoteDevice,
+    enabled: Boolean,
+    active: Boolean,
+    onDisconnect: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     var editingWake by remember { mutableStateOf(false) }
     var macDraft by remember(saved.wakeMac) { mutableStateOf(saved.wakeMac.orEmpty()) }
@@ -357,6 +374,8 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
             detail = saved.address,
             icon = if (saved.bluetooth) Icons.AutoMirrored.Rounded.BluetoothSearching else Icons.Rounded.History,
             enabled = enabled,
+            active = active,
+            modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = connect,
         ) {
             if (!saved.bluetooth) saved.wakeMac?.let { mac ->
@@ -365,6 +384,14 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
                         tint = tokens.colors.accent)
                 }
             }
+            if (active) {
+                Text(
+                    stringResource(Res.string.remote_pc_status_connected),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tokens.colors.textSecondary,
+                    maxLines = 1,
+                )
+            }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(Res.string.remote_pc_more_options, saved.name),
@@ -372,9 +399,9 @@ private fun SavedPcRow(saved: RememberedRemoteDevice, enabled: Boolean) {
                 }
                 Menu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     MenuItem(
-                        text = stringResource(Res.string.remote_pc_connect),
+                        text = stringResource(if (active) Res.string.remote_disconnect else Res.string.remote_pc_connect),
                         enabled = enabled,
-                        onClick = { menuOpen = false; connect() },
+                        onClick = { menuOpen = false; if (active) onDisconnect() else connect() },
                     )
                     if (!saved.bluetooth) {
                         MenuItem(

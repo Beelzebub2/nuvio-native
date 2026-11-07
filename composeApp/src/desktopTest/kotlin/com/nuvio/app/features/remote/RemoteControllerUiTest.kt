@@ -28,6 +28,7 @@ class RemoteControllerUiTest {
     fun reset() {
         DesktopRemote.visible.value = false
         DesktopRemote.connected.value = false
+        DesktopRemote.activeDesktop.value = null
         DesktopRemote.connecting.value = false
         DesktopRemote.scanning.value = false
         DesktopRemote.pairing.value = null
@@ -36,6 +37,7 @@ class RemoteControllerUiTest {
         DesktopRemote.discoveryReady.value = false
         DesktopRemote.remotePlayback.value = RemotePlayback()
         DesktopRemote.desktops.value = emptyList()
+        DesktopRemote.bluetoothDesktops.value = emptyList()
         DesktopRemote.remembered.value = emptyList()
     }
 
@@ -155,6 +157,33 @@ class RemoteControllerUiTest {
         onNodeWithText("PCs").performClick()
         onNodeWithText("Disconnect").assertIsDisplayed()
         capture("pc-controller-pcs-connected")
+    }
+
+    @Test
+    fun connectedPcIsLabeledAndCannotOfferASecondConnectAction() = runDesktopComposeUiTest(width = 412, height = 900) {
+        val saved = RememberedRemoteDevice("Office PC", "02:12:34:56:78:9A", 0L, bluetooth = true)
+        val other = RememberedRemoteDevice("Other PC", "02:12:34:56:78:9B", 0L, bluetooth = true)
+        DesktopRemote.remembered.value = listOf(saved, other)
+        DesktopRemote.connected.value = true
+        DesktopRemote.activeDesktop.value = RemoteDesktop(saved.address, 0, saved.name, bluetooth = true)
+        DesktopRemote.status.value = "Connected to Office PC"
+        show(desktopLayout = false)
+
+        onNodeWithText("PCs").performClick()
+        onNodeWithTag("remote-saved-pc-${saved.address}").performScrollTo().assertIsDisplayed()
+            .assert(!hasClickAction())
+        onNodeWithTag("remote-saved-pc-${other.address}").assert(hasClickAction())
+        onNodeWithContentDescription("More options for Office PC").performClick()
+        onNodeWithText("Connect").assertDoesNotExist()
+        onAllNodesWithText("Disconnect").assertCountEquals(2)
+        onNodeWithText("Forget").assertIsDisplayed()
+
+        runOnIdle {
+            DesktopRemote.activeDesktop.value = null
+            DesktopRemote.connected.value = false
+        }
+        onNodeWithTag("remote-saved-pc-${saved.address}").assert(hasClickAction())
+        onNodeWithText("Connect").assertIsDisplayed()
     }
 
     @Test
