@@ -9,15 +9,33 @@ import java.io.IOException
 import java.nio.channels.FileChannel
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.util.Comparator
 import java.util.Locale
 import java.util.Properties
 import kotlin.io.path.exists
+
+// Preferences include API tokens and saved account state. Protect the primary,
+// backup and temporary generations, not just the newest persisted file.
+private val ownerOnlyStoreFilePermissions = PosixFilePermissions.fromString("rw-------")
+private val ownerOnlyStoreDirectoryPermissions = PosixFilePermissions.fromString("rwx------")
+
+private fun restrictDesktopStorePathToOwner(path: Path, directory: Boolean = false) {
+    // Never chmod the target of a user-supplied symlink (e.g. a configured data directory).
+    if (Files.isSymbolicLink(path)) return
+    val view = Files.getFileAttributeView(path, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+        ?: return // Windows and filesystems without POSIX permissions retain native ACLs.
+    // An existing store on a read-only filesystem must remain readable. All new
+    // generations are created with restricted permissions before any bytes are written.
+    runCatching { view.setPermissions(if (directory) ownerOnlyStoreDirectoryPermissions else ownerOnlyStoreFilePermissions) }
+}
 
 internal object DesktopStorage {
     private val json = Json { ignoreUnknownKeys = true }
@@ -28,6 +46,8 @@ internal object DesktopStorage {
         val directory = override?.let(Paths::get) ?: resolveAppDataDir()
         val firstLaunch = !Files.exists(directory)
         Files.createDirectories(directory)
+        // Do not change permissions of an explicitly overridden/shared parent directory.
+        if (override == null) restrictDesktopStorePathToOwner(directory, directory = true)
         if (firstLaunch && override == null && System.getProperty("os.name").startsWith("Windows")) {
             val previous = directory.parent.resolve("Nuvio")
             // Copy local preferences once; the original app's files and account credentials stay intact.
@@ -241,6 +261,10 @@ internal object DesktopStorage {
 
         private fun ensureLoaded() {
             if (loaded) return
+            // Legacy stores may have been written with a permissive umask. Restrict
+            // both generations even when the backup is not needed for recovery.
+            restrictDesktopStorePathToOwner(file)
+            restrictDesktopStorePathToOwner(backup)
             val primary = runCatching {
                 readSnapshot(file)?.also { current ->
                     // Before the first upgrade, the only valid legacy + backup
@@ -370,7 +394,18 @@ internal object DesktopStorage {
         }
 
         private fun writeSyncedTemp(bytes: ByteArray): Path {
-            val temporary = Files.createTempFile(file.parent, file.fileName.toString() + "-", ".tmp")
+            // Create with owner-only permissions atomically: chmod *after* writing
+            // would leave a brief window when secrets are readable by other users.
+            val parent = file.parent
+            val prefix = file.fileName.toString() + "-"
+            val temporary = if (Files.getFileAttributeView(parent, PosixFileAttributeView::class.java) != null) {
+                Files.createTempFile(
+                    parent, prefix, ".tmp",
+                    PosixFilePermissions.asFileAttribute(ownerOnlyStoreFilePermissions),
+                )
+            } else {
+                Files.createTempFile(parent, prefix, ".tmp")
+            }
             try {
                 FileOutputStream(temporary.toFile()).use { output ->
                     output.write(bytes)
