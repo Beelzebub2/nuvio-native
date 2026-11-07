@@ -264,6 +264,35 @@ internal fun audioTrackMatchesLanguage(track: AudioTrack, target: String): Boole
     )
 }
 
+/**
+ * Match ISO 639-1 preferences to 639-2 container tags (e.g. pt / por,
+ * cs / cze). Do not guess from labels when a different explicit track
+ * language is present, and keep the user's preference order authoritative.
+ *
+ * Returns the position in the currently reported track list, which is the
+ * index expected by the desktop controller's selectAudioTrack() path.
+ */
+internal fun findPreferredAudioTrackIndex(
+    tracks: List<AudioTrack>,
+    languages: List<String>,
+): Int {
+    for (preferred in languages) {
+        val taggedIndex = tracks.indexOfFirst {
+            languageMatchesPreference(it.language, preferred)
+        }
+        if (taggedIndex >= 0) return taggedIndex
+
+        // Some media omit the language field but name the track, e.g.
+        // "Portuguese 5.1". Reuse Starlit's existing label matcher only there.
+        val namedIndex = tracks.indexOfFirst {
+            normalizeLanguageCode(it.language) == null &&
+                audioTrackMatchesLanguage(it, preferred)
+        }
+        if (namedIndex >= 0) return namedIndex
+    }
+    return -1
+}
+
 internal fun selectedAudioLanguageTarget(track: AudioTrack): String? {
     track.language
         ?.takeIf { it.isNotBlank() && !it.equals("und", ignoreCase = true) }
