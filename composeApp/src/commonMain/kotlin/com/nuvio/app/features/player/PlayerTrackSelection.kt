@@ -264,6 +264,47 @@ internal fun audioTrackMatchesLanguage(track: AudioTrack, target: String): Boole
     )
 }
 
+/**
+ * Match ISO 639-1 preferences to 639-2 container tags (e.g. pt / por,
+ * cs / cze). Do not guess from labels when a different explicit track
+ * language is present, and keep the user's preference order authoritative.
+ *
+ * Returns the position in the currently reported track list, which is the
+ * index expected by the desktop controller's selectAudioTrack() path.
+ */
+internal fun findPreferredAudioTrackIndex(
+    tracks: List<AudioTrack>,
+    languages: List<String>,
+): Int {
+    for (preferred in languages) {
+        val normalizedPreferred = normalizeLanguageCode(preferred) ?: continue
+
+        // An explicit pt-PT preference must not be beaten by a previously
+        // listed pt-BR track (and vice versa). The primary language still
+        // provides a fallback when there is no exact regional match.
+        val exactIndex = tracks.indexOfFirst {
+            normalizeLanguageCode(it.language) == normalizedPreferred
+        }
+        if (exactIndex >= 0) return exactIndex
+
+        val regionalIndex = tracks.indexOfFirst {
+            languageMatchesPreference(it.language, preferred)
+        }
+        if (regionalIndex >= 0) return regionalIndex
+
+        // Untagged media may name the track, e.g. "Portuguese 5.1".
+        // Never override a conflicting explicit language using its label.
+        val namedIndex = tracks.indexOfFirst {
+            normalizeLanguageCode(it.language).let { code ->
+                (code == null || code == "und" || code == "unknown") &&
+                    audioTrackMatchesLanguage(it, preferred)
+            }
+        }
+        if (namedIndex >= 0) return namedIndex
+    }
+    return -1
+}
+
 internal fun selectedAudioLanguageTarget(track: AudioTrack): String? {
     track.language
         ?.takeIf { it.isNotBlank() && !it.equals("und", ignoreCase = true) }
