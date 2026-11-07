@@ -17,6 +17,16 @@
 
 <!-- Why this change is needed. Explain the user-visible bug, regression, maintenance need, docs error, or approved request. -->
 
+## Existing functionality and overlap audit
+
+<!-- Required for behavior/UI changes: identify existing commands, handlers, screens or APIs you checked.
+     Explain what is reused instead of being reimplemented, and note overlapping open PRs.
+     For docs-only changes, write "Not applicable". -->
+
+- Existing implementation checked:
+- Reused behavior / UI control:
+- Overlapping PRs or merge risks:
+
 ## Desktop scope
 
 <!-- This repository branch is for the desktop app. Explain which desktop platform(s) are affected: Windows, macOS, Linux, or desktop shared code. -->
@@ -41,6 +51,9 @@
 
 <!-- ALL boxes must be checked or the PR will be closed without review. -->
 - [ ] I have read and understood `CONTRIBUTING.md`.
+- [ ] I checked existing behavior and open PRs before introducing commands, handlers or UI controls.
+- [ ] I reused existing actions and confirmed there are no duplicate controls for the same behavior on the affected screen.
+- [ ] I checked the PR against current `Dev` for overlapping changes and disclosed any merge risks.
 - [ ] This PR is small, focused, and limited to one problem.
 - [ ] This PR is scoped to the desktop app, desktop packaging, desktop documentation, or shared code required for desktop behavior.
 - [ ] This PR is not cosmetic-only.

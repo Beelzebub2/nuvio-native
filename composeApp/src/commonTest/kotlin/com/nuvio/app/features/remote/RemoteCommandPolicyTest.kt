@@ -6,7 +6,7 @@ class RemoteCommandPolicyTest {
     @Test
     fun onlyCurrentPlaybackAndAdvertisedChoicesReachControls() {
         val state = RemotePlayback(playbackId = "session-2", duration = 100_000,
-            nextEpisodeAvailable = true, skipIntro = true, fullscreenSupported = true,
+            skip = true, nextEpisodeAvailable = true, skipIntro = true, fullscreenSupported = true,
             episodes = listOf(RemoteChoice("episode-3", "Episode 3")),
             subtitles = listOf(RemoteChoice("off", "Off"), RemoteChoice("english", "English")),
             sources = listOf(RemoteChoice("episode-3-source-0", "Source")))
@@ -16,7 +16,8 @@ class RemoteCommandPolicyTest {
         assertTrue(allowed("mute"))
         assertTrue(allowed("volume", 0.4))
         assertTrue(allowed("next"))
-        assertTrue(allowed("skipIntro"))
+        assertTrue(allowed("skipInterval"))
+        assertTrue(allowed("skipIntro")) // Legacy PR #153 client remains supported.
         assertTrue(allowed("setFullscreen", 1.0))
         assertTrue(allowed("setFullscreen", 0.0))
         assertTrue(allowed("previous"))
@@ -32,7 +33,8 @@ class RemoteCommandPolicyTest {
         assertFalse(allowed("seek", 100_001.0))
         assertFalse(allowed("seekBy", Double.POSITIVE_INFINITY))
         assertFalse(allowed("volume", 2.0))
-        assertFalse(allowed("skipInterval"))
+        assertFalse(allowed("skipInterval", value = 1.0))
+        assertFalse(allowed("skipInterval", session = "session-1"))
         assertFalse(allowed("next", id = "old-episode"))
         assertFalse(allowed("next", session = "session-1"))
         assertFalse(allowed("skipIntro", value = 1.0))
@@ -41,8 +43,12 @@ class RemoteCommandPolicyTest {
         assertFalse(allowed("setFullscreen", id = "other-window"))
         assertFalse(RemoteCommand(type = "next", playbackId = state.playbackId)
             .isAllowedFor(state.copy(nextEpisodeAvailable = false)))
+        assertFalse(RemoteCommand(type = "skipInterval", playbackId = state.playbackId)
+            .isAllowedFor(state.copy(skip = false)))
         assertFalse(RemoteCommand(type = "skipIntro", playbackId = state.playbackId)
             .isAllowedFor(state.copy(skipIntro = false)))
+        assertFalse(RemoteCommand(type = "skipIntro", playbackId = state.playbackId)
+            .isAllowedFor(state.copy(skip = false)))
         assertFalse(allowed("enableP2pForPlayerControls"))
         assertFalse(allowed("submitIntroCommit"))
     }

@@ -14,7 +14,8 @@ internal fun RemoteCommand.isAllowedFor(playback: RemotePlayback): Boolean {
         "seekBy" -> id.isEmpty() && value in -60_000.0..60_000.0
         "volume" -> id.isEmpty() && value in 0.0..1.0
         "skipInterval" -> playback.skip && id.isEmpty() && value == 0.0
-        "skipIntro" -> playback.skipIntro && id.isEmpty() && value == 0.0
+        // Compatibility alias for clients built with PR #153. New clients send skipInterval only.
+        "skipIntro" -> playback.skip && playback.skipIntro && id.isEmpty() && value == 0.0
         "episode" -> value == 0.0 && playback.episodes.any { it.id == id }
         "subtitle" -> value == 0.0 && playback.subtitles.any { it.id == id }
         "source" -> value == 0.0 && playback.sources.any { it.id == id }
