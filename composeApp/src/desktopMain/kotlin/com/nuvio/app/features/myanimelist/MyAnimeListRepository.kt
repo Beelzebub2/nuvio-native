@@ -173,10 +173,19 @@ internal object MyAnimeListRepository {
     }
 
     suspend fun listStatus(id: Int) = authorized { client.listStatus(id, it) }
-    suspend fun update(id: Int, status: MalStatus? = null, score: Int? = null, isRewatching: Boolean? = null) =
-        authorized { client.update(id, it, status, score, isRewatching) }
-    suspend fun animeList(status: MalStatus? = null, offset: Int = 0) =
-        authorized { client.animeList(it, status, offset) }
+    suspend fun update(
+        id: Int, status: MalStatus? = null, score: Int? = null, isRewatching: Boolean? = null,
+        watchedEpisodes: Int? = null,
+    ) = authorized { client.update(id, it, status, score, isRewatching, watchedEpisodes) }
+    suspend fun update(id: Int, patch: MalListPatch) =
+        update(id, patch.status, patch.score, patch.isRewatching, patch.watchedEpisodes)
+    suspend fun remove(id: Int) = authorized { client.remove(id, it) }
+    suspend fun animeStatistics() = authorized { client.animeStatistics(it) }
+    suspend fun animeList(status: MalStatus? = null, offset: Int = 0, sort: MalListSort = MalListSort.UPDATED) =
+        authorized { client.animeList(it, status, offset, sort = sort) }
+
+    /** Runs list writes that must finish even after the MyAnimeList tab is closed. */
+    internal fun launchDetached(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
     suspend fun search(name: String) = authorized { client.search(name, it) }
 
     /** Idempotent. Only a genuinely playing title already completed on MAL is changed. */
