@@ -4,7 +4,6 @@ import android.content.Context
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import java.io.File
 import java.net.URI
-import java.nio.file.Files
 
 internal actual object DownloadStorageManagement {
     actual val supported: Boolean = true
@@ -56,13 +55,28 @@ internal actual object DownloadStorageManagement {
         if (transfer.item.localFileUri != item.localFileUri) return null
         val root = File(context.filesDir, "downloads")
         val file = File(root, item.fileName)
-        val path = file.toPath()
-        if (!Files.isRegularFile(path) || Files.isSymbolicLink(path) ||
-            Files.isSymbolicLink(root.toPath()) ||
-            file.canonicalFile.parentFile != root.canonicalFile) return null
+        if (!isPrivateStarlitDownloadFile(root, file)) return null
         val recordedUri = item.localFileUri ?: return null
         if (File(URI(recordedUri)).canonicalFile != file.canonicalFile) return null
         if (file.length() <= 0L || file.length() != item.downloadedBytes) return null
         file.length()
     }.getOrNull()
 }
+
+/**
+ * Android supports API 24+, while java.nio.file.Files is only available from
+ * API 26. Canonical path comparisons work on all supported Android versions
+ * and reject symlinks in either the downloads directory itself or the media
+ * file, including links that point to another file within the same directory.
+ * Canonicalize the parent first: Android's system-provided app-private parent
+ * can itself contain aliases, which are not evidence that the downloads
+ * directory is a symlink.
+ */
+internal fun isPrivateStarlitDownloadFile(root: File, file: File): Boolean = runCatching {
+    val parent = root.parentFile?.canonicalFile ?: return false
+    val expectedRoot = File(parent, root.name)
+    val actualRoot = root.canonicalFile
+    if (!root.isDirectory || actualRoot != expectedRoot) return false
+    val expectedFile = File(actualRoot, file.name)
+    file.isFile && file.canonicalFile == expectedFile
+}.getOrDefault(false)
