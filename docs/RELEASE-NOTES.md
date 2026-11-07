@@ -1,3 +1,29 @@
+## Starlit 1.13.0
+
+### Privacy and diagnostics
+
+- **Find privacy controls easily:** Mobile Settings now includes a Privacy & Diagnostics shortcut to the existing Usage statistics switch. Usage data remains opt-in and off by default; crash reporting still has an independent setting.
+- **Official privacy policy:** Mobile Settings and desktop About now link to Starlit's official privacy policy instead of the legacy Nuvio link, with corrected English and Portuguese labels.
+- **Private account-security analytics:** Starlit's source now includes a restricted server-side login audit exporter; security operators can review the separately hosted private OpenObserve dashboard. It is independent of the optional app-usage analytics switch and does not add emails, account IDs, credentials, or full request URLs to exported events. Server deployment and dashboard access are administered separately from an app installation.
+
+### Phone remote and playback
+
+- **Show the actual connected PC:** The phone controller displays a verified active computer as Connected, offers Disconnect instead of a second Connect action, and avoids duplicate reconnections or queuing commands while disconnected.
+- **More consistent discovery and pairing:** Saved LAN connections start the existing secure pairing flow automatically; Bluetooth auto-resume respects the most recently selected transport. Remote tab positions, troubleshooting panels, search status, and manual-IP editing remain stable during scans.
+- **Select the right desktop audio track:** Preferred audio languages now match common three-letter ISO codes and regional variants, favoring exact locales before compatible language fallbacks. Conflicting explicit track languages are not overridden by a descriptive label.
+
+### Desktop performance and reliability
+
+- **Lower overhead for ordinary streams:** Regular desktop streams use smaller forward/backward byte caches without reducing the existing P2P cache budgets or changing the established cache time horizon. Native player initialization also guards Windows numeric-locale compatibility.
+- **Right-sized posters and safer animated artwork:** Desktop images use actual layout sizing instead of unnecessarily large decodes. GIF decoders are no longer closed while a visible collection card still needs them.
+- **Recover from temporary download outages:** Desktop HTTP downloads back off and retry transient network failures and server throttling, while preserving existing resume checks, file ownership, fingerprints, SHA-256 proofs, and cancellation behavior. Local disk failures retain a shorter retry budget.
+
+### Validation and limitations
+
+- PRs #159, #161, #163, #164, and #165 passed their relevant Android Full/Play Store, iOS, desktop regression, native, and security checks before merging. The release pipeline additionally tests the integrated desktop app and gateway, packages Windows, signs Android APKs, and validates checksums before publication.
+- Wi-Fi and Bluetooth pairing, remote playback commands, and large 7-10 GB P2P streams still need physical-device checks on representative networks. The remote does not relax Windows Public-network firewall rules or device-approval security.
+- Server-side login audit collection is distinct from opt-in device usage diagnostics. Account-security dashboards and ingestion require their own private server configuration; the app release does not grant dashboard access.
+
 ## Starlit 1.12.3
 
 ### Intro skipping for movies and TV series

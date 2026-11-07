@@ -539,7 +539,7 @@
     <string name="compose_settings_root_general_section">CHUNG</string>
     <string name="compose_settings_root_integrations_description">Quản lý tích hợp có sẵn</string>
     <string name="compose_settings_root_notifications_description">Quản lý nhắc nhở tập phim mới phát hành và gửi thông báo kiểm tra</string>
-    <string name="compose_settings_root_privacy_policy_description">Tìm hiểu cách Nuvio xử lý dữ liệu của bạn</string>
+    <string name="compose_settings_root_privacy_policy_description">Tìm hiểu cách Starlit xử lý dữ liệu của bạn</string>
     <string name="compose_settings_root_streams_description">Hiển thị kết quả luồng và các quy tắc URL của nhãn</string>
     <string name="compose_settings_root_switch_profile_description">Chuyển sang hồ sơ khác</string>
     <string name="compose_settings_root_switch_profile_title">Chuyển hồ sơ</string>

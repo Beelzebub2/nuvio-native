@@ -58,9 +58,12 @@ import nuvio.composeapp.generated.resources.changelog_description
 import nuvio.composeapp.generated.resources.remote_pc_controller_title
 import nuvio.composeapp.generated.resources.remote_pc_controller_description
 import nuvio.composeapp.generated.resources.remote_pc_unsupported
+import nuvio.composeapp.generated.resources.settings_advanced_usage_analytics
+import nuvio.composeapp.generated.resources.settings_advanced_usage_analytics_subtitle
+import nuvio.composeapp.generated.resources.settings_root_privacy_section
 import org.jetbrains.compose.resources.stringResource
 
-internal const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
+internal const val PRIVACY_POLICY_URL = "https://starlit.rrmtools.uk/privacy/"
 
 internal fun LazyListScope.settingsRootContent(
     isTablet: Boolean,
@@ -190,6 +193,33 @@ internal fun LazyListScope.settingsRootContent(
             }
         }
     }
+    if (showAboutSection && !isDesktop) {
+        item {
+            val uriHandler = LocalUriHandler.current
+            SettingsSection(
+                title = stringResource(Res.string.settings_root_privacy_section),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.settings_advanced_usage_analytics),
+                        description = stringResource(Res.string.settings_advanced_usage_analytics_subtitle),
+                        icon = Icons.Rounded.Tune,
+                        isTablet = isTablet,
+                        onClick = onAdvancedClick,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.compose_settings_page_privacy_policy),
+                        description = stringResource(Res.string.compose_settings_root_privacy_policy_description),
+                        icon = Icons.Rounded.Policy,
+                        isTablet = isTablet,
+                        onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) },
+                    )
+                }
+            }
+        }
+    }
     if (showAboutSection) {
         item {
             val uriHandler = LocalUriHandler.current
@@ -208,14 +238,16 @@ internal fun LazyListScope.settingsRootContent(
                         )
                         SettingsGroupDivider(isTablet = isTablet)
                     }
-                    SettingsNavigationRow(
-                        title = stringResource(Res.string.compose_settings_page_privacy_policy),
-                        description = stringResource(Res.string.compose_settings_root_privacy_policy_description),
-                        icon = Icons.Rounded.Policy,
-                        isTablet = isTablet,
-                        onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) },
-                    )
-                    SettingsGroupDivider(isTablet = isTablet)
+                    if (isDesktop) {
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.compose_settings_page_privacy_policy),
+                            description = stringResource(Res.string.compose_settings_root_privacy_policy_description),
+                            icon = Icons.Rounded.Policy,
+                            isTablet = isTablet,
+                            onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) },
+                        )
+                        SettingsGroupDivider(isTablet = isTablet)
+                    }
                     SettingsNavigationRow(
                         title = stringResource(Res.string.compose_settings_page_licenses_attributions),
                         description = stringResource(Res.string.about_licenses_attributions_subtitle),

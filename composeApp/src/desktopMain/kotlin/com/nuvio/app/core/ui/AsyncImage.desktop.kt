@@ -18,11 +18,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import coil3.BitmapImage
 import coil3.Image
-import coil3.PlatformContext
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
 import coil3.request.NullRequestDataException
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.FilterMipmap
@@ -33,7 +30,6 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private const val MinCustomDownscaleRatio = 1.08f
-private const val MaxDesktopSourceSizePx = 1536
 private const val MaxScaledBitmapPixels = 1_250_000L
 
 private val IsWindowsDesktop: Boolean =
@@ -60,16 +56,8 @@ internal actual fun NuvioAsyncImage(
     clipToBounds: Boolean,
     desktopImageScaling: NuvioDesktopImageScaling,
 ) {
-    val context = LocalPlatformContext.current
     val effectiveDesktopImageScaling = remember(desktopImageScaling) {
         if (IsWindowsDesktop) desktopImageScaling else NuvioDesktopImageScaling.Disabled
-    }
-    val requestModel = remember(context, model, effectiveDesktopImageScaling) {
-        if (effectiveDesktopImageScaling == NuvioDesktopImageScaling.Disabled) {
-            model
-        } else {
-            model.withDesktopHighQualitySize(context)
-        }
     }
     val transform: (AsyncImagePainter.State) -> AsyncImagePainter.State = remember(
         placeholder,
@@ -115,7 +103,10 @@ internal actual fun NuvioAsyncImage(
     }
 
     AsyncImage(
-        model = requestModel,
+        // Let Coil decode to the actual layout constraints instead of forcing
+        // every small poster into a 1536px texture. Explicit ImageRequest size
+        // options supplied by callers remain untouched.
+        model = model,
         contentDescription = contentDescription,
         modifier = modifier,
         transform = transform,
@@ -127,21 +118,6 @@ internal actual fun NuvioAsyncImage(
         filterQuality = filterQuality ?: FilterQuality.High,
         clipToBounds = clipToBounds,
     )
-}
-
-private fun Any?.withDesktopHighQualitySize(context: PlatformContext): Any? {
-    if (this == null) return null
-
-    return if (this is ImageRequest) {
-        newBuilder()
-            .size(MaxDesktopSourceSizePx)
-            .build()
-    } else {
-        ImageRequest.Builder(context)
-            .data(this)
-            .size(MaxDesktopSourceSizePx)
-            .build()
-    }
 }
 
 private fun Image.toScaledBitmapPainter(desktopImageScaling: NuvioDesktopImageScaling): Painter? {

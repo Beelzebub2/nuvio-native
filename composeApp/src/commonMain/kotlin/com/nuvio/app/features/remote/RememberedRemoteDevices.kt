@@ -15,6 +15,21 @@ internal data class RememberedRemoteDevice(
     val bluetooth: Boolean = false,
 )
 
+/** A saved LAN entry is an explicit reconnect request, not just another discovery scan. */
+internal fun connectRememberedRemoteDevice(transport: DesktopRemoteTransport, saved: RememberedRemoteDevice) {
+    if (saved.bluetooth) {
+        transport.connect(RemoteDesktop(saved.address, 0, saved.name, bluetooth = true))
+    } else {
+        transport.discover(saved.address, connect = true)
+    }
+}
+
+/** Reconnect automatically only when Bluetooth is the most recently used transport. */
+internal fun preferredBluetoothReconnect(
+    remembered: List<RememberedRemoteDevice>,
+    bluetoothSupported: Boolean,
+): RememberedRemoteDevice? = remembered.firstOrNull()?.takeIf { it.bluetooth && bluetoothSupported }
+
 internal expect object RememberedRemoteDeviceStore {
     fun read(account: RemoteAccount): List<RememberedRemoteDevice>
     fun write(account: RemoteAccount, devices: List<RememberedRemoteDevice>)

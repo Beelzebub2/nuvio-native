@@ -609,7 +609,7 @@
     <string name="compose_settings_root_general_section">GENERAL</string>
     <string name="compose_settings_root_integrations_description">Manage available integrations</string>
     <string name="compose_settings_root_notifications_description">Manage episode release alerts and send a test notification.</string>
-    <string name="compose_settings_root_privacy_policy_description">Learn how Nuvio handles your data</string>
+    <string name="compose_settings_root_privacy_policy_description">Learn how Starlit handles your data</string>
     <string name="compose_settings_root_streams_description">Stream result display and badge URL rules.</string>
     <string name="compose_settings_root_switch_profile_description">Change to a different profile.</string>
     <string name="compose_settings_root_switch_profile_title">Switch Profile</string>
@@ -621,6 +621,7 @@
     <string name="settings_advanced_section_startup">STARTUP</string>
     <string name="settings_advanced_section_windows_graphics">WINDOWS GRAPHICS</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTICS</string>
+    <string name="settings_root_privacy_section">PRIVACY &amp; DIAGNOSTICS</string>
     <string name="settings_advanced_usage_analytics">Usage statistics</string>
     <string name="settings_advanced_usage_analytics_subtitle">Optional version, platform and feature counts using a random installation ID. Off until enabled.</string>
     <string name="diagnostics_consent_title">Optional diagnostics</string>
@@ -890,6 +891,7 @@
     <string name="remote_playback_idle_body">Start a video on your PC and its controls show up here.</string>
     <string name="remote_playback_options">Playback options</string>
     <string name="remote_pc_status_connected">Connected</string>
+    <string name="remote_pc_connected_to">Connected to %1$s</string>
     <string name="remote_pc_status_searching">Searching</string>
     <string name="remote_pc_status_connecting">Connecting</string>
     <string name="remote_pc_status_idle">Not connected</string>
@@ -911,7 +913,7 @@
     <string name="remote_pc_troubleshoot_title">Can't find your PC?</string>
     <string name="remote_pc_troubleshoot_open">Starlit is open on the PC and signed in to the same account.</string>
     <string name="remote_pc_troubleshoot_network">Both devices are on the same Wi-Fi or Ethernet network, not a guest network.</string>
-    <string name="remote_pc_troubleshoot_firewall">On the PC, open Settings → Account → Phone remote → Trouble connecting? for network checks and optional private-network firewall permission.</string>
+    <string name="remote_pc_troubleshoot_firewall">On the PC, make sure Windows trusts this network as Private. Then open Settings → Account → Phone remote → Trouble connecting? to check the firewall rules.</string>
     <string name="remote_pc_troubleshoot_fallback">Still nothing? Scan the QR code or enter the PC's address.</string>
     <string name="remote_window_subtitle">Control playback on this PC from Starlit on your Android phone.</string>
     <string name="remote_window_scan_title">Scan with your phone</string>
