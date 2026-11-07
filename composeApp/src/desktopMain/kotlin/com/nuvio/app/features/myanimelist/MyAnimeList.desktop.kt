@@ -170,7 +170,7 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(meta: MetaDetails, 
     })
 }
 
-@Composable private fun MalSetupDialog(connection: MalConnectionState, onDismiss: () -> Unit) {
+@Composable internal fun MalSetupDialog(connection: MalConnectionState, onDismiss: () -> Unit) {
     var clientId by remember { mutableStateOf(connection.clientId) }
     var clientSecret by remember { mutableStateOf("") }
     val uri = LocalUriHandler.current
