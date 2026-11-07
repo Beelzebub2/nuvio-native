@@ -1,0 +1,16 @@
+{
+  "name": "@rrmtools/starlit-auth-login-analytics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "maxmind": "5.0.8",
+    "pg": "8.16.3"
+  }
+}
