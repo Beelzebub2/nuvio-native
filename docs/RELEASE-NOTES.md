@@ -1,3 +1,26 @@
+## Starlit 1.12.3
+
+### Intro skipping for movies and TV series
+
+- **Skip openings beyond anime:** The player can use available intro and recap markers for films and regular TV episodes, not only anime. Existing intro providers remain supported, with TheIntroDB as a fallback when a compatible IMDb ID and reliable timestamps are available.
+- **Recognize more episode sources:** Metadata IMDb IDs and existing TMDB/Simkl lookups help identify shows whose add-on video IDs do not use the IMDb format. Built-in and external playback share the same resolution logic instead of creating separate skip controls.
+- **Avoid unintended skips:** Invalid, incomplete and open-ended ranges are not used for seeking. Existing skip settings still apply, and movie post-credits scenes remain protected. Content without verified timestamps will not gain a guessed skip button.
+
+### Phone-to-PC remote controls
+
+- **No duplicate actions:** The phone controller offers the existing Next episode transport button and a single contextual skip action, with the existing fullscreen-on-PC control. Skip intro uses the established skip-interval command; previously released clients that send the legacy skipIntro command remain supported.
+- **Clearer fullscreen labels:** The phone now explicitly says Fullscreen on PC or Exit fullscreen on PC in English and Portuguese, so it is clear which screen changes.
+
+### Safer Android download cleanup
+
+- **Delete only files owned by the active profile:** Android checks that a completed download belongs to the active profile, was created by the transfer scheduler, and has a matching stored file URI before deleting it. Arbitrary saved paths and imported/stale queue entries cannot authorize deletion.
+- **Protect files on older Android versions:** The checks work from Android API 24, reject symlinks, path traversal, unmanaged files, and files from other profiles. Regression tests cover Android API 24, 34 and 36.
+
+### Validation and limitations
+
+- PRs #146, #154 and #156 passed their respective Android Full/Play Store, iOS Kotlin, desktop or storage, and repository security checks before merging. The release workflow will additionally test the combined desktop build and metadata gateway, package the Windows installer, sign Android APKs, and verify SHA-256 checksums before publication.
+- Intro timing coverage depends on accurate third-party timestamps; no content is skipped automatically when a trustworthy interval is unavailable. Physical-device Android download cleanup tests remain recommended alongside automated coverage.
+
 ## Starlit 1.12.2
 
 ### Account creation and email verification
