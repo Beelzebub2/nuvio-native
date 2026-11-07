@@ -169,7 +169,9 @@ object SkipIntroRepository {
         } else emptyList()
 
         return@coroutineScope mergeByPriority(introDb, animeSkipDeferred.await(), aniSkipDeferred.await()).also {
-            if (it.isNotEmpty()) cache[cacheKey] = it
+            // Preserve the pre-existing MAL/Kitsu negative cache. Without it,
+            // episodes with no skip markers re-query all providers on every open.
+            cache[cacheKey] = it
         }
     }
 
@@ -210,7 +212,9 @@ object SkipIntroRepository {
         } else emptyList()
 
         return@coroutineScope mergeByPriority(introDb, animeSkipDeferred.await(), aniSkipDeferred.await()).also {
-            if (it.isNotEmpty()) cache[cacheKey] = it
+            // Preserve the pre-existing MAL/Kitsu negative cache. Without it,
+            // episodes with no skip markers re-query all providers on every open.
+            cache[cacheKey] = it
         }
     }
 
