@@ -402,13 +402,68 @@ class DesktopDownloadsTest {
         }
         try {
             val download = item(root, url = http.url())
-            val error = assertFails { withTimeout(15_000) { copy(download) } }
+            val io = DownloadIo()
+            val error = try {
+                assertFails {
+                    withTimeout(15_000) {
+                        copyDesktopDownload(download, download.sourceUrl, io, { _, _ -> },
+                            onRetryDelay = { /* avoid elapsed time in a bounded-retry regression test */ })
+                    }
+                }
+            } finally { io.close() }
             // Gives up with its own error after the bounded retries instead of hitting the timeout.
             // The request count is not exact: the JDK client may add or lose one on a cut-off connection.
             assertIs<IOException>(error)
             assertTrue(error.message.orEmpty().startsWith("Transfer interrupted"), error.message)
-            assertTrue(calls.get() in 2..4, "requests: ${calls.get()}")
+            assertTrue(calls.get() in 2..11, "requests: ${calls.get()}")
             assertFalse(downloadPath(download).exists())
+        } finally { http.stop(0); root.deleteRecursively() }
+    }
+
+    @Test fun networkRetryBudgetUsesExponentialBackoffButResetsAfterProgress() {
+        val budget = DesktopDownloadRetryBudget()
+        assertEquals(2_000L, budget.delayAfterFailure(0, networkFailure = true))
+        assertEquals(4_000L, budget.delayAfterFailure(0, networkFailure = true))
+        assertEquals(2_000L, budget.delayAfterFailure(42, networkFailure = true))
+        assertEquals(4_000L, budget.delayAfterFailure(42, networkFailure = true))
+        assertEquals(8_000L, budget.delayAfterFailure(42, networkFailure = true))
+        assertEquals(16_000L, budget.delayAfterFailure(42, networkFailure = true))
+        repeat(5) { assertEquals(30_000L, budget.delayAfterFailure(42, networkFailure = true)) }
+        assertNull(budget.delayAfterFailure(42, networkFailure = true))
+        val disk = DesktopDownloadRetryBudget()
+        assertEquals(2_000L, disk.delayAfterFailure(0, networkFailure = false))
+        assertEquals(4_000L, disk.delayAfterFailure(0, networkFailure = false))
+        assertNull(disk.delayAfterFailure(0, networkFailure = false))
+    }
+
+    @Test fun fourTemporaryHttpFailuresRecoverWithoutPublishingAnIncompleteFile() = runBlocking {
+        val root = Files.createTempDirectory("download-temporary-503").toFile()
+        val calls = AtomicInteger()
+        val http = server { exchange ->
+            if (calls.incrementAndGet() <= 4) {
+                exchange.sendResponseHeaders(503, -1)
+                exchange.close()
+            } else {
+                exchange.responseHeaders.add("Content-Type", "video/mp4")
+                exchange.responseHeaders.add("ETag", "\"fixture\"")
+                exchange.sendResponseHeaders(200, media.size.toLong())
+                exchange.responseBody.use { it.write(media) }
+            }
+        }
+        try {
+            val download = item(root, url = http.url())
+            val io = DownloadIo()
+            val observedDelays = mutableListOf<Long>()
+            val file = try {
+                withTimeout(15_000) {
+                    copyDesktopDownload(download, download.sourceUrl, io, { _, _ -> },
+                        onRetryDelay = { observedDelays += it })
+                }
+            } finally { io.close() }
+            assertEquals(5, calls.get())
+            assertEquals(listOf(2_000L, 4_000L, 8_000L, 16_000L), observedDelays)
+            assertContentEquals(media, file.readBytes())
+            assertEquals(downloadSha256File(file), readDesktopDownloadProof(file)?.completedSha256)
         } finally { http.stop(0); root.deleteRecursively() }
     }
 
