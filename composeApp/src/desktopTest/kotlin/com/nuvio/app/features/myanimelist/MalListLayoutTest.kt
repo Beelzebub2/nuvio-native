@@ -92,7 +92,7 @@ class MalListLayoutTest {
                 }
                 if (width == 820) {
                     // Sorting must not cover the last status category.
-                    onNodeWithText("Plan to Watch", substring = true).assertIsDisplayed()
+                    onNodeWithTag("mal-filter-PLAN_TO_WATCH").assertIsDisplayed()
                     onNodeWithContentDescription("Sort by Last updated").assertIsDisplayed()
                 }
                 val directory = File("build/reports/mal-list").apply { mkdirs() }

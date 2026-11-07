@@ -423,6 +423,7 @@ private fun MalStatusTabs(
                     key = status,
                     label = status?.label ?: "All",
                     count = stats?.count(status)?.takeIf { stats.total > 0 }?.let { "%,d".format(it) },
+                    testTag = "mal-filter-${status?.name ?: "ALL"}",
                 )
             },
             selected = selected,
