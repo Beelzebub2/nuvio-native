@@ -52,6 +52,57 @@ class SkipIntroResolutionTest {
     }
 
     @Test
+    fun choosesMostCompleteSafeAnimeSkipEntryForDuplicateEpisode() {
+        fun episode(vararg markers: AnimeSkipTimestamp) = AnimeSkipEpisode(
+            number = "1042", timestamps = markers.toList(),
+        )
+        val entries = listOf(
+            episode(timestamp(18.0, "Intro")), // No end marker, unsafe to use
+            episode(timestamp(110.0, "Intro"), timestamp(200.0, "Canon")),
+            episode(
+                timestamp(0.0, "Recap"), timestamp(25.0, "Canon"),
+                timestamp(110.0, "Intro"), timestamp(200.0, "Canon"),
+                timestamp(1300.0, "New Credits"), timestamp(1400.0, "Preview"),
+            ),
+        )
+        assertEquals(listOf("recap", "op", "ed"), entries.bestSkipIntervals().map { it.type })
+        assertTrue(listOf(episode(timestamp(18.0, "Intro"))).bestSkipIntervals().isEmpty())
+    }
+
+    @Test
+    fun duplicateEntriesPreferMoreSegmentsWithoutSkippingUnknownEnding() {
+        val first = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(10.0, "Mixed Intro"), timestamp(100.0, "Canon"),
+        ))
+        val complete = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(10.0, "Mixed Intro"), timestamp(100.0, "Canon"),
+            timestamp(600.0, "Mixed Intro"), timestamp(690.0, "Canon"),
+        ))
+        val selected = listOf(first, complete).bestSkipIntervals()
+        assertEquals(2, selected.size)
+        assertEquals(listOf("mixed-op", "mixed-op"), selected.map { it.type })
+        assertTrue(listOf(AnimeSkipEpisode(timestamps = listOf(
+            timestamp(1300.0, "Credits"),
+        ))).bestSkipIntervals().isEmpty())
+    }
+
+    @Test
+    fun completeEpisodeCategoriesOutrankExtraOpenings() {
+        val twoOpenings = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(0.0, "Intro"), timestamp(80.0, "Canon"),
+            timestamp(100.0, "Mixed Intro"), timestamp(180.0, "Canon"),
+        ))
+        val openingAndRecap = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(0.0, "Recap"), timestamp(25.0, "Canon"),
+            timestamp(100.0, "Intro"), timestamp(180.0, "Canon"),
+        ))
+        assertEquals(
+            listOf("recap", "op"),
+            listOf(twoOpenings, openingAndRecap).bestSkipIntervals().map { it.type },
+        )
+    }
+
+    @Test
     fun alignsProviderOpeningsToMatchingMediaChapters() {
         // Representative opening markers and matching media chapter boundaries across seven cases.
         // One fixture has an incomplete marker and a second provider reports shifted boundaries.

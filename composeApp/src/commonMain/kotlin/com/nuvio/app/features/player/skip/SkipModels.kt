@@ -169,7 +169,9 @@ internal fun AnimeSkipEpisode.skipIntervals(): List<SkipInterval> {
         if (end.at <= start.at) return@mapNotNull null
         val type = when (start.type.name.lowercase()) {
             "intro", "new intro" -> "op"
-            "credits" -> "ed"
+            "mixed intro" -> "mixed-op"
+            "credits", "new credits" -> "ed"
+            "mixed credits" -> "mixed-ed"
             "recap" -> "recap"
             else -> return@mapNotNull null
         }
@@ -177,6 +179,27 @@ internal fun AnimeSkipEpisode.skipIntervals(): List<SkipInterval> {
         SkipInterval(start.at, end.at, type, "animeskip")
     }
 }
+
+/** Prefer a complete community submission, never a larger *unsafe* range. */
+internal fun List<AnimeSkipEpisode>.bestSkipIntervals(): List<SkipInterval> =
+    asSequence()
+        .map { it.skipIntervals() }
+        .filter { it.isNotEmpty() }
+        .maxWithOrNull(
+            compareBy<List<SkipInterval>>(
+                { intervals ->
+                    intervals.map { interval ->
+                        when (interval.type) {
+                            "op", "mixed-op" -> "opening"
+                            "ed", "mixed-ed" -> "ending"
+                            else -> interval.type
+                        }
+                    }.toSet().size
+                },
+                { it.size },
+            ),
+        )
+        .orEmpty()
 
 @Serializable
 data class AnimeSkipTimestamp(
