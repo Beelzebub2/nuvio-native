@@ -129,13 +129,11 @@ private class GifCodecHolder(
 // LRU Cache holding raw GIF Codecs (max 15 items in memory, tiny compressed bytes ~10-20MB total)
 private val gifCodecCache = object : LinkedHashMap<String, GifCodecHolder?>(16, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, GifCodecHolder?>?): Boolean {
-        val shouldRemove = size > 15
-        if (shouldRemove) {
-            try {
-                eldest?.value?.codec?.close()
-            } catch (_: Exception) {}
-        }
-        return shouldRemove
+        // An onscreen collection card may still hold the evicted codec and read
+        // its next frame. Closing it here invalidates that live Skia decoder and
+        // can crash the native player UI. The Managed codec is cleaned up only
+        // after its last holder is no longer reachable.
+        return size > 15
     }
 }
 
