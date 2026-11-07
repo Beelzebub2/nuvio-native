@@ -261,7 +261,7 @@ internal fun <T> RemoteTabs(tabs: List<Pair<T, String>>, selected: T, onSelect: 
             Box(
                 Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(48.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (isSelected) tokens.colors.accent.copy(alpha = tokens.opacity.selected) else Color.Transparent)
                     .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(key) }),

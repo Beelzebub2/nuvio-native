@@ -187,6 +187,54 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun searchingForAnotherPcDoesNotReplaceTheActiveConnectionMessage() = runDesktopComposeUiTest(width = 360, height = 802) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.activeDesktop.value = RemoteDesktop("192.168.1.45", REMOTE_LAN_PORT, "Office PC")
+        DesktopRemote.status.value = "Searching nearby Bluetooth PCs…"
+        DesktopRemote.scanning.value = true
+        show(desktopLayout = false)
+
+        onNodeWithText("PCs").performClick()
+        onNodeWithText("Connected to Office PC").assertIsDisplayed()
+        onNodeWithText("Searching nearby Bluetooth PCs…").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("desktop-remote-search-local-network").assertIsNotEnabled()
+        capture("pc-controller-connected-and-searching")
+    }
+
+    @Test
+    fun savedPcEditorStaysWithItsDeviceWhenPairingReordersRows() = runDesktopComposeUiTest(width = 412, height = 900) {
+        val bluetooth = RememberedRemoteDevice("Office PC", "02:12:34:56:78:9A", 0L, bluetooth = true)
+        val lan = RememberedRemoteDevice("Other PC", "192.168.1.45", 0L)
+        DesktopRemote.remembered.value = listOf(bluetooth, lan)
+        DesktopRemote.connected.value = true
+        DesktopRemote.activeDesktop.value = RemoteDesktop(bluetooth.address, 0, bluetooth.name, bluetooth = true)
+        show(desktopLayout = false)
+
+        onNodeWithText("PCs").performClick()
+        onNodeWithContentDescription("More options for Office PC").performScrollTo().performClick()
+        onNodeWithText("Forget").assertIsDisplayed()
+        onNodeWithText("Wake-on-LAN settings").assertDoesNotExist()
+        runOnIdle { DesktopRemote.remembered.value = listOf(lan, bluetooth) }
+        onNodeWithText("Forget").assertIsDisplayed()
+        onNodeWithText("Wake-on-LAN settings").assertDoesNotExist()
+    }
+
+    @Test
+    fun pcsTabKeepsItsScrollPositionWhenSwitchingTabs() = runDesktopComposeUiTest(width = 360, height = 700) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remembered.value = (1..8).map {
+            RememberedRemoteDevice("Office PC $it", "192.168.1.$it", 0L)
+        }
+        show(desktopLayout = false)
+
+        onNodeWithText("PCs").performClick()
+        onNodeWithText("Previously paired PCs".uppercase()).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Remote").performClick()
+        onNodeWithText("PCs").performClick()
+        onNodeWithText("Previously paired PCs".uppercase()).assertIsDisplayed()
+    }
+
+    @Test
     fun fullscreenWorksWhenConnectedPcIsIdle() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.connected.value = true
         DesktopRemote.remotePlayback.value = RemotePlayback(fullscreenSupported = true, fullscreen = true)

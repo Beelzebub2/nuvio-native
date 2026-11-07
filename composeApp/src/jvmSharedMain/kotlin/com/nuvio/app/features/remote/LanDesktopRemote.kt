@@ -376,6 +376,8 @@ internal class LanDesktopRemote(
         }
     }
     override fun send(command: RemoteCommand) {
+        // Commands issued from stale UI must not be buffered and replayed after pairing.
+        if (host || !DesktopRemote.connected.value) return
         if (!commands.trySend(command).isSuccess) DesktopRemote.status.value = "Remote is busy. Please try again."
     }
 
@@ -399,6 +401,10 @@ internal class LanDesktopRemote(
             }
             address
         }
+        if (connect && targetAddress != null && isActiveRemoteDesktop(
+                DesktopRemote.connected.value, DesktopRemote.activeDesktop.value,
+                targetAddress.hostAddress.orEmpty(), bluetooth = false,
+            )) return
         if (DesktopRemote.scanning.value || DesktopRemote.connecting.value) {
             // A general search never interrupts work in progress, but a PC the user
             // picked (a scanned QR code or a typed address) replaces it.

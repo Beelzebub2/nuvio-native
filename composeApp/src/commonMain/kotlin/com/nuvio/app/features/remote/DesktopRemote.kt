@@ -144,6 +144,11 @@ internal object DesktopRemote {
 
     fun forget(address: String) {
         val current = activeAccount ?: return
+        val isCurrentPc = remembered.value.any { device ->
+            device.address == address && isActiveRemoteDesktop(
+                connected.value, activeDesktop.value, device.address, device.bluetooth,
+            )
+        }
         if (remembered.value.any { it.address == address && it.bluetooth }) {
             if (!transport.forgetBluetoothTrust(current, address)) {
                 status.value = "Could not forget the Bluetooth PC securely. Please try again."
@@ -153,6 +158,8 @@ internal object DesktopRemote {
         val next = remembered.value.filterNot { it.address == address }
         RememberedRemoteDeviceStore.write(current, next)
         remembered.value = next
+        // Forgetting a trusted PC must also revoke its *active* remote session.
+        if (isCurrentPc) transport.disconnect()
     }
 
     fun saveWakeAddress(address: String, mac: String): Boolean {
@@ -173,8 +180,8 @@ internal object DesktopRemote {
     fun open() {
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value && !connecting.value) {
-            val lastBluetooth = remembered.value.firstOrNull { it.bluetooth }
-            if (lastBluetooth != null && transport.bluetoothSupported) {
+            val lastBluetooth = preferredBluetoothReconnect(remembered.value, transport.bluetoothSupported)
+            if (lastBluetooth != null) {
                 transport.connect(RemoteDesktop(lastBluetooth.address, 0, lastBluetooth.name, bluetooth = true))
             } else {
                 transport.discover(deepScan = true)
