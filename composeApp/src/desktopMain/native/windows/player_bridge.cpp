@@ -1767,7 +1767,10 @@ private:
             setMpvOptionStringLocked("demuxer-max-bytes", isLoopbackReader ? "512MiB" : "150MiB");
             setMpvOptionStringLocked("demuxer-max-back-bytes", isLoopbackReader ? "256MiB" : "50MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
-            if (isLoopbackReader) setMpvOptionStringLocked("cache-secs", "36000");
+            // Preserve Starlit's prior prefetch time horizon for every source.
+            // The reduced byte caps above already bound memory for regular HTTP;
+            // changing both limits at once could regress playback on shaky links.
+            setMpvOptionStringLocked("cache-secs", "36000");
             if (sourceUrl.rfind("http://127.0.0.1:", 0) == 0 &&
                 sourceUrl.find("/stream?") != std::string::npos) {
                 // TorrServer's HTTP source can pause for new torrent pieces. Wait for a
