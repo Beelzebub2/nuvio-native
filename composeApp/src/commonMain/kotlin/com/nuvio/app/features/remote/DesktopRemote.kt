@@ -159,7 +159,10 @@ internal object DesktopRemote {
         RememberedRemoteDeviceStore.write(current, next)
         remembered.value = next
         // Forgetting a trusted PC must also revoke its *active* remote session.
-        if (isCurrentPc) transport.disconnect()
+        if (isCurrentPc) {
+            transport.disconnect()
+            status.value = "Disconnected. Search the local network to pair again."
+        }
     }
 
     fun saveWakeAddress(address: String, mac: String): Boolean {
