@@ -245,6 +245,7 @@ internal class LanDesktopRemote(
         commands.close()
         commands = Channel(32)
         DesktopRemote.pairing.value = null
+        DesktopRemote.activeDesktop.value = null
         DesktopRemote.connected.value = false
         DesktopRemote.connecting.value = false
         DesktopRemote.remotePlayback.value = RemotePlayback()
@@ -375,6 +376,8 @@ internal class LanDesktopRemote(
         }
     }
     override fun send(command: RemoteCommand) {
+        // Commands issued from stale UI must not be buffered and replayed after pairing.
+        if (host || !DesktopRemote.connected.value) return
         if (!commands.trySend(command).isSuccess) DesktopRemote.status.value = "Remote is busy. Please try again."
     }
 
@@ -398,6 +401,10 @@ internal class LanDesktopRemote(
             }
             address
         }
+        if (connect && targetAddress != null && isActiveRemoteDesktop(
+                DesktopRemote.connected.value, DesktopRemote.activeDesktop.value,
+                targetAddress.hostAddress.orEmpty(), bluetooth = false,
+            )) return
         if (DesktopRemote.scanning.value || DesktopRemote.connecting.value) {
             // A general search never interrupts work in progress, but a PC the user
             // picked (a scanned QR code or a typed address) replaces it.
@@ -687,6 +694,11 @@ internal class LanDesktopRemote(
     override fun connect(desktop: RemoteDesktop) {
         val currentScope = scope ?: return
         val expected = account ?: return
+        // Scanning or tapping the current PC again must not tear down a live secure session.
+        if (isActiveRemoteDesktop(
+                DesktopRemote.connected.value, DesktopRemote.activeDesktop.value,
+                desktop.address, desktop.bluetooth,
+            )) return
         // Android must stop searching before it connects, and a finished search must not hide this attempt.
         cancelSearch()
         if (desktop.bluetooth) {
@@ -861,6 +873,7 @@ internal class LanDesktopRemote(
                 if (sessionEpoch.get() == epoch) {
                     confirmation = null
                     DesktopRemote.pairing.value = null
+                    DesktopRemote.activeDesktop.value = null
                     DesktopRemote.connected.value = false
                     DesktopRemote.connecting.value = false
                     DesktopRemote.pendingHandoff.value = null
@@ -891,6 +904,7 @@ internal class LanDesktopRemote(
         publish(epoch) {
             DesktopRemote.pairing.value = null
             DesktopRemote.connecting.value = false
+            DesktopRemote.activeDesktop.value = if (peerToken == null) selectedDesktop else null
             DesktopRemote.connected.value = true
             DesktopRemote.status.value = "Connected to $peer"
             if (peerToken == null) {

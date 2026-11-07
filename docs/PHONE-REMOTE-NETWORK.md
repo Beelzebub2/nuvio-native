@@ -71,11 +71,44 @@ command/response round trip. They also cover rule inspection, UI recovery paths,
 pairing/security failures, command bounds and QR validation. Windows Settings
 launching was checked against the actual Network & internet page.
 
-During investigation, a physical Android phone and this Windows PC were on the
-same private IPv4 subnet. The phone's TCP probe to a new wildcard-bound Java
-listener timed out. That demonstrates that wildcard binding alone did not make
-that endpoint reachable in this environment; it does not uniquely identify a
-firewall as the cause. No firewall or network profile was changed. The Starlit
-phone app was not installed, so a physical phone-app pairing/command session
-has not been verified. Automated socket tests establish protocol behavior, not
-universal reachability across routers, profiles and security products.
+### Physical OPPO-to-Windows audit, 2026-11-07
+
+- A USB-debugging-authorized OPPO CPH2639 (Android 16) was connected to the
+  same local IPv4 `/24` as the Windows Starlit 1.12.3 desktop. ICMP ping worked
+  in both directions, showing that the endpoints have an IP route.
+- The official signed Starlit 1.12.3 arm64 Android APK was downloaded, verified
+  against its published SHA-256 checksum, installed and opened on the OPPO.
+  The **PC controller** page rendered and the discovery options were accessible.
+- A direct TCP probe from the OPPO to the PC's remote port **47789** timed out.
+  Windows marked its Ethernet connection **Public** while its Starlit inbound
+  TCP/UDP firewall allow rules applied only to **Private/Domain**, making the
+  current firewall profile incompatible with those rules. During later
+  observations the Starlit TCP listener was also absent, so there was no
+  available listener to probe in those moments. A timeout alone cannot
+  distinguish these failure modes.
+- The fresh OPPO installation remained in **guest mode**. The controller
+  correctly explained that both apps must be signed into the same Starlit
+  account/server before secure discovery or pairing. Neither a six-digit-code
+  handshake nor playback/download commands were exercised on the real devices.
+- On Android 16, the system's Bluetooth **Nearby devices** permission prompt
+  appeared when starting Bluetooth discovery. The two requested Bluetooth
+  permissions were granted. Guest mode still prevented an authenticated scan.
+  Expanding the manual IP entry and focusing its text field showed that the
+  on-screen keyboard could obscure the action below it. The controller now
+  applies IME-aware padding and a URI-friendly keyboard configuration; this
+  layout change requires rechecking with a freshly built APK.
+- No account was selected from the phone's Google sign-in chooser. The Windows
+  firewall, network profile, account data and protected Bluetooth keys were
+  not changed as part of this test. Bluetooth pairing was not tested on the
+  physical OPPO; transport/command scenarios are separately covered by
+  automated Kotlin tests.
+
+**End-to-end acceptance still needed:** On a *trusted* home/office network,
+switch Windows Ethernet to **Private** using Windows Settings, not by silently
+opening the Public firewall profile. Sign in to the same Starlit account and
+server on both devices, open the desktop Phone remote window and confirm its
+listener is ready, then retry LAN discovery/direct IP and fresh two-device
+pairing. Verify play/pause, fullscreen, skip intro, next episode, seeking,
+volume, disconnect/reconnect, and that a Bluetooth reconnect only skips a code
+when both sides retain their protected trust keys. Check the Android UI during
+search, pairing, disconnection and returning from the background.

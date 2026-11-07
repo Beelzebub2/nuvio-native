@@ -37,6 +37,7 @@ class RemoteSearchProgressTest {
         DesktopRemote.scanning.value = false
         DesktopRemote.connecting.value = false
         DesktopRemote.connected.value = false
+        DesktopRemote.activeDesktop.value = null
         DesktopRemote.pairing.value = null
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
@@ -48,6 +49,28 @@ class RemoteSearchProgressTest {
             withTimeout(10_000) { while (!condition()) delay(25) }
         } catch (_: TimeoutCancellationException) {
             fail("Timed out waiting until $what. Status: ${DesktopRemote.status.value}")
+        }
+    }
+
+    @Test
+    fun reconnectingToTheCurrentPcDoesNotTearDownItsSession() = runBlocking {
+        val client = FakeBluetoothClient()
+        val phone = LanDesktopRemote(bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined)
+        try {
+            phone.start(account, host = false)
+            DesktopRemote.activeDesktop.value = pc
+            DesktopRemote.connected.value = true
+            DesktopRemote.status.value = "Connected to Desktop-B"
+
+            // The same endpoint can appear with a different display name after rediscovery.
+            phone.connect(pc.copy(name = "Renamed PC"))
+
+            assertTrue(DesktopRemote.connected.value)
+            assertFalse(DesktopRemote.connecting.value)
+            assertEquals(pc, DesktopRemote.activeDesktop.value)
+            assertEquals("Connected to Desktop-B", DesktopRemote.status.value)
+        } finally {
+            phone.stop()
         }
     }
 
