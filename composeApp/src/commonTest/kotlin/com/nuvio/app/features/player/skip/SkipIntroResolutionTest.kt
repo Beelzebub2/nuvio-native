@@ -87,6 +87,22 @@ class SkipIntroResolutionTest {
     }
 
     @Test
+    fun completeEpisodeCategoriesOutrankExtraOpenings() {
+        val twoOpenings = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(0.0, "Intro"), timestamp(80.0, "Canon"),
+            timestamp(100.0, "Mixed Intro"), timestamp(180.0, "Canon"),
+        ))
+        val openingAndRecap = AnimeSkipEpisode(timestamps = listOf(
+            timestamp(0.0, "Recap"), timestamp(25.0, "Canon"),
+            timestamp(100.0, "Intro"), timestamp(180.0, "Canon"),
+        ))
+        assertEquals(
+            listOf("recap", "op"),
+            listOf(twoOpenings, openingAndRecap).bestSkipIntervals().map { it.type },
+        )
+    }
+
+    @Test
     fun alignsProviderOpeningsToMatchingMediaChapters() {
         // Representative opening markers and matching media chapter boundaries across seven cases.
         // One fixture has an incomplete marker and a second provider reports shifted boundaries.

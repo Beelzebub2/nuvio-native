@@ -187,7 +187,15 @@ internal fun List<AnimeSkipEpisode>.bestSkipIntervals(): List<SkipInterval> =
         .filter { it.isNotEmpty() }
         .maxWithOrNull(
             compareBy<List<SkipInterval>>(
-                { intervals -> intervals.map { it.type }.toSet().size },
+                { intervals ->
+                    intervals.map { interval ->
+                        when (interval.type) {
+                            "op", "mixed-op" -> "opening"
+                            "ed", "mixed-ed" -> "ending"
+                            else -> interval.type
+                        }
+                    }.toSet().size
+                },
                 { it.size },
             ),
         )
