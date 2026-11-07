@@ -40,6 +40,8 @@ jobs:
           --tests '*DownloadQuotaLifecycleTest*'
           --tests '*DownloadQueueTest*'
           --tests '*DesktopDownloadsTest*'
+          --tests '*DesktopStorageTest*'
+          --tests '*DesktopStoragePermissionsTest*'
           '-Dorg.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
