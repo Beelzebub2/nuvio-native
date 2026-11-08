@@ -160,6 +160,7 @@ internal class LanDesktopRemote(
     private val discoveryPort: Int = DISCOVERY_PORT,
     private val uiDispatcher: CoroutineDispatcher = Dispatchers.Main,
     private val bluetoothTrustStore: RemoteBluetoothTrustStore? = null,
+    private val lanTrustStore: RemoteLanTrustStore? = null,
     private val openDiscoverySocket: (Int) -> DatagramSocket = ::bindRemoteDiscoverySocket,
 ) : DesktopRemoteTransport {
     override val supported = true
@@ -267,6 +268,15 @@ internal class LanDesktopRemote(
         return runCatching {
             val store = bluetoothTrustStore ?: return false
             store.delete(account, "phone:$validated")
+            true
+        }.getOrDefault(false)
+    }
+
+    override fun forgetLanTrust(account: RemoteAccount, desktopId: String): Boolean {
+        if (!desktopId.matches(Regex("[0-9a-f]{32}"))) return false
+        return runCatching {
+            val store = lanTrustStore ?: return false
+            store.delete(account, "phone:$desktopId")
             true
         }.getOrDefault(false)
     }
@@ -821,8 +831,12 @@ internal class LanDesktopRemote(
                 val channel = pairing.channel
                 currentCoroutineContext().ensureActive()
                 check(sessionEpoch.get() == epoch)
-                val trusted = bluetooth && pairing.supportsTrustedReconnect &&
+                val lanResume = if (!bluetooth && pairing.supportsLanTrustedReconnect)
+                    resumeLanTrust(pairing, expected, serverSide, lanTrustStore)
+                else null
+                val trusted = if (bluetooth) pairing.supportsTrustedReconnect &&
                     resumeBluetoothTrust(pairing, expected, serverSide, bluetoothAddress, bluetoothTrustStore)
+                else lanResume?.trusted == true
                 val approval = CompletableDeferred<Unit>()
                 if (!trusted) {
                     publish(epoch) {
@@ -843,13 +857,16 @@ internal class LanDesktopRemote(
                 )
                 if (serverSide) publish(epoch) {
                     // An authorized session may reconnect immediately after a transient
-                    // Bluetooth drop; the 20-second throttle still covers failed peers.
+                    // transport drop; the 20-second throttle still covers failed peers.
                     lastHostAttemptNanos = 0L
                 }
                 if (bluetooth && pairing.supportsTrustedReconnect && !trusted) {
                     enrollBluetoothTrust(channel, expected, serverSide, bluetoothAddress, bluetoothTrustStore)
                 }
-                pairedLoop(channel, peer, configureTimeout, expected, peerToken, epoch)
+                if (!bluetooth && pairing.supportsLanTrustedReconnect && !trusted) {
+                    enrollLanTrust(channel, expected, serverSide, lanResume?.desktopId, lanTrustStore)
+                }
+                pairedLoop(channel, peer, configureTimeout, expected, peerToken, epoch, lanResume?.desktopId)
             } finally {
                 runCatching { closeTransport() }
             }
@@ -889,6 +906,7 @@ internal class LanDesktopRemote(
         expected: RemoteAccount,
         peerToken: String?,
         epoch: Long,
+        lanDesktopId: String?,
     ) {
         currentCoroutineContext().ensureActive()
         check(sessionEpoch.get() == epoch)
@@ -913,7 +931,9 @@ internal class LanDesktopRemote(
                 // Same-account verification has completed in both cases.
                 selectedDesktop?.let { desktop ->
                     runCatching {
-                        DesktopRemote.pairedWith(expected, desktop, System.currentTimeMillis())
+                        DesktopRemote.pairedWith(
+                            expected, desktop, System.currentTimeMillis(), trustedId = lanDesktopId,
+                        )
                     }
                 }
             }
