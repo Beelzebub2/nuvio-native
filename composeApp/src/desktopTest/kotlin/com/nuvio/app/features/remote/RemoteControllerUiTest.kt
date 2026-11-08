@@ -1,6 +1,7 @@
 package com.nuvio.app.features.remote
 
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import com.nuvio.app.core.ui.NuvioTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,6 +107,35 @@ class RemoteControllerUiTest {
         onNodeWithText("Find your Starlit PC").assertIsDisplayed()
         onNodeWithText("Choose your PC.").assertIsDisplayed()
         onNodeWithTag("desktop-remote-search-local-network").assertIsEnabled()
+    }
+
+    @Test
+    fun remoteVolumeSliderShowsPcVolumeUpToTwoHundredPercent() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(
+            playbackId = "volume-test", volume = 1.5f, volumeMax = REMOTE_MAX_VOLUME_LEVEL,
+        )
+        show(desktopLayout = false)
+        val slider = onNodeWithTag("remote-volume-slider").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("remote-volume-value").assertTextEquals("150%")
+        assertEquals(
+            2f,
+            slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].range.endInclusive,
+        )
+        runOnIdle { DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(volume = 2f) }
+        onNodeWithTag("remote-volume-value").assertTextEquals("200%")
+
+        // Mixed-version pairing remains usable; a legacy PC does not advertise 200% commands.
+        runOnIdle {
+            DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(
+                volume = 0.75f, volumeMax = 1f,
+            )
+        }
+        onNodeWithTag("remote-volume-value").assertTextEquals("75%")
+        assertEquals(
+            1f,
+            slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].range.endInclusive,
+        )
     }
 
     @Test
