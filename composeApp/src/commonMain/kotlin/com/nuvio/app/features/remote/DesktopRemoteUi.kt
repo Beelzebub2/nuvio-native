@@ -40,6 +40,11 @@ internal fun DesktopRemoteDialogs(
     val pendingHandoff by DesktopRemote.pendingHandoff.collectAsState()
     val visible by DesktopRemote.visible.collectAsState()
     val hostReady by DesktopRemote.hostReady.collectAsState()
+    val sourcePickerOpen by DesktopRemote.sourcePickerVisible.collectAsState()
+    val requestedSourceId by DesktopRemote.pendingPhoneSourceRequestId.collectAsState()
+    val remotePlayback by DesktopRemote.remotePlayback.collectAsState()
+    val remoteConnected by DesktopRemote.connected.collectAsState()
+    val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
     var confirmed by remember(pairing) { mutableStateOf(false) }
     val confirm = {
         confirmed = true
@@ -99,5 +104,17 @@ internal fun DesktopRemoteDialogs(
                 onReject = { DesktopRemote.pendingHandoff.value = null },
             )
         }
+    } else if (sourcePickerOpen) {
+        RemoteSourcePickerDialog(
+            requestId = requestedSourceId,
+            state = remotePlayback.sourcePicker,
+            connected = remoteConnected,
+            pcName = activeDesktop?.name.orEmpty(),
+            onDismiss = { DesktopRemote.dismissPhoneSourcePicker() },
+            onOpenController = {
+                DesktopRemote.dismissPhoneSourcePicker()
+                DesktopRemote.open()
+            },
+        )
     }
 }

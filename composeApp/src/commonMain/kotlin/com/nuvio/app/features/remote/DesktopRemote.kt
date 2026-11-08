@@ -18,6 +18,18 @@ internal fun newRemotePlaybackId(): String = Uuid.random().toString()
 @Serializable
 internal data class RemoteChoice(val id: String, val label: String, val selected: Boolean = false)
 
+/** Source descriptions only. Media URLs, headers, torrent hashes and credentials stay on the PC. */
+@Serializable
+internal data class RemoteSourcePicker(
+    val requestId: String = "",
+    val title: String = "",
+    val phase: String = "idle",
+    val sources: List<RemoteChoice> = emptyList(),
+    val message: String = "",
+)
+
+internal const val REMOTE_SOURCE_CAPABILITY = "source-picker-v2"
+
 @Serializable
 internal data class RemotePlayback(
     val playbackId: String = "",
@@ -37,6 +49,8 @@ internal data class RemotePlayback(
     val message: String = "",
     val downloadProfileId: Int? = null,
     val downloads: List<RemoteDownloadStatus> = emptyList(),
+    val capabilities: List<String> = emptyList(),
+    val sourcePicker: RemoteSourcePicker = RemoteSourcePicker(),
 )
 
 @Serializable
@@ -47,6 +61,7 @@ internal data class RemoteCommand(
     val playbackId: String = "",
     val profileId: Int? = null,
     val handoff: RemotePlaybackHandoff? = null,
+    val requestId: String = "",
 )
 
 internal data class RemoteDesktop(
@@ -119,13 +134,20 @@ internal object DesktopRemote {
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
     val visible = MutableStateFlow(false)
     val pendingHandoff = MutableStateFlow<RemotePlaybackHandoff?>(null)
+    val sourcePicker = MutableStateFlow(RemoteSourcePicker())
+    val sourcePickerVisible = MutableStateFlow(false)
+    val pendingPhoneSourceRequestId = MutableStateFlow("")
+    val sourceRequestId = MutableStateFlow("")
+    var sourceRequestPreviousPlaybackId = ""
+    /** Installed only while a desktop stream picker belongs to the active remote request. */
+    var selectRemoteSource: ((String, String?) -> Boolean)? = null
     // Accessed only on the UI dispatcher, including dispatch from the transport.
     var playback = RemotePlayback()
     var dispatch: ((RemoteCommand) -> Unit)? = null
     var fullscreenActions: RemoteFullscreenActions? = null
     private var activeAccount: RemoteAccount? = null
     // Only the active desktop content navigator can accept a pending request.
-    var onAcceptedHandoff: ((RemotePlaybackHandoff) -> Unit)? = null
+    var onAcceptedHandoff: ((RemotePlaybackHandoff, String?) -> Unit)? = null
     var handoffAccount: RemoteAccount? = null
 
     /** Changing the account/server replaces remembered devices, never merges trust domains. */
@@ -200,13 +222,64 @@ internal object DesktopRemote {
                 .joinToString("").trim(),
         )
         if (!safe.isAllowed()) return false
+        if (REMOTE_SOURCE_CAPABILITY !in remotePlayback.value.capabilities) {
+            status.value = "Update Starlit on your PC to choose a source from the phone."
+            return false
+        }
+        val requestId = newRemotePlaybackId()
+        pendingPhoneSourceRequestId.value = requestId
+        sourcePickerVisible.value = true
         transport.send(RemoteCommand(
             type = "handoffRequest",
             playbackId = remotePlayback.value.playbackId,
             profileId = safe.profileId,
             handoff = safe,
+            requestId = requestId,
         ))
         return true
+    }
+
+    /** Enter the source-picker flow only after the encrypted, account-verified session has authorized the command. */
+    fun beginSourceRequest(requestId: String, handoff: RemotePlaybackHandoff): Boolean {
+        if (!isDesktop || !connected.value || onAcceptedHandoff == null ||
+            !isValidRemoteRequestId(requestId)) return false
+        val account = handoffAccount ?: return false
+        if (com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != handoff.profileId ||
+            !handoff.isAllowed() || runCatching { currentRemoteAccessToken(account) }.isFailure) return false
+        sourceRequestId.value = requestId
+        sourceRequestPreviousPlaybackId = playback.playbackId
+        sourcePicker.value = RemoteSourcePicker(requestId, handoff.title, "searching")
+        selectRemoteSource = null
+        onAcceptedHandoff?.invoke(handoff, requestId)
+        return true
+    }
+
+    fun selectPhoneSource(sourceId: String) {
+        val requestId = pendingPhoneSourceRequestId.value
+        val sourceState = remotePlayback.value.sourcePicker
+        if (!connected.value || sourceState.requestId != requestId ||
+            sourceState.phase !in setOf("ready", "searching") ||
+            sourceState.sources.none { it.id == sourceId }) return
+        transport.send(RemoteCommand(
+            type = "handoffSource", requestId = requestId, id = sourceId,
+            playbackId = remotePlayback.value.playbackId,
+            profileId = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId,
+        ))
+    }
+
+    fun dismissPhoneSourcePicker() {
+        val requestId = pendingPhoneSourceRequestId.value
+        val state = remotePlayback.value.sourcePicker
+        if (connected.value && requestId.isNotEmpty() && state.requestId == requestId &&
+            state.phase in setOf("searching", "ready", "empty", "error")) {
+            transport.send(RemoteCommand(
+                type = "handoffCancel", requestId = requestId,
+                playbackId = remotePlayback.value.playbackId,
+                profileId = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId,
+            ))
+        }
+        sourcePickerVisible.value = false
+        pendingPhoneSourceRequestId.value = ""
     }
 
     fun acceptPendingHandoff() {
@@ -217,7 +290,7 @@ internal object DesktopRemote {
             com.nuvio.app.features.profiles.ProfileRepository.activeProfileId != request.profileId ||
             !request.isAllowed()) return
         if (runCatching { currentRemoteAccessToken(account) }.isFailure) return
-        onAcceptedHandoff?.invoke(request)
+        onAcceptedHandoff?.invoke(request, null)
     }
 
     fun command(type: String, value: Double = 0.0, id: String = "") {

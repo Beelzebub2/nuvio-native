@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -22,6 +23,7 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
+import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.toastMessage
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.p2p.P2pConsentDialog
@@ -32,6 +34,12 @@ import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.resolveContentLanguage
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
+import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.RemoteChoice
+import com.nuvio.app.features.remote.RemoteSourcePicker
+import com.nuvio.app.features.remote.isEligibleForRemotePlayback
+import com.nuvio.app.features.remote.newRemotePlaybackId
+import com.nuvio.app.features.remote.remoteSourceLabel
 import com.nuvio.app.features.streams.StreamBehaviorHints
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamLaunchStore
@@ -526,6 +534,14 @@ internal fun StreamDestination(
         return
     }
 
+    fun reportRemoteSourceFailure(message: String) {
+        val requestId = launch.remoteSourceRequestId ?: return
+        val current = DesktopRemote.sourcePicker.value
+        if (DesktopRemote.sourceRequestId.value == requestId && current.requestId == requestId) {
+            DesktopRemote.sourcePicker.value = current.copy(phase = "ready", message = message)
+        }
+    }
+
     fun openSelectedStream(
         stream: StreamItem,
         resolvedResumePositionMs: Long?,
@@ -543,10 +559,12 @@ internal fun StreamDestination(
                     ) }
                 } catch (e: TimeoutCancellationException) {
                     NuvioToastController.show("Source resolver timed out. Choose another source or retry.")
+                    reportRemoteSourceFailure("Source resolver timed out. Choose another source.")
                     return@launch
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) {
                     NuvioToastController.show("Couldn't resolve this source. Choose another source or retry.")
+                    reportRemoteSourceFailure("This source couldn't be resolved. Try another.")
                     return@launch
                 } finally { resolvingDebridStream = false }
                 when (resolved) {
@@ -559,6 +577,7 @@ internal fun StreamDestination(
                     )
                     else -> {
                         resolved.toastMessage()?.let { NuvioToastController.show(it) }
+                        reportRemoteSourceFailure("This source couldn't be resolved. Try another.")
                         if (resolved == DirectDebridPlayableResult.Stale) {
                             StreamsRepository.reload(
                                 type = launch.type,
@@ -592,7 +611,10 @@ internal fun StreamDestination(
             }
             return
         }
-        val sourceUrl = stream.playableDirectUrl ?: return
+        val sourceUrl = stream.playableDirectUrl ?: run {
+            reportRemoteSourceFailure("Source is unavailable. Choose another.")
+            return
+        }
         if (playerSettings.streamReuseLastLinkEnabled) {
             val cacheKey = StreamLinkCacheRepository.contentKey(
                 type = launch.type,
@@ -659,6 +681,75 @@ internal fun StreamDestination(
         navController.navigate(
             PlayerRoute(launchId = launchId, title = playerLaunch.title)
         )
+    }
+
+    // Use the very same desktop StreamsRepository and openSelectedStream path as
+    // ordinary local selection. The phone receives only short opaque handles
+    // and sanitized labels; no media URL, torrent or provider credentials.
+    val remoteRequestId = launch.remoteSourceRequestId
+    val handles = remember(remoteRequestId) { mutableMapOf<StreamItem, String>() }
+    val eligibleRemoteStreams = if (remoteRequestId != null &&
+        streamsUiState.requestToken == expectedStreamsRequestToken) {
+        streamsUiState.groups.flatMap { it.streams }
+            .filter {
+                it.isEligibleForRemotePlayback(
+                    p2pEnabled = p2pEnabled && P2pSettingsRepository.isVisible,
+                    debridEnabled = DebridSettingsRepository.snapshot().canResolvePlayableLinks,
+                )
+            }
+            .distinct()
+            .take(36)
+    } else emptyList()
+    val remoteChoices = eligibleRemoteStreams.map { source ->
+        RemoteChoice(handles.getOrPut(source) { newRemotePlaybackId() }, source.remoteSourceLabel())
+    }
+    SideEffect {
+        if (remoteRequestId != null && DesktopRemote.sourceRequestId.value == remoteRequestId) {
+            DesktopRemote.selectRemoteSource = { requestId, handle ->
+                if (requestId != remoteRequestId || navController.currentRoute != route) false
+                else if (handle == null) {
+                    onBack()
+                    true
+                } else {
+                    val current = DesktopRemote.sourcePicker.value
+                    val stream = eligibleRemoteStreams.firstOrNull { handles[it] == handle }
+                    if (current.requestId != requestId || current.sources.none { it.id == handle } ||
+                        current.phase !in setOf("ready", "searching") || stream == null) false
+                    else {
+                        DesktopRemote.sourcePicker.value = current.copy(
+                            phase = "preparing", message = "Opening selected source on the PC.",
+                        )
+                        openSelectedStream(stream, launch.resumePositionMs, launch.resumeProgressFraction, false, false)
+                        true
+                    }
+                }
+            }
+            val current = DesktopRemote.sourcePicker.value
+            if (current.requestId == remoteRequestId &&
+                current.phase in setOf("searching", "ready", "empty")) {
+                val searching = streamsUiState.requestToken != expectedStreamsRequestToken ||
+                    streamsUiState.isAnyLoading
+                val phase = when {
+                    remoteChoices.isNotEmpty() -> "ready"
+                    searching -> "searching"
+                    else -> "empty"
+                }
+                val message = when {
+                    remoteChoices.isNotEmpty() && searching -> "More sources may still appear."
+                    remoteChoices.isEmpty() && !searching -> "No playable PC sources found. Check your PC's add-ons and P2P settings."
+                    else -> ""
+                }
+                val updated = RemoteSourcePicker(remoteRequestId, launch.title, phase, remoteChoices, message)
+                if (updated != current) DesktopRemote.sourcePicker.value = updated
+            }
+        }
+    }
+    DisposableEffect(route, remoteRequestId) {
+        onDispose {
+            if (remoteRequestId != null && DesktopRemote.sourceRequestId.value == remoteRequestId) {
+                DesktopRemote.selectRemoteSource = null
+            }
+        }
     }
 
     LaunchedEffect(reuseNavigated) {

@@ -18,6 +18,10 @@ internal fun RemotePlayback.toRemoteWireJson(): String {
             subtitles = snapshot.subtitles.take(snapshot.subtitles.size / 2),
             sources = snapshot.sources.take(snapshot.sources.size / 2),
             downloads = snapshot.downloads.take(snapshot.downloads.size / 2),
+            sourcePicker = snapshot.sourcePicker.copy(
+                sources = snapshot.sourcePicker.sources.take(snapshot.sourcePicker.sources.size / 2),
+                message = snapshot.sourcePicker.message.take(160),
+            ),
             message = "Some choices are hidden because this list is very large. Use the desktop for the complete list.",
         )
     }

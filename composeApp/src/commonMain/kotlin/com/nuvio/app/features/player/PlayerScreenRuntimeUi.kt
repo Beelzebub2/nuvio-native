@@ -823,7 +823,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                         resumePositionMs = playbackSnapshot.positionMs.coerceIn(0L, 43_200_000L),
                     )
                     val sent = DesktopRemote.requestHandoff(request)
-                    NuvioToastController.show(if (sent) handoffSentText else handoffUnavailableText)
+                    if (!sent) NuvioToastController.show(DesktopRemote.status.value)
                 }
             } else null,
             onDiagnosticsClick = { showPlaybackDiagnostics = true },
@@ -939,7 +939,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         onDispose {
             DesktopRemote.dispatch = null
             DesktopRemote.playback = RemotePlayback()
-            DesktopRemote.transport.disconnect()
+            // Closing/replacing the player must not unpair the phone remote.
         }
     }
     val identity = remember(activePlaybackKey) { newRemotePlaybackId() }

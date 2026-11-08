@@ -692,7 +692,7 @@
     <string name="remote_pc_save_mac">Salvar endereço de ativação</string>
     <string name="remote_pc_invalid_mac">Informe um endereço MAC Ethernet válido para este PC salvo.</string>
     <string name="remote_verify_title">Verificar conexão remota</string>
-    <string name="remote_verify_prompt">Confirme apenas se este código for igual nos dois dispositivos.</string>
+    <string name="remote_verify_prompt">Confirme apenas se o código corresponder nos dois dispositivos. Um celular pareado pode iniciar e controlar a reprodução no PC sem pedir autorização a cada título.</string>
     <string name="remote_verify_waiting">Aguardando o outro dispositivo e a verificação da conta…</string>
     <string name="remote_verify_peer">Conexão de %1$s. Os códigos mudam a cada conexão.</string>
     <string name="remote_verify_confirm">Os códigos são iguais</string>
@@ -740,6 +740,15 @@
     <string name="remote_playback_subtitles">Legendas</string>
     <string name="remote_playback_find_subtitles">Buscar legendas nos addons</string>
     <string name="remote_playback_sources">Fontes do episódio</string>
+    <string name="remote_source_picker_title">Escolher fonte para o PC</string>
+    <string name="remote_source_picker_device">Reproduzir em %1$s</string>
+    <string name="remote_source_picker_searching">Buscando fontes no PC…</string>
+    <string name="remote_source_picker_preparing">Abrindo a fonte escolhida no PC…</string>
+    <string name="remote_source_picker_playing">O player do PC está pronto. Você pode controlá-lo pelo celular.</string>
+    <string name="remote_source_picker_disconnected">O PC desconectou. Conecte novamente para tentar outra vez.</string>
+    <string name="remote_source_picker_empty">Nenhuma fonte reproduzível encontrada no PC. Verifique os add-ons e as configurações P2P.</string>
+    <string name="remote_source_picker_error">Não foi possível carregar as fontes. Tente de novo na página do conteúdo.</string>
+    <string name="remote_source_picker_controller">Abrir controle do PC</string>
     <string name="settings_account">Conta</string>
     <string name="settings_account_delete_account">Excluir Conta</string>
     <string name="settings_account_delete_account_description">Isso excluirá permanentemente sua conta e todos os dados associados.</string>

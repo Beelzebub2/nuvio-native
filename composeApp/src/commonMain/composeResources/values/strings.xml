@@ -862,7 +862,7 @@
     <string name="remote_pc_save_mac">Save wake address</string>
     <string name="remote_pc_invalid_mac">Enter a valid unicast Ethernet MAC address for this saved PC.</string>
     <string name="remote_verify_title">Verify remote connection</string>
-    <string name="remote_verify_prompt">Confirm only if this code matches on both devices.</string>
+    <string name="remote_verify_prompt">Confirm only if this code matches on both devices. A paired phone can start and control playback on your PC without asking again for each title.</string>
     <string name="remote_verify_waiting">Waiting for the other device and account verification…</string>
     <string name="remote_verify_peer">Connection from %1$s. Codes change on every connection.</string>
     <string name="remote_verify_confirm">Codes match</string>
@@ -886,6 +886,15 @@
     <string name="remote_playback_subtitles">Subtitles</string>
     <string name="remote_playback_find_subtitles">Find add-on subtitles</string>
     <string name="remote_playback_sources">Episode sources</string>
+    <string name="remote_source_picker_title">Choose a source for PC</string>
+    <string name="remote_source_picker_device">Playing on %1$s</string>
+    <string name="remote_source_picker_searching">Searching sources on the PC…</string>
+    <string name="remote_source_picker_preparing">Opening your source on the PC…</string>
+    <string name="remote_source_picker_playing">The PC player is ready. Use your phone to control it.</string>
+    <string name="remote_source_picker_disconnected">The PC disconnected. Reconnect to try again.</string>
+    <string name="remote_source_picker_empty">No playable sources found on this PC. Check its add-ons and P2P settings.</string>
+    <string name="remote_source_picker_error">Could not load sources. Try again from the content page.</string>
+    <string name="remote_source_picker_controller">Open PC controller</string>
     <string name="remote_playback_now_playing">Now playing on your PC</string>
     <string name="remote_playback_idle_title">Nothing playing yet</string>
     <string name="remote_playback_idle_body">Start a video on your PC and its controls show up here.</string>
