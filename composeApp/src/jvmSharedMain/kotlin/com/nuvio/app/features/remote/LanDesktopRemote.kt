@@ -1031,6 +1031,9 @@ internal class LanDesktopRemote(
                                 val accepted = DesktopRemote.selectRemoteSource?.invoke(command.requestId, command.id) == true
                                 if (accepted) {
                                     sourceRequestStartedAtNanos.set(System.nanoTime())
+                                    // The phone explicitly chose a validated PC-side source.
+                                    // Wake its timed-out monitor, not on passive polling.
+                                    runCatching { connectionLifetime.playbackRequested() }
                                 } else {
                                     DesktopRemote.sourcePicker.value = state.copy(
                                         phase = "error", message = "This source is no longer available. Search again.",
@@ -1057,7 +1060,13 @@ internal class LanDesktopRemote(
                         }
                     } else if (command.type != "state" &&
                         command.playbackId == DesktopRemote.playback.playbackId && command.value.isFinite()) {
-                        DesktopRemote.dispatch?.invoke(command)
+                        DesktopRemote.dispatch?.let { dispatch ->
+                            val wakeDisplay = command.requestsDisplayWakeForPlayback(
+                                DesktopRemote.playback, ProfileRepository.activeProfileId,
+                            )
+                            dispatch(command)
+                            if (wakeDisplay) runCatching { connectionLifetime.playbackRequested() }
+                        }
                     }
                     val profileId = ProfileRepository.activeProfileId
                     val picker = DesktopRemote.sourcePicker.value

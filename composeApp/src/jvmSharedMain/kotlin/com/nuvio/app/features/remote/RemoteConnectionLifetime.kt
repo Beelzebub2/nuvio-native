@@ -12,6 +12,8 @@ internal interface RemoteConnectionLifetime {
     fun connecting() {}
     fun authenticated(host: Boolean) {}
     fun disconnected() {}
+    /** Only after authenticated, profile-bound playback actions on the PC. */
+    fun playbackRequested() {}
 }
 
 internal object NoopRemoteConnectionLifetime : RemoteConnectionLifetime
