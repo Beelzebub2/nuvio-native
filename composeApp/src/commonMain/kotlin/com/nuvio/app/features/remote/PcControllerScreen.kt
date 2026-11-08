@@ -66,6 +66,9 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.downloads.DownloadStatus
 import com.nuvio.app.features.downloads.formatDownloadBytes
 import com.nuvio.app.features.profiles.ProfileRepository
+import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -643,8 +646,32 @@ private fun TransportButton(icon: ImageVector, description: String, enabled: Boo
 @Composable
 private fun VolumeRow(playback: RemotePlayback) {
     val tokens = MaterialTheme.nuvio
-    var volume by remember { mutableStateOf<Float?>(null) }
-    val shownVolume = volume ?: playback.volume.coerceIn(0f, 1f)
+    val maxVolume = playback.effectiveVolumeMax()
+    val pcVolume = playback.volume.takeIf { it.isFinite() }?.coerceIn(0f, REMOTE_MAX_VOLUME_LEVEL) ?: 1f
+    var draggedVolume by remember(playback.playbackId) { mutableStateOf<Float?>(null) }
+    var awaitingVolume by remember(playback.playbackId) { mutableStateOf<Float?>(null) }
+
+    // Keep the thumb at the requested level until the PC has actually acknowledged it.
+    // Otherwise the previous 300-ms snapshot makes it jump backwards on finger release.
+    LaunchedEffect(pcVolume, awaitingVolume) {
+        val requested = awaitingVolume ?: return@LaunchedEffect
+        if (abs(pcVolume - requested) <= 0.01f) awaitingVolume = null
+    }
+    LaunchedEffect(awaitingVolume) {
+        if (awaitingVolume != null) {
+            delay(2_500)
+            // Recover if the command was rejected or the remote connection stalled.
+            awaitingVolume = null
+        }
+    }
+    // Preview a stationary drag without flooding the encrypted command queue.
+    // The final exact value is always sent immediately on release.
+    LaunchedEffect(draggedVolume) {
+        val preview = draggedVolume ?: return@LaunchedEffect
+        delay(350)
+        DesktopRemote.command("volume", preview.toDouble())
+    }
+    val shownVolume = draggedVolume ?: awaitingVolume ?: pcVolume
     Row(
         Modifier
             .fillMaxWidth()
@@ -654,7 +681,11 @@ private fun VolumeRow(playback: RemotePlayback) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        IconButton(onClick = { DesktopRemote.command("mute") }) {
+        IconButton(onClick = {
+            draggedVolume = null
+            awaitingVolume = null
+            DesktopRemote.command("mute")
+        }) {
             Icon(
                 if (shownVolume <= 0f) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
                 contentDescription = stringResource(Res.string.remote_playback_mute),
@@ -662,14 +693,26 @@ private fun VolumeRow(playback: RemotePlayback) {
             )
         }
         Slider(
-            value = shownVolume,
-            onValueChange = { volume = it },
-            onValueChangeFinished = { volume?.let { DesktopRemote.command("volume", it.toDouble()) }; volume = null },
+            value = shownVolume.coerceIn(0f, maxVolume),
+            valueRange = 0f..maxVolume,
+            onValueChange = { draggedVolume = it.coerceIn(0f, maxVolume) },
+            onValueChangeFinished = {
+                draggedVolume?.let { requested ->
+                    awaitingVolume = requested
+                    DesktopRemote.command("volume", requested.toDouble())
+                }
+                draggedVolume = null
+            },
             colors = remoteSliderColors(),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).testTag("remote-volume-slider"),
         )
-        Text("${(shownVolume * 100).toInt()}%", style = MaterialTheme.typography.labelMedium, color = tokens.colors.textMuted,
-            modifier = Modifier.widthIn(min = 44.dp).padding(end = 10.dp), textAlign = TextAlign.End)
+        Text(
+            "${(shownVolume * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = tokens.colors.textMuted,
+            modifier = Modifier.widthIn(min = 44.dp).padding(end = 10.dp).testTag("remote-volume-value"),
+            textAlign = TextAlign.End,
+        )
     }
 }
 

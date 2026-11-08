@@ -27,6 +27,7 @@ import com.nuvio.app.features.remote.RemotePlayback
 import com.nuvio.app.features.remote.RemotePlaybackHandoff
 import com.nuvio.app.features.remote.newRemotePlaybackId
 import com.nuvio.app.features.remote.isAllowedFor
+import com.nuvio.app.features.remote.REMOTE_MAX_VOLUME_LEVEL
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -953,6 +954,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         position = state.positionMs,
         duration = state.durationMs,
         volume = playerController?.getRemoteVolume() ?: 1f,
+        volumeMax = REMOTE_MAX_VOLUME_LEVEL,
         skip = state.skipPromptVisible,
         skipIntro = state.skipPromptVisible &&
             com.nuvio.app.features.player.skip.AutoSkipSegmentType.fromSkipIntervalType(
@@ -987,7 +989,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                     scheduleProgressSyncAfterSeek()
                 }
                 "seekBy" -> seekBy(command.value.toLong().coerceIn(-60_000, 60_000))
-                "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, 1f))
+                "volume" -> controller.setRemoteVolume(command.value.toFloat().coerceIn(0f, REMOTE_MAX_VOLUME_LEVEL))
                 "mute" -> controller.setMuted(controller.getRemoteVolume() > 0f)
                 // Both names share one player action; skipIntro is a legacy wire alias only.
                 "skipInterval", "skipIntro" -> handlePlayerControlsEvent("skipInterval", 0.0)
@@ -1009,6 +1011,11 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                 "source" -> episodeSources.firstOrNull { sourceId(it) == command.id }?.let {
                     handlePlayerControlsEvent("selectEpisodeStream", it.index.toDouble())
                 }
+            }
+            // The encrypted remote response is assembled immediately after dispatch, before
+            // the next Compose frame; echo the *applied* PC level, not the prior snapshot.
+            if (command.type == "volume" || command.type == "mute") {
+                DesktopRemote.playback = DesktopRemote.playback.copy(volume = controller.getRemoteVolume())
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.nuvio.app.features.remote
 
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -19,6 +20,20 @@ class RemotePlaybackHandoffTest {
         episode = 2,
         resumePositionMs = 120_000,
     )
+
+    @Test
+    fun volumeBoostNegotiationIsBackwardCompatibleWithOldPcSnapshots() {
+        // A v1.14.0 desktop has no volumeMax field, so the phone must send at most 100%.
+        val oldPc = Json.decodeFromString<RemotePlayback>("""{"playbackId":"legacy","volume":0.7}""")
+        assertEquals(1f, oldPc.effectiveVolumeMax())
+
+        val modernPc = oldPc.copy(volumeMax = REMOTE_MAX_VOLUME_LEVEL, volume = 1.75f)
+        val encoded = Json.encodeToString(modernPc)
+        assertTrue(encoded.contains("\"volumeMax\""))
+        val decoded = Json.decodeFromString<RemotePlayback>(encoded)
+        assertEquals(2f, decoded.effectiveVolumeMax())
+        assertEquals(1.75f, decoded.volume)
+    }
 
     @Test
     fun metadataOnlyRequestContainsNoRemoteMediaUrlOrCredential() {

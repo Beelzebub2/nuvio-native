@@ -29,6 +29,8 @@ internal data class RemoteSourcePicker(
 )
 
 internal const val REMOTE_SOURCE_CAPABILITY = "source-picker-v2"
+/** Desktop player volume is normalized to 0..2 (0..200%). Old PCs advertise 1. */
+internal const val REMOTE_MAX_VOLUME_LEVEL = 2f
 
 @Serializable
 internal data class RemotePlayback(
@@ -38,6 +40,8 @@ internal data class RemotePlayback(
     val position: Long = 0,
     val duration: Long = 0,
     val volume: Float = 1f,
+    /** Defaults to 100% so a newer phone never sends unsupported boost commands to an older PC. */
+    val volumeMax: Float = 1f,
     val skip: Boolean = false,
     val skipIntro: Boolean = false,
     val nextEpisodeAvailable: Boolean = false,
@@ -52,6 +56,9 @@ internal data class RemotePlayback(
     val capabilities: List<String> = emptyList(),
     val sourcePicker: RemoteSourcePicker = RemoteSourcePicker(),
 )
+
+internal fun RemotePlayback.effectiveVolumeMax(): Float =
+    volumeMax.takeIf { it.isFinite() }?.coerceIn(1f, REMOTE_MAX_VOLUME_LEVEL) ?: 1f
 
 @Serializable
 internal data class RemoteCommand(
