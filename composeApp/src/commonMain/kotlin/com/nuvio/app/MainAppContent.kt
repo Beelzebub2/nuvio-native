@@ -1008,6 +1008,7 @@ internal fun MainAppContent(
             resumeProgressFraction: Float?,
             manualSelection: Boolean,
             startFromBeginning: Boolean,
+            remoteSourceRequestId: String? = null,
         ) {
             val targetResumePositionMs = if (startFromBeginning) 0L else (resumePositionMs ?: 0L)
             val targetResumeProgressFraction = if (startFromBeginning) null else resumeProgressFraction
@@ -1059,6 +1060,11 @@ internal fun MainAppContent(
 
             if (!PlaybackAvailability.current().canStream(type, videoId)) {
                 NuvioToastController.show(playbackUnavailableMessage)
+                if (remoteSourceRequestId != null) {
+                    DesktopRemote.sourcePicker.value = DesktopRemote.sourcePicker.value.copy(
+                        phase = "error", message = "This title cannot be streamed on the PC.",
+                    )
+                }
                 return
             }
 
@@ -1082,6 +1088,7 @@ internal fun MainAppContent(
                     resumeProgressFraction = targetResumeProgressFraction,
                     manualSelection = manualSelection,
                     startFromBeginning = startFromBeginning,
+                    remoteSourceRequestId = remoteSourceRequestId,
                 ),
             )
             navController.navigate(
@@ -1135,30 +1142,39 @@ internal fun MainAppContent(
                 )
             }
 
-        // The desktop never opens a phone-supplied URL. After the PC user
-        // explicitly accepts a metadata-only handoff, open the normal desktop
-        // source picker, including existing addon/rights/P2P-consent checks.
-        val latestOnPlayManually by rememberUpdatedState(onPlayManually)
+        // Both legacy approved and modern paired requests enter the PC's existing
+        // source pipeline. The modern picker is driven from the phone, never a URL.
+        val latestRemoteLaunch by rememberUpdatedState(
+            newValue = { handoff: com.nuvio.app.features.remote.RemotePlaybackHandoff, requestId: String? ->
+                launchPlaybackWithDownloadPreference(
+                    type = handoff.contentType,
+                    videoId = handoff.videoId,
+                    parentMetaId = handoff.parentMetaId,
+                    parentMetaType = handoff.contentType,
+                    title = handoff.title,
+                    logo = null, poster = null, background = null,
+                    seasonNumber = handoff.season,
+                    episodeNumber = handoff.episode,
+                    episodeTitle = null, episodeThumbnail = null, pauseDescription = null,
+                    resumePositionMs = handoff.resumePositionMs,
+                    resumeProgressFraction = null,
+                    manualSelection = true,
+                    startFromBeginning = false,
+                    remoteSourceRequestId = requestId,
+                )
+            },
+        )
         DisposableEffect(isDesktop, activePlaybackProfileId) {
             if (isDesktop) {
-                DesktopRemote.onAcceptedHandoff = { handoff ->
+                DesktopRemote.onAcceptedHandoff = { handoff, requestId ->
                     if (handoff.profileId == ProfileRepository.activeProfileId &&
                         handoff.profileId == activePlaybackProfileId) {
-                        latestOnPlayManually(
-                            handoff.contentType,
-                            handoff.videoId,
-                            handoff.parentMetaId,
-                            handoff.contentType,
-                            handoff.title,
-                            null,
-                            null,
-                            null,
-                            handoff.season,
-                            handoff.episode,
-                            null,
-                            null,
-                            null,
-                            handoff.resumePositionMs,
+                        latestRemoteLaunch(handoff, requestId)
+                    } else if (requestId != null &&
+                        DesktopRemote.sourcePicker.value.requestId == requestId) {
+                        DesktopRemote.sourcePicker.value = DesktopRemote.sourcePicker.value.copy(
+                            phase = "error",
+                            message = "Switch to the same active profile on both devices before playing.",
                         )
                     }
                 }

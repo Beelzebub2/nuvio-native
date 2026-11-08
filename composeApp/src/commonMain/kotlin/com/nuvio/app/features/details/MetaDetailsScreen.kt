@@ -1573,9 +1573,7 @@ fun MetaDetailsScreen(
                                                 ),
                                                 onClick = {
                                                     val sent = DesktopRemote.requestHandoff(primaryHandoff)
-                                                    NuvioToastController.show(
-                                                        if (sent) pcHandoffSent else pcHandoffUnavailable,
-                                                    )
+                                                    if (!sent) NuvioToastController.show(DesktopRemote.status.value)
                                                 },
                                             ) {
                                                 Text(stringResource(Res.string.remote_handoff_send))
@@ -2272,9 +2270,7 @@ fun MetaDetailsScreen(
                                         ?.lastPositionMs?.coerceIn(0L, 43_200_000L) ?: 0L,
                                 )
                                 val sent = DesktopRemote.requestHandoff(request)
-                                NuvioToastController.show(
-                                    if (sent) pcHandoffSent else pcHandoffUnavailable,
-                                )
+                                if (!sent) NuvioToastController.show(DesktopRemote.status.value)
                             },
                         ))
                     }

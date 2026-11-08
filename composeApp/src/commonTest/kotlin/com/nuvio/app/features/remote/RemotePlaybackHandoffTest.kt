@@ -64,4 +64,56 @@ class RemotePlaybackHandoffTest {
         assertFalse(valid.copy(season = -1).isAllowed())
         assertFalse(valid.copy(episode = 10000).isAllowed())
     }
+
+    @Test
+    fun newSourceCommandsMustMatchExactRequestPlaybackProfileAndAdvertisedHandle() {
+        val requestId = "4d6f2801-16ee-493c-bcc9-0bfa5efad34b"
+        val available = RemoteSourcePicker(
+            requestId = requestId,
+            phase = "ready",
+            sources = listOf(RemoteChoice("opaque-123", "1080p · Provider")),
+        )
+        val command = RemoteCommand(
+            type = "handoffSource",
+            requestId = requestId,
+            id = "opaque-123",
+            playbackId = "player-a",
+            profileId = 2,
+        )
+        assertTrue(command.isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(id = "https://example.org/video").isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(requestId = "4d6f2801-16ee-493c-bcc9-000000000000").isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(profileId = 1).isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.isAllowedSourceAction(2, "player-b", available))
+        // Source picker navigation can dispose the previous player before the
+        // phone receives a fresh playback generation. Its own request remains valid.
+        assertTrue(command.isAllowedSourceAction(2, "player-b", available, requestPlaybackId = "player-a"))
+        assertFalse(command.copy(playbackId = "forged").isAllowedSourceAction(
+            2, "player-b", available, requestPlaybackId = "player-a",
+        ))
+        assertFalse(command.isAllowedSourceAction(2, "player-a", available.copy(phase = "preparing")))
+        assertFalse(command.copy(handoff = handoff()).isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(value = Double.NaN).isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(type = "handoffCancel", id = "opaque-123").isAllowedSourceAction(2, "player-a", available))
+        assertTrue(command.copy(type = "handoffCancel", id = "").isAllowedSourceAction(2, "player-a", available))
+        assertFalse(command.copy(type = "handoffRequest", requestId = "not-uuid").acceptableHandoff(2, "player-a") != null)
+    }
+
+    @Test
+    fun sourcePickerWireIsMetadataOnlyAndOldSnapshotsDeserializeSafely() {
+        val response = RemotePlayback(
+            capabilities = listOf(REMOTE_SOURCE_CAPABILITY),
+            sourcePicker = RemoteSourcePicker(
+                "4d6f2801-16ee-493c-bcc9-0bfa5efad34b", "A Movie",
+                "ready", listOf(RemoteChoice("opaque-123", "1080p · Provider")),
+            ),
+        )
+        val json = Json.encodeToString(response)
+        assertFalse(json.contains("sourceUrl"))
+        assertFalse(json.contains("Authorization"))
+        assertFalse(json.contains("magnet:"))
+        val previousPeer = Json.decodeFromString<RemotePlayback>("""{"playbackId":"old","playing":false}""")
+        assertTrue(previousPeer.capabilities.isEmpty())
+        assertEquals("idle", previousPeer.sourcePicker.phase)
+    }
 }

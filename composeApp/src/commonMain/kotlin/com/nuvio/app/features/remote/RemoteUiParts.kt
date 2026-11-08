@@ -40,6 +40,7 @@ import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.nuvio
+import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -439,6 +440,96 @@ internal fun RemoteChoiceList(title: String, items: List<RemoteChoice>, command:
         }
         DialogButtons {
             DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
+        }
+    }
+}
+
+/** Initial source selection happens on the phone; the PC keeps the actual stream objects. */
+@Composable
+internal fun RemoteSourcePickerDialog(
+    requestId: String,
+    state: RemoteSourcePicker,
+    connected: Boolean,
+    pcName: String,
+    onDismiss: () -> Unit,
+    onOpenController: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    val matches = requestId.isNotEmpty() && requestId == state.requestId
+    var noResponse by remember(requestId) { mutableStateOf(false) }
+    LaunchedEffect(requestId, matches, connected) {
+        if (matches) {
+            noResponse = false
+        } else if (connected && requestId.isNotEmpty()) {
+            delay(20_000L)
+            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.requestId != requestId
+        }
+    }
+    val searching = connected && !noResponse && (!matches || state.phase == "searching")
+    val preparing = connected && matches && state.phase == "preparing"
+    val playing = connected && matches && state.phase == "playing"
+    DialogSurface(
+        onDismissRequest = onDismiss,
+        title = stringResource(Res.string.remote_source_picker_title),
+        message = stringResource(Res.string.remote_source_picker_device, pcName.ifBlank { "Starlit PC" }),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (matches && state.title.isNotBlank()) {
+                Text(state.title, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (searching || preparing) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NuvioLoadingIndicator(Modifier.size(18.dp), color = tokens.colors.accent, size = 18.dp)
+                    Text(
+                        stringResource(if (preparing) Res.string.remote_source_picker_preparing else Res.string.remote_source_picker_searching),
+                        style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary,
+                    )
+                }
+            }
+            if (playing) {
+                RemoteCard(tone = RemoteTone.Success) {
+                    Text(stringResource(Res.string.remote_source_picker_playing),
+                        style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textPrimary)
+                }
+            }
+            if (!connected) {
+                DialogHint(stringResource(Res.string.remote_source_picker_disconnected), isError = true)
+            } else if (noResponse && !matches) {
+                DialogHint(stringResource(Res.string.remote_source_picker_timeout), isError = true)
+            } else if (matches && state.phase == "empty") {
+                DialogHint(stringResource(Res.string.remote_source_picker_empty))
+            } else if (matches && state.phase == "error") {
+                DialogHint(state.message.ifBlank { stringResource(Res.string.remote_source_picker_error) }, isError = true)
+            } else if (matches && state.message.isNotBlank() && state.phase != "playing") {
+                DialogHint(state.message)
+            }
+            if (matches && state.sources.isNotEmpty() && state.phase in setOf("searching", "ready")) {
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())
+                        .testTag("remote-initial-sources"),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    state.sources.forEach { source ->
+                        DialogOption(
+                            text = source.label,
+                            selected = false,
+                            onClick = { DesktopRemote.selectPhoneSource(source.id) },
+                        )
+                    }
+                }
+            }
+        }
+        DialogButtons {
+            DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
+            if (playing) {
+                DialogButton(
+                    text = stringResource(Res.string.remote_source_picker_controller),
+                    onClick = onOpenController,
+                    style = DialogButtonStyle.Primary,
+                )
+            }
         }
     }
 }

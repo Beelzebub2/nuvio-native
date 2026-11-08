@@ -186,6 +186,7 @@ internal class LanDesktopRemote(
     @Volatile private var searchJob: Job? = null
     private val lastWakeNanos = AtomicLong(0L)
     private val lastHandoffAtNanos = AtomicLong(0L)
+    private val sourceRequestStartedAtNanos = AtomicLong(0L)
     private var bluetoothListener: ServerSocket? = null
     private var lastHostAttemptNanos = 0L
 
@@ -235,6 +236,9 @@ internal class LanDesktopRemote(
         sessionEpoch.incrementAndGet()
         selectedDesktop = null
         DesktopRemote.pendingHandoff.value = null
+        DesktopRemote.sourceRequestId.value = ""
+        DesktopRemote.sourcePicker.value = RemoteSourcePicker()
+        DesktopRemote.selectRemoteSource = null
         connection?.cancel()
         connection = null
         confirmation?.cancel()
@@ -894,6 +898,9 @@ internal class LanDesktopRemote(
                     DesktopRemote.connected.value = false
                     DesktopRemote.connecting.value = false
                     DesktopRemote.pendingHandoff.value = null
+                    DesktopRemote.sourceRequestId.value = ""
+                    DesktopRemote.sourcePicker.value = RemoteSourcePicker()
+                    DesktopRemote.selectRemoteSource = null
                 }
             }
         }
@@ -961,11 +968,55 @@ internal class LanDesktopRemote(
                         if (intent != null && DesktopRemote.pendingHandoff.value == null) {
                             val now = System.nanoTime()
                             val previous = lastHandoffAtNanos.get()
-                            // Prevent an otherwise authorized phone from flooding
-                            // the desktop with navigation prompts.
-                            if (previous == 0L || now - previous !in 0 until 20_000_000_000L) {
+                            // Keep the old confirmation throttling, but allow an authorized
+                            // source-picking phone to replace an accidental selection promptly.
+                            val throttleNs = if (command.requestId.isEmpty()) 20_000_000_000L else 750_000_000L
+                            if (previous == 0L || now - previous !in 0 until throttleNs) {
                                 lastHandoffAtNanos.set(now)
-                                DesktopRemote.pendingHandoff.value = intent
+                                if (command.requestId.isEmpty()) {
+                                    // Older phones still require their original desktop approval.
+                                    DesktopRemote.pendingHandoff.value = intent
+                                } else if (DesktopRemote.beginSourceRequest(command.requestId, intent)) {
+                                    sourceRequestStartedAtNanos.set(now)
+                                } else {
+                                    DesktopRemote.sourcePicker.value = RemoteSourcePicker(
+                                        command.requestId, intent.title, "error",
+                                        message = "Cannot open sources on this PC. Check the active profile.",
+                                    )
+                                }
+                            } else if (command.requestId.isNotEmpty()) {
+                                DesktopRemote.sourcePicker.value = RemoteSourcePicker(
+                                    command.requestId, intent.title, "error",
+                                    message = "Requests arrived too quickly. Try again.",
+                                )
+                            }
+                        }
+                    } else if (command.type == "handoffSource" || command.type == "handoffCancel") {
+                        val state = DesktopRemote.sourcePicker.value
+                        if (command.isAllowedSourceAction(
+                            ProfileRepository.activeProfileId, DesktopRemote.playback.playbackId, state,
+                            DesktopRemote.sourceRequestPreviousPlaybackId,
+                        )) {
+                            val age = System.nanoTime() - sourceRequestStartedAtNanos.get()
+                            if (age !in 0..120_000_000_000L) {
+                                DesktopRemote.sourcePicker.value = state.copy(
+                                    phase = "error", sources = emptyList(), message = "Source search expired. Try again.",
+                                )
+                                DesktopRemote.selectRemoteSource = null
+                            } else if (command.type == "handoffCancel") {
+                                DesktopRemote.selectRemoteSource?.invoke(command.requestId, null)
+                                DesktopRemote.selectRemoteSource = null
+                                DesktopRemote.sourceRequestId.value = ""
+                                DesktopRemote.sourcePicker.value = RemoteSourcePicker()
+                            } else {
+                                val accepted = DesktopRemote.selectRemoteSource?.invoke(command.requestId, command.id) == true
+                                if (accepted) {
+                                    sourceRequestStartedAtNanos.set(System.nanoTime())
+                                } else {
+                                    DesktopRemote.sourcePicker.value = state.copy(
+                                        phase = "error", message = "This source is no longer available. Search again.",
+                                    )
+                                }
                             }
                         }
                     } else if (command.type == "downloadPause" || command.type == "downloadResume") {
@@ -990,6 +1041,18 @@ internal class LanDesktopRemote(
                         DesktopRemote.dispatch?.invoke(command)
                     }
                     val profileId = ProfileRepository.activeProfileId
+                    val picker = DesktopRemote.sourcePicker.value
+                    if (picker.phase == "preparing" &&
+                        DesktopRemote.playback.playbackId.isNotBlank() &&
+                        DesktopRemote.playback.playbackId != DesktopRemote.sourceRequestPreviousPlaybackId) {
+                        DesktopRemote.sourcePicker.value = picker.copy(phase = "playing", sources = emptyList())
+                    } else if (picker.phase == "preparing" &&
+                        System.nanoTime() - sourceRequestStartedAtNanos.get() > 60_000_000_000L) {
+                        DesktopRemote.sourcePicker.value = picker.copy(
+                            phase = "error", sources = emptyList(),
+                            message = "The PC did not start playing. Check its player or try another source.",
+                        )
+                    }
                     DesktopRemote.playback.copy(
                         fullscreenSupported = DesktopRemote.fullscreenActions != null,
                         fullscreen = DesktopRemote.fullscreenActions?.isFullscreen() == true,
@@ -997,6 +1060,8 @@ internal class LanDesktopRemote(
                         downloads = if (command.profileId == profileId)
                             remoteDownloadSnapshot(DownloadsRepository.uiState.value, profileId)
                         else emptyList(),
+                        capabilities = if (DesktopRemote.onAcceptedHandoff != null) listOf(REMOTE_SOURCE_CAPABILITY) else emptyList(),
+                        sourcePicker = DesktopRemote.sourcePicker.value,
                     )
                 }
                 channel.send(snapshot.toRemoteWireJson())

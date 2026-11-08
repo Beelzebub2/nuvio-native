@@ -26,9 +26,90 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
+      - name: Provision checksum-verified Gradle 9.4.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The wrapper's 9.4.1 distribution redirects through a GitHub release
+          # page returning 504 on fresh macOS runners. Fetch the exact same ZIP
+          # via the official Gradle release asset API, verify its published SHA256,
+          # and run that pinned binary instead of an unverified alternate mirror.
+          archive="$RUNNER_TEMP/gradle-9.4.1-bin.zip"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 900 \
+            -H 'Accept: application/octet-stream' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/gradle/gradle-distributions/releases/assets/377041523' \
+            -o "$archive"
+          printf '%s  %s\n' \
+            '2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb' \
+            "$archive" | shasum -a 256 --check
+          mkdir -p "$RUNNER_TEMP/starlit-gradle"
+          unzip -q "$archive" -d "$RUNNER_TEMP/starlit-gradle"
+          binary="$RUNNER_TEMP/starlit-gradle/gradle-9.4.1/bin/gradle"
+          test -x "$binary"
+          echo "STARLIT_GRADLE_BIN=$binary" >> "$GITHUB_ENV"
+      - name: Provision checksum-verified Kotlin Native compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Maven Central redirects this 2.4.10 compiler archive to a GitHub
+          # releases page that can return transient HTTP 504 on macOS runners.
+          # Use the exact official release asset through GitHub's API/CDN,
+          # pin its published digest, and pass it to the existing Gradle task.
+          archive="$RUNNER_TEMP/kotlin-native-prebuilt-2.4.10-macos-aarch64.tar.gz"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 900 \
+            -H 'Accept: application/octet-stream' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/JetBrains/kotlin/releases/assets/585406113' \
+            -o "$archive"
+          printf '%s  %s\n' \
+            '55ded039bb56a69aec9df354a92b42df9e916104e3c53d8d9852d9cc6617ed9d' \
+            "$archive" | shasum -a 256 --check
+          mkdir -p "$RUNNER_TEMP/starlit-kotlin-native"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/starlit-kotlin-native"
+          compiler="$(find "$RUNNER_TEMP/starlit-kotlin-native" -maxdepth 5 \
+            -name kotlinc-native -print -quit)"
+          if [[ -z "$compiler" || ! -x "$compiler" ]]; then
+            echo '::error::Checksum-verified Kotlin Native archive has no executable compiler.'
+            exit 1
+          fi
+          echo "KOTLIN_NATIVE_HOME=${compiler%/bin/kotlinc-native}" >> "$GITHUB_ENV"
+      - name: Provision checksum-verified Kotlin compiler Maven artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The Kotlin 2.4.10 embeddable compiler POM is available from Maven
+          # Central, but its JAR redirects to an intermittently failing GitHub
+          # release page. Pin the official binary hash and mirror only this
+          # exact Maven module for this CI invocation.
+          mirror="$RUNNER_TEMP/starlit-kotlin-maven"
+          module="$mirror/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.4.10"
+          mkdir -p "$module"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 90 \
+            'https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.4.10/kotlin-compiler-embeddable-2.4.10.pom' \
+            -o "$module/kotlin-compiler-embeddable-2.4.10.pom"
+          jar="$module/kotlin-compiler-embeddable-2.4.10.jar"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 900 \
+            -H 'Accept: application/octet-stream' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/JetBrains/kotlin/releases/assets/583808361' \
+            -o "$jar"
+          printf '%s  %s\n' \
+            '9309638a2ee03e6bde9ef4b7444055a94b84ab906563675d71ff9aecb64da913' \
+            "$jar" | shasum -a 256 --check
+          echo "STARLIT_CI_KOTLIN_ARTIFACT_MIRROR=$mirror" >> "$GITHUB_ENV"
       - name: Compile iOS simulator Kotlin and Keychain interop
         run: >-
-          ./gradlew :composeApp:compileKotlinIosSimulatorArm64
+          "$STARLIT_GRADLE_BIN" :composeApp:compileKotlinIosSimulatorArm64
+          "-Pkotlin.native.home=${KOTLIN_NATIVE_HOME}"
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --no-configuration-cache --no-daemon --console=plain

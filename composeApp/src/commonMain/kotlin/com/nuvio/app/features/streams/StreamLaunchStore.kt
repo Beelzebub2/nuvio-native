@@ -19,6 +19,8 @@ data class StreamLaunch(
     val resumeProgressFraction: Float? = null,
     val manualSelection: Boolean = false,
     val startFromBeginning: Boolean = false,
+    /** Session-scoped request for phone-controlled source selection; never persisted or shared as a URL. */
+    val remoteSourceRequestId: String? = null,
 )
 
 object StreamLaunchStore {
