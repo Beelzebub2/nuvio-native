@@ -35,6 +35,7 @@ private const val HOST_RETRY_DELAY_MS = 3_000L
 private const val PAIRING_TIMEOUT = 90_000L
 // Android searches for about 12 seconds; some phones never report the end.
 private const val BLUETOOTH_SEARCH_TIMEOUT_MS = 30_000L
+private const val BLUETOOTH_RESULTS_TTL_MS = 60_000L
 private val TCP_PROBE_MARKER = "STRP".toByteArray(Charsets.US_ASCII)
 private val wireJson = Json { ignoreUnknownKeys = true }
 
@@ -163,6 +164,7 @@ internal class LanDesktopRemote(
     private val lanTrustStore: RemoteLanTrustStore? = null,
     private val openDiscoverySocket: (Int) -> DatagramSocket = ::bindRemoteDiscoverySocket,
     private val connectionLifetime: RemoteConnectionLifetime = NoopRemoteConnectionLifetime,
+    private val bluetoothResultsTtlMs: Long = BLUETOOTH_RESULTS_TTL_MS,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
@@ -270,6 +272,7 @@ internal class LanDesktopRemote(
         searchJob = null
         runCatching { bluetoothClient?.stop() }
         DesktopRemote.scanning.value = false
+        DesktopRemote.bluetoothDesktops.value = emptyList()
     }
 
     override fun confirmPairing() { confirmation?.complete(Unit) }
@@ -304,12 +307,10 @@ internal class LanDesktopRemote(
             DesktopRemote.status.value = "Bluetooth control is not available on this device."
             return
         }
-        // Restarting would empty the list, and a radio search breaks a Bluetooth connection being opened.
+        // A radio search breaks a Bluetooth connection being opened.
         if (DesktopRemote.scanning.value || DesktopRemote.connecting.value) return
         val epoch = searchEpoch.incrementAndGet()
         fun current() = scope === currentScope && searchEpoch.get() == epoch
-        // PCs from the last search stay listed until this one has finished, so nothing flickers.
-        val previous = DesktopRemote.bluetoothDesktops.value
         val found = LinkedHashMap<String, RemoteDesktop>()
         var finished = false
         var watchdog: Job? = null
@@ -324,8 +325,16 @@ internal class LanDesktopRemote(
                 failure != null -> failure
                 else -> "No Bluetooth PCs found. Pair your phone with the PC in Bluetooth settings and try again."
             }
+            if (found.isNotEmpty()) currentScope.launch(uiDispatcher) {
+                // Inquiry results are a momentary observation, not proof that a
+                // PC is still in range. Saved PCs remain in their separate list.
+                delay(bluetoothResultsTtlMs)
+                if (current()) DesktopRemote.bluetoothDesktops.value = emptyList()
+            }
         }
         DesktopRemote.scanning.value = true
+        // Do not display a PC from a previous scan as if it is still nearby.
+        DesktopRemote.bluetoothDesktops.value = emptyList()
         DesktopRemote.status.value = "Searching nearby Bluetooth PCs…"
         watchdog = currentScope.launch(uiDispatcher) {
             delay(BLUETOOTH_SEARCH_TIMEOUT_MS)
@@ -340,8 +349,7 @@ internal class LanDesktopRemote(
                     if (finished || !current()) return@launch
                     // Android reports a PC several times per search; keep its place in the list.
                     found[desktop.address] = desktop
-                    DesktopRemote.bluetoothDesktops.value =
-                        found.values + previous.filter { it.address !in found }
+                    DesktopRemote.bluetoothDesktops.value = found.values.toList()
                 }
             },
             onFinished = { failure -> currentScope.launch(uiDispatcher) { finish(failure) } },
@@ -788,13 +796,12 @@ internal class LanDesktopRemote(
                     bluetooth = true,
                 )
             } catch (cancelled: CancellationException) { throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 withContext(NonCancellable + uiDispatcher) {
                     if (sessionEpoch.get() == epoch) {
                         DesktopRemote.connecting.value = false
                         runCatching { connectionLifetime.disconnected() }
-                        DesktopRemote.status.value =
-                            "Bluetooth connection failed. Pair with the PC in device settings and keep Bluetooth enabled on both."
+                        DesktopRemote.status.value = remoteBluetoothConnectionFailureMessage(error)
                     }
                 }
             } finally {
