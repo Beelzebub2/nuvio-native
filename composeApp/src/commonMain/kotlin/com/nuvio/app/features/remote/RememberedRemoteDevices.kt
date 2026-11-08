@@ -3,8 +3,8 @@ package com.nuvio.app.features.remote
 import kotlinx.serialization.Serializable
 
 /**
- * A remembered PC is only a reconnect hint. It carries no remote trust,
- * pairing secret, authorization token or stored approval.
+ * A remembered PC is a reconnect hint. Its optional random desktop ID is
+ * untrusted metadata; it carries no approval, secret or authorization token.
  */
 @Serializable
 internal data class RememberedRemoteDevice(
@@ -13,6 +13,7 @@ internal data class RememberedRemoteDevice(
     val lastSeenEpochMs: Long,
     val wakeMac: String? = null,
     val bluetooth: Boolean = false,
+    val trustedId: String? = null,
 )
 
 /** A saved LAN entry is an explicit reconnect request, not just another discovery scan. */
@@ -41,18 +42,22 @@ internal fun rememberRemoteDevice(
     address: String,
     nowEpochMs: Long,
     bluetooth: Boolean = false,
+    trustedId: String? = null,
 ): List<RememberedRemoteDevice> {
     val safeAddress = normalizeRememberedRemoteAddress(address, bluetooth) ?: return existing
     val safeName = name.trim().replace('|', ' ').take(80).ifBlank { "Starlit PC" }
+    val safeId = trustedId?.takeIf { !bluetooth && it.matches(Regex("[0-9a-f]{32}")) }
+    val prior = existing.firstOrNull { !it.bluetooth && safeId != null && it.trustedId == safeId }
+        ?: existing.firstOrNull { it.bluetooth == bluetooth && it.address == safeAddress }
     val latest = RememberedRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
-        wakeMac = if (bluetooth) null else existing.firstOrNull {
-            !it.bluetooth && it.address == safeAddress
-        }?.wakeMac,
+        wakeMac = if (bluetooth) null else prior?.wakeMac,
         bluetooth = bluetooth,
+        trustedId = if (bluetooth) null else safeId ?: prior?.trustedId,
     )
     return (listOf(latest) + existing.filterNot {
-        it.bluetooth == bluetooth && it.address == safeAddress
+        it.bluetooth == bluetooth && (it.address == safeAddress ||
+            (!bluetooth && safeId != null && it.trustedId == safeId))
     }).take(10)
 }
 

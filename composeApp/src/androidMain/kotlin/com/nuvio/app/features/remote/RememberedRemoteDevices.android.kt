@@ -30,6 +30,9 @@ internal actual object RememberedRemoteDeviceStore {
                 name = it.name.trim().take(80),
                 lastSeenEpochMs = it.lastSeenEpochMs.coerceAtLeast(0L),
                 wakeMac = if (it.bluetooth) null else it.wakeMac?.let(::normalizedWakeMac),
+                trustedId = it.trustedId?.takeIf { id ->
+                    !it.bluetooth && id.matches(Regex("[0-9a-f]{32}"))
+                },
             ) }
             .distinctBy { it.bluetooth to it.address }.take(10).toList()
     }.getOrDefault(emptyList())
