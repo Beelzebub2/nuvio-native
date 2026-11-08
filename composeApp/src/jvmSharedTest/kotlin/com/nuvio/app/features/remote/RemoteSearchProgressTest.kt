@@ -102,7 +102,7 @@ class RemoteSearchProgressTest {
     }
 
     @Test
-    fun aNewBluetoothSearchKeepsTheCurrentListUntilItHasResults() = runBlocking {
+    fun aNewBluetoothSearchDropsStalePcsImmediatelyAndIgnoresOldCallbacks() = runBlocking {
         val client = FakeBluetoothClient()
         val phone = LanDesktopRemote(bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined)
         val other = RemoteDesktop("11:22:33:44:55:66", 0, "Laptop", bluetooth = true)
@@ -113,15 +113,76 @@ class RemoteSearchProgressTest {
             client.finished!!(null)
 
             phone.discoverBluetooth()
-            // No flash of an empty list while the second search starts.
-            assertEquals(listOf(pc), DesktopRemote.bluetoothDesktops.value)
+            // A previously paired or discovered PC is not necessarily nearby.
+            assertTrue(DesktopRemote.bluetoothDesktops.value.isEmpty())
             client.found!!(other)
+            assertEquals(listOf(other), DesktopRemote.bluetoothDesktops.value)
             client.finished!!(null)
-            // A PC that was not seen again is dropped once the search is complete.
             assertEquals(listOf(other), DesktopRemote.bluetoothDesktops.value)
         } finally {
             phone.stop()
         }
+    }
+
+    @Test
+    fun bluetoothSearchExpiresResultsWithoutDeletingSavedPcDetails() = runBlocking {
+        val client = FakeBluetoothClient()
+        val phone = LanDesktopRemote(
+            bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined, bluetoothResultsTtlMs = 40L,
+        )
+        try {
+            phone.start(account, host = false)
+            val saved = RememberedRemoteDevice("Desktop-B", pc.address, 123L, bluetooth = true)
+            DesktopRemote.remembered.value = listOf(saved)
+            phone.discoverBluetooth()
+            client.found!!(pc)
+            client.finished!!(null)
+            assertEquals(listOf(pc), DesktopRemote.bluetoothDesktops.value)
+            withTimeout(2_000) {
+                while (DesktopRemote.bluetoothDesktops.value.isNotEmpty()) delay(10)
+            }
+            assertFalse(DesktopRemote.scanning.value)
+            assertEquals(listOf(saved), DesktopRemote.remembered.value,
+                "A live scan expiring must not remove the trusted reconnect entry")
+        } finally {
+            phone.stop()
+        }
+    }
+
+    @Test
+    fun aCancelledBluetoothScanCannotRepopulateTheNearbyList() = runBlocking {
+        val client = FakeBluetoothClient()
+        val phone = LanDesktopRemote(bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined)
+        try {
+            phone.start(account, host = false)
+            phone.discoverBluetooth()
+            val outdatedResult = client.found!!
+            phone.connect(pc)
+            outdatedResult(pc)
+            assertTrue(DesktopRemote.bluetoothDesktops.value.isEmpty())
+        } finally {
+            phone.stop()
+        }
+    }
+
+    @Test
+    fun bluetoothCandidatesIncludeOlderPairedPcsWithMissingDeviceClass() {
+        assertTrue(isBluetoothPcCandidate("Workshop", false, false, false, true))
+        assertTrue(isBluetoothPcCandidate("OfficePC", false, true, false, false))
+        assertTrue(isBluetoothPcCandidate("", false, false, true, false))
+        assertTrue(isBluetoothPcCandidate("Desktop-B", true, false, false, false))
+        assertFalse(isBluetoothPcCandidate("Earbuds", false, false, false, false))
+    }
+
+    @Test
+    fun bluetoothConnectionErrorsGiveLegacyUsersActionableAlternatives() {
+        val failure = remoteBluetoothConnectionFailureMessage(
+            RemoteBluetoothCompatibilityException(java.io.IOException("rfcomm unavailable")),
+        )
+        assertContains(failure, "RFCOMM")
+        assertContains(failure, "Wi-Fi/QR")
+        assertContains(remoteBluetoothConnectionFailureMessage(SecurityException()), "Nearby devices")
+        assertContains(remoteBluetoothConnectionFailureMessage(IllegalArgumentException()), "Pair the PC")
     }
 
     @Test

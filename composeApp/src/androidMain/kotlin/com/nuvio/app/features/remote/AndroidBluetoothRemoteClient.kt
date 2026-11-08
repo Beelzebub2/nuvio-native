@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,10 +14,13 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -59,36 +63,52 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
             return
         }
         stop()
-        var found = false
         var finished = false
-        // Paired PCs are already listed, so a radio problem only matters when nothing was found.
-        fun finish(failure: String) {
+        // Only inquiry results count as nearby. Android's bondedDevices contains
+        // PCs that may have been turned off or out of range for months.
+        fun finish(failure: String?) {
             if (finished) return
             finished = true
-            onFinished(if (found) null else failure)
+            onFinished(failure)
         }
-        fun add(device: BluetoothDevice?) {
+        fun add(device: BluetoothDevice?, discoveredName: String?) {
             if (device == null) return
-            val name = runCatching { device.name }.getOrNull().orEmpty()
+            val address = runCatching { device.address }.getOrNull() ?: return
+            val name = runCatching { device.name }.getOrNull().orEmpty().ifBlank { discoveredName.orEmpty() }
             val majorClass = runCatching { device.bluetoothClass?.majorDeviceClass }.getOrNull()
-            if (majorClass != BluetoothClass.Device.Major.COMPUTER &&
-                !name.contains("desktop", true) && !name.contains("laptop", true) &&
-                !name.contains("starlit", true) && !name.contains("macbook", true)) return
-            found = true
-            onFound(RemoteDesktop(device.address, 0, name.ifBlank { "Bluetooth PC" }, bluetooth = true))
+            val savedPc = DesktopRemote.remembered.value.any {
+                it.bluetooth && it.address.equals(address, ignoreCase = true)
+            }
+            val serviceAdvertised = runCatching {
+                device.uuids?.any { it.uuid.toString().equals(REMOTE_BLUETOOTH_SERVICE, ignoreCase = true) }
+            }.getOrDefault(false) == true
+            // Legacy Windows adapters sometimes omit the Bluetooth class/name.
+            // Accept an actually discovered, OS-bonded unknown-class device as a
+            // candidate, but never add every bonded device without a radio hit.
+            val bondedUnknownClass = (majorClass == null ||
+                majorClass == BluetoothClass.Device.Major.UNCATEGORIZED) &&
+                runCatching { device.bondState == BluetoothDevice.BOND_BONDED }.getOrDefault(false)
+            if (!isBluetoothPcCandidate(
+                    name, majorClass == BluetoothClass.Device.Major.COMPUTER,
+                    savedPc, serviceAdvertised, bondedUnknownClass,
+                )) return
+            onFound(RemoteDesktop(address, 0, name.ifBlank { "Bluetooth PC" }, bluetooth = true))
         }
-        runCatching { bt.bondedDevices.forEach(::add) }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     BluetoothDevice.ACTION_FOUND -> {
-                        @Suppress("DEPRECATION")
-                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                        runCatching { add(device) }
+                        val device = if (Build.VERSION.SDK_INT >= 33)
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                        runCatching { add(device, intent.getStringExtra(BluetoothDevice.EXTRA_NAME)) }
                     }
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                         stop()
-                        finish("No Bluetooth PCs found. Pair with the PC in Bluetooth settings and try again.")
+                        finish(null)
                     }
                 }
             }
@@ -121,14 +141,40 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
         require(device.bondState == BluetoothDevice.BOND_BONDED) {
             "Pair the PC in Android Bluetooth settings before connecting."
         }
-        val socket = device.createRfcommSocketToServiceRecord(UUID.fromString(REMOTE_BLUETOOTH_SERVICE))
+        val service = UUID.fromString(REMOTE_BLUETOOTH_SERVICE)
+        try {
+            return@withContext connectSocket(device, service, insecure = false)
+        } catch (secureError: IOException) {
+            currentCoroutineContext().ensureActive()
+            // Secure RFCOMM is preferred. Legacy Bluetooth controllers may
+            // support only a non-authenticated RFCOMM link; the Starlit
+            // connection still requires its own encrypted, verified handshake.
+            check(device.bondState == BluetoothDevice.BOND_BONDED) {
+                "The PC is no longer paired in Android Bluetooth settings."
+            }
+            try {
+                return@withContext connectSocket(device, service, insecure = true)
+            } catch (compatibilityError: IOException) {
+                compatibilityError.addSuppressed(secureError)
+                throw RemoteBluetoothCompatibilityException(compatibilityError)
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun connectSocket(
+        device: BluetoothDevice, service: UUID, insecure: Boolean,
+    ): RemoteBluetoothConnection {
+        val socket: BluetoothSocket = if (insecure)
+            device.createInsecureRfcommSocketToServiceRecord(service)
+        else device.createRfcommSocketToServiceRecord(service)
         val watchdog = CoroutineScope(Dispatchers.IO).launch {
-            delay(15_000)
+            delay(12_000)
             runCatching { socket.close() }
         }
         try {
             socket.connect()
-            RemoteBluetoothConnection(socket.inputStream, socket.outputStream, device.name ?: address) {
+            return RemoteBluetoothConnection(socket.inputStream, socket.outputStream, device.name ?: device.address) {
                 runCatching { socket.close() }
             }
         } catch (error: Exception) {
