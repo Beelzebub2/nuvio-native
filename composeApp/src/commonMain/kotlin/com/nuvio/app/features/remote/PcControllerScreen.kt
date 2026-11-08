@@ -402,23 +402,6 @@ private fun SavedPcRow(
             modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = connect,
         ) {
-            if (!saved.bluetooth && !active) {
-                NuvioCompactActionButton(
-                    label = stringResource(Res.string.remote_pc_wake),
-                    icon = Icons.Rounded.PowerSettingsNew,
-                    tone = NuvioCompactActionTone.Ghost,
-                    size = NuvioActionSize.Small,
-                    modifier = Modifier.testTag("remote-wake-pc-${saved.address}"),
-                    onClick = {
-                        val mac = saved.wakeMac
-                        if (mac != null) DesktopRemote.transport.wake(saved.address, mac)
-                        else {
-                            editingWake = true
-                            macError = false
-                        }
-                    },
-                )
-            }
             if (active) {
                 Text(
                     stringResource(Res.string.remote_pc_status_connected),
@@ -451,6 +434,25 @@ private fun SavedPcRow(
                     )
                 }
             }
+        }
+        if (!saved.bluetooth && !active) {
+            // Keep the wake action readable on narrow phones instead of
+            // squeezing the PC name/address into an already crowded row.
+            NuvioCompactActionButton(
+                label = stringResource(Res.string.remote_pc_wake),
+                icon = Icons.Rounded.PowerSettingsNew,
+                tone = NuvioCompactActionTone.Ghost,
+                size = NuvioActionSize.Small,
+                modifier = Modifier.align(Alignment.End).testTag("remote-wake-pc-${saved.address}"),
+                onClick = {
+                    val mac = saved.wakeMac
+                    if (mac != null) DesktopRemote.transport.wake(saved.address, mac)
+                    else {
+                        editingWake = true
+                        macError = false
+                    }
+                },
+            )
         }
         AnimatedVisibility(visible = editingWake) {
             RemoteCard {
