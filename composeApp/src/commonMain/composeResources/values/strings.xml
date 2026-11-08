@@ -2834,7 +2834,7 @@
     <string name="remote_qr_account_description">Control playback from your Android phone. Pair on the same network with your Starlit account.</string>
     <string name="remote_qr_manage">Manage connection</string>
     <string name="remote_qr_show">Connect phone</string>
-    <string name="remote_qr_instructions">On your Android phone, open Starlit → Settings → PC controller → Scan desktop QR code. Choose this PC, then compare and confirm the codes on both devices. Use the same account and server on the same network.</string>
+    <string name="remote_qr_instructions">On your Android phone, open Starlit → Settings → PC controller → Scan desktop QR code. Choose this PC. On the first pairing, or if Starlit asks again for security, compare and confirm the codes on both devices. Use the same account and server on the same network.</string>
     <string name="remote_qr_image_description">Desktop pairing QR code for %1$s</string>
     <string name="remote_qr_change_network">Choose network address</string>
     <string name="remote_qr_scan">Scan desktop QR code</string>
