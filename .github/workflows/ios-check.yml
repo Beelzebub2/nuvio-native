@@ -43,9 +43,38 @@ jobs:
             echo "::warning::Gradle distribution download failed; retry $((attempt + 1))/5."
             sleep "$((attempt * 20))"
           done
+      - name: Provision checksum-verified Kotlin Native compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Maven Central redirects this 2.4.10 compiler archive to a GitHub
+          # releases page that can return transient HTTP 504 on macOS runners.
+          # Use the exact official release asset through GitHub's API/CDN,
+          # pin its published digest, and pass it to the existing Gradle task.
+          archive="$RUNNER_TEMP/kotlin-native-prebuilt-2.4.10-macos-aarch64.tar.gz"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 900 \
+            -H 'Accept: application/octet-stream' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/JetBrains/kotlin/releases/assets/585406113' \
+            -o "$archive"
+          printf '%s  %s\n' \
+            '55ded039bb56a69aec9df354a92b42df9e916104e3c53d8d9852d9cc6617ed9d' \
+            "$archive" | shasum -a 256 --check
+          mkdir -p "$RUNNER_TEMP/starlit-kotlin-native"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/starlit-kotlin-native"
+          compiler="$(find "$RUNNER_TEMP/starlit-kotlin-native" -maxdepth 5 \
+            -name kotlinc-native -print -quit)"
+          if [[ -z "$compiler" || ! -x "$compiler" ]]; then
+            echo '::error::Checksum-verified Kotlin Native archive has no executable compiler.'
+            exit 1
+          fi
+          echo "KOTLIN_NATIVE_HOME=${compiler%/bin/kotlinc-native}" >> "$GITHUB_ENV"
       - name: Compile iOS simulator Kotlin and Keychain interop
         run: >-
           ./gradlew :composeApp:compileKotlinIosSimulatorArm64
+          "-Pkotlin.native.home=${KOTLIN_NATIVE_HOME}"
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --no-configuration-cache --no-daemon --console=plain
