@@ -116,6 +116,21 @@ class RemoteLanTrustTest {
             trustedId = "invalid").single().trustedId)
     }
 
+
+    @Test fun trustKeysAreScopedToAccountServerAndTransport() {
+        val store = TestLanStore()
+        val lanId = "a".repeat(32)
+        val trust = RemoteLanTrust("b".repeat(32), "c".repeat(64))
+        store.write(account, "phone:$lanId", trust)
+        assertEquals(trust, store.read(account, "phone:$lanId"))
+        assertNull(store.read(account.copy(userId = "another"), "phone:$lanId"))
+        assertNull(store.read(account.copy(server = "https://different.example"), "phone:$lanId"))
+        assertNotEquals(remoteLanTrustKey(account, "phone:$lanId"),
+            remoteBluetoothTrustKey(account, "phone:$lanId"))
+        assertNotEquals(remoteLanTrustProof(trust, ByteArray(32), "phone"),
+            remoteBluetoothTrustProof(RemoteBluetoothTrust(trust.id, trust.secret), ByteArray(32), "phone"))
+    }
+
     private suspend fun withPeers(
         block: suspend CoroutineScope.(RemotePairingChannel, RemotePairingChannel) -> Unit,
     ) = coroutineScope {
