@@ -220,6 +220,18 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun savedLanPcAlwaysOffersWakeAndOpensMacSetupOnFirstUse() = runDesktopComposeUiTest(width = 412, height = 900) {
+        val saved = RememberedRemoteDevice("Living room PC", "192.168.1.60", 0L)
+        DesktopRemote.remembered.value = listOf(saved)
+        DesktopRemote.connected.value = false
+        show(desktopLayout = false)
+        onNodeWithTag("remote-wake-pc-${saved.address}").performScrollTo().assertIsDisplayed()
+            .performClick()
+        onNodeWithText("PC network adapter MAC").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Save wake address").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun pcsTabKeepsItsScrollPositionWhenSwitchingTabs() = runDesktopComposeUiTest(width = 360, height = 700) {
         DesktopRemote.connected.value = true
         DesktopRemote.remembered.value = (1..8).map {

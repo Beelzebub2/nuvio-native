@@ -28,6 +28,15 @@ private class FakeBluetoothClient : RemoteBluetoothClient {
     override fun stop() { stops++ }
 }
 
+private class FakeRemoteConnectionLifetime : RemoteConnectionLifetime {
+    var starts = 0
+    var stops = 0
+    var active = false
+    override val retainWhenUiDetached: Boolean get() = active
+    override fun connecting() { starts++; active = true }
+    override fun disconnected() { stops++; active = false }
+}
+
 class RemoteSearchProgressTest {
     private val account = RemoteAccount("account", "https://example.org", "publishable")
     private val pc = RemoteDesktop("AA:BB:CC:DD:EE:FF", 0, "Desktop-B", bluetooth = true)
@@ -49,6 +58,32 @@ class RemoteSearchProgressTest {
             withTimeout(10_000) { while (!condition()) delay(25) }
         } catch (_: TimeoutCancellationException) {
             fail("Timed out waiting until $what. Status: ${DesktopRemote.status.value}")
+        }
+    }
+
+    @Test
+    fun reattachingTheUiToAnExistingAccountDoesNotRestartItsPhoneSession() = runBlocking {
+        val lifecycle = FakeRemoteConnectionLifetime()
+        val phone = LanDesktopRemote(
+            bluetoothClient = FakeBluetoothClient(),
+            connectionLifetime = lifecycle,
+            uiDispatcher = Dispatchers.Unconfined,
+        )
+        try {
+            phone.start(account, host = false)
+            phone.connect(pc)
+            assertTrue(DesktopRemote.connecting.value)
+            assertEquals(1, lifecycle.starts)
+            assertTrue(phone.retainWhenUiDetached)
+            val before = lifecycle.stops
+            phone.start(account, host = false)
+            assertTrue(DesktopRemote.connecting.value, "A recreated Activity must not cancel pairing")
+            assertEquals(before, lifecycle.stops)
+            phone.start(account.copy(userId = "another-user"), host = false)
+            assertFalse(DesktopRemote.connecting.value, "A changed account must end the old connection")
+            assertTrue(lifecycle.stops > before)
+        } finally {
+            phone.stop()
         }
     }
 

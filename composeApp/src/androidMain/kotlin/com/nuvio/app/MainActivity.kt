@@ -88,6 +88,7 @@ open class MainActivity : AppCompatActivity() {
         )
         ThemeSettingsStorage.initialize(applicationContext)
         com.nuvio.app.features.remote.AndroidBluetoothRemoteClient.initialize(applicationContext)
+        com.nuvio.app.features.remote.AndroidRemoteConnectionLifetime.initialize(applicationContext)
         AppIconPlatform.initialize(applicationContext)
         SentrySettingsStorage.initialize(applicationContext)
         SentryInitializer.start(application)
@@ -199,6 +200,10 @@ open class MainActivity : AppCompatActivity() {
 
     private fun handleIncomingAppIntent(intent: Intent?) {
         val incoming = intent ?: return
+        if (incoming.action == com.nuvio.app.features.remote.ACTION_OPEN_PC_REMOTE) {
+            com.nuvio.app.features.remote.DesktopRemote.visible.value = true
+            return
+        }
         val appUrl = incoming.dataString?.trim().orEmpty()
         if (appUrl.isBlank()) return
         if (GoogleOAuthAvailability.isOfficialServer() && isStarlitOAuthCallback(appUrl)) {

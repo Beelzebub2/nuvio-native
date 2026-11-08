@@ -163,10 +163,12 @@ internal class LanDesktopRemote(
     private val bluetoothTrustStore: RemoteBluetoothTrustStore? = null,
     private val lanTrustStore: RemoteLanTrustStore? = null,
     private val openDiscoverySocket: (Int) -> DatagramSocket = ::bindRemoteDiscoverySocket,
+    private val connectionLifetime: RemoteConnectionLifetime = NoopRemoteConnectionLifetime,
     private val bluetoothResultsTtlMs: Long = BLUETOOTH_RESULTS_TTL_MS,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
+    override val retainWhenUiDetached get() = connectionLifetime.retainWhenUiDetached
     override fun localAddresses(): List<String> =
         runCatching { localInterfaces().mapNotNull { it.address.hostAddress }.distinct().sorted() }
             .getOrDefault(emptyList())
@@ -193,6 +195,10 @@ internal class LanDesktopRemote(
     private var lastHostAttemptNanos = 0L
 
     override fun start(account: RemoteAccount, host: Boolean) {
+        // The Compose host can be reconstructed while the Android foreground
+        // service still owns a connected socket. A same-account reattach must
+        // not disconnect and ask to pair again.
+        if (this.account == account && this.host == host && scope?.isActive == true) return
         stop()
         this.account = account
         this.host = host
@@ -236,6 +242,7 @@ internal class LanDesktopRemote(
 
     override fun disconnect() {
         sessionEpoch.incrementAndGet()
+        runCatching { connectionLifetime.disconnected() }
         selectedDesktop = null
         DesktopRemote.pendingHandoff.value = null
         DesktopRemote.sourceRequestId.value = ""
@@ -748,6 +755,7 @@ internal class LanDesktopRemote(
                 withContext(NonCancellable + uiDispatcher) {
                     if (sessionEpoch.get() == epoch) {
                         DesktopRemote.connecting.value = false
+                        runCatching { connectionLifetime.disconnected() }
                         DesktopRemote.status.value =
                             remoteConnectionFailureMessage(error, desktop.address, desktop.port)
                     }
@@ -761,6 +769,7 @@ internal class LanDesktopRemote(
     private fun showConnecting(desktop: RemoteDesktop) {
         DesktopRemote.connecting.value = true
         DesktopRemote.status.value = "Connecting to ${desktop.name}…"
+        runCatching { connectionLifetime.connecting() }
     }
 
     private fun connectBluetooth(desktop: RemoteDesktop, ownerScope: CoroutineScope, expected: RemoteAccount) {
@@ -791,6 +800,7 @@ internal class LanDesktopRemote(
                 withContext(NonCancellable + uiDispatcher) {
                     if (sessionEpoch.get() == epoch) {
                         DesktopRemote.connecting.value = false
+                        runCatching { connectionLifetime.disconnected() }
                         DesktopRemote.status.value = remoteBluetoothConnectionFailureMessage(error)
                     }
                 }
@@ -900,6 +910,7 @@ internal class LanDesktopRemote(
             withContext(NonCancellable + uiDispatcher) {
                 if (sessionEpoch.get() == epoch) {
                     confirmation = null
+                    runCatching { connectionLifetime.disconnected() }
                     DesktopRemote.pairing.value = null
                     DesktopRemote.activeDesktop.value = null
                     DesktopRemote.connected.value = false
@@ -938,6 +949,7 @@ internal class LanDesktopRemote(
             DesktopRemote.connecting.value = false
             DesktopRemote.activeDesktop.value = if (peerToken == null) selectedDesktop else null
             DesktopRemote.connected.value = true
+            runCatching { connectionLifetime.authenticated(host = peerToken != null) }
             DesktopRemote.status.value = "Connected to $peer"
             if (peerToken == null) {
                 // Device metadata is only a discovery shortcut. A new connection

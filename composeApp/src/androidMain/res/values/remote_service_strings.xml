@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="remote_service_channel">PC remote connection</string>
+    <string name="remote_service_title">Starlit PC remote</string>
+    <string name="remote_service_connecting">Connecting to your PC</string>
+    <string name="remote_service_connected">Connected; controls stay active in the background</string>
+    <string name="remote_service_disconnect">Disconnect</string>
+</resources>
