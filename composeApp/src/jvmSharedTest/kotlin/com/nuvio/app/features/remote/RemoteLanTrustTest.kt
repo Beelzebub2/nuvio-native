@@ -114,6 +114,10 @@ class RemoteLanTrustTest {
         assertEquals(id, updated.single().trustedId)
         assertNull(rememberRemoteDevice(emptyList(), "PC", "10.0.0.50", 3L,
             trustedId = "invalid").single().trustedId)
+        // Old or untrusted desktop on a reused address must not inherit the
+        // trust identity of another, previously paired PC on that IP.
+        val withoutTrust = rememberRemoteDevice(updated, "Untrusted PC", "10.0.0.50", 4L)
+        assertNull(withoutTrust.single().trustedId)
     }
 
 

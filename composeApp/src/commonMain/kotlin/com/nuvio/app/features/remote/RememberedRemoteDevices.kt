@@ -53,7 +53,7 @@ internal fun rememberRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
         wakeMac = if (bluetooth) null else prior?.wakeMac,
         bluetooth = bluetooth,
-        trustedId = if (bluetooth) null else safeId ?: prior?.trustedId,
+        trustedId = if (bluetooth) null else safeId,
     )
     return (listOf(latest) + existing.filterNot {
         it.bluetooth == bluetooth && (it.address == safeAddress ||
