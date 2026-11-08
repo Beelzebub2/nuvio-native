@@ -270,8 +270,10 @@ internal object DesktopRemote {
     fun dismissPhoneSourcePicker() {
         val requestId = pendingPhoneSourceRequestId.value
         val state = remotePlayback.value.sourcePicker
-        if (connected.value && requestId.isNotEmpty() && state.requestId == requestId &&
-            state.phase in setOf("searching", "ready", "empty", "error")) {
+        // Even before the PC acknowledges a request, cancellation must be queued
+        // after the request, or closing the phone sheet can strand the PC picker.
+        if (connected.value && isValidRemoteRequestId(requestId) &&
+            (state.requestId != requestId || state.phase in setOf("searching", "ready", "empty", "error"))) {
             transport.send(RemoteCommand(
                 type = "handoffCancel", requestId = requestId,
                 playbackId = remotePlayback.value.playbackId,

@@ -85,6 +85,12 @@ class RemotePlaybackHandoffTest {
         assertFalse(command.copy(requestId = "4d6f2801-16ee-493c-bcc9-000000000000").isAllowedSourceAction(2, "player-a", available))
         assertFalse(command.copy(profileId = 1).isAllowedSourceAction(2, "player-a", available))
         assertFalse(command.isAllowedSourceAction(2, "player-b", available))
+        // Source picker navigation can dispose the previous player before the
+        // phone receives a fresh playback generation. Its own request remains valid.
+        assertTrue(command.isAllowedSourceAction(2, "player-b", available, requestPlaybackId = "player-a"))
+        assertFalse(command.copy(playbackId = "forged").isAllowedSourceAction(
+            2, "player-b", available, requestPlaybackId = "player-a",
+        ))
         assertFalse(command.isAllowedSourceAction(2, "player-a", available.copy(phase = "preparing")))
         assertFalse(command.copy(handoff = handoff()).isAllowedSourceAction(2, "player-a", available))
         assertFalse(command.copy(value = Double.NaN).isAllowedSourceAction(2, "player-a", available))

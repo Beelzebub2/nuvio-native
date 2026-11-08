@@ -91,6 +91,15 @@ internal fun StreamDestination(
         }
         return
     }
+    val remoteRequestId = launch.remoteSourceRequestId
+    val currentRemoteSourceRequestId by DesktopRemote.sourceRequestId.collectAsStateWithLifecycle()
+    LaunchedEffect(route, remoteRequestId, currentRemoteSourceRequestId) {
+        if (remoteRequestId != null && currentRemoteSourceRequestId != remoteRequestId &&
+            navController.currentRoute == route) {
+            // A phone can cancel during episode resolution, before source UI exists.
+            onBack()
+        }
+    }
     val pauseDescription = launch.pauseDescription
     val streamRouteScope = rememberCoroutineScope()
     var autoPlayNavigationStarted by remember(route.launchId) { mutableStateOf(false) }
@@ -686,7 +695,6 @@ internal fun StreamDestination(
     // Use the very same desktop StreamsRepository and openSelectedStream path as
     // ordinary local selection. The phone receives only short opaque handles
     // and sanitized labels; no media URL, torrent or provider credentials.
-    val remoteRequestId = launch.remoteSourceRequestId
     val handles = remember(remoteRequestId) { mutableMapOf<StreamItem, String>() }
     val eligibleRemoteStreams = if (remoteRequestId != null &&
         streamsUiState.requestToken == expectedStreamsRequestToken) {

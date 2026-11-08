@@ -40,6 +40,7 @@ import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.nuvio
+import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -455,7 +456,16 @@ internal fun RemoteSourcePickerDialog(
 ) {
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
-    val searching = connected && (!matches || state.phase == "searching")
+    var noResponse by remember(requestId) { mutableStateOf(false) }
+    LaunchedEffect(requestId, matches, connected) {
+        if (matches) {
+            noResponse = false
+        } else if (connected && requestId.isNotEmpty()) {
+            delay(20_000L)
+            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.requestId != requestId
+        }
+    }
+    val searching = connected && !noResponse && (!matches || state.phase == "searching")
     val preparing = connected && matches && state.phase == "preparing"
     val playing = connected && matches && state.phase == "playing"
     DialogSurface(
@@ -486,6 +496,8 @@ internal fun RemoteSourcePickerDialog(
             }
             if (!connected) {
                 DialogHint(stringResource(Res.string.remote_source_picker_disconnected), isError = true)
+            } else if (noResponse && !matches) {
+                DialogHint(stringResource(Res.string.remote_source_picker_timeout), isError = true)
             } else if (matches && state.phase == "empty") {
                 DialogHint(stringResource(Res.string.remote_source_picker_empty))
             } else if (matches && state.phase == "error") {

@@ -975,6 +975,7 @@ internal class LanDesktopRemote(
                         val state = DesktopRemote.sourcePicker.value
                         if (command.isAllowedSourceAction(
                             ProfileRepository.activeProfileId, DesktopRemote.playback.playbackId, state,
+                            DesktopRemote.sourceRequestPreviousPlaybackId,
                         )) {
                             val age = System.nanoTime() - sourceRequestStartedAtNanos.get()
                             if (age !in 0..120_000_000_000L) {

@@ -792,6 +792,7 @@
     <string name="remote_source_picker_disconnected">O PC desligou-se. Volta a ligar para tentares novamente.</string>
     <string name="remote_source_picker_empty">Não foram encontradas fontes reproduzíveis no PC. Verifica os add-ons e as definições P2P.</string>
     <string name="remote_source_picker_error">Não foi possível obter as fontes. Tenta novamente na página do conteúdo.</string>
+    <string name="remote_source_picker_timeout">O PC não respondeu. Fecha esta janela e tenta novamente.</string>
     <string name="remote_source_picker_controller">Abrir comando do PC</string>
     <string name="settings_account">Conta</string>
     <string name="settings_account_delete_account">Eliminar conta</string>

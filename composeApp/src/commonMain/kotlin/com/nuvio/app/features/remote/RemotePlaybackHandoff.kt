@@ -55,10 +55,14 @@ internal fun RemoteCommand.isAllowedSourceAction(
     currentProfileId: Int,
     currentPlaybackId: String,
     state: RemoteSourcePicker,
+    requestPlaybackId: String = currentPlaybackId,
 ): Boolean {
     if (type !in setOf("handoffSource", "handoffCancel") ||
         !isValidRemoteRequestId(requestId) || state.requestId != requestId ||
-        profileId != currentProfileId || playbackId != currentPlaybackId ||
+        profileId != currentProfileId ||
+        // The previous player may disappear while the PC navigates to its
+        // source picker. Both generations still belong to this exact request.
+        (playbackId != currentPlaybackId && playbackId != requestPlaybackId) ||
         value != 0.0 || handoff != null ||
         state.phase !in setOf("searching", "ready", "empty", "error")) return false
     return if (type == "handoffCancel") id.isEmpty()

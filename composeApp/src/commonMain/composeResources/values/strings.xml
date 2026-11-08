@@ -894,6 +894,7 @@
     <string name="remote_source_picker_disconnected">The PC disconnected. Reconnect to try again.</string>
     <string name="remote_source_picker_empty">No playable sources found on this PC. Check its add-ons and P2P settings.</string>
     <string name="remote_source_picker_error">Could not load sources. Try again from the content page.</string>
+    <string name="remote_source_picker_timeout">The PC did not respond. Close this panel and try again.</string>
     <string name="remote_source_picker_controller">Open PC controller</string>
     <string name="remote_playback_now_playing">Now playing on your PC</string>
     <string name="remote_playback_idle_title">Nothing playing yet</string>
