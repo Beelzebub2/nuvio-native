@@ -1,3 +1,29 @@
+## Starlit 1.14.0
+
+### Phone-to-PC playback and pairing
+
+- **Start a movie or episode from the phone:** Once a phone is securely paired with a compatible Starlit PC, choose a film, series or episode without accepting an extra playback prompt on the computer. The PC uses its built-in player so playback controls remain available on the phone.
+- **Choose the PC's source on your phone:** Browse eligible streams found by the PC's installed add-ons, see provider, source and available size information, and choose the initial source before the PC starts playback. The existing desktop playback path continues to enforce provider/debrid and P2P settings; stream URLs, torrent details and credentials are never sent to the phone.
+- **Keep pairing across Wi-Fi reconnects:** Android and Windows securely remember a previously approved LAN pairing and mutually prove trust during reconnect, including across local IP address changes. Forgetting the device revokes its saved LAN credential. The initial connection still requires code verification on both devices; unknown or revoked devices cannot skip it.
+- **Better remote session feedback:** Source searching, selection, preparation, cancellation, unavailable sources and connection timeouts display on the phone. Player replacement no longer disconnects the phone remote. Older app versions use their prior compatible pairing/playback behavior or receive an update-required message.
+
+### MyAnimeList and anime playback
+
+- **Manage MyAnimeList directly on desktop:** A redesigned, responsive list provides status groups, sorting, richer details and inline editing of watch status, score, watched episodes and rewatching. Removal requires confirmation, and the interface handles failed updates without losing track of the user's changes.
+- **Recover more anime intro and credit markers:** Anime-Skip can find intervals even when optional TVDB episode mapping is missing, using available anime IDs. Multiple community markers are handled more carefully and incomplete or unbounded intervals are never used to guess where to skip; existing movie and TV intro support remains intact.
+
+### Languages and security
+
+- **More languages:** Add 13 additional interface translations for supported locales, excluding Hindi. Language catalogs are initial translations and can be improved through native-speaker review.
+- **Private desktop preferences on Unix:** On Linux and macOS, app-owned preference files and their backups receive owner-only permissions, including when written atomically. Existing Windows permissions and explicitly customized storage locations are unchanged.
+- **More robust CI dependencies:** The iOS Kotlin compile check verifies pinned Gradle and Kotlin/Native artifacts against official SHA-256 checksums, avoiding intermittent release-asset download failures without changing the versions used for normal application builds.
+
+### Validation and limitations
+
+- The source changes from PRs #162, #167, #169, #170, #171 and #172 are included. Remote integration tests passed 67/67 on Windows, with the release pipeline independently rechecking the integrated desktop build, provider gateway, version policy, Windows installation and signed Android packages.
+- Initial PC source selection is manual (not automatic), and only eligible PC-playable streams are offered. A source needing P2P permission still follows the PC's existing consent policy; the phone does not grant new P2P rights silently. The source list is capped for remote performance.
+- Physical Android-to-Windows Wi-Fi/Bluetooth and provider-specific P2P/debrid playback still need device-level verification. The official 1.14.0 GitHub release packages Windows and Android; an iOS App Store distribution is not part of these release assets.
+
 ## Starlit 1.13.0
 
 ### Privacy and diagnostics
