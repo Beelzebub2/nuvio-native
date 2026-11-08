@@ -10,6 +10,52 @@ import kotlin.test.assertTrue
 
 class WindowsRemoteSleepGuardTest {
     @Test
+    fun authorizedRemotePlaybackRequestsOneShotMonitorWakeWithoutKeepingDisplayAlwaysOn() {
+        val systemAwake = CountDownLatch(1)
+        val monitorWake = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val wakeCount = AtomicInteger(0)
+        val oneShotCount = AtomicInteger(0)
+        val callerThread = Thread.currentThread()
+        val guard = WindowsRemoteSleepGuard(
+            powerOnDisplay = {
+                wakeCount.incrementAndGet()
+                monitorWake.countDown()
+            },
+            setState = { flags ->
+                when (flags) {
+                    WindowsRemoteSleepGuard.ES_CONTINUOUS or WindowsRemoteSleepGuard.ES_SYSTEM_REQUIRED ->
+                        systemAwake.countDown()
+                    WindowsRemoteSleepGuard.ES_DISPLAY_REQUIRED -> {
+                        oneShotCount.incrementAndGet()
+                        assertFalse(Thread.currentThread() === callerThread,
+                            "Display timer reset must be asynchronous")
+                    }
+                    WindowsRemoteSleepGuard.ES_CONTINUOUS -> released.countDown()
+                    else -> throw AssertionError("Unexpected Windows execution flags: $flags")
+                }
+                1
+            },
+        )
+        guard.playbackRequested()
+        assertEquals(0, wakeCount.get(), "Unauthenticated requests must not light the PC display")
+        guard.authenticated(host = false)
+        guard.playbackRequested()
+        assertEquals(0, wakeCount.get(), "A client-side remote must never wake the local display")
+        guard.authenticated(host = true)
+        assertTrue(systemAwake.await(3, TimeUnit.SECONDS))
+        assertEquals(0, oneShotCount.get(), "Pairing/connection alone must leave the display timer untouched")
+        guard.playbackRequested()
+        assertTrue(monitorWake.await(3, TimeUnit.SECONDS))
+        assertEquals(1, oneShotCount.get())
+        guard.playbackRequested()
+        assertEquals(1, wakeCount.get(), "Repeated playback events must be throttled")
+        guard.disconnected()
+        assertTrue(released.await(3, TimeUnit.SECONDS))
+        guard.playbackRequested()
+        assertEquals(1, wakeCount.get(), "Disconnected phones cannot wake the display")
+    }
+    @Test
     fun preventsOnlySystemSleepDuringAnAuthenticatedDesktopSessionAndReleasesIt() {
         val enabled = CountDownLatch(1)
         val disabled = CountDownLatch(1)
