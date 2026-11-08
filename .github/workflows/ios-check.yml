@@ -26,6 +26,23 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
+      - name: Download pinned Gradle with retries
+        shell: bash
+        run: |
+          # Gradle's official distribution redirects through GitHub release assets,
+          # which can transiently return 504 on fresh macOS runners. A download
+          # failure is not a Kotlin failure; only retry the wrapper setup.
+          for attempt in 1 2 3 4 5; do
+            if ./gradlew --version --no-daemon; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo '::error::Gradle distribution remains unavailable after five attempts.'
+              exit 1
+            fi
+            echo "::warning::Gradle distribution download failed; retry $((attempt + 1))/5."
+            sleep "$((attempt * 20))"
+          done
       - name: Compile iOS simulator Kotlin and Keychain interop
         run: >-
           ./gradlew :composeApp:compileKotlinIosSimulatorArm64
