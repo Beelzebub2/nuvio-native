@@ -7,6 +7,7 @@ class RemoteCommandPolicyTest {
     fun onlyCurrentPlaybackAndAdvertisedChoicesReachControls() {
         val state = RemotePlayback(playbackId = "session-2", duration = 100_000,
             skip = true, nextEpisodeAvailable = true, skipIntro = true, fullscreenSupported = true,
+            volumeMax = REMOTE_MAX_VOLUME_LEVEL,
             episodes = listOf(RemoteChoice("episode-3", "Episode 3")),
             subtitles = listOf(RemoteChoice("off", "Off"), RemoteChoice("english", "English")),
             sources = listOf(RemoteChoice("episode-3-source-0", "Source")))
@@ -15,6 +16,8 @@ class RemoteCommandPolicyTest {
         assertTrue(allowed("pause"))
         assertTrue(allowed("mute"))
         assertTrue(allowed("volume", 0.4))
+        assertTrue(allowed("volume", 1.5))
+        assertTrue(allowed("volume", 2.0))
         assertTrue(allowed("next"))
         assertTrue(allowed("skipInterval"))
         assertTrue(allowed("skipIntro")) // Legacy PR #153 client remains supported.
@@ -32,7 +35,9 @@ class RemoteCommandPolicyTest {
         assertFalse(allowed("seek", Double.NaN))
         assertFalse(allowed("seek", 100_001.0))
         assertFalse(allowed("seekBy", Double.POSITIVE_INFINITY))
-        assertFalse(allowed("volume", 2.0))
+        assertFalse(allowed("volume", 2.01))
+        assertFalse(allowed("volume", -0.01))
+        assertFalse(allowed("volume", Double.NaN))
         assertFalse(allowed("skipInterval", value = 1.0))
         assertFalse(allowed("skipInterval", session = "session-1"))
         assertFalse(allowed("next", id = "old-episode"))
@@ -51,6 +56,25 @@ class RemoteCommandPolicyTest {
             .isAllowedFor(state.copy(skip = false)))
         assertFalse(allowed("enableP2pForPlayerControls"))
         assertFalse(allowed("submitIntroCommit"))
+    }
+
+    @Test
+    fun boostedVolumeIsAcceptedOnlyWhenPcAdvertisesIt() {
+        val legacy = RemotePlayback(playbackId = "old-pc")
+        val boosted = legacy.copy(volumeMax = REMOTE_MAX_VOLUME_LEVEL)
+        fun allowed(playback: RemotePlayback, volume: Double) =
+            RemoteCommand(type = "volume", value = volume, playbackId = playback.playbackId).isAllowedFor(playback)
+        assertEquals(1f, legacy.effectiveVolumeMax())
+        assertTrue(allowed(legacy, 1.0))
+        assertFalse(allowed(legacy, 1.01))
+        assertEquals(2f, boosted.effectiveVolumeMax())
+        assertTrue(allowed(boosted, 1.5))
+        assertTrue(allowed(boosted, 2.0))
+        assertFalse(allowed(boosted, 2.01))
+        assertFalse(allowed(boosted, Double.POSITIVE_INFINITY))
+        // A corrupted advertised maximum must never increase the allowed command range.
+        assertEquals(1f, boosted.copy(volumeMax = Float.NaN).effectiveVolumeMax())
+        assertEquals(2f, boosted.copy(volumeMax = Float.MAX_VALUE).effectiveVolumeMax())
     }
 
     @Test
