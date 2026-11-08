@@ -27,6 +27,9 @@ internal fun randomRemoteBytes() = ByteArray(32).also(random::nextBytes)
 // present before either peer exchanges any resume messages.
 private val TRUSTED_HOST_MARKER = "STH2!".toByteArray(Charsets.US_ASCII)
 private val TRUSTED_PHONE_MARKER = "STP2!".toByteArray(Charsets.US_ASCII)
+// Separate new LAN marker preserves compatibility with Bluetooth-only v2 clients.
+private val LAN_HOST_MARKER = "LNH1!".toByteArray(Charsets.US_ASCII)
+private val LAN_PHONE_MARKER = "LNP1!".toByteArray(Charsets.US_ASCII)
 internal fun remoteHash(vararg values: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").run {
     update(REMOTE_PROTOCOL.toByteArray(Charsets.UTF_8))
     values.forEach { update(it) }
@@ -73,6 +76,7 @@ internal data class RemotePairingChannel(
     val code: String,
     val transcript: ByteArray = byteArrayOf(),
     val supportsTrustedReconnect: Boolean = false,
+    val supportsLanTrustedReconnect: Boolean = false,
 )
 
 internal fun openRemoteChannel(socket: Socket, host: Boolean): RemotePairingChannel =
@@ -83,10 +87,14 @@ internal fun openRemoteChannel(source: InputStream, destination: OutputStream, h
     val input = DataInputStream(source)
     val output = DataOutputStream(destination)
     var trustedReconnectSupported = false
+    var lanReconnectSupported = false
     val transcript = if (host) {
         val keys = remoteRsaKeys()
         val publicKey = keys.public.encoded
-        val nonce = randomRemoteBytes().also { TRUSTED_HOST_MARKER.copyInto(it) }
+        val nonce = randomRemoteBytes().also {
+            TRUSTED_HOST_MARKER.copyInto(it)
+            LAN_HOST_MARKER.copyInto(it, TRUSTED_HOST_MARKER.size)
+        }
         val commitment = remoteHash(publicKey, nonce)
         output.writeUTF(REMOTE_PROTOCOL)
         output.writeFrame(publicKey)
@@ -96,18 +104,27 @@ internal fun openRemoteChannel(source: InputStream, destination: OutputStream, h
         val secret = decryptRemoteSecret(keys.private, encrypted)
         trustedReconnectSupported = secret.copyOfRange(0, TRUSTED_PHONE_MARKER.size)
             .contentEquals(TRUSTED_PHONE_MARKER)
+        lanReconnectSupported = secret.copyOfRange(
+            TRUSTED_PHONE_MARKER.size, TRUSTED_PHONE_MARKER.size + LAN_PHONE_MARKER.size,
+        ).contentEquals(LAN_PHONE_MARKER)
         output.writeFrame(nonce)
         remoteTranscript(publicKey, commitment, encrypted, nonce, secret)
     } else {
         require(input.readUTF() == REMOTE_PROTOCOL)
         val publicKey = input.readFrame(512)
         val commitment = input.readFrame(32).also { require(it.size == 32) }
-        val secret = randomRemoteBytes().also { TRUSTED_PHONE_MARKER.copyInto(it) }
+        val secret = randomRemoteBytes().also {
+            TRUSTED_PHONE_MARKER.copyInto(it)
+            LAN_PHONE_MARKER.copyInto(it, TRUSTED_PHONE_MARKER.size)
+        }
         val encrypted = encryptRemoteSecret(publicKey, secret)
         output.writeFrame(encrypted)
         val nonce = input.readFrame(32)
         trustedReconnectSupported = nonce.copyOfRange(0, TRUSTED_HOST_MARKER.size)
             .contentEquals(TRUSTED_HOST_MARKER)
+        lanReconnectSupported = nonce.copyOfRange(
+            TRUSTED_HOST_MARKER.size, TRUSTED_HOST_MARKER.size + LAN_HOST_MARKER.size,
+        ).contentEquals(LAN_HOST_MARKER)
         remoteTranscript(publicKey, commitment, encrypted, nonce, secret)
     }
     return RemotePairingChannel(
@@ -115,6 +132,7 @@ internal fun openRemoteChannel(source: InputStream, destination: OutputStream, h
         remotePairingCode(transcript),
         transcript,
         trustedReconnectSupported,
+        trustedReconnectSupported && lanReconnectSupported,
     )
 }
 

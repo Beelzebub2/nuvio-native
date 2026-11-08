@@ -105,6 +105,15 @@ class DesktopRemoteProtocolTest {
                 Socket(address, tcpPort).use { phone ->
                     phone.soTimeout = 5_000
                     val pairing = openRemoteChannel(phone, host = false)
+                    // New peers negotiate LAN trust before the desktop shows the
+                    // first-time code. Reply as an untrusted phone to exercise
+                    // the real two-device approval path without credentials.
+                    assertTrue(pairing.supportsLanTrustedReconnect)
+                    val trust = resumeLanTrust(
+                        pairing, RemoteAccount("account", "https://example.org", "publishable"),
+                        host = false, store = null,
+                    )
+                    assertFalse(trust.trusted)
                     withTimeout(5_000) {
                         while (DesktopRemote.pairing.value == null) delay(25)
                     }
