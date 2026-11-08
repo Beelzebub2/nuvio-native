@@ -92,6 +92,7 @@ internal interface RemoteFullscreenActions {
 internal interface DesktopRemoteTransport {
     val supported: Boolean
     val bluetoothSupported: Boolean get() = false
+    val retainWhenUiDetached: Boolean get() = false
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
     /**
@@ -347,10 +348,23 @@ internal fun DesktopRemoteHost() {
             DesktopRemote.status.value = "Sign in to the same account and server on both devices to use Desktop remote."
         }
         onDispose {
-            DesktopRemote.transport.stop()
-            DesktopRemote.accountChanged(null)
-            DesktopRemote.handoffAccount = null
-            DesktopRemote.pendingHandoff.value = null
+            // A phone's connected-device foreground service owns the transport
+            // when its Activity is temporarily removed. Never retain it if the
+            // account or server changed, or after an explicit disconnect.
+            val signedInNow = AuthRepository.state.value as? AuthState.Authenticated
+            val retain = !isDesktop && remoteAccount != null &&
+                signedInNow != null && !signedInNow.isAnonymous &&
+                signedInNow.userId == remoteAccount.userId &&
+                ServerConfigurationRepository.active.value.backendUrl.trimEnd('/') == remoteAccount.server &&
+                DesktopRemote.transport.retainWhenUiDetached &&
+                (DesktopRemote.connected.value || DesktopRemote.connecting.value ||
+                    DesktopRemote.pairing.value != null)
+            if (!retain) {
+                DesktopRemote.transport.stop()
+                DesktopRemote.accountChanged(null)
+                DesktopRemote.handoffAccount = null
+                DesktopRemote.pendingHandoff.value = null
+            }
         }
     }
     DesktopRemoteDialogs()

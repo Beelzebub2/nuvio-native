@@ -5,8 +5,16 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Normal prerequisite for Android 14+ connectedDevice FGS on Wi-Fi-only phones. -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <application>
+        <service
+            android:name="com.nuvio.app.features.remote.AndroidRemoteConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            android:stopWithTask="false" />
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.nuvio.app.features.player.StarlitCastOptionsProvider" />

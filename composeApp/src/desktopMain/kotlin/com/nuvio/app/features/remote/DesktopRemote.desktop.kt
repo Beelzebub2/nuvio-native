@@ -12,4 +12,7 @@ internal actual fun createDesktopRemoteTransport(): DesktopRemoteTransport =
         lanTrustStore = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
             WindowsRemoteLanTrustStore
         else null,
+        connectionLifetime = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
+            WindowsRemoteSleepGuard()
+        else NoopRemoteConnectionLifetime,
     )

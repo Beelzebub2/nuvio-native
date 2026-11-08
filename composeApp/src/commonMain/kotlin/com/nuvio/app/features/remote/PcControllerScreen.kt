@@ -402,11 +402,22 @@ private fun SavedPcRow(
             modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = connect,
         ) {
-            if (!saved.bluetooth) saved.wakeMac?.let { mac ->
-                IconButton(onClick = { DesktopRemote.transport.wake(saved.address, mac) }) {
-                    Icon(Icons.Rounded.PowerSettingsNew, contentDescription = stringResource(Res.string.remote_pc_wake),
-                        tint = tokens.colors.accent)
-                }
+            if (!saved.bluetooth && !active) {
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.remote_pc_wake),
+                    icon = Icons.Rounded.PowerSettingsNew,
+                    tone = NuvioCompactActionTone.Ghost,
+                    size = NuvioActionSize.Small,
+                    modifier = Modifier.testTag("remote-wake-pc-${saved.address}"),
+                    onClick = {
+                        val mac = saved.wakeMac
+                        if (mac != null) DesktopRemote.transport.wake(saved.address, mac)
+                        else {
+                            editingWake = true
+                            macError = false
+                        }
+                    },
+                )
             }
             if (active) {
                 Text(

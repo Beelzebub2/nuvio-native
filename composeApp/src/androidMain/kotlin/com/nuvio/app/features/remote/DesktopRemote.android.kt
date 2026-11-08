@@ -5,4 +5,5 @@ internal actual fun createDesktopRemoteTransport(): DesktopRemoteTransport =
         bluetoothClient = AndroidBluetoothRemoteClient,
         bluetoothTrustStore = AndroidRemoteBluetoothTrustStore,
         lanTrustStore = AndroidRemoteLanTrustStore,
+        connectionLifetime = AndroidRemoteConnectionLifetime,
     )
