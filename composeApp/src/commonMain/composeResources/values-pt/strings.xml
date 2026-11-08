@@ -2153,7 +2153,7 @@
     <string name="remote_qr_account_description">Controle a reprodução pelo seu telemóvel Android. Emparelhe na mesma rede com a sua conta Starlit.</string>
     <string name="remote_qr_manage">Gerir ligação</string>
     <string name="remote_qr_show">Ligar telemóvel</string>
-    <string name="remote_qr_instructions">No telemóvel Android, abra Starlit → Definições → Controlador do PC → Ler código QR do computador. Escolha este PC e compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
+    <string name="remote_qr_instructions">No telemóvel Android, abra Starlit → Definições → Controlador do PC → Ler código QR do computador. Escolha este PC. Na primeira ligação, ou se o Starlit voltar a pedir por segurança, compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
     <string name="remote_qr_image_description">Código QR de emparelhamento do computador %1$s</string>
     <string name="remote_qr_change_network">Escolher endereço de rede</string>
     <string name="remote_qr_scan">Ler código QR do computador</string>

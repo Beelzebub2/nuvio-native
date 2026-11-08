@@ -1666,7 +1666,7 @@
     <string name="remote_qr_account_description">Controle a reprodução pelo seu celular Android. Pareie na mesma rede com sua conta Starlit.</string>
     <string name="remote_qr_manage">Gerenciar conexão</string>
     <string name="remote_qr_show">Conectar celular</string>
-    <string name="remote_qr_instructions">No celular Android, abra Starlit → Configurações → Controlador do PC → Ler QR code do computador. Escolha este PC, compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
+    <string name="remote_qr_instructions">No celular Android, abra Starlit → Configurações → Controlador do PC → Ler QR code do computador. Escolha este PC. Na primeira conexão, ou se o Starlit pedir novamente por segurança, compare e confirme os códigos nos dois dispositivos. Use a mesma conta e servidor na mesma rede.</string>
     <string name="remote_qr_image_description">QR code de pareamento do computador %1$s</string>
     <string name="remote_qr_change_network">Escolher endereço de rede</string>
     <string name="remote_qr_scan">Ler QR code do computador</string>

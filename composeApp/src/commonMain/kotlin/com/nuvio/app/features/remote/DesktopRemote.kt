@@ -107,6 +107,7 @@ internal interface DesktopRemoteTransport {
     fun disconnect()
     fun send(command: RemoteCommand)
     fun forgetBluetoothTrust(account: RemoteAccount, address: String): Boolean = false
+    fun forgetLanTrust(account: RemoteAccount, desktopId: String): Boolean = false
 }
 
 internal expect fun createDesktopRemoteTransport(): DesktopRemoteTransport
@@ -157,9 +158,13 @@ internal object DesktopRemote {
     }
 
     /** Called only after encrypted, account-verified pairing or a previously approved secure resume. */
-    fun pairedWith(account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long) {
+    fun pairedWith(
+        account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long, trustedId: String? = null,
+    ) {
         if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
-        val list = rememberRemoteDevice(remembered.value, desktop.name, desktop.address, nowEpochMs, desktop.bluetooth)
+        val list = rememberRemoteDevice(
+            remembered.value, desktop.name, desktop.address, nowEpochMs, desktop.bluetooth, trustedId,
+        )
         RememberedRemoteDeviceStore.write(account, list)
         remembered.value = list
     }
@@ -176,6 +181,13 @@ internal object DesktopRemote {
                 status.value = "Could not forget the Bluetooth PC securely. Please try again."
                 return
             }
+        }
+        // Forget must also erase the encrypted LAN credential, never just the visible row.
+        val lanIds = remembered.value.filter { it.address == address && !it.bluetooth }
+            .mapNotNull { it.trustedId }.distinct()
+        if (lanIds.any { !transport.forgetLanTrust(current, it) }) {
+            status.value = "Could not forget this Wi-Fi PC securely. Please try again."
+            return
         }
         val next = remembered.value.filterNot { it.address == address }
         RememberedRemoteDeviceStore.write(current, next)
