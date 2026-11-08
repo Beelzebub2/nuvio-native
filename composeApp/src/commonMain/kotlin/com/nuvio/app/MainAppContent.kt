@@ -1170,6 +1170,12 @@ internal fun MainAppContent(
                     if (handoff.profileId == ProfileRepository.activeProfileId &&
                         handoff.profileId == activePlaybackProfileId) {
                         latestRemoteLaunch(handoff, requestId)
+                    } else if (requestId != null &&
+                        DesktopRemote.sourcePicker.value.requestId == requestId) {
+                        DesktopRemote.sourcePicker.value = DesktopRemote.sourcePicker.value.copy(
+                            phase = "error",
+                            message = "Switch to the same active profile on both devices before playing.",
+                        )
                     }
                 }
             }

@@ -719,7 +719,9 @@ internal fun StreamDestination(
                         DesktopRemote.sourcePicker.value = current.copy(
                             phase = "preparing", message = "Opening selected source on the PC.",
                         )
-                        openSelectedStream(stream, launch.resumePositionMs, launch.resumeProgressFraction, false, false)
+                        // Keep the player inside Starlit, otherwise an enabled external player
+                        // would steal playback and the phone could no longer control the PC.
+                        openSelectedStream(stream, launch.resumePositionMs, launch.resumeProgressFraction, false, true)
                         true
                     }
                 }

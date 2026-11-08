@@ -1021,7 +1021,7 @@ internal class LanDesktopRemote(
                     }
                     val profileId = ProfileRepository.activeProfileId
                     val picker = DesktopRemote.sourcePicker.value
-                    if (picker.phase == "preparing" && DesktopRemote.playback.playing &&
+                    if (picker.phase == "preparing" &&
                         DesktopRemote.playback.playbackId.isNotBlank() &&
                         DesktopRemote.playback.playbackId != DesktopRemote.sourceRequestPreviousPlaybackId) {
                         DesktopRemote.sourcePicker.value = picker.copy(phase = "playing", sources = emptyList())
