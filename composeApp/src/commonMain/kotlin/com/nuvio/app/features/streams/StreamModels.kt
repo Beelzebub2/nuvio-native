@@ -30,6 +30,10 @@ data class StreamItem(
     val debridCacheStatus: StreamDebridCacheStatus? = null,
     val externalSubtitles: List<StreamSubtitle> = emptyList(),
     val badges: List<StreamBadge> = emptyList(),
+    /** Seeders reported by the provider, if known; not a live tracker measurement. */
+    val seeders: Int? = null,
+    /** Peer count reported by the provider, if known. */
+    val peers: Int? = null,
 ) {
     val streamLabel: String
         get() = name?.takeIf { it.isNotBlank() } ?: "Stream"

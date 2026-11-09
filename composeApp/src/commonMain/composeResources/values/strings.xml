@@ -896,6 +896,11 @@
     <string name="remote_source_picker_error">Could not load sources. Try again from the content page.</string>
     <string name="remote_source_picker_timeout">The PC did not respond. Close this panel and try again.</string>
     <string name="remote_source_picker_controller">Open PC controller</string>
+    <string name="remote_source_quality_stars">Resolution quality: %1$d out of 5 stars</string>
+    <string name="remote_source_quality_hint">Stars reflect resolution, not viewer reviews or streaming reliability.</string>
+    <string name="remote_source_seeders">Seeds: %1$d</string>
+    <string name="remote_source_peers">Peers: %1$d</string>
+    <string name="remote_source_cached">Cached</string>
     <string name="remote_playback_now_playing">Now playing on your PC</string>
     <string name="remote_playback_idle_title">Nothing playing yet</string>
     <string name="remote_playback_idle_body">Start a video on your PC and its controls show up here.</string>

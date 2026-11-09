@@ -16,7 +16,19 @@ import kotlin.uuid.Uuid
 internal fun newRemotePlaybackId(): String = Uuid.random().toString()
 
 @Serializable
-internal data class RemoteChoice(val id: String, val label: String, val selected: Boolean = false)
+internal data class RemoteChoice(
+    val id: String,
+    val label: String,
+    val selected: Boolean = false,
+    // Optional source-only metadata. Other remote choices and older peers keep their defaults.
+    val quality: String? = null,
+    val qualityStars: Int? = null,
+    val seeders: Int? = null,
+    val peers: Int? = null,
+    val cached: Boolean = false,
+    val recommended: Boolean = false,
+    val recommendationReason: String? = null,
+)
 
 /** Source descriptions only. Media URLs, headers, torrent hashes and credentials stay on the PC. */
 @Serializable

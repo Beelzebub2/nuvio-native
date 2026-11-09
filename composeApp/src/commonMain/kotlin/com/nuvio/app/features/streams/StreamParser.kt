@@ -48,6 +48,8 @@ object StreamParser {
                 addonName = addonName,
                 addonId = addonId,
                 addonLogo = addonLogo,
+                seeders = (obj.int("seeders") ?: obj.int("seeds"))?.takeIf { it in 0..999_999 },
+                peers = obj.int("peers")?.takeIf { it in 0..999_999 },
                 streamType = normalizeStreamType(obj.string("type")),
                 clientResolve = clientResolve,
                 behaviorHints = StreamBehaviorHints(

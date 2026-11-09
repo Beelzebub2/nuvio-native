@@ -120,15 +120,30 @@ class RemotePlaybackHandoffTest {
             capabilities = listOf(REMOTE_SOURCE_CAPABILITY),
             sourcePicker = RemoteSourcePicker(
                 "4d6f2801-16ee-493c-bcc9-0bfa5efad34b", "A Movie",
-                "ready", listOf(RemoteChoice("opaque-123", "1080p · Provider")),
+                "ready", listOf(RemoteChoice(
+                    "opaque-123", "1080p - Provider", quality = "1080p",
+                    qualityStars = 4, seeders = 89, peers = 7, cached = true,
+                    recommended = true, recommendationReason = "ReadyToPlay",
+                )),
             ),
         )
         val json = Json.encodeToString(response)
+        val decoded = Json.decodeFromString<RemotePlayback>(json)
+        assertEquals(4, decoded.sourcePicker.sources.first().qualityStars)
+        assertEquals(89, decoded.sourcePicker.sources.first().seeders)
+        assertEquals(7, decoded.sourcePicker.sources.first().peers)
+        assertTrue(decoded.sourcePicker.sources.first().recommended)
         assertFalse(json.contains("sourceUrl"))
         assertFalse(json.contains("Authorization"))
         assertFalse(json.contains("magnet:"))
+        assertFalse(json.contains("infoHash"))
         val previousPeer = Json.decodeFromString<RemotePlayback>("""{"playbackId":"old","playing":false}""")
         assertTrue(previousPeer.capabilities.isEmpty())
         assertEquals("idle", previousPeer.sourcePicker.phase)
+        val previousChoice = Json.decodeFromString<RemoteChoice>("""{"id":"legacy","label":"720p"}""")
+        assertNull(previousChoice.qualityStars)
+        assertNull(previousChoice.seeders)
+        assertNull(previousChoice.peers)
+        assertFalse(previousChoice.recommended)
     }
 }
