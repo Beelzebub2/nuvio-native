@@ -4,6 +4,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import {
   AuthAuditReporter, coarseGeoLocation, exportFailedLogins, exportSuccessfulLogins,
+  retryDelayMs,
 } from './lib.mjs';
 
 async function localGeoIp(path) {
@@ -36,22 +37,42 @@ export async function run(env = process.env) {
   const geo = await localGeoIp(env.GEOIP_DB_PATH);
   let stopping = false;
   const stop = () => { stopping = true; };
+  const states = {
+    success: { failures: 0, nextAt: 0, lastWarningAt: 0 },
+    failure: { failures: 0, nextAt: 0, lastWarningAt: 0 },
+  };
+  async function pollSource(key, label, task) {
+    const state = states[key];
+    if (Date.now() < state.nextAt) return;
+    try {
+      await task();
+      if (state.failures) console.info(label + ' recovered');
+      state.failures = 0;
+      state.nextAt = 0;
+      state.lastWarningAt = 0;
+    } catch (error) {
+      // Never advance a failed cursor. Avoid retry storms and log flooding.
+      state.failures = Math.min(8, state.failures + 1);
+      const now = Date.now();
+      state.nextAt = now + retryDelayMs(state.failures);
+      if (!state.lastWarningAt || now - state.lastWarningAt >= 30 * 60_000) {
+        // Driver errors may contain database URLs, client IPs and credentials.
+        const reason = error?.code === 'AUTH_AUDIT_INGEST_WINDOW'
+          ? ' (OpenObserve ingest-age window)' : '';
+        console.error(label + ' temporarily unavailable' + reason);
+        state.lastWarningAt = now;
+      }
+    }
+  }
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
   try {
     await db.query('SELECT 1');
     while (!stopping) {
-      try {
-        await exportSuccessfulLogins(db, reporter, geo);
-      } catch {
-        // Driver/network errors can contain credentials or private addresses.
-        console.error('Successful login analytics temporarily unavailable');
-      }
-      try {
-        await exportFailedLogins(db, reporter, env.AUTH_FAILED_LOG_PATH, geo);
-      } catch {
-        console.error('Failed-login gateway analytics temporarily unavailable');
-      }
+      await pollSource('success', 'Successful login analytics', () =>
+        exportSuccessfulLogins(db, reporter, geo));
+      await pollSource('failure', 'Failed-login gateway analytics', () =>
+        exportFailedLogins(db, reporter, env.AUTH_FAILED_LOG_PATH, geo));
       if (!stopping) await pause(5000);
     }
   } finally {

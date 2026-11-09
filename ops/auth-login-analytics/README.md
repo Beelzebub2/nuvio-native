@@ -63,6 +63,34 @@ lookback and 100 rows per poll; Nginx log polling is bounded to 256 KiB
 per cycle. The failure cursor stores inode and byte offset. Copytruncate
 rotation can still lose a few events around an unusual concurrent crash.
 
+### OpenObserve ingestion age and recovery
+
+**Required VPS configuration:** OpenObserve can reject old event timestamps
+with **HTTP 200** and per-stream `failed` counts. Its default ingest-age
+window is only **5 hours**, which leaves this exporter stuck retrying once
+the cursor is older than that window. Set `ZO_INGEST_ALLOWED_UPTO=720`
+(hours, **30 days**) in the OpenObserve Compose environment alongside
+`ZO_COMPACT_DATA_RETENTION_DAYS=30`. Preserve the original timestamp and
+make the ingest window no larger than the retention window. Validate the
+Compose file, back up the prior configuration and recreate **only**
+OpenObserve without pulling a new image. Verify the cursor resumes and
+that original logins and existing account services remain functional.
+
+On transient failures the exporter uses bounded exponential backoff (5
+seconds up to 5 minutes), and emits only sanitized error categories at
+most every 30 minutes until recovery. Failed/partial deliveries stay
+uncheckpointed; duplicates remain possible when an acknowledgement is
+lost after a successful remote write. Dashboards must count distinct
+`event_id` values; do not delete security audit records to reduce the
+OpenObserve stream summary counter.
+
+Use an OpenObserve ingestion-only passcode/token, **not** the root login
+password. OpenObserve may expose the same username with a different,
+ingestion-only passcode: verify it is different and a read-only API call
+using it returns 401/403. Keep OpenObserve loopback-only (or behind an
+authenticated private tunnel), restrict `/etc/starlit/runtime.env` to
+root and apply retention/access controls for `starlit_auth` client IP data.
+
 ## Local checks
 
 Run npm ci --ignore-scripts --no-audit and npm test in this directory.
