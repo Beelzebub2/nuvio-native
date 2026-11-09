@@ -1,3 +1,27 @@
+## Starlit 1.15.0
+
+### Anime franchise watch orders
+
+- **Follow the story across seasons and films:** Anime detail pages can show a compact viewing-order preview and a full franchise list. Reviewed sequences place essential movies and related seasons in their intended progression, while optional side stories remain clearly distinguished.
+- **Choose how to browse:** Switch between recommended, release and verified chronological ordering, include or hide optional entries, and see which installments are current or completed. Incomplete or uncertain source data is labelled as inferred or partial rather than presented as a definitive order.
+- **Find the next installment easily:** Select a title from the watch-order list to search through the existing Starlit add-ons and source picker. At the end of the final available episode or a movie, a dismissible suggestion can point to the next eligible title; ordinary next-episode autoplay still takes precedence, and playback never starts across titles without a new selection.
+- **Clear recovery and attribution:** Missing mappings, unavailable orders and connection failures have retry or fallback states. Franchise data is attributed to Junban under the Open Database License (ODbL 1.0), with read-only relationship metadata provided through a compatible third-party API.
+
+### Phone-to-PC connectivity
+
+- **Pair with wired computers over local Wi-Fi:** Restore reliable discovery, pairing and control when the phone is on Wi-Fi but the paired Windows PC uses Ethernet. LAN and firewall checks handle the different network interfaces more accurately while keeping the existing authenticated device trust and firewall protections.
+- **More reliable compatibility checks:** Improve Windows firewall rule detection and recovery without creating unnecessary public-network allowances. The iOS Kotlin build also uses checksum-verified dependency downloads.
+
+### Service reliability
+
+- **Avoid repeated failed analytics submissions:** The independent account-security analytics exporter handles stale ingestion failures without rapid retry loops. This server-side change does not enable additional client analytics or collect watch-order history.
+
+### Validation and limitations
+
+- The anime watch-order change passed Android Full/Play Store, iOS Kotlin, desktop, gateway, Unix-native and repository-security pull-request checks. Focused gateway tests passed 47/47 and targeted watch-order tests passed 8/8; phone-sized and desktop-sized layouts were visually checked. The read-only watch-order API was deployed and checked over HTTPS before this release.
+- Watch-order availability depends on reliable third-party franchise metadata and the user's installed add-ons; some franchises have no verified order or playable title. Chronological ordering is only shown where reviewed. Watch progress, third-party list statuses, and existing media sources are not automatically modified.
+- Real-world phone-to-PC pairing, specific streaming providers, and physical Android/iOS playback still require hardware testing. This release packages Windows and Android builds, not an iOS App Store release.
+
 ## Starlit 1.14.1
 
 ### More reliable phone-to-PC control
