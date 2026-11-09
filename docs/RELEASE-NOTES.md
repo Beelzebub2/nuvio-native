@@ -1,3 +1,23 @@
+## Starlit 1.14.1
+
+### More reliable phone-to-PC control
+
+- **Keep controlling the PC after leaving the remote screen:** While a phone is connected, Android can keep its authenticated remote session running through a connected-device foreground service when Starlit is minimized or the user navigates elsewhere. Disconnecting ends the service instead of leaving an untracked connection behind.
+- **Keep the PC awake when a phone is controlling it:** Windows prevents automatic system sleep only during an authenticated remote session and returns to normal power management afterwards. The phone also offers a **Wake PC** action for a saved LAN computer using Wake-on-LAN, when the hardware and network support it.
+- **Restore a timed-out monitor when starting playback:** Play, next/previous episode, episode selection and approved source selection from the paired phone ask Windows to wake a display that turned off through its idle timer. This does not unlock Windows, resume a genuinely sleeping PC without Wake-on-LAN, or turn on a physically switched-off monitor.
+
+### Bluetooth and volume corrections
+
+- **Only show current nearby Bluetooth PCs:** Android expires stale scan results instead of offering devices that were nearby earlier. Compatible previously paired older PCs can connect through a legacy Bluetooth RFCOMM fallback where the secure-first connection is unsupported.
+- **Control the PC player up to 200% volume:** The phone slider now follows the desktop player's native 0–200% range. It negotiates the maximum with the PC, so older PCs without volume-boost support stay limited to 100%.
+- **Prevent the volume slider jumping backwards:** The phone keeps the chosen volume visible while awaiting confirmation from the PC, previews adjustments during interaction and reconciles the value when the PC responds. Mute continues to use the existing command.
+
+### Validation and limitations
+
+- Includes merged remote-control fixes [#174](https://github.com/Beelzebub2/nuvio-native/pull/174), [#175](https://github.com/Beelzebub2/nuvio-native/pull/175), [#176](https://github.com/Beelzebub2/nuvio-native/pull/176), and [#177](https://github.com/Beelzebub2/nuvio-native/pull/177). Their Android, desktop, iOS Kotlin and security CI checks passed prior to merge; the tag-triggered release workflow independently validates the combined Windows/Android release.
+- Bluetooth RFCOMM compatibility depends on the older PC's actual Bluetooth stack. Wake-on-LAN needs firmware, network-adapter and network support. Playing on a screen locked by Windows does not bypass the lock screen. Boosted volume above 100% may distort some audio.
+- Real Android-to-Windows Wi-Fi/Bluetooth pairing, background sessions, monitor timeout and Wake-on-LAN still require testing on physical devices. This release packages Windows and Android installers/APKs; it does not publish an iOS App Store build.
+
 ## Starlit 1.14.0
 
 ### Phone-to-PC playback and pairing
