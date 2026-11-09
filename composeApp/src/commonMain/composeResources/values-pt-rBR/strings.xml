@@ -750,6 +750,11 @@
     <string name="remote_source_picker_error">Não foi possível carregar as fontes. Tente de novo na página do conteúdo.</string>
     <string name="remote_source_picker_timeout">O PC não respondeu. Feche esta janela e tente novamente.</string>
     <string name="remote_source_picker_controller">Abrir controle do PC</string>
+    <string name="remote_source_quality_stars">Qualidade da resolução: %1$d de 5 estrelas</string>
+    <string name="remote_source_quality_hint">As estrelas indicam a resolução, não avaliações de usuários nem a confiabilidade da reprodução.</string>
+    <string name="remote_source_seeders">Seeders: %1$d</string>
+    <string name="remote_source_peers">Peers: %1$d</string>
+    <string name="remote_source_cached">Em cache</string>
     <string name="settings_account">Conta</string>
     <string name="settings_account_delete_account">Excluir Conta</string>
     <string name="settings_account_delete_account_description">Isso excluirá permanentemente sua conta e todos os dados associados.</string>

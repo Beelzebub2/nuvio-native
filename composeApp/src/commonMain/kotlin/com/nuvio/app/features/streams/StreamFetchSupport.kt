@@ -115,6 +115,8 @@ internal fun PluginRuntimeResult.toStreamItem(
         sourceName = scraper.name,
         addonName = addonName,
         addonId = addonId,
+        seeders = seeders?.takeIf { it in 0..999_999 },
+        peers = peers?.takeIf { it in 0..999_999 },
         streamType = normalizeStreamType(type),
         behaviorHints = if (requestHeaders.isEmpty()) {
             StreamBehaviorHints()

@@ -35,11 +35,11 @@ import com.nuvio.app.features.player.resolveContentLanguage
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
 import com.nuvio.app.features.remote.DesktopRemote
-import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemoteSourcePicker
 import com.nuvio.app.features.remote.isEligibleForRemotePlayback
 import com.nuvio.app.features.remote.newRemotePlaybackId
-import com.nuvio.app.features.remote.remoteSourceLabel
+import com.nuvio.app.features.remote.remoteSourceChoice
+import com.nuvio.app.features.remote.recommendedRemoteSources
 import com.nuvio.app.features.streams.StreamBehaviorHints
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamLaunchStore
@@ -696,7 +696,7 @@ internal fun StreamDestination(
     // ordinary local selection. The phone receives only short opaque handles
     // and sanitized labels; no media URL, torrent or provider credentials.
     val handles = remember(remoteRequestId) { mutableMapOf<StreamItem, String>() }
-    val eligibleRemoteStreams = if (remoteRequestId != null &&
+    val allEligibleRemoteStreams = if (remoteRequestId != null &&
         streamsUiState.requestToken == expectedStreamsRequestToken) {
         streamsUiState.groups.flatMap { it.streams }
             .filter {
@@ -706,10 +706,19 @@ internal fun StreamDestination(
                 )
             }
             .distinct()
-            .take(36)
     } else emptyList()
+    val remoteSelection = recommendedRemoteSources(
+        state = streamsUiState,
+        eligible = allEligibleRemoteStreams,
+        debridEnabled = DebridSettingsRepository.snapshot().canResolvePlayableLinks,
+    )
+    val remoteBestMatch = remoteSelection.best
+    val eligibleRemoteStreams = remoteSelection.streams
     val remoteChoices = eligibleRemoteStreams.map { source ->
-        RemoteChoice(handles.getOrPut(source) { newRemotePlaybackId() }, source.remoteSourceLabel())
+        source.remoteSourceChoice(
+            handle = handles.getOrPut(source) { newRemotePlaybackId() },
+            recommendation = remoteBestMatch?.takeIf { it.stream == source }?.reason,
+        )
     }
     SideEffect {
         if (remoteRequestId != null && DesktopRemote.sourceRequestId.value == remoteRequestId) {
