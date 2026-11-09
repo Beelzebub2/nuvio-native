@@ -1,3 +1,20 @@
+## Starlit 1.16.0
+
+### Phone-to-PC playback
+
+- **Compare recommended sources on your phone:** The paired-PC source picker places the desktop's best match first, explains its ranking, and shows resolution-tier stars, reported seed/peer availability and cached status on alternatives. Stars describe quality tiers rather than viewer ratings; unavailable metrics are not invented.
+- **Choose the PC's audio track remotely:** The phone controller can show and select tracks offered by the playing desktop session. Track changes are authorized for the active playback session and older remote peers keep their previous controls.
+
+### Playback and MyAnimeList
+
+- **Fullscreen during stream preparation:** The desktop startup overlay now exposes fullscreen entry and exit before the player is ready, without hiding its close control or changing the torrent engine.
+- **Prevent premature automatic rewatches:** Automatic desktop MyAnimeList Rewatching updates require at least 55% of the episode by default; set a 55–95% threshold per local profile in Tracking settings. Loading, paused, unknown-duration and stale playback states do not trigger early updates. Manual MyAnimeList edits are unchanged.
+
+### Validation and limitations
+
+- Related pull requests #185–#188 passed their applicable Android Full/Play Store, iOS Kotlin, desktop and source-security CI checks. Regression tests cover fullscreen state, source ranking, remote audio commands and playback thresholds.
+- Hardware pairing and track switching, provider-dependent seed/peer data and mixed-version remote operation still need device testing. The release provides Windows and Android builds, not an iOS App Store package.
+
 ## Starlit 1.15.0
 
 ### Anime franchise watch orders
