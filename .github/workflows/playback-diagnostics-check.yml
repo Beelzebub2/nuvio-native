@@ -82,6 +82,7 @@ jobs:
           --tests '*PlaybackDiagnosticsTest*'
           --tests '*NativePlayerStartupTest*' --tests '*NativePlayerControllerTeardownTest*'
           --tests '*PreferredAudioTrackTest*'
+          --tests '*OpeningOverlayFullscreenTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
