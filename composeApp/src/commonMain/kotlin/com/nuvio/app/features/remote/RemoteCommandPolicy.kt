@@ -18,6 +18,7 @@ internal fun RemoteCommand.isAllowedFor(playback: RemotePlayback): Boolean {
         "skipIntro" -> playback.skip && playback.skipIntro && id.isEmpty() && value == 0.0
         "episode" -> value == 0.0 && playback.episodes.any { it.id == id }
         "subtitle" -> value == 0.0 && playback.subtitles.any { it.id == id }
+        "audioTrack" -> value == 0.0 && playback.audioTracks.any { it.id == id }
         "source" -> value == 0.0 && playback.sources.any { it.id == id }
         else -> false
     }

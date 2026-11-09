@@ -12,6 +12,8 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlin.test.*
 import org.junit.Assume.assumeTrue
 
@@ -295,9 +297,21 @@ class DesktopRemoteProtocolTest {
     @Test
     fun oversizedUnicodeAndEscapedMetadataIsBoundedBeforeSending() {
         val choices = List(2000) { RemoteChoice("$it-" + "\u0000".repeat(200), "🎞".repeat(150)) }
-        val encoded = RemotePlayback(playbackId = "id", episodes = choices, subtitles = choices, sources = choices).toRemoteWireJson()
+        val encoded = RemotePlayback(playbackId = "id", episodes = choices, subtitles = choices,
+            audioTracks = choices, sources = choices).toRemoteWireJson()
         assertTrue(encoded.toByteArray(Charsets.UTF_8).size <= MAX_REMOTE_FRAME / 2)
         assertTrue(encoded.contains("Some choices are hidden"))
+    }
+
+    @Test
+    fun desktopAudioTracksRoundTripAndOlderPhoneSnapshotsRemainReadable() {
+        val selected = RemoteChoice(remoteAudioTrackId(1, "23"), "Japanese • stereo", selected = true)
+        val snapshot = RemotePlayback(playbackId = "playback-123", audioTracks = listOf(
+            RemoteChoice(remoteAudioTrackId(0, "12"), "English"), selected,
+        ))
+        val json = Json { ignoreUnknownKeys = true }
+        assertEquals(snapshot.audioTracks, json.decodeFromString<RemotePlayback>(snapshot.toRemoteWireJson()).audioTracks)
+        assertEquals(emptyList(), json.decodeFromString<RemotePlayback>("{\"playbackId\":\"legacy\"}").audioTracks)
     }
 
     @Test

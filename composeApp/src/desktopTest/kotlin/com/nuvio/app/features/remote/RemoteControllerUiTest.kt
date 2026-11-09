@@ -183,6 +183,34 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun phoneControllerShowsSelectedPcAudioTrackAndOpensAudioChoices() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(
+            playbackId = "track-session",
+            title = "Playback",
+            audioTracks = listOf(
+                RemoteChoice(remoteAudioTrackId(0, "2"), "English stereo", selected = true),
+                RemoteChoice(remoteAudioTrackId(1, "4"), "Japanese surround"),
+            ),
+        )
+        show(desktopLayout = false)
+        onNodeWithTag("remote-audio-tracks").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        onNodeWithText("English stereo").assertIsDisplayed()
+        capture("pc-controller-audio-tracks")
+        onNodeWithTag("remote-audio-tracks").performClick()
+        onNodeWithText("Japanese surround").assertIsDisplayed()
+    }
+
+    @Test
+    fun legacyPcDoesNotDisplayUnsupportedAudioSelector() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(playbackId = "legacy-session", title = "Playback")
+        show(desktopLayout = false)
+        onNodeWithTag("remote-audio-tracks").assertDoesNotExist()
+        capture("pc-controller-no-audio-tracks")
+    }
+
+    @Test
     fun connectedControllerSplitsRemoteDownloadsAndPcsIntoTabs() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.connected.value = true
         DesktopRemote.status.value = "Connected to Living room PC"

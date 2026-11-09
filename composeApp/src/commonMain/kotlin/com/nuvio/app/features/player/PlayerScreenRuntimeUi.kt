@@ -26,6 +26,7 @@ import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
 import com.nuvio.app.features.remote.RemotePlaybackHandoff
 import com.nuvio.app.features.remote.newRemotePlaybackId
+import com.nuvio.app.features.remote.remoteAudioTrackId
 import com.nuvio.app.features.remote.isAllowedFor
 import com.nuvio.app.features.remote.REMOTE_MAX_VOLUME_LEVEL
 import androidx.compose.ui.graphics.Color
@@ -971,6 +972,15 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         subtitles = listOf(RemoteChoice("off", "Off", isSubtitleOffSelected)) + state.subtitleOptionItems.take(500).map {
             RemoteChoice(it.id, "${it.title} • ${it.sourceLabel}".take(150), it.isSelected)
         },
+        audioTracks = audioTracks.take(128).map { track ->
+            RemoteChoice(
+                id = remoteAudioTrackId(track.index, track.id),
+                label = track.label.ifBlank {
+                    track.language?.takeIf { it.isNotBlank() } ?: "${state.audioLabel} ${track.index + 1}"
+                }.take(150),
+                selected = if (selectedAudioIndex >= 0) track.index == selectedAudioIndex else track.isSelected,
+            )
+        },
         sources = episodeSources.take(500).map { RemoteChoice(sourceId(it), "${it.addonName} • ${it.label}".take(180)) },
         message = when {
             state.showP2pConsent -> "Confirm P2P streaming on the desktop before continuing."
@@ -985,6 +995,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         DesktopRemote.dispatch = dispatch@ { command ->
             if (!command.isAllowedFor(remoteState)) return@dispatch
             val controller = playerController ?: return@dispatch
+            var audioTrackSelected = false
             when (command.type) {
                 "play" -> { shouldPlay = true; controller.play() }
                 "pause" -> { shouldPlay = false; controller.pause() }
@@ -1013,6 +1024,9 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                         handlePlayerControlsEvent(if (it.kind == "addon") "selectAddonSubtitle" else "selectBuiltInSubtitleTrack", it.index.toDouble())
                     }
                 }
+                "audioTrack" -> audioTracks.firstOrNull {
+                    remoteAudioTrackId(it.index, it.id) == command.id
+                }?.let { audioTrackSelected = selectUserAudioTrack(it.index) }
                 "fetchSubtitles" -> { refreshTracks(); fetchAddonSubtitlesForActiveItem() }
                 "source" -> episodeSources.firstOrNull { sourceId(it) == command.id }?.let {
                     handlePlayerControlsEvent("selectEpisodeStream", it.index.toDouble())
@@ -1022,6 +1036,10 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
             // the next Compose frame; echo the *applied* PC level, not the prior snapshot.
             if (command.type == "volume" || command.type == "mute") {
                 DesktopRemote.playback = DesktopRemote.playback.copy(volume = controller.getRemoteVolume())
+            } else if (audioTrackSelected) {
+                DesktopRemote.playback = DesktopRemote.playback.copy(
+                    audioTracks = DesktopRemote.playback.audioTracks.map { it.copy(selected = it.id == command.id) },
+                )
             }
         }
     }
@@ -1237,13 +1255,11 @@ internal fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: 
             val requestedId = value.toInt()
             val index = audioTracks.firstOrNull { it.id == requestedId.toString() }?.index
                 ?: audioTracks.firstOrNull { it.index == requestedId }?.index
-                ?: requestedId
+                ?: return true
             playerControlsLog.d {
                 "selectAudioTrack id=$requestedId index=$index tracks=${audioTracks.size} ${playerControlLogContext()}"
             }
-            selectedAudioIndex = index
-            persistAudioPreference(audioTracks.firstOrNull { it.index == index })
-            playerController?.selectAudioTrack(index)
+            selectUserAudioTrack(index)
         }
         "fetchAddonSubtitles" -> fetchAddonSubtitlesForActiveItem()
         "selectAddonSubtitle" -> {
@@ -1987,9 +2003,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         audioTracks = audioTracks,
         selectedAudioIndex = selectedAudioIndex,
         onAudioTrackSelected = { index ->
-            selectedAudioIndex = index
-            persistAudioPreference(audioTracks.firstOrNull { it.index == index })
-            playerController?.selectAudioTrack(index)
+            selectUserAudioTrack(index)
             scope.launch {
                 kotlinx.coroutines.delay(200)
                 showAudioModal = false

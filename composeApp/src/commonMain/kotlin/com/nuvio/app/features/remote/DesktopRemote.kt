@@ -30,6 +30,9 @@ internal data class RemoteChoice(
     val recommendationReason: String? = null,
 )
 
+/** Track IDs are scoped to the current playback and include the player's logical track index. */
+internal fun remoteAudioTrackId(index: Int, id: String): String = "$index:${id.take(64)}"
+
 /** Source descriptions only. Media URLs, headers, torrent hashes and credentials stay on the PC. */
 @Serializable
 internal data class RemoteSourcePicker(
@@ -61,6 +64,7 @@ internal data class RemotePlayback(
     val fullscreen: Boolean = false,
     val episodes: List<RemoteChoice> = emptyList(),
     val subtitles: List<RemoteChoice> = emptyList(),
+    val audioTracks: List<RemoteChoice> = emptyList(),
     val sources: List<RemoteChoice> = emptyList(),
     val message: String = "",
     val downloadProfileId: Int? = null,
