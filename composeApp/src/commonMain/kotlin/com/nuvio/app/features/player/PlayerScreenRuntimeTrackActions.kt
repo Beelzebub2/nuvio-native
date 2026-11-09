@@ -59,6 +59,16 @@ internal fun PlayerScreenRuntime.persistAudioPreference(track: AudioTrack?) {
     }
 }
 
+/** Shared by player controls and the authenticated phone remote; never select an unlisted track. */
+internal fun PlayerScreenRuntime.selectUserAudioTrack(index: Int): Boolean {
+    val track = audioTracks.firstOrNull { it.index == index } ?: return false
+    val controller = playerController ?: return false
+    selectedAudioIndex = track.index
+    persistAudioPreference(track)
+    controller.selectAudioTrack(track.index)
+    return true
+}
+
 internal fun PlayerScreenRuntime.persistInternalSubtitlePreference(track: SubtitleTrack?) {
     updateTrackPreference { current ->
         current.copy(
