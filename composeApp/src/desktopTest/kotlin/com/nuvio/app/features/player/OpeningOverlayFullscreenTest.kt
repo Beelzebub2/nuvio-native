@@ -40,14 +40,14 @@ class OpeningOverlayFullscreenTest {
                 }
             }
 
-            compose.onNodeWithContentDescription("Enter fullscreen").assertIsDisplayed().performClick()
+            compose.onNodeWithContentDescription("Fullscreen").assertIsDisplayed().performClick()
             compose.waitUntil(3_000) { fullscreen.get() }
             compose.onNodeWithContentDescription("Exit fullscreen").assertIsDisplayed()
 
             compose.runOnIdle { loadingMessage = "Preparing stream" }
             compose.onNodeWithContentDescription("Exit fullscreen").assertIsDisplayed().performClick()
             compose.waitUntil(3_000) { !fullscreen.get() }
-            compose.onNodeWithContentDescription("Enter fullscreen").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Fullscreen").assertIsDisplayed()
         } finally {
             unregisterFullscreen()
         }
