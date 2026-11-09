@@ -181,6 +181,10 @@ private fun DetailsColumn(
     bluetoothHostReady: Boolean,
 ) {
     val tokens = MaterialTheme.nuvio
+    val firewallState by firewall.state.collectAsState()
+    LaunchedEffect(hostReady, connected, firewall) {
+        if (hostReady && !connected) firewall.refresh()
+    }
     if (connected) {
         RemoteCard(tone = RemoteTone.Success) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -251,6 +255,11 @@ private fun DetailsColumn(
         if (showNetworkHelp) {
             Text(stringResource(Res.string.remote_network_help_body),
                 style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary)
+        }
+        // A blocked Ethernet profile needs to be visible before the user
+        // struggles with QR pairing or discovers the hidden Network help.
+        if (showNetworkHelp || firewallState != RemoteFirewallState.NotNeeded &&
+            firewallState != RemoteFirewallState.Allowed) {
             RemoteFirewallCard(firewall)
         }
     }

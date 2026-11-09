@@ -17,6 +17,7 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.util.Collections
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
@@ -115,12 +116,71 @@ internal fun strictRemoteIpv4(value: String): Inet4Address? {
     return InetAddress.getByAddress(octets.map(Int::toByte).toByteArray()) as? Inet4Address
 }
 
-private fun localInterfaces() = Collections.list(NetworkInterface.getNetworkInterfaces()).filter {
-    it.isUp && !it.isLoopback && !it.isVirtual
-}.flatMap { it.interfaceAddresses }.filter { it.address is Inet4Address && it.address.isSiteLocalAddress }
+internal data class RemoteLanInterface(
+    val address: Inet4Address,
+    val networkPrefixLength: Int,
+    val broadcast: InetAddress?,
+    val name: String,
+    val displayName: String,
+    val pointToPoint: Boolean = false,
+)
+
+/** Name hints are only for ordering. They never widen the allowed LAN subnets. */
+private fun remoteLanInterfacePriority(nic: RemoteLanInterface): Int {
+    val name = nic.name.lowercase(Locale.ROOT)
+    val description = nic.displayName.lowercase(Locale.ROOT)
+    val label = "$name $description"
+    // Java does not consistently flag Windows vEthernet/VMware adapters as virtual.
+    val virtual = listOf(
+        "virtual", "vethernet", "vmware", "vmnet", "vbox", "hyper-v", "host-only",
+        "vpn", "tunnel", "wintun", "tailscale", "zerotier", "wireguard", "nordlynx",
+        "hamachi", "radmin", "docker", "wsl", "loopback", "bridge",
+    ).any { it in label } || listOf("tun", "tap", "wg", "zt", "ppp").any { name.startsWith(it) }
+    val cellular = listOf("rmnet", "ccmni", "pdp_ip", "wwan").any { name.startsWith(it) } ||
+        listOf("cellular", "mobile data", "wwan", "lte modem").any { it in label }
+    if (nic.pointToPoint || virtual || cellular) return 2
+    val physical = listOf("wlan", "wlp", "wlo", "eth", "enp", "eno", "ens").any { name.startsWith(it) } ||
+        listOf("wi-fi", "wifi", "wireless", "ethernet", "gigabit", "gbe", "802.11").any { it in description }
+    return if (physical) 0 else 1
+}
+
+internal fun prioritizedRemoteLanInterfaces(interfaces: List<RemoteLanInterface>): List<RemoteLanInterface> =
+    interfaces.sortedWith(compareBy<RemoteLanInterface> { remoteLanInterfacePriority(it) }
+        .thenBy { it.name.lowercase(Locale.ROOT) }
+        .thenBy { it.address.hostAddress })
+
+/** Probe no more than two adapters; aliases cannot crowd out another physical NIC. */
+internal fun remoteDeepScanInterfaces(interfaces: List<RemoteLanInterface>): List<RemoteLanInterface> {
+    return prioritizedRemoteLanInterfaces(interfaces)
+        .groupBy(::remoteLanInterfacePriority).values
+        .flatMap { group ->
+            val firstPerNic = group.distinctBy { it.name.ifBlank { it.address.hostAddress.orEmpty() } }
+            firstPerNic + group.filterNot { it in firstPerNic }
+        }
+        .take(2)
+}
+
+private fun localInterfaces(): List<RemoteLanInterface> = prioritizedRemoteLanInterfaces(
+    Collections.list(NetworkInterface.getNetworkInterfaces()).filter {
+        it.isUp && !it.isLoopback && !it.isVirtual
+    }.flatMap { nic ->
+        nic.interfaceAddresses.mapNotNull { item ->
+            val address = item.address as? Inet4Address ?: return@mapNotNull null
+            if (!address.isSiteLocalAddress) return@mapNotNull null
+            RemoteLanInterface(
+                address = address,
+                networkPrefixLength = item.networkPrefixLength.toInt(),
+                broadcast = item.broadcast,
+                name = nic.name.orEmpty(),
+                displayName = nic.displayName.orEmpty(),
+                pointToPoint = nic.isPointToPoint,
+            )
+        }
+    },
+)
 
 internal fun isRemoteLanPeer(address: InetAddress): Boolean = address is Inet4Address && address.isSiteLocalAddress &&
-    localInterfaces().any { sameRemoteSubnet(address.address, it.address.address, it.networkPrefixLength.toInt()) }
+    localInterfaces().any { sameRemoteSubnet(address.address, it.address.address, it.networkPrefixLength) }
 
 // Some Android Wi-Fi interfaces report no directed broadcast address. A single
 // limited-broadcast fallback keeps discovery usable without broadening the peer
@@ -170,7 +230,7 @@ internal class LanDesktopRemote(
     override val bluetoothSupported get() = bluetoothClient?.supported == true
     override val retainWhenUiDetached get() = connectionLifetime.retainWhenUiDetached
     override fun localAddresses(): List<String> =
-        runCatching { localInterfaces().mapNotNull { it.address.hostAddress }.distinct().sorted() }
+        runCatching { localInterfaces().mapNotNull { it.address.hostAddress }.distinct() }
             .getOrDefault(emptyList())
     @Volatile private var scope: CoroutineScope? = null
     private var account: RemoteAccount? = null
@@ -381,7 +441,7 @@ internal class LanDesktopRemote(
         currentScope.launch {
             try {
                 val broadcasts = localInterfaces().filter {
-                    sameRemoteSubnet(target.address, it.address.address, it.networkPrefixLength.toInt())
+                    sameRemoteSubnet(target.address, it.address.address, it.networkPrefixLength)
                 }.mapNotNull { it.broadcast }.distinct()
                 check(broadcasts.isNotEmpty()) { "No usable local interface broadcast address." }
                 DatagramSocket().use { socket ->
@@ -506,8 +566,8 @@ internal class LanDesktopRemote(
                     withContext(uiDispatcher) {
                         if (current()) DesktopRemote.status.value = "Checking local PCs directly…"
                     }
-                    val candidates = localInterfaces().take(2)
-                        .flatMap { remoteSubnetCandidates(it.address.address, it.networkPrefixLength.toInt()) }
+                    val candidates = remoteDeepScanInterfaces(localInterfaces())
+                        .flatMap { remoteSubnetCandidates(it.address.address, it.networkPrefixLength) }
                         .distinctBy { it.hostAddress }
                         .filter(::isRemoteLanPeer)
                     probeRemoteTargets(candidates, ::current, expected)

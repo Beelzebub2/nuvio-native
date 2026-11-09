@@ -30,17 +30,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The wrapper's 9.4.1 distribution redirects through a GitHub release
-          # page returning 504 on fresh macOS runners. Fetch the exact same ZIP
-          # via the official Gradle release asset API, verify its published SHA256,
-          # and run that pinned binary instead of an unverified alternate mirror.
+          # Fetch the pinned Gradle ZIP from Gradle's official distribution host.
+          # GitHub's unauthenticated release asset API returns HTTP 403 on some
+          # runners. Verify its published SHA256 before executing the archive.
           archive="$RUNNER_TEMP/gradle-9.4.1-bin.zip"
           curl --fail --location --silent --show-error \
             --retry 5 --retry-all-errors --retry-delay 10 \
             --connect-timeout 30 --max-time 900 \
-            -H 'Accept: application/octet-stream' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            'https://api.github.com/repos/gradle/gradle-distributions/releases/assets/377041523' \
+            'https://downloads.gradle.org/distributions/gradle-9.4.1-bin.zip' \
             -o "$archive"
           printf '%s  %s\n' \
             '2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb' \
@@ -54,17 +51,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Maven Central redirects this 2.4.10 compiler archive to a GitHub
-          # releases page that can return transient HTTP 504 on macOS runners.
-          # Use the exact official release asset through GitHub's API/CDN,
-          # pin its published digest, and pass it to the existing Gradle task.
+          # Request the official, version-tagged Kotlin/Native release asset.
+          # GitHub's unauthenticated release asset API can return HTTP 403;
+          # the original asset URL redirects directly to the release CDN.
+          # Keep verifying the published SHA256 before executing the compiler.
           archive="$RUNNER_TEMP/kotlin-native-prebuilt-2.4.10-macos-aarch64.tar.gz"
           curl --fail --location --silent --show-error \
             --retry 5 --retry-all-errors --retry-delay 10 \
             --connect-timeout 30 --max-time 900 \
-            -H 'Accept: application/octet-stream' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            'https://api.github.com/repos/JetBrains/kotlin/releases/assets/585406113' \
+            'https://github.com/JetBrains/kotlin/releases/download/v2.4.10/kotlin-native-prebuilt-2.4.10-macos-aarch64.tar.gz' \
             -o "$archive"
           printf '%s  %s\n' \
             '55ded039bb56a69aec9df354a92b42df9e916104e3c53d8d9852d9cc6617ed9d' \
@@ -82,10 +77,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The Kotlin 2.4.10 embeddable compiler POM is available from Maven
-          # Central, but its JAR redirects to an intermittently failing GitHub
-          # release page. Pin the official binary hash and mirror only this
-          # exact Maven module for this CI invocation.
+          # Maven Central serves the official POM and JAR directly. Verify the
+          # published release asset SHA256 for the JAR before using the mirror.
           mirror="$RUNNER_TEMP/starlit-kotlin-maven"
           module="$mirror/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.4.10"
           mkdir -p "$module"
@@ -98,9 +91,7 @@ jobs:
           curl --fail --location --silent --show-error \
             --retry 5 --retry-all-errors --retry-delay 10 \
             --connect-timeout 30 --max-time 900 \
-            -H 'Accept: application/octet-stream' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            'https://api.github.com/repos/JetBrains/kotlin/releases/assets/583808361' \
+            'https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.4.10/kotlin-compiler-embeddable-2.4.10.jar' \
             -o "$jar"
           printf '%s  %s\n' \
             '9309638a2ee03e6bde9ef4b7444055a94b84ab906563675d71ff9aecb64da913' \

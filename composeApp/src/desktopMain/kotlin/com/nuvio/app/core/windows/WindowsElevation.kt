@@ -13,6 +13,7 @@ import java.util.Locale
 
 internal const val ELEVATED_TASK_ARGUMENT = "--starlit-elevated-task"
 internal const val PHONE_REMOTE_FIREWALL_TASK = "phone-remote-firewall"
+internal const val PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK = "phone-remote-public-ethernet-firewall"
 
 private const val EXIT_OK = 0
 private const val EXIT_FAILED = 2
@@ -29,6 +30,8 @@ internal fun runElevatedHelperTask(args: Array<String>): Int? {
     return when (args[1]) {
         PHONE_REMOTE_FIREWALL_TASK ->
             if (runCatching { allowPhoneRemoteThroughWindowsFirewall() }.isSuccess) EXIT_OK else EXIT_FAILED
+        PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK ->
+            if (runCatching { allowPhoneRemoteThroughWindowsFirewall(publicEthernet = true) }.isSuccess) EXIT_OK else EXIT_FAILED
         else -> EXIT_UNKNOWN_TASK
     }
 }

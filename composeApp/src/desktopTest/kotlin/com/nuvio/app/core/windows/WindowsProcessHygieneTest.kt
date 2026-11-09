@@ -97,6 +97,13 @@ class WindowsProcessHygieneTest {
         ))
         assertEquals("""C:\Users\me\AppData\Local\Starlit\Starlit.exe""", command.file)
         assertEquals("--starlit-elevated-task phone-remote-firewall", command.parameters)
+        val publicWired = assertNotNull(selfCommand(
+            executable = """C:\Users\me\AppData\Local\Starlit\Starlit.exe""",
+            classPath = null,
+            javaCommand = null,
+            arguments = listOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK),
+        ))
+        assertEquals("--starlit-elevated-task phone-remote-public-ethernet-firewall", publicWired.parameters)
     }
 
     @Test
@@ -128,5 +135,7 @@ class WindowsProcessHygieneTest {
         assertEquals(64, runElevatedHelperTask(arrayOf(ELEVATED_TASK_ARGUMENT)))
         assertEquals(64, runElevatedHelperTask(arrayOf(ELEVATED_TASK_ARGUMENT, "format-disk")))
         assertEquals(64, runElevatedHelperTask(arrayOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_FIREWALL_TASK, "C:\\evil.exe")))
+        assertEquals(64, runElevatedHelperTask(arrayOf(
+            ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK, "C:\\evil.exe")))
     }
 }

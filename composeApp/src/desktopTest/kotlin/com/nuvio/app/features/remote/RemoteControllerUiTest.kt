@@ -17,9 +17,14 @@ private class FakeFirewall(initial: RemoteFirewallState) : RemoteFirewallAccess 
     override val state: StateFlow<RemoteFirewallState> = flow
     var refreshes = 0
     var requests = 0
+    var publicEthernetRequests = 0
     var settingsOpened = 0
     override fun refresh() { refreshes++ }
     override fun requestAccess() { requests++; flow.value = RemoteFirewallState.Requesting }
+    override fun requestPublicEthernetAccess() {
+        publicEthernetRequests++
+        flow.value = RemoteFirewallState.PublicEthernetFailed
+    }
     override fun openNetworkSettings() { settingsOpened++ }
 }
 
@@ -290,23 +295,29 @@ class RemoteControllerUiTest {
     }
 
     @Test
-    fun desktopWindowOffersNetworkHelpOnlyWhenRequested() = runDesktopComposeUiTest(width = 900, height = 680) {
+    fun desktopWindowSurfacesFirewallProblemsAndKeepsManualNetworkHelp() = runDesktopComposeUiTest(width = 900, height = 680) {
         DesktopRemote.hostReady.value = true
         DesktopRemote.discoveryReady.value = true
         DesktopRemote.status.value = "Ready to pair with your phone on this local network."
         val firewall = FakeFirewall(RemoteFirewallState.Blocked)
         show(desktopLayout = true, firewall = firewall)
         onNodeWithTag("desktop-pairing-qr").assertIsDisplayed()
-        onNodeWithTag("remote-firewall-card").assertDoesNotExist()
-        runOnIdle { assertEquals(0, firewall.refreshes) }
-        onNodeWithTag("remote-network-help").performScrollTo().performClick()
         onNodeWithText("Connection permission isn't confirmed").performScrollTo().assertIsDisplayed()
         runOnIdle { assertEquals(1, firewall.refreshes) }
+        onNodeWithTag("remote-network-help").performScrollTo().performClick()
+        onNodeWithText("Connection permission isn't confirmed").performScrollTo().assertIsDisplayed()
+        runOnIdle { assertEquals(2, firewall.refreshes) }
         onNodeWithTag("remote-firewall-allow").performScrollTo()
         capture("phone-remote-network-help")
         onNodeWithTag("remote-firewall-allow").performScrollTo().performClick()
         runOnIdle { assertEquals(1, firewall.requests) }
         onNodeWithText("Approve the Windows prompt to let Starlit through the firewall…").performScrollTo().assertIsDisplayed()
+        runOnIdle { firewall.flow.value = RemoteFirewallState.PublicNetwork }
+        onNodeWithTag("remote-firewall-allow-public-ethernet").performScrollTo().performClick()
+        runOnIdle { assertEquals(1, firewall.publicEthernetRequests) }
+        onNodeWithText("Couldn't update Windows Firewall").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Allow on wired Ethernet").performScrollTo().performClick()
+        runOnIdle { assertEquals(2, firewall.publicEthernetRequests) }
         runOnIdle { firewall.flow.value = RemoteFirewallState.PublicNetwork }
         onNodeWithText("Open network settings").performScrollTo().performClick()
         runOnIdle { assertEquals(1, firewall.settingsOpened) }
