@@ -54,6 +54,8 @@ import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.isSelectableForPlayback
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import com.nuvio.app.features.watchorder.PlayerWatchOrderSuggestion
+import com.nuvio.app.features.watchorder.shouldOfferFranchiseContinuation
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.isDesktop
 import com.nuvio.app.features.player.skip.internalSkipAction
@@ -634,6 +636,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
         RenderPlaybackOverlays(
             runtime = runtime,
+            isInPictureInPicture = isInPip,
             displayedPositionMs = displayedPositionMs,
             currentGestureFeedback = currentGestureFeedback,
             p2pInitialLoadingMessage = p2pInitialLoadingMessage,
@@ -897,7 +900,7 @@ internal fun releaseRetainedPlayerBeforeNavigation(
     }
 }
 
-private fun PlayerScreenRuntime.requestBack() {
+private fun PlayerScreenRuntime.requestBack(afterExit: (() -> Unit)? = null) {
     flushWatchProgress()
     val exitingController = playerLifecycleController
     args.onBack { afterRelease, releaseFailed ->
@@ -916,6 +919,9 @@ private fun PlayerScreenRuntime.requestBack() {
                         playerController = null
                     }
                     afterRelease()
+                    // The player must be released and the guarded pop completed
+                    // before activating search; never navigate over an active stream.
+                    afterExit?.invoke()
                 },
                 onReleaseFailed = { message ->
                     if (!playerReleaseSurfaceRetention.finish(releaseAttemptId)) {
@@ -1858,6 +1864,7 @@ private fun MetaVideo.playerControlsEpisodeCode(): String =
 @Composable
 private fun BoxScope.RenderPlaybackOverlays(
     runtime: PlayerScreenRuntime,
+    isInPictureInPicture: Boolean,
     displayedPositionMs: Long,
     currentGestureFeedback: GestureFeedbackState?,
     p2pInitialLoadingMessage: String?,
@@ -1934,6 +1941,33 @@ private fun BoxScope.RenderPlaybackOverlays(
             errorMessage = errorMessage,
             onDismissError = { requestBack() },
         )
+        if (!playerControlsLocked && !isInPictureInPicture && args.onFindNextTitle != null) {
+            val matchingMeta = playerMeta?.takeIf { it.id == parentMetaId }
+                ?: metaUiState.meta?.takeIf { it.id == parentMetaId }
+            PlayerWatchOrderSuggestion(
+                meta = matchingMeta,
+                eligible = shouldOfferFranchiseContinuation(
+                    hasEnded = playbackSnapshot.isEnded && !playerReleaseSurfaceRetention.inFlight,
+                    hasPlaybackError = errorMessage != null,
+                    hasNextEpisode = nextEpisodeInfo != null,
+                    isSeries = isSeries,
+                    currentEpisodeInMetadata = playerMetaVideos.any {
+                        it.season == activeSeasonNumber &&
+                            it.episode == activeEpisodeNumber &&
+                            activeSeasonNumber != null && activeEpisodeNumber != null
+                    },
+                ),
+                profileId = profileId,
+                watchedItems = watchedUiState.items,
+                bottomPadding = overlayBottomPadding,
+                endPadding = sliderEdgePadding,
+                onFindTitle = { title ->
+                    // Existing player release/guard stays authoritative. Search
+                    // activation runs only after release and guarded pop.
+                    requestBack(afterExit = { args.onFindNextTitle?.invoke(title) })
+                },
+            )
+        }
     }
 }
 

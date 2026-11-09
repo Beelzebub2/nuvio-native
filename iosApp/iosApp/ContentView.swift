@@ -869,7 +869,8 @@ private struct DetailDestinationView: View {
     @ObservedObject var appCoordinator: AppNavigationCoordinator
 
     private var usesComposeNavigationHeader: Bool {
-        wrapper.route is DetailRoute || wrapper.route is StreamRoute
+        wrapper.route is DetailRoute || wrapper.route is StreamRoute ||
+            wrapper.route is WatchOrderRoute
     }
 
     private var respectsNativeNavigationSafeArea: Bool {
