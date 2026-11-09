@@ -2240,4 +2240,12 @@
     <string name="watch_order_unavailable">Esta ordem não foi verificada ou está temporariamente indisponível.</string>
     <string name="watch_order_disclaimer">A disponibilidade depende dos add-ons. A escolha abre a pesquisa normal do Starlit e a seleção da fonte.</string>
     <string name="watch_order_attribution">Dados das franquias: Junban (ODbL)</string>
+    <string name="watch_order_view_all">Ver ordem completa</string>
+    <string name="watch_order_summary">%1$d títulos</string>
+    <string name="watch_order_no_mapping">Ainda não existe um identificador de anime confirmado para este título.</string>
+    <string name="watch_order_partial">Ordem parcial · relações indisponíveis</string>
+    <string name="watch_order_choose_mode">Ordem de visualização</string>
+    <string name="watch_order_chronology_unverified">Ainda não foi verificada uma ordem cronológica para esta franquia. Experimenta a ordem recomendada.</string>
+    <string name="watch_order_explanation">Só os títulos identificados com segurança aparecem como vistos. Seleciona outro título para procurar nos teus add-ons; a reprodução não começa automaticamente.</string>
+    <string name="watch_order_dismiss">Agora não</string>
 </resources>

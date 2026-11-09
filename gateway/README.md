@@ -39,6 +39,10 @@ MAL sequel/prequel relations from the Tenrai service when safe. Only the
 version-controlled Starlit override for KonoSuba's main progression is marked
 "verified"; other inferred results are identified as inferred or partial.
 Unknown chronology fails closed rather than fabricating viewing order.
+Movie MAL IDs also resolve when the movie has an explicit Tenrai Prequel
+link to one matching Junban TV series; unrelated franchise entries or
+ambiguous prequels are not joined. Unknown movie dates are kept adjacent
+to their source installment in release mode instead of moved to the end.
 
 Junban's API and database are independent projects with their own terms.
 Attribution: Junban (https://junban.moe), database ODbL 1.0. Its franchise

@@ -2911,4 +2911,12 @@
     <string name="watch_order_unavailable">This viewing order is not verified or is currently unavailable.</string>
     <string name="watch_order_disclaimer">Availability depends on your add-ons. Choosing a title opens normal Starlit search and source selection.</string>
     <string name="watch_order_attribution">Franchise data: Junban (ODbL)</string>
+    <string name="watch_order_view_all">View full order</string>
+    <string name="watch_order_summary">%1$d installments</string>
+    <string name="watch_order_no_mapping">No confirmed anime ID is available for this title yet.</string>
+    <string name="watch_order_partial">Partial order · relationships unavailable</string>
+    <string name="watch_order_choose_mode">Viewing order</string>
+    <string name="watch_order_chronology_unverified">A chronological order has not been verified for this franchise. Try the recommended order instead.</string>
+    <string name="watch_order_explanation">Only confirmed title matches appear as watched. Select another installment to search your available add-ons; this never starts playback automatically.</string>
+    <string name="watch_order_dismiss">Not now</string>
 </resources>

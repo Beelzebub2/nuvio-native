@@ -85,6 +85,19 @@ function seasonsFor(series) {
   return (series?.seasons || []).filter(s => s?.number > 0 && id(s.external_ids?.mal))
     .slice(0, 50).map(s => step([s.external_ids.mal, s.title || series.title, 'tv', s.first_aired]));
 }
+function releaseOrder(steps) {
+  // A directly-linked film may have no release date in relation metadata.
+  // Anchor it to its preceding installment, preserving sequel order rather
+  // than incorrectly sorting that film after every dated TV season.
+  let previousDate = '';
+  return steps
+    .map((row, position) => {
+      if (row.date) previousDate = row.date;
+      return { row, position, anchor: row.date || previousDate || '9999' };
+    })
+    .sort((a, b) => a.anchor.localeCompare(b.anchor) || a.position - b.position)
+    .map(({ row }) => row);
+}
 function curated(order, group, malId, mode, title) {
   const main = order.steps.map(row => step(row));
   const optional = order.optional.map(row => step(row, false));
@@ -106,6 +119,7 @@ async function resolve(malId, mode, fetcher, now) {
   let group = known.get(malId);
   let title = null;
   let series = null;
+  let movieLink = null;
   try {
     const lookup = await getJson(fetcher, JUNBAN + '/lookup?site=mal&id=' + malId, now);
     group = id(lookup?.franchise?.id) || group;
@@ -114,6 +128,29 @@ async function resolve(malId, mode, fetcher, now) {
       const franchise = await getJson(fetcher, JUNBAN + '/franchises/' + group, now);
       title = name(franchise?.name) || title;
       series = seriesFor(franchise, malId);
+      if (!series && lookup?.type === 'movie' && name(lookup?.movie?.title)) {
+        // Movies have their own Junban object; a movie MAL ID is never a
+        // "season". Require an explicit MAL Prequel edge to *one* Junban
+        // member series before associating it with any television sequence.
+        const relations = await getJson(fetcher, TENRAI + '/' + malId + '/relations', now);
+        const prequels = new Set(
+          (Array.isArray(relations?.data) ? relations.data : [])
+            .filter(row => row?.relation === 'Prequel' && Array.isArray(row.entry))
+            .flatMap(row => row.entry.slice(0, 20))
+            .map(row => id(row?.mal_id)).filter(Boolean),
+        );
+        const seriesCandidates = (Array.isArray(franchise?.series) ? franchise.series : [])
+          .slice(0, 50)
+          .filter(row => (row?.seasons || []).some(season =>
+            prequels.has(id(season?.external_ids?.mal))));
+        if (seriesCandidates.length === 1) {
+          series = seriesCandidates[0];
+          const predecessors = seasonsFor(series).filter(row => prequels.has(row.malId));
+          movieLink = predecessors.length === 1
+            ? { beforeMalId: predecessors[0].malId, title: name(lookup.movie.title) }
+            : null;
+        }
+      }
     }
   } catch (error) {
     if (!known.has(malId)) {
@@ -130,13 +167,19 @@ async function resolve(malId, mode, fetcher, now) {
   if (mode === 'chronological') return { error: 'Chronological order is not verified', status: 409 };
   if (!series) return { error: 'No reliable watch order', status: 404 };
   const steps = seasonsFor(series);
+  if (movieLink) {
+    const predecessor = steps.findIndex(row => row.malId === movieLink.beforeMalId);
+    if (predecessor >= 0) steps.splice(predecessor + 1, 0,
+      step([malId, movieLink.title, 'movie', null]));
+  }
   if (!steps.some(row => row.malId === malId)) return { error: 'No reliable watch order', status: 404 };
   // Only direct sequel MOVIES of the actual series are considered essential
   // candidates. Other Junban series are never merged by title similarity.
   const lookups = [...new Set([malId, ...steps.map(row => row.malId)])].slice(0, 4);
   const results = await Promise.allSettled(lookups.map(value =>
     getJson(fetcher, TENRAI + '/' + value + '/relations', now)));
-  const relationCount = results.filter(result => result.status === 'fulfilled').length;
+  const relationCount = results.filter(result => result.status === 'fulfilled').length +
+    (movieLink ? 1 : 0);
   for (let index = 0; index < results.length; index++) {
     if (results[index].status !== 'fulfilled') continue;
     const position = steps.findIndex(row => row.malId === lookups[index]);
@@ -149,7 +192,7 @@ async function resolve(malId, mode, fetcher, now) {
       steps.splice(position + 1, 0, step([movieId, entry.name, 'movie', null]));
     }
   }
-  if (mode === 'release') steps.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  if (mode === 'release') steps.splice(0, steps.length, ...releaseOrder(steps));
   return { franchiseId: 'junban:' + group, franchiseName: title,
     requestedMalId: malId, mode, confidence: relationCount ? 'inferred' : 'partial',
     reviewed: null, steps, sources: ['junban', ...(relationCount ? ['mal-relations'] : [])],

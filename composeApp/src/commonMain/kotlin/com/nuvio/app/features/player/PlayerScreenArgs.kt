@@ -25,6 +25,7 @@ internal data class PlayerScreenArgs(
     val onSystemBackHandlerChanged: (handler: (() -> Unit)?) -> Unit = {},
     val onOpenInExternalPlayer: ((ExternalPlayerPlaybackRequest) -> Unit)?,
     val onOpenExternalUrl: ((String) -> Unit)?,
+    val onFindNextTitle: ((String) -> Unit)? = null,
     val modifier: Modifier,
     val logo: String?,
     val poster: String?,

@@ -17,11 +17,13 @@ import com.nuvio.app.navigation.DetailRoute
 import com.nuvio.app.navigation.EntityBrowseRoute
 import com.nuvio.app.navigation.NuvioNavigator
 import com.nuvio.app.navigation.PersonDetailRoute
+import com.nuvio.app.navigation.WatchOrderRoute
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.person_role_creator
 import nuvio.composeapp.generated.resources.person_role_director
 import nuvio.composeapp.generated.resources.person_role_writer
+import nuvio.composeapp.generated.resources.watch_order_title
 import org.jetbrains.compose.resources.stringResource
 
 internal typealias ContentPlayAction = (
@@ -85,6 +87,7 @@ internal fun DetailsDestination(
     val directorRole = stringResource(Res.string.person_role_director)
     val writerRole = stringResource(Res.string.person_role_writer)
     val creatorRole = stringResource(Res.string.person_role_creator)
+    val watchOrderTitle = stringResource(Res.string.watch_order_title)
     MetaDetailsScreen(
         type = route.type,
         id = route.id,
@@ -93,6 +96,18 @@ internal fun DetailsDestination(
         onPlayManually = onPlayManually,
         onOpenMeta = onOpenMeta,
         onFindAnimeTitle = onFindAnimeTitle,
+        onOpenWatchOrder = { malId, completed ->
+            navController.navigate(
+                WatchOrderRoute(
+                    malId = malId,
+                    sourceMetaId = route.id,
+                    sourceMetaType = route.type,
+                    sourceTitle = route.title.orEmpty(),
+                    currentTitleCompleted = completed,
+                    screenTitle = watchOrderTitle,
+                ),
+            )
+        },
         onCastClick = { person, avatarTransitionKey ->
             val tmdbId = person.tmdbId
             if (tmdbId != null && tmdbId > 0) {

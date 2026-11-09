@@ -113,6 +113,40 @@ test('non-curated anime only include their own series and explicitly connected s
   assert.ok(!data.steps.some(s => [1998, 2001].includes(s.malId)));
 });
 
+test('a verified franchise movie link is reachable when the selected MAL ID is a movie', async () => {
+  const fetcher = async url => {
+    if (url.includes('/lookup?')) return Response.json({
+      type: 'movie', movie: { title: 'A linked film' },
+      franchise: { id: 9999, name: 'Test Franchise' },
+    });
+    if (url.endsWith('/franchises/9999')) return Response.json({ series: [
+      { title: 'Main', seasons: [
+        { number: 1, title: 'First', first_aired: '2018-01-01', external_ids: { mal: '1001' } },
+        { number: 2, title: 'Next', first_aired: '2020-01-01', external_ids: { mal: '1002' } },
+      ] },
+      { title: 'Unrelated', seasons: [
+        { number: 1, title: 'Other', external_ids: { mal: '2001' } },
+      ] },
+    ] });
+    if (url.endsWith('/1999/relations')) return Response.json({ data: [{
+      relation: 'Prequel', entry: [{ mal_id: 1001, name: 'First' }],
+    }] });
+    if (url.endsWith('/1001/relations')) return Response.json({ data: [{
+      relation: 'Sequel', entry: [{ mal_id: 1999, name: 'A linked film', media_type: 'Movie' }],
+    }] });
+    return Response.json({ data: [] });
+  };
+  const result = await handleWatchOrderRequest(request('malId=1999&mode=release'), {
+    cache: new MemoryCache(), fetcher,
+  });
+  assert.equal(result.status, 200);
+  const data = await result.json();
+  assert.equal(data.confidence, 'inferred');
+  assert.deepEqual(data.steps.map(row => row.malId), [1001, 1999, 1002]);
+  assert.equal(data.steps[1].kind, 'movie');
+  assert.ok(data.steps.every(row => row.malId !== 2001));
+});
+
 test('unknown chronology is refused; unknown MAL ID is not falsely marked verified', async () => {
   const fetcher = async url => url.includes('/lookup?')
     ? Response.json({ franchise: { id: 9999, name: 'Other' } })

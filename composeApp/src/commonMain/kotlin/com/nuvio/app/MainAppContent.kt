@@ -1603,12 +1603,32 @@ internal fun MainAppContent(
                         onPlayManually = onPlayManually,
                         onFindAnimeTitle = { title ->
                             com.nuvio.app.features.search.SearchPrefill.request(title)
-                            navController.popBackStack(route)
+                            // Always reveal the root Search tab, even when the
+                            // current details came from another details route.
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
                             if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
                             searchFocusRequestCount++
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                    )
+                }
+                entry<com.nuvio.app.navigation.WatchOrderRoute> { route ->
+                    com.nuvio.app.features.watchorder.WatchOrderScreen(
+                        route = route,
+                        onBack = rememberGuardedPopBackStack(navController, route),
+                        onFindTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                     )
                 }
                 entry<PersonDetailRoute> { route ->
@@ -1674,6 +1694,15 @@ internal fun MainAppContent(
                         onExternalPlayerLaunch = { launch -> lastExternalPlayerLaunch = launch },
                         launchExternalPlayer = launchExternalPlayer,
                         openExternalStreamUrl = ::openExternalStreamUrl,
+                        onFindNextTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         onSystemBackHandlerChanged = { playerRoute, handler ->
                             if (handler == null) {
                                 if (registeredPlayerSystemBack?.first == playerRoute) {

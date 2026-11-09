@@ -26,15 +26,34 @@ internal data class AnimeWatchOrderStep(
 internal data class AnimeWatchOrder(
     val franchiseName: String,
     val mode: String,
-    val verified: Boolean,
+    val confidence: String,
     val steps: List<AnimeWatchOrderStep>,
 ) {
+    val verified: Boolean get() = confidence == "verified"
+
     // Only call when Starlit considers the *current* title completed. We do
     // not assume other franchise entries were watched merely from their order.
     fun nextAfter(currentMalId: Int, includeOptional: Boolean): AnimeWatchOrderStep? {
         val index = steps.indexOfFirst { it.malId == currentMalId }
         if (index < 0) return null
         return steps.drop(index + 1).firstOrNull { it.required || includeOptional }
+    }
+
+    fun nextUnwatchedAfter(
+        currentMalId: Int,
+        includeOptional: Boolean,
+        completedMalIds: Set<Int>,
+        today: String,
+    ): AnimeWatchOrderStep? {
+        val index = steps.indexOfFirst { it.malId == currentMalId }
+        if (index < 0) return null
+        return steps.drop(index + 1).firstOrNull { step ->
+            (step.required || includeOptional) &&
+                step.malId !in completedMalIds &&
+                // Unknown release dates are displayed in the list but are not
+                // automatically recommended as already available.
+                (step.releaseDate?.take(10)?.let { it <= today } == true)
+        }
     }
 }
 
@@ -74,15 +93,16 @@ internal object AnimeWatchOrderRepository {
             franchiseName = root["franchiseName"]?.jsonPrimitive?.contentOrNull
                 ?.take(180).orEmpty(),
             mode = mode,
-            verified = root["confidence"]?.jsonPrimitive?.contentOrNull == "verified",
+            confidence = root["confidence"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf { it in setOf("verified", "inferred", "partial") } ?: return null,
             steps = steps,
         )
         } catch (_: Exception) { null }
     }
 
-    suspend fun load(malId: Int, mode: String): AnimeWatchOrder? {
+    suspend fun load(malId: Int, mode: String, forceRefresh: Boolean = false): AnimeWatchOrder? {
         if (malId <= 0 || mode !in setOf("recommended", "release", "chronological")) return null
-        cache[malId to mode]?.let { return it }
+        if (!forceRefresh) cache[malId to mode]?.let { return it }
         return try {
             val text = httpGetText(GATEWAY + "?malId=" + malId + "&mode=" + mode, timeoutMillis = 14_000L)
             parse(text)?.takeIf { it.mode == mode && it.steps.any { s -> s.malId == malId } }
@@ -90,7 +110,7 @@ internal object AnimeWatchOrderRepository {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            null
+            cache[malId to mode]
         }
     }
 

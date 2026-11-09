@@ -33,6 +33,64 @@ class AnimeWatchOrderTest {
 
     @Test fun inferredOrderIsNotMarkedVerified() {
         assertFalse(AnimeWatchOrderRepository.parse(example.replace("verified", "inferred"))!!.verified)
+        assertEquals("partial", AnimeWatchOrderRepository.parse(example.replace("verified", "partial"))!!.confidence)
+    }
+
+    @Test fun nextRecommendationSkipsCompletedOptionalAndFutureReleases() {
+        val order = AnimeWatchOrderRepository.parse(example)!!
+        assertEquals(49458, order.nextUnwatchedAfter(
+            currentMalId = 38040, includeOptional = true, completedMalIds = setOf(51958),
+            today = "2026-11-09",
+        )?.malId)
+        assertNull(order.nextUnwatchedAfter(
+            currentMalId = 32937, includeOptional = false,
+            completedMalIds = setOf(38040, 49458), today = "2026-11-09",
+        ))
+        assertNull(order.nextUnwatchedAfter(
+            currentMalId = 32937, includeOptional = false,
+            completedMalIds = emptySet(), today = "2016-02-02",
+        ))
+        val unknownRelease = order.copy(
+            steps = order.steps.map { if (it.malId == 38040) it.copy(releaseDate = null) else it },
+        )
+        assertEquals(49458, unknownRelease.nextUnwatchedAfter(
+            currentMalId = 32937, includeOptional = false,
+            completedMalIds = emptySet(), today = "2026-11-09",
+        )?.malId)
+    }
+
+    @Test fun previewCentersOnTheCurrentEntryAndBoundsTheList() {
+        val order = AnimeWatchOrderRepository.parse(example)!!
+        val required = order.steps.filter { it.required }
+        assertEquals(listOf(30831, 32937, 38040),
+            watchOrderPreviewWindow(required, 32937, 3).map { it.malId })
+        assertEquals(listOf(32937, 38040, 49458),
+            watchOrderPreviewWindow(required, 49458, 3).map { it.malId })
+        assertEquals(emptyList(), watchOrderPreviewWindow(required, 49458, 0))
+        assertEquals(required, watchOrderPreviewWindow(required, null, 10))
+    }
+
+    @Test fun franchiseCardNeverOverridesWithinSeriesAutoplayOrShowsOnErrors() {
+        assertFalse(shouldOfferFranchiseContinuation(
+            hasEnded = true, hasPlaybackError = false, hasNextEpisode = true,
+            isSeries = true, currentEpisodeInMetadata = true,
+        ))
+        assertFalse(shouldOfferFranchiseContinuation(
+            hasEnded = true, hasPlaybackError = true, hasNextEpisode = false,
+            isSeries = true, currentEpisodeInMetadata = true,
+        ))
+        assertFalse(shouldOfferFranchiseContinuation(
+            hasEnded = false, hasPlaybackError = false, hasNextEpisode = false,
+            isSeries = true, currentEpisodeInMetadata = true,
+        ))
+        assertFalse(shouldOfferFranchiseContinuation(
+            hasEnded = true, hasPlaybackError = false, hasNextEpisode = false,
+            isSeries = true, currentEpisodeInMetadata = false,
+        ))
+        assertTrue(shouldOfferFranchiseContinuation(
+            hasEnded = true, hasPlaybackError = false, hasNextEpisode = false,
+            isSeries = false, currentEpisodeInMetadata = false,
+        ))
     }
 
     @Test fun malformedAndDuplicateResponsesFailClosed() {
