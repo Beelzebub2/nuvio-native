@@ -158,33 +158,25 @@ actual object P2pStreamingEngine {
     // Access only while holding nativeCallMutex: one request at a time, and
     // register its waiter before the event pump can consume the reply.
     private var pendingEvent: PendingEvent? = null
-    private var activeStartJob: Job? = null
+    private val startRequests = P2pStartRequests()
     private var pendingStopJob: Job? = null
     private var stopEpoch = 0L
     private var generation = 0L
     private val knownTorrentIds = mutableMapOf<String, String>()
 
-    actual suspend fun startStream(request: P2pStreamRequest): String {
+    actual suspend fun startStream(request: P2pStreamRequest): String = startRequests.run {
         val (acceptedStopEpoch, previousStop) = synchronized(controlLock) {
             stopEpoch to pendingStopJob
         }
         previousStop?.join()
-        return lifecycleMutex.withLock {
+        lifecycleMutex.withLock {
             currentCoroutineContext().ensureActive()
-            val job = currentCoroutineContext()[Job]
             synchronized(controlLock) {
                 if (acceptedStopEpoch != stopEpoch) {
                     throw CancellationException("P2P stream start superseded by stop")
                 }
-                activeStartJob = job
             }
-            try {
-                startStreamLocked(request)
-            } finally {
-                synchronized(controlLock) {
-                    if (activeStartJob === job) activeStartJob = null
-                }
-            }
+            startStreamLocked(request)
         }
     }
 
@@ -328,9 +320,9 @@ actual object P2pStreamingEngine {
     }
 
     private fun scheduleStop(shutdownEngine: Boolean) {
-        val (stop, startup) = synchronized(controlLock) {
+        startRequests.cancel()
+        val stop = synchronized(controlLock) {
             stopEpoch += 1
-            val active = activeStartJob
             val previous = pendingStopJob
             scope.launch(start = CoroutineStart.LAZY) {
                 try {
@@ -342,9 +334,8 @@ actual object P2pStreamingEngine {
                         if (pendingStopJob === thisJob) pendingStopJob = null
                     }
                 }
-            }.also { pendingStopJob = it } to active
+            }.also { pendingStopJob = it }
         }
-        startup?.cancel(CancellationException("P2P stream stopped"))
         stop.start()
     }
 

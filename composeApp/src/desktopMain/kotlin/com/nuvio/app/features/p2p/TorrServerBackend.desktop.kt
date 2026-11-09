@@ -147,6 +147,7 @@ private class TorrServerBinary(
 ) {
     private val log = Logger.withTag("TorrServerBinary")
     private val healthClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(2))
         .build()
     @Volatile private var process: Process? = null
@@ -419,6 +420,8 @@ private class TorrServerApi(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val client = HttpClient.newBuilder()
+        // TorrServer serves cleartext HTTP/1.1; avoid an h2c upgrade on the first POST.
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(2))
         .build()
 

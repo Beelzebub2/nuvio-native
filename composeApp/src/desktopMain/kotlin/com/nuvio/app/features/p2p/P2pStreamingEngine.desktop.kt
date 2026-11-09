@@ -112,7 +112,6 @@ internal class DesktopP2pSession(
         return scope.launch {
             backendLock.withLock {
                 if (closing || _state.value !is P2pStreamingState.Idle) return@withLock
-                synchronized(intentLock) { intent += 1 }
                 try {
                     if (needsNetworkRecovery()) {
                         backend.restart(settings())
@@ -161,8 +160,15 @@ internal class DesktopP2pSession(
                     startMonitoring(session, currentIntent)
                     session.url
                 } catch (e: CancellationException) {
-                    withContext(NonCancellable) { backend.stop() }
-                    activeHash = null
+                    // A replacement source can reuse a fully prepared swarm. Stop and
+                    // caller cancellation still tear it down; partial startup never survives.
+                    val replacing = synchronized(intentLock) {
+                        intent != currentIntent && _state.value is P2pStreamingState.Connecting
+                    }
+                    if (!replacing || activeHash == null) {
+                        withContext(NonCancellable) { backend.stop() }
+                        activeHash = null
+                    }
                     publish(currentIntent, P2pStreamingState.Idle)
                     throw e
                 } catch (e: Exception) {
@@ -262,6 +268,9 @@ internal class DesktopP2pSession(
             try {
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "starting_engine", request = request))
                 val stale = needsNetworkRecovery()
+                // Until prepare/add succeeds, cancellation must clean up a possibly
+                // half-configured process rather than assuming the old hash is usable.
+                activeHash = null
                 if (recovering || attempt > 0 || stale) {
                     backend.restart(settings())
                     activeHash = null
@@ -270,7 +279,7 @@ internal class DesktopP2pSession(
                 preparedSignals = signals
                 startReadinessMonitoring()
                 ensureCurrent(currentIntent)
-                val magnet = buildP2pMagnetUri(request.infoHash, (DEFAULT_TRACKERS + request.trackers).distinct())
+                val magnet = buildP2pMagnetUri(request.infoHash, DESKTOP_TORRENT_TRACKERS + request.trackers)
                 publish(currentIntent, P2pStreamingState.Connecting(if (recovering) "recovering_engine" else "add_magnet", request = request))
                 val hash = backend.addTorrent(magnet)
                 activeHash = hash
@@ -461,6 +470,7 @@ internal class DesktopP2pSession(
         val requestedIdx = request.fileIdx
         val filename = request.filename
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(90)
+        var polls = 0
         var files: List<TorrServerFile> = emptyList()
         var metadataReady = false
 
@@ -476,7 +486,19 @@ internal class DesktopP2pSession(
                 continue
             }
             files = try {
-                backend.getTorrentStats(hash).files
+                val stats = backend.getTorrentStats(hash)
+                synchronized(intentLock) {
+                    if (this.intent == intent) {
+                        val connecting = _state.value as? P2pStreamingState.Connecting
+                        if (connecting != null) _state.value = connecting.copy(
+                            downloadSpeed = stats.downloadSpeed,
+                            uploadSpeed = stats.uploadSpeed,
+                            peers = stats.peers,
+                            seeds = stats.seeds,
+                        )
+                    }
+                }
+                stats.files
             } catch (e: DesktopTorrentEngineUnavailable) {
                 // Retain peer discovery across intermittent local status failures.
                 if (e.httpStatusCode == 404 || !backend.isHealthy()) throw e
@@ -495,7 +517,9 @@ internal class DesktopP2pSession(
                 (videos.isNotEmpty() || files.all { it.path.isNotBlank() })
             if (metadataReady) break
             log.d { "Waiting for torrent metadata..." }
-            delay(1_000L)
+            // Metadata often arrives in the first few hundred milliseconds on a
+            // warm/local swarm. Poll briefly at 4 Hz, then back off for slow swarms.
+            delay(if (++polls <= 20) 250L else 1_000L)
         }
 
         if (!metadataReady) {
@@ -550,13 +574,6 @@ internal class DesktopP2pSession(
 
     private companion object {
         const val WARM_TORRENT_RETENTION_MS = 90_000L
-        val DEFAULT_TRACKERS = listOf(
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.stealth.si:80/announce",
-            "udp://tracker.openbittorrent.com:6969/announce",
-            "udp://exodus.desync.com:6969/announce",
-            "udp://tracker.torrent.eu.org:451/announce",
-        )
     }
 }
 

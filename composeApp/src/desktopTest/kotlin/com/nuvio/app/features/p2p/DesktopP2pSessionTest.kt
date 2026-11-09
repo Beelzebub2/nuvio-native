@@ -136,7 +136,7 @@ class DesktopP2pSessionTest {
         val engine = engine(backend)
         try {
             assertTrue(engine.startStream(request).endsWith("index=1"))
-            assertTrue(testScheduler.currentTime >= 2_000L, "Incomplete file metadata must be polled before playback")
+            assertEquals(500L, testScheduler.currentTime, "Ready metadata should not wait for one-second polling ticks")
             assertEquals(1, backend.starts, "Waiting for metadata must not restart a healthy engine")
         } finally {
             engine.shutdown().join()
@@ -623,6 +623,36 @@ class DesktopP2pSessionTest {
         start.join()
         assertFalse(backend.running)
         assertIs<P2pStreamingState.Idle>(engine.state.value)
+    }
+
+    @Test fun replacingMetadataStartupKeepsThePreparedProcessAndPeers() = runTest {
+        val backend = Backend().apply { metadata = false }
+        val engine = engine(backend)
+        try {
+            val first = async { engine.startStream(request) }
+            runCurrent()
+            backend.metadata = true
+            val latest = async { engine.startStream(request) }
+            assertTrue(latest.await().endsWith("index=1"))
+            first.join()
+            assertTrue(first.isCancelled)
+            assertEquals(1, backend.starts, "Replacing an obsolete metadata wait must not rebuild the swarm")
+            assertTrue(backend.dropped.isEmpty())
+        } finally { engine.shutdown().join() }
+    }
+
+    @Test fun metadataWaitPublishesSwarmProgressBeforeThePlayerIsReady() = runTest {
+        val backend = Backend().apply { metadata = false; peers = 7; downloadSpeed = 8192L }
+        val engine = engine(backend)
+        val start = async { engine.startStream(request) }
+        runCurrent()
+        val connecting = assertIs<P2pStreamingState.Connecting>(engine.state.value)
+        assertEquals(7, connecting.peers)
+        assertEquals(8192L, connecting.downloadSpeed)
+        assertEquals(request, connecting.request)
+        start.cancel()
+        start.join()
+        engine.shutdown().join()
     }
 
     @Test fun aWakeUpDuringMetadataLoadingRebuildsBeforeContinuing() = runTest {

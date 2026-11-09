@@ -129,6 +129,7 @@ actual object P2pStreamingEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleLock = Any()
     private val startMutex = Mutex()
+    private val startRequests = P2pStartRequests()
     private var statsJob: Job? = null
     private var cleanupJob: Job? = null
     private var engineEventsJob: Job? = null
@@ -152,8 +153,13 @@ actual object P2pStreamingEngine {
         appContext = context.applicationContext
     }
 
-    actual suspend fun startStream(request: P2pStreamRequest): String = withContext(Dispatchers.IO) {
-        startMutex.withLock { startStreamLocked(request) }
+    actual suspend fun startStream(request: P2pStreamRequest): String = startRequests.run {
+        withContext(Dispatchers.IO) {
+            startMutex.withLock {
+                currentCoroutineContext().ensureActive()
+                startStreamLocked(request)
+            }
+        }
     }
 
     actual suspend fun clearCache(): P2pCacheClearResult = withContext(Dispatchers.IO) {
@@ -376,6 +382,7 @@ actual object P2pStreamingEngine {
 
     private fun scheduleStop(shutdownEngine: Boolean) {
         val startedAtMs = SystemClock.elapsedRealtime()
+        startRequests.cancel()
         val detached = synchronized(lifecycleLock) {
             val detached = detachActiveStream()
             enqueueCleanupLocked(detached, shutdownEngine)

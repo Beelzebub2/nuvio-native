@@ -6,6 +6,7 @@ on:
       - 'composeApp/**'
       - 'iosApp/**'
       - 'gradle/**'
+      - 'scripts/prepare-ios-dependencies.sh'
       - '*.gradle.kts'
       - '.github/workflows/ios-check.yml'
   workflow_dispatch:
@@ -100,6 +101,16 @@ jobs:
       - name: Compile iOS simulator Kotlin and Keychain interop
         run: >-
           "$STARLIT_GRADLE_BIN" :composeApp:compileKotlinIosSimulatorArm64
+          "-Pkotlin.native.home=${KOTLIN_NATIVE_HOME}"
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --no-configuration-cache --no-daemon --console=plain
+      - name: Prepare checksum-verified Full P2P engine
+        run: bash scripts/prepare-ios-dependencies.sh --engine-only
+      - name: Compile Full iOS simulator P2P integration
+        run: >-
+          "$STARLIT_GRADLE_BIN" :composeApp:compileKotlinIosSimulatorArm64
+          -Pnuvio.ios.distribution=full
           "-Pkotlin.native.home=${KOTLIN_NATIVE_HOME}"
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'

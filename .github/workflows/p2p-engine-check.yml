@@ -1,0 +1,62 @@
+name: Check P2P engine
+
+on:
+  pull_request:
+    paths:
+      - 'composeApp/src/**/features/p2p/**'
+      - 'composeApp/src/**/features/downloads/**'
+      - 'composeApp/src/desktopMain/resources/torrserver/**'
+      - 'composeApp/build.gradle.kts'
+      - '.github/workflows/p2p-engine-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2p-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-p2p:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - name: Fetch checksum-verified bundled torrent engine
+        shell: pwsh
+        run: |
+          git fetch --no-tags --depth=1 https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime commit fetch failed.' }
+          git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
+          if ($LASTEXITCODE -ne 0) { throw 'Torrent engine fetch failed.' }
+          git lfs checkout
+          $torrent = 'composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe'
+          if ((Get-FileHash $torrent -Algorithm SHA256).Hash.ToLowerInvariant() -ne '13031185a54abe0f729f9f3bdb7271a349a89ac8c559327d773c66007ed604f4') { throw 'Torrent engine checksum mismatch.' }
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install WebView2 build SDK
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.4078.44 -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
+          "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.1.0.4078.44" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Test lifecycle, resources and local torrent ranges
+        shell: pwsh
+        run: >-
+          ./gradlew.bat :composeApp:desktopTest
+          "-Pnuvio.webview2.dir=$env:WEBVIEW2_ROOT"
+          --tests 'com.nuvio.app.features.p2p.*'
+          --tests '*DesktopDownloadsTest*' --tests '*DownloadTorrentResourcesTest*'
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --max-workers=2 --no-configuration-cache --no-daemon --console=plain
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: p2p-engine-test-results
+          path: composeApp/build/test-results/desktopTest/
+          if-no-files-found: warn
