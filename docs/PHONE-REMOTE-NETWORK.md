@@ -16,10 +16,10 @@ test proving the phone is blocked.
 
 ## What the implementation does
 
-- Try QR or the current PC IP address first. Optional **Trouble connecting?**
-  help inspects Windows rules only when requested. There is no Starlit startup
-  firewall modal or automatic administrator request. Windows may still display
-  its own normal first-use firewall alert when an application starts listening.
+- Try QR or the current PC IP address first. The Phone remote window checks
+  Windows firewall rules while the listener is ready. Inaccessible profiles
+  are shown automatically; **Trouble connecting?** still offers manual checks.
+  There is no startup firewall modal or automatic administrator request.
 - Evaluate TCP session permission separately from UDP discovery permission.
   A UDP restriction does not label an allowed TCP session as blocked.
 - Probe direct and remembered IP addresses even if UDP cannot start or send.
@@ -29,12 +29,19 @@ test proving the phone is blocked.
   guest Wi-Fi isolation, VPN routing or other security software. A live approved
   connection hides irrelevant LAN warnings; a Bluetooth connection is not
   presented as proof that TCP is reachable.
-- Keep administrator permission available as an explicit user action. The
-  installed rules remain limited to Starlit's executable, the two ports,
-  `LocalSubnet`, and Private/Domain profiles. Starlit does not switch profiles,
-  disable the firewall, open router ports or grant a Public-profile exception.
-  Only mark a home network Private if you trust it. Organization policies can
-  still prevent access.
+- Keep administrator permission available as an explicit user action.
+  Private/Domain rules remain limited to Starlit's executable, the two ports
+  and `LocalSubnet`. For a trusted Ethernet connection Windows still marks
+  Public, **Allow on wired Ethernet** can install separate Public-profile
+  rules only for Starlit's executable, the same TCP/UDP ports and `LocalSubnet`
+  on **Lan** interface types. Windows requests administrator confirmation
+  for this optional exception; it does not grant access on Public Wi-Fi.
+  Starlit does not switch profiles, disable the firewall or open router ports.
+  Only mark a home network Private if you trust it. Organization policies
+  can still prevent access.
+- On PCs with several active adapters (including VMware, Hyper-V or VPN),
+  present physical Ethernet/Wi-Fi addresses first when choosing the QR
+  discovery hint. Direct subnet TCP searches also prioritize those adapters.
 
 Kotlin's [coroutine exception documentation](https://kotlinlang.org/docs/exception-handling.html)
 explains that an unhandled child exception other than cancellation cancels its
@@ -104,11 +111,14 @@ launching was checked against the actual Network & internet page.
   automated Kotlin tests.
 
 **End-to-end acceptance still needed:** On a *trusted* home/office network,
-switch Windows Ethernet to **Private** using Windows Settings, not by silently
-opening the Public firewall profile. Sign in to the same Starlit account and
+either switch Windows Ethernet to **Private** in Windows Settings or explicitly
+choose the Starlit **Allow on wired Ethernet** firewall option (administrator
+approval required). Sign in to the same Starlit account and
 server on both devices, open the desktop Phone remote window and confirm its
 listener is ready, then retry LAN discovery/direct IP and fresh two-device
 pairing. Verify play/pause, fullscreen, skip intro, next episode, seeking,
 volume, disconnect/reconnect, and that a Bluetooth reconnect only skips a code
 when both sides retain their protected trust keys. Check the Android UI during
-search, pairing, disconnection and returning from the background.
+search, pairing, disconnection and returning from the background. Also verify
+Public Wi-Fi remains inaccessible to the LAN remote, and that on a mixed
+virtual/physical-adapter PC the QR defaults to the real wired LAN IP.

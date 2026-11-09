@@ -2,6 +2,7 @@ package com.nuvio.app.features.remote
 
 import com.nuvio.app.core.windows.ELEVATED_TASK_ARGUMENT
 import com.nuvio.app.core.windows.PHONE_REMOTE_FIREWALL_TASK
+import com.nuvio.app.core.windows.PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK
 import com.nuvio.app.core.windows.WindowsElevation
 import co.touchlab.kermit.Logger
 import java.nio.file.Paths
@@ -28,6 +29,8 @@ import kotlinx.serialization.json.put
 internal const val FIREWALL_GROUP = "Starlit phone remote"
 internal const val FIREWALL_TCP_RULE = "Starlit phone remote TCP"
 internal const val FIREWALL_UDP_RULE = "Starlit phone remote UDP"
+internal const val FIREWALL_PUBLIC_ETHERNET_TCP_RULE = "Starlit phone remote TCP (public Ethernet)"
+internal const val FIREWALL_PUBLIC_ETHERNET_UDP_RULE = "Starlit phone remote UDP (public Ethernet)"
 internal const val FIREWALL_DISCOVERY_PORT = 47788
 internal const val FIREWALL_SESSION_PORT = 47789
 
@@ -159,10 +162,10 @@ internal fun windowsFirewallSnapshotJson(
 }.toString()
 
 /** Runs in the elevated helper started by [WindowsRemoteFirewall.requestAccess]. */
-internal fun allowPhoneRemoteThroughWindowsFirewall() {
+internal fun allowPhoneRemoteThroughWindowsFirewall(publicEthernet: Boolean = false) {
     val executable = ProcessHandle.current().info().command().orElse(null)
     check(!executable.isNullOrBlank()) { "Unknown Starlit executable" }
-    WindowsFirewallCom.allowPhoneRemote(executable)
+    WindowsFirewallCom.allowPhoneRemote(executable, publicEthernet)
 }
 
 private data class FirewallRule(
@@ -232,16 +235,26 @@ private fun String.isAnyFilter(): Boolean = equals("Any", ignoreCase = true) || 
 
 private fun String.isUnrestrictedUser(): Boolean = isEmpty() || isAnyFilter()
 
-/** Only rules covering ordinary local-subnet traffic can prove that the remote is reachable. */
-private fun FirewallRule.allowsLocalSubnet(): Boolean =
-    remotePort.isAnyFilter() && localAddress.isAnyFilter() &&
-        (remoteAddress.isAnyFilter() || remoteAddress.equals("LocalSubnet", ignoreCase = true) ||
-            remoteAddress.equals("LocalSubnet4", ignoreCase = true)) &&
-        service.isAnyFilter() && interfaceAlias.isAnyFilter() && interfaceType.isAnyFilter() &&
+/** On Public, recognize only narrow, explicitly approved wired rules as safe. */
+private fun FirewallRule.allowsLocalSubnet(profile: String, executable: String, protocol: String, port: Int): Boolean {
+    val networkScope = if (profile == "public") {
+        isProgramSpecific(executable) &&
+            this.protocol.equals(protocol, ignoreCase = true) &&
+            localPort == port.toString() &&
+            remoteAddress.equals("LocalSubnet", ignoreCase = true) &&
+            interfaceType.equals("Lan", ignoreCase = true)
+    } else {
+        interfaceType.isAnyFilter() &&
+            (remoteAddress.isAnyFilter() || remoteAddress.equals("LocalSubnet", ignoreCase = true) ||
+                remoteAddress.equals("LocalSubnet4", ignoreCase = true))
+    }
+    return networkScope && remotePort.isAnyFilter() && localAddress.isAnyFilter() &&
+        service.isAnyFilter() && interfaceAlias.isAnyFilter() &&
         authentication.equals("NotRequired", ignoreCase = true) &&
         encryption.equals("NotRequired", ignoreCase = true) &&
         overrideBlockRules.equals("False", ignoreCase = true) &&
         localUser.isUnrestrictedUser() && remoteUser.isUnrestrictedUser() && remoteMachine.isUnrestrictedUser()
+}
 
 private fun FirewallRule.protocolMatches(protocol: String): Boolean =
     this.protocol.equals("Any", ignoreCase = true) ||
@@ -347,17 +360,19 @@ internal fun parseWindowsFirewallState(json: String, executable: String): Remote
                 rule.action.equals("Allow", ignoreCase = true) &&
                     (rule.isProgramSpecific(executable) || rule.isProgramAgnostic()) &&
                     rule.matchesPort(protocol, port, explicitPortOnly = rule.isProgramAgnostic()) &&
-                    rule.allowsLocalSubnet()
+                    rule.allowsLocalSubnet(profile, executable, protocol, port)
             }
         }
 
         when {
+            // CurrentProfileTypes is a union of active adapters. A working
+            // Private VPN must not conceal a blocked Public Ethernet adapter.
+            "public" in activeProfiles && (!allowedOn("public", "TCP", FIREWALL_SESSION_PORT) ||
+                !allowedOn("public", "UDP", FIREWALL_DISCOVERY_PORT)) ->
+                RemoteFirewallState.PublicNetwork
             activeProfiles.any { allowedOn(it, "TCP", FIREWALL_SESSION_PORT) &&
                 allowedOn(it, "UDP", FIREWALL_DISCOVERY_PORT) } -> RemoteFirewallState.Allowed
             activeProfiles.any { allowedOn(it, "TCP", FIREWALL_SESSION_PORT) } -> RemoteFirewallState.DiscoveryRestricted
-            activeProfiles.all { it == "public" } &&
-                (allowedOn("private", "TCP", FIREWALL_SESSION_PORT) ||
-                    allowedOn("domain", "TCP", FIREWALL_SESSION_PORT)) -> RemoteFirewallState.PublicNetwork
             else -> RemoteFirewallState.Blocked
         }
     }.getOrDefault(RemoteFirewallState.Unverified)
@@ -396,7 +411,11 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
         }
     }
 
-    override fun requestAccess() {
+    override fun requestAccess() = requestFirewallAccess(publicEthernet = false)
+
+    override fun requestPublicEthernetAccess() = requestFirewallAccess(publicEthernet = true)
+
+    private fun requestFirewallAccess(publicEthernet: Boolean) {
         val ticket = synchronized(lock) {
             if (mutableState.value == RemoteFirewallState.Requesting) return
             generation += 1
@@ -407,11 +426,15 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
             val owner = runCatching { withContext(Dispatchers.Swing) { WindowsElevation.activeWindowHandle() } }.getOrNull()
             // Starlit restarts itself elevated for this one task, behind a single UAC prompt.
             val succeeded = runCatching {
-                WindowsElevation.runSelf(listOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_FIREWALL_TASK), 180, owner)
+                WindowsElevation.runSelf(listOf(
+                    ELEVATED_TASK_ARGUMENT,
+                    if (publicEthernet) PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK else PHONE_REMOTE_FIREWALL_TASK,
+                ), 180, owner)
             }.getOrDefault(false)
             if (succeeded) scheduleRefresh(requestGeneration = ticket)
             else synchronized(lock) {
-                if (generation == ticket) mutableState.value = RemoteFirewallState.Failed
+                if (generation == ticket) mutableState.value =
+                    if (publicEthernet) RemoteFirewallState.PublicEthernetFailed else RemoteFirewallState.Failed
             }
         }
     }

@@ -67,6 +67,18 @@ internal object WindowsFirewallCom {
         }
     }
 
+    /** A JVM launched by Gradle shares java.exe with unrelated applications. */
+    internal fun requireDedicatedPublicEthernetLauncher(program: String) {
+        val name = program.replace('\\', '/').substringAfterLast('/')
+        require(name.equals("Starlit.exe", ignoreCase = true) && name != program) {
+            "Public Ethernet firewall permission requires the installed Starlit desktop launcher"
+        }
+    }
+
+    internal fun newlyCreatedPublicEthernetRuleNames(previouslyOwned: Set<String>): List<String> =
+        listOf(FIREWALL_PUBLIC_ETHERNET_TCP_RULE, FIREWALL_PUBLIC_ETHERNET_UDP_RULE)
+            .filterNot(previouslyOwned::contains)
+
     const val NET_FW_RULE_DIR_IN = 1
     const val NET_FW_ACTION_BLOCK = 0
     const val NET_FW_ACTION_ALLOW = 1
@@ -109,15 +121,18 @@ internal object WindowsFirewallCom {
      * only runs in the elevated helper the user approved. Only replaces our own earlier
      * inbound Allow rules; never removes a Block rule or another app's rule.
      */
-    fun allowPhoneRemote(program: String) {
+    fun allowPhoneRemote(program: String, publicEthernet: Boolean = false) {
         require(program.isNotBlank())
+        if (publicEthernet) requireDedicatedPublicEthernetLauncher(program)
+        val tcpRule = if (publicEthernet) FIREWALL_PUBLIC_ETHERNET_TCP_RULE else FIREWALL_TCP_RULE
+        val udpRule = if (publicEthernet) FIREWALL_PUBLIC_ETHERNET_UDP_RULE else FIREWALL_UDP_RULE
         WindowsCom.withApartment {
             WindowsCom.create(CLSID_NET_FW_POLICY2, IID_NET_FW_POLICY2).use { policy ->
                 policy.getObject(POLICY_RULES, "Rules").use { rules ->
                     val ownership = mutableMapOf<String, MutableList<Boolean>>()
                     forEachRule(rules) { rule, _ ->
                         val name = runCatching { rule.getString(RULE_NAME, "Name") }.getOrNull()
-                        if (name == FIREWALL_TCP_RULE || name == FIREWALL_UDP_RULE) {
+                        if (name == tcpRule || name == udpRule) {
                             val ours = runCatching {
                                 rule.getInt(RULE_DIRECTION, "Direction") == NET_FW_RULE_DIR_IN &&
                                     rule.getInt(RULE_ACTION, "Action") == NET_FW_ACTION_ALLOW &&
@@ -130,20 +145,47 @@ internal object WindowsFirewallCom {
                     }
                     // Add also replaces by name: reject collisions BEFORE changing any rule.
                     requireOwnedRuleNames(ownership)
-                    for ((name, owners) in ownership) {
-                        if (owners.isNotEmpty()) WindowsCom.withBstr(name) {
-                            checkHresult("Rules.Remove", rules.call(RULES_REMOVE, it))
+                    if (!publicEthernet) {
+                        // Preserve the existing private/domain rule replacement flow.
+                        for ((name, owners) in ownership) {
+                            if (owners.isNotEmpty()) WindowsCom.withBstr(name) {
+                                checkHresult("Rules.Remove", rules.call(RULES_REMOVE, it))
+                            }
                         }
                     }
-                    addRule(rules, FIREWALL_TCP_RULE, NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program)
-                    addRule(rules, FIREWALL_UDP_RULE, NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program)
+                    try {
+                        // Public rules overwrite only previously verified, owned names.
+                        // Keep old rules in place until their replacements are added.
+                        addRule(rules, tcpRule, NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program, publicEthernet)
+                        addRule(rules, udpRule, NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program, publicEthernet)
+                    } catch (error: Exception) {
+                        if (publicEthernet) {
+                            // Fail closed on a first-time partial installation:
+                            // remove any newly created Public rules if either Add failed.
+                            for (name in newlyCreatedPublicEthernetRuleNames(ownership.keys)) {
+                                runCatching {
+                                    WindowsCom.withBstr(name) { ruleName ->
+                                        checkHresult("Rules.Remove", rules.call(RULES_REMOVE, ruleName))
+                                    }
+                                }.onFailure(error::addSuppressed)
+                            }
+                        }
+                        throw error
+                    }
                 }
             }
         }
     }
 
     /** Builds a rule exactly as [allowPhoneRemote] would, without adding it to the firewall. */
-    internal fun <T> withPhoneRemoteRule(name: String, protocol: Int, port: Int, program: String, block: (ComObject) -> T): T =
+    internal fun <T> withPhoneRemoteRule(
+        name: String,
+        protocol: Int,
+        port: Int,
+        program: String,
+        publicEthernet: Boolean = false,
+        block: (ComObject) -> T,
+    ): T =
         WindowsCom.create(CLSID_NET_FW_RULE, IID_NET_FW_RULE).use { rule ->
             rule.putString(RULE_NAME + 1, "Name", name)
             rule.putString(RULE_DESCRIPTION + 1, "Description", "Lets phones on your local network find and control Starlit.")
@@ -152,9 +194,13 @@ internal object WindowsFirewallCom {
             rule.putInt(RULE_PROTOCOL + 1, "Protocol", protocol)
             rule.putString(RULE_LOCAL_PORTS + 1, "LocalPorts", port.toString())
             rule.putString(RULE_REMOTE_ADDRESSES + 1, "RemoteAddresses", "LocalSubnet")
+            // A Public-profile exception must never expose remote control via
+            // public Wi-Fi. The user explicitly approves wired LAN access only.
+            if (publicEthernet) rule.putString(RULE_INTERFACE_TYPES + 1, "InterfaceTypes", "Lan")
             rule.putInt(RULE_DIRECTION + 1, "Direction", NET_FW_RULE_DIR_IN)
             rule.putString(RULE_GROUPING + 1, "Grouping", FIREWALL_GROUP)
-            rule.putInt(RULE_PROFILES + 1, "Profiles", NET_FW_PROFILE2_DOMAIN or NET_FW_PROFILE2_PRIVATE)
+            rule.putInt(RULE_PROFILES + 1, "Profiles", if (publicEthernet) NET_FW_PROFILE2_PUBLIC
+                else NET_FW_PROFILE2_DOMAIN or NET_FW_PROFILE2_PRIVATE)
             rule.putInt(RULE_ACTION + 1, "Action", NET_FW_ACTION_ALLOW)
             rule.putBoolean(RULE_ENABLED + 1, "Enabled", true)
             block(rule)
@@ -164,8 +210,8 @@ internal object WindowsFirewallCom {
     internal fun recordOf(rule: ComObject): WindowsFirewallRuleRecord =
         rule.queryInterface(IID_NET_FW_RULE3)?.use { record(it, isRule3 = true) } ?: record(rule, isRule3 = false)
 
-    private fun addRule(rules: ComObject, name: String, protocol: Int, port: Int, program: String) {
-        withPhoneRemoteRule(name, protocol, port, program) { rule ->
+    private fun addRule(rules: ComObject, name: String, protocol: Int, port: Int, program: String, publicEthernet: Boolean) {
+        withPhoneRemoteRule(name, protocol, port, program, publicEthernet) { rule ->
             checkHresult("Rules.Add", rules.call(RULES_ADD, rule.pointer))
         }
     }

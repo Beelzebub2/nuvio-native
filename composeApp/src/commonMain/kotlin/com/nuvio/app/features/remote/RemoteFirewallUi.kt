@@ -110,15 +110,23 @@ internal fun RemoteFirewallCard(firewall: RemoteFirewallAccess, modifier: Modifi
             body = stringResource(Res.string.remote_firewall_public_body),
         ) {
             NuvioCompactActionButton(
+                label = stringResource(Res.string.remote_firewall_allow_public_ethernet),
+                icon = Icons.Rounded.Security,
+                tone = NuvioCompactActionTone.Primary,
+                size = NuvioActionSize.Small,
+                modifier = Modifier.testTag("remote-firewall-allow-public-ethernet"),
+                onClick = firewall::requestPublicEthernetAccess,
+            )
+            NuvioCompactActionButton(
                 label = stringResource(Res.string.remote_firewall_open_settings),
                 icon = Icons.Rounded.Lan,
-                tone = NuvioCompactActionTone.Primary,
+                tone = NuvioCompactActionTone.Ghost,
                 size = NuvioActionSize.Small,
                 onClick = firewall::openNetworkSettings,
             )
             CheckAgainButton(firewall)
         }
-        RemoteFirewallState.Failed -> FirewallNotice(
+        RemoteFirewallState.Failed, RemoteFirewallState.PublicEthernetFailed -> FirewallNotice(
             modifier = modifier,
             tone = RemoteTone.Danger,
             icon = Icons.Rounded.ErrorOutline,
@@ -126,11 +134,15 @@ internal fun RemoteFirewallCard(firewall: RemoteFirewallAccess, modifier: Modifi
             body = stringResource(Res.string.remote_firewall_failed_body),
         ) {
             NuvioCompactActionButton(
-                label = stringResource(Res.string.remote_firewall_try_again),
+                label = stringResource(if (state == RemoteFirewallState.PublicEthernetFailed)
+                    Res.string.remote_firewall_allow_public_ethernet else Res.string.remote_firewall_try_again),
                 icon = Icons.Rounded.Security,
                 tone = NuvioCompactActionTone.Primary,
                 size = NuvioActionSize.Small,
-                onClick = firewall::requestAccess,
+                onClick = {
+                    if (state == RemoteFirewallState.PublicEthernetFailed) firewall.requestPublicEthernetAccess()
+                    else firewall.requestAccess()
+                },
             )
             CheckAgainButton(firewall)
         }

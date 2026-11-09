@@ -375,6 +375,60 @@ class DesktopRemoteProtocolTest {
     }
 
     @Test
+    fun qrAddressesPreferRealEthernetAndWifiOverVirtualVpnAndCellularAdapters() {
+        val interfaces = listOf(
+            lanInterface("10.7.0.2", "tun0", "WireGuard Tunnel"),
+            lanInterface("192.168.56.1", "eth1", "VirtualBox Host-Only Ethernet Adapter"),
+            lanInterface("172.25.10.1", "vEthernet (Default Switch)", "Hyper-V Virtual Ethernet Adapter"),
+            lanInterface("192.168.1.40", "eth4", "Realtek PCIe 2.5GbE Family Controller"),
+            lanInterface("192.168.1.41", "wlan0", "Intel Wi-Fi 6 AX201"),
+            lanInterface("192.168.70.1", "vmnet8", "VMware Network Adapter VMnet8"),
+            lanInterface("10.23.0.1", "rmnet_data0", "Mobile data"),
+        )
+        val ordered = prioritizedRemoteLanInterfaces(interfaces).map { it.address.hostAddress }
+        assertEquals(listOf("192.168.1.40", "192.168.1.41"), ordered.take(2))
+        assertEquals(interfaces.size, ordered.size, "Less useful NICs remain available as fallbacks")
+        assertTrue(ordered.indexOf("192.168.56.1") > 1)
+        assertTrue(ordered.indexOf("10.7.0.2") > 1)
+        assertTrue(ordered.indexOf("10.23.0.1") > 1)
+    }
+
+    @Test
+    fun deepScanUsesTwoDistinctPhysicalNicsBeforeAliasesOrVirtualNetworks() {
+        val interfaces = listOf(
+            lanInterface("172.21.0.1", "vmnet1", "VMware Virtual Network Adapter"),
+            lanInterface("192.168.2.7", "wlan0", "Wi-Fi secondary address"),
+            lanInterface("192.168.1.7", "wlan0", "Wi-Fi"),
+            lanInterface("10.2.3.4", "eth0", "Ethernet"),
+            lanInterface("10.8.0.1", "tun0", "VPN tunnel", pointToPoint = true),
+        )
+        val selected = remoteDeepScanInterfaces(interfaces)
+        assertEquals(listOf("10.2.3.4", "192.168.1.7"), selected.map { it.address.hostAddress })
+        val scanned = selected.flatMap { remoteSubnetCandidates(it.address.address, it.networkPrefixLength) }
+            .map { it.hostAddress }.toSet()
+        assertTrue("10.2.3.90" in scanned)
+        assertTrue("192.168.1.90" in scanned)
+        assertFalse("192.168.2.90" in scanned)
+        assertFalse("172.21.0.90" in scanned)
+    }
+
+    @Test
+    fun deepScanKeepsAddressAliasesAndVirtualOnlyFallbacksWhenNeeded() {
+        val ethernetOnly = listOf(
+            lanInterface("192.168.1.4", "eth0", "Ethernet"),
+            lanInterface("192.168.2.4", "eth0", "Ethernet"),
+        )
+        assertEquals(ethernetOnly.map { it.address }, remoteDeepScanInterfaces(ethernetOnly).map { it.address })
+        val withVpn = ethernetOnly + lanInterface("10.8.0.2", "tun0", "VPN", pointToPoint = true)
+        assertEquals(ethernetOnly.map { it.address }, remoteDeepScanInterfaces(withVpn).map { it.address })
+        val virtualOnly = listOf(
+            lanInterface("10.8.0.2", "tun0", "VPN", pointToPoint = true),
+            lanInterface("192.168.56.1", "vmnet1", "VMware Network Adapter"),
+        )
+        assertEquals(2, remoteDeepScanInterfaces(virtualOnly).size)
+    }
+
+    @Test
     fun directTcpDiscoveryOnlyRecognizesCurrentAccountAndChallenge() {
         val account = RemoteAccount("user-1", "https://one.example", "public")
         val other = account.copy(userId = "user-2")
@@ -549,4 +603,18 @@ class DesktopRemoteProtocolTest {
             }
         }
     }
+
+    private fun lanInterface(
+        ip: String,
+        name: String,
+        displayName: String,
+        pointToPoint: Boolean = false,
+    ) = RemoteLanInterface(
+        address = requireNotNull(strictRemoteIpv4(ip)),
+        networkPrefixLength = 24,
+        broadcast = null,
+        name = name,
+        displayName = displayName,
+        pointToPoint = pointToPoint,
+    )
 }

@@ -2209,7 +2209,8 @@
     <string name="remote_firewall_blocked_title">Permissão de ligação não confirmada</string>
     <string name="remote_firewall_blocked_body">O Starlit não confirmou uma regra TCP para esta rede. Tenta primeiro o QR ou o endereço IP do PC. Se a ligação falhar numa rede doméstica de confiança, pede as regras do Starlit para redes privadas. O Windows pede autorização de administrador; podem aplicar-se políticas da organização.</string>
     <string name="remote_firewall_public_title">Esta rede está definida como Pública</string>
-    <string name="remote_firewall_public_body">As regras do Starlit aplicam-se a redes Privadas e de Domínio. Tenta primeiro o QR ou o endereço IP do PC. Se necessário, define como Privada apenas uma rede em que confies, como a tua rede doméstica. Mantém as redes Wi-Fi públicas ou partilhadas como Públicas.</string>
+    <string name="remote_firewall_public_body">O Windows classificou pelo menos uma rede como Pública. Confirma se é a Ethernet; pode ser outro adaptador. Numa Ethernet de confiança, podes autorizar explicitamente o Starlit para dispositivos da rede local, com aprovação de administrador. Em alternativa, define a rede doméstica como Privada. Esta exceção não abre o Wi-Fi público.</string>
+    <string name="remote_firewall_allow_public_ethernet">Permitir em Ethernet por cabo</string>
     <string name="remote_firewall_allow">Permitir na firewall</string>
     <string name="remote_firewall_check_again">Verificar novamente</string>
     <string name="remote_firewall_open_settings">Abrir definições de rede</string>

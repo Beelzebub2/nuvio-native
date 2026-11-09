@@ -950,7 +950,8 @@
     <string name="remote_firewall_allow">Allow through firewall</string>
     <string name="remote_firewall_check_again">Check again</string>
     <string name="remote_firewall_public_title">This network is set to Public</string>
-    <string name="remote_firewall_public_body">Starlit's rules apply to Private and Domain networks. Try QR or the PC's IP address first. If needed, mark only a network you trust, such as your own home network, as Private in Windows settings. Keep shared or public Wi-Fi Public.</string>
+    <string name="remote_firewall_public_body">Windows has marked at least one network Public. Check whether your Ethernet connection is Public; another adapter could be responsible. On trusted wired Ethernet, you can explicitly allow Starlit for local-subnet phones with administrator approval. Alternatively, mark your trusted home network Private. This exception does not open Public Wi-Fi.</string>
+    <string name="remote_firewall_allow_public_ethernet">Allow on wired Ethernet</string>
     <string name="remote_firewall_open_settings">Open network settings</string>
     <string name="remote_firewall_requesting">Approve the Windows prompt to let Starlit through the firewall…</string>
     <string name="remote_firewall_failed_title">Couldn't update Windows Firewall</string>

@@ -28,6 +28,39 @@ class WindowsRemoteFirewallTest {
         }
     }
 
+    @Test
+    fun publicEthernetPermissionRequiresThePackagedStarlitExecutable() {
+        WindowsFirewallCom.requireDedicatedPublicEthernetLauncher(
+            """C:\Program Files\Starlit\Starlit.exe""")
+        WindowsFirewallCom.requireDedicatedPublicEthernetLauncher(
+            """C:\Users\test\AppData\Local\Starlit\starlit.exe""")
+        for (program in listOf(
+            """C:\Program Files\Java\bin\java.exe""",
+            """C:\Users\test\jdk\bin\javaw.exe""",
+            """C:\Windows\System32\cmd.exe""",
+            """C:\Program Files\SomeOtherApp\SomeOtherApp.exe""",
+            "Starlit.exe",
+        )) {
+            assertFailsWith<IllegalArgumentException> {
+                WindowsFirewallCom.requireDedicatedPublicEthernetLauncher(program)
+            }
+        }
+        // Reject a shared JVM before even opening the COM firewall interface.
+        assertFailsWith<IllegalArgumentException> {
+            WindowsFirewallCom.allowPhoneRemote("""C:\Users\test\jdk\bin\java.exe""", publicEthernet = true)
+        }
+    }
+
+    @Test
+    fun publicEthernetRollbackNeverDeletesRulesThatAlreadyExisted() {
+        val tcp = FIREWALL_PUBLIC_ETHERNET_TCP_RULE
+        val udp = FIREWALL_PUBLIC_ETHERNET_UDP_RULE
+        assertEquals(listOf(tcp, udp), WindowsFirewallCom.newlyCreatedPublicEthernetRuleNames(emptySet()))
+        assertEquals(listOf(udp), WindowsFirewallCom.newlyCreatedPublicEthernetRuleNames(setOf(tcp)))
+        assertEquals(listOf(tcp), WindowsFirewallCom.newlyCreatedPublicEthernetRuleNames(setOf(udp)))
+        assertEquals(emptyList(), WindowsFirewallCom.newlyCreatedPublicEthernetRuleNames(setOf(tcp, udp)))
+    }
+
     private fun rule(
         action: String = "Allow",
         profile: String = "Private",
@@ -141,7 +174,7 @@ class WindowsRemoteFirewallTest {
             rule(profile = "Any", program = "Any", protocol = "Any", localPort = "Any"),
             networks = listOf("Public"),
         )
-        assertEquals(RemoteFirewallState.Blocked, parseWindowsFirewallState(json, executable))
+        assertEquals(RemoteFirewallState.PublicNetwork, parseWindowsFirewallState(json, executable))
     }
 
     @Test
@@ -318,6 +351,61 @@ class WindowsRemoteFirewallTest {
             networks = listOf("Public"),
         )
         assertEquals(RemoteFirewallState.PublicNetwork, parseWindowsFirewallState(json, executable))
+    }
+
+    @Test
+    fun publicEthernetCanBeGrantedOnlyWithExplicitAppScopedLanRules() {
+        val tcp = rule(profile = "Public", program = executable, protocol = "TCP",
+            localPort = "47789", remoteAddress = "LocalSubnet", interfaceType = "Lan")
+        val udp = rule(profile = "Public", program = executable, protocol = "UDP",
+            localPort = "47788", remoteAddress = "LocalSubnet", interfaceType = "Lan")
+        assertEquals(RemoteFirewallState.Allowed,
+            parseWindowsFirewallState(snapshot(tcp, udp, networks = listOf("Public")), executable))
+        assertEquals(RemoteFirewallState.PublicNetwork,
+            parseWindowsFirewallState(snapshot(tcp, networks = listOf("Public")), executable))
+        assertEquals(RemoteFirewallState.PublicNetwork,
+            parseWindowsFirewallState(snapshot(
+                tcp, rule(profile = "Public", program = "Any", protocol = "UDP",
+                    localPort = "47788", remoteAddress = "LocalSubnet", interfaceType = "Lan"),
+                networks = listOf("Public")), executable))
+        assertEquals(RemoteFirewallState.PublicNetwork,
+            parseWindowsFirewallState(snapshot(
+                rule(profile = "Public", program = executable, interfaceType = "Wireless",
+                    remoteAddress = "LocalSubnet"), udp, networks = listOf("Public")), executable))
+    }
+
+    @Test
+    fun broadPublicWifiOrProgramRulesCannotMasqueradeAsWiredLocalPermission() {
+        val publicUdp = rule(profile = "Public", program = executable, protocol = "UDP",
+            localPort = "47788", remoteAddress = "LocalSubnet", interfaceType = "Lan")
+        val unsafeTcp = listOf(
+            rule(profile = "Public", program = executable, protocol = "Any", localPort = "Any",
+                remoteAddress = "Any", interfaceType = "Any"),
+            rule(profile = "Public", program = executable, protocol = "TCP", localPort = "Any",
+                remoteAddress = "LocalSubnet", interfaceType = "Lan"),
+            rule(profile = "Public", program = executable, protocol = "Any", localPort = "47789",
+                remoteAddress = "LocalSubnet", interfaceType = "Lan"),
+            rule(profile = "Public", program = executable, protocol = "TCP", localPort = "47789",
+                remoteAddress = "Any", interfaceType = "Lan"),
+            rule(profile = "Public", program = executable, protocol = "TCP", localPort = "47789",
+                remoteAddress = "LocalSubnet", interfaceType = "Wireless"),
+            rule(profile = "Public", program = "Any", protocol = "TCP", localPort = "47789",
+                remoteAddress = "LocalSubnet", interfaceType = "Lan"),
+        )
+        unsafeTcp.forEach { tcp ->
+            assertEquals(RemoteFirewallState.PublicNetwork, parseWindowsFirewallState(
+                snapshot(tcp, publicUdp, networks = listOf("Public")), executable), tcp.toString())
+        }
+    }
+
+    @Test
+    fun privateVpnProfileDoesNotMaskPublicEthernetPermissionGap() {
+        val privateRules = arrayOf(
+            rule(profile = "Private", protocol = "TCP"),
+            rule(profile = "Private", protocol = "UDP", localPort = "47788"),
+        )
+        assertEquals(RemoteFirewallState.PublicNetwork, parseWindowsFirewallState(
+            snapshot(*privateRules, networks = listOf("Private", "Public")), executable))
     }
 
     @Test
@@ -502,8 +590,8 @@ class WindowsRemoteFirewallTest {
         val program = """C:\Program Files\O'Brien\Aplicação 日本語\Starlit.exe"""
         val records = WindowsCom.withApartment {
             listOf(
-                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_TCP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program, WindowsFirewallCom::recordOf),
-                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_UDP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program, WindowsFirewallCom::recordOf),
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_TCP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program, false, WindowsFirewallCom::recordOf),
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_UDP_RULE, WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program, false, WindowsFirewallCom::recordOf),
             )
         }
         val tcp = records[0]
@@ -518,5 +606,22 @@ class WindowsRemoteFirewallTest {
             RemoteFirewallState.Allowed,
             parseWindowsFirewallState(windowsFirewallSnapshotJson(records, WindowsFirewallCom.NET_FW_PROFILE2_PRIVATE, allProfilesOn), program),
         )
+
+        val publicRecords = WindowsCom.withApartment {
+            listOf(
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_PUBLIC_ETHERNET_TCP_RULE,
+                    WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, FIREWALL_SESSION_PORT, program, true,
+                    WindowsFirewallCom::recordOf),
+                WindowsFirewallCom.withPhoneRemoteRule(FIREWALL_PUBLIC_ETHERNET_UDP_RULE,
+                    WindowsFirewallCom.NET_FW_IP_PROTOCOL_UDP, FIREWALL_DISCOVERY_PORT, program, true,
+                    WindowsFirewallCom::recordOf),
+            )
+        }
+        assertEquals(WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC, publicRecords[0].profiles.getOrThrow())
+        assertEquals("Lan", publicRecords[0].interfaceTypes.getOrThrow())
+        assertEquals("LocalSubnet", publicRecords[0].remoteAddresses.getOrThrow())
+        assertEquals("Lan", publicRecords[1].interfaceTypes.getOrThrow())
+        assertEquals(RemoteFirewallState.Allowed, parseWindowsFirewallState(
+            windowsFirewallSnapshotJson(publicRecords, WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC, allProfilesOn), program))
     }
 }

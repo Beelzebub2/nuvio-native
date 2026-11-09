@@ -21,12 +21,14 @@ internal enum class RemoteFirewallState {
     Blocked,
     /** Windows rules could not be inspected; do not claim that the firewall is blocking the PC. */
     Unverified,
-    /** The rules allow private networks, but the active network is marked Public. */
+    /** An active Public network has no confirmed remote TCP/UDP permission. */
     PublicNetwork,
     /** Waiting for the user to answer the operating system's administrator prompt. */
     Requesting,
     /** The user declined the prompt, or adding the rules failed. */
     Failed,
+    /** The user declined or the wired Public-network exception could not be installed. */
+    PublicEthernetFailed,
 }
 
 internal interface RemoteFirewallAccess {
@@ -37,6 +39,9 @@ internal interface RemoteFirewallAccess {
 
     /** Asks the OS for permission (one administrator prompt on Windows) to allow the remote ports. */
     fun requestAccess()
+
+    /** Explicitly allows Starlit on Public wired LANs only, after an administrator prompt. */
+    fun requestPublicEthernetAccess() = Unit
 
     /** Opens the OS page where the user can mark the current network as Private. */
     fun openNetworkSettings()
