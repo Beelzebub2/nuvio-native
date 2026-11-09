@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   AuthAuditReporter, auditIngestUrl, coarseGeoLocation,
   exportFailedLogins, exportSuccessfulLogins, failedLogin,
-  publicClientIp, successfulLogin,
+  publicClientIp, retryDelayMs, successfulLogin,
 } from './lib.mjs';
 
 const now = Date.UTC(2026, 10, 7, 1, 0, 0);
@@ -105,6 +105,34 @@ test('OpenObserve must acknowledge all records before an export is considered de
     ingestUrl: 'http://127.0.0.1:5080/api/default/starlit_usage/_json',
     authorization: 'Bearer token',
   }), /authorization/);
+});
+
+test('retry backoff is bounded to prevent duplicate-ingestion storms', () => {
+  assert.equal(retryDelayMs(1), 5000);
+  assert.equal(retryDelayMs(2), 10000);
+  assert.equal(retryDelayMs(3), 20000);
+  assert.equal(retryDelayMs(7), 300000);
+  assert.equal(retryDelayMs(10000), 300000);
+  assert.equal(retryDelayMs(NaN), 5000);
+});
+
+test('too-old HTTP 200 rejects ingestion and reports no upstream private details', async () => {
+  const reporter = new AuthAuditReporter({
+    ingestUrl: 'http://127.0.0.1:5080/api/default/starlit_usage/_json',
+    authorization: 'Basic YTpi',
+    fetcher: async () => new Response(JSON.stringify({ code: 200, status: [{
+      successful: 0, failed: 1,
+      error: 'Too old data, private address and secret',
+    }] }), { status: 200 }),
+  });
+  await assert.rejects(reporter.send([{ event_id: 'one' }]), err =>
+    err.code === 'AUTH_AUDIT_INGEST_WINDOW' &&
+    !/private|secret/.test(err.message));
+  reporter.fetcher = async () => new Response(JSON.stringify({ code: 200, status: [
+    { successful: '1', failed: 0 },
+  ] }), { status: 200 });
+  await assert.rejects(reporter.send([{ event_id: 'one' }]), err =>
+    err.code === 'AUTH_AUDIT_REJECTED');
 });
 
 test('success exporter persists cursor only after full upstream acknowledgement', async () => {
