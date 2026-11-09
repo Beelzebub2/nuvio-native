@@ -50,6 +50,7 @@ dependencyResolutionManagement {
 
 include(":composeApp")
 include(":androidApp")
+include(":tvApp")
 include(":desktopSentry")
 if (!System.getProperty("os.name").contains("win", ignoreCase = true)) {
     include(":composeMediaPlayer")

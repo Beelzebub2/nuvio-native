@@ -112,6 +112,21 @@ internal fun MainTabsDestination(
     onAddProfileRequested: () -> Unit,
     onSearchRequested: (() -> Unit)? = null,
 ) {
+    if (LocalTelevisionUi.current) {
+        PlatformBackHandler(enabled = rootRouteActive, onBack = onBack)
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            TelevisionTabsDestination(
+                selectedTab = selectedTab,
+                initialHomeReady = initialHomeReady,
+                rootRouteActive = rootRouteActive,
+                requests = requests,
+                state = state,
+                actions = actions(true),
+                onTabSelected = onTabSelected,
+            )
+        }
+        return
+    }
     PlatformBackHandler(enabled = rootRouteActive, onBack = onBack)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
