@@ -6,6 +6,15 @@ const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST_ID_RE = /^[0-9a-f]{32}$/i;
 const MAX_LOG_READ = 256 * 1024;
+const BASE_RETRY_MS = 5000;
+const MAX_RETRY_MS = 5 * 60_000;
+
+// Limit retries during upstream failures; never silently skip an audit event.
+export function retryDelayMs(failures) {
+  const exponent = Number.isSafeInteger(failures) && failures > 0
+    ? Math.min(failures - 1, 6) : 0;
+  return Math.min(MAX_RETRY_MS, BASE_RETRY_MS * 2 ** exponent);
+}
 const reservations = new BlockList();
 
 for (const [ip, mask] of [
@@ -130,11 +139,18 @@ export class AuthAuditReporter {
     if (!response.ok) throw new Error('Auth audit ingestion unavailable');
     const ack = await response.json();
     const entries = ack?.status;
-    const accepted = Array.isArray(entries) &&
-      entries.reduce((count, entry) => count + Number(entry.successful || 0), 0) === records.length &&
-      entries.every(entry => entry.failed === 0);
+    // HTTP 200 may still report rejected records (including old timestamps).
+    const accepted = Array.isArray(entries) && entries.length > 0 &&
+      entries.every(entry => Number.isSafeInteger(entry?.successful) &&
+        entry.successful >= 0 && entry.failed === 0) &&
+      entries.reduce((count, entry) => count + entry.successful, 0) === records.length;
     if (ack?.code !== 200 || !accepted) {
-      throw new Error('Auth audit ingestion did not accept every record');
+      const error = new Error('Auth audit ingestion did not accept every record');
+      // Never expose upstream errors: they may contain client IPs or payloads.
+      error.code = Array.isArray(entries) && entries.some(entry =>
+        typeof entry?.error === 'string' && /Too old data/i.test(entry.error))
+        ? 'AUTH_AUDIT_INGEST_WINDOW' : 'AUTH_AUDIT_REJECTED';
+      throw error;
     }
   }
 }
