@@ -92,13 +92,18 @@ class TorrServerIntegrationTest {
             val url = backend.getStreamUrl("magnet:?xt=urn:btih:$hash", id)
             for (start in listOf(0, payload.size - 8192, 1024 * 1024, 0)) {
                 val end = start + 8191
-                val response = client.send(HttpRequest.newBuilder(URI(url))
-                    .timeout(Duration.ofSeconds(20)).header("Range", "bytes=$start-$end").GET().build(),
-                    HttpResponse.BodyHandlers.ofByteArray())
+                val response = try {
+                    client.send(HttpRequest.newBuilder(URI(url))
+                        .timeout(Duration.ofSeconds(20)).header("Range", "bytes=$start-$end").GET().build(),
+                        HttpResponse.BodyHandlers.ofByteArray())
+                } catch (error: Exception) {
+                    throw AssertionError("Range $start-$end failed; seed blocks=${seed.blocksServed.get()} failure=${seed.failure.get()}", error)
+                }
                 assertEquals(206, response.statusCode())
                 assertEquals("bytes $start-$end/${payload.size}", response.headers().firstValue("Content-Range").orElse(null))
                 assertContentEquals(payload.copyOfRange(start, end + 1), response.body())
             }
+            assertTrue(seed.blocksServed.get() > 0, "Payload must arrive through the loopback BitTorrent peer")
             assertTrue(backend.isHealthy())
             assertEquals(hash, backend.addTorrent("magnet:?xt=urn:btih:$hash"), "Re-adding must retain the existing torrent")
         } finally {

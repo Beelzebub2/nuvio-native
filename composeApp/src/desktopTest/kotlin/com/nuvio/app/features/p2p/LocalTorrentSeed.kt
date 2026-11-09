@@ -10,12 +10,16 @@ import java.net.Socket
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** A generated, private test torrent with one loopback tracker and one real BT wire peer. */
 internal class LocalTorrentSeed(private val payload: ByteArray) : AutoCloseable {
     private val executor = Executors.newCachedThreadPool { Thread(it, "local-torrent-seed").apply { isDaemon = true } }
     private val peer = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
     private val sockets = CopyOnWriteArrayList<Socket>()
+    val blocksServed = AtomicInteger()
+    val failure = AtomicReference<Throwable?>()
     private val http = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply { this.executor = executor }
     private val pieceLength = 256 * 1024
     private val pieceCount = (payload.size + pieceLength - 1) / pieceLength
@@ -47,7 +51,12 @@ internal class LocalTorrentSeed(private val payload: ByteArray) : AutoCloseable 
             while (!peer.isClosed) {
                 val socket = try { peer.accept() } catch (_: Exception) { break }
                 sockets += socket
-                executor.execute { runCatching { serve(socket, hash) }; sockets -= socket }
+                executor.execute {
+                    try { serve(socket, hash) }
+                    catch (error: IllegalArgumentException) { failure.compareAndSet(null, error) }
+                    catch (_: java.io.IOException) { /* Reader disconnects and fixture shutdown close sockets. */ }
+                    finally { sockets -= socket }
+                }
             }
         }
     }
@@ -92,6 +101,7 @@ internal class LocalTorrentSeed(private val payload: ByteArray) : AutoCloseable 
             output.writeInt(begin)
             output.write(payload, offset.toInt(), count)
             output.flush()
+            blocksServed.incrementAndGet()
         }
     }
 

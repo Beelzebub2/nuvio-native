@@ -159,6 +159,9 @@ actual object P2pStreamingEngine {
     // register its waiter before the event pump can consume the reply.
     private var pendingEvent: PendingEvent? = null
     private val startRequests = P2pStartRequests()
+    // Native terminal events need the owner of the in-flight C request, which
+    // can differ from the newest request still queued behind lifecycleMutex.
+    private var activeStartJob: Job? = null
     private var pendingStopJob: Job? = null
     private var stopEpoch = 0L
     private var generation = 0L
@@ -171,12 +174,18 @@ actual object P2pStreamingEngine {
         previousStop?.join()
         lifecycleMutex.withLock {
             currentCoroutineContext().ensureActive()
+            val job = currentCoroutineContext()[Job]
             synchronized(controlLock) {
                 if (acceptedStopEpoch != stopEpoch) {
                     throw CancellationException("P2P stream start superseded by stop")
                 }
+                activeStartJob = job
             }
-            startStreamLocked(request)
+            try {
+                startStreamLocked(request)
+            } finally {
+                synchronized(controlLock) { if (activeStartJob === job) activeStartJob = null }
+            }
         }
     }
 
