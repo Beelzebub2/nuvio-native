@@ -173,6 +173,7 @@ import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.watchorder.WatchOrderSection
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
 import com.nuvio.app.features.watching.application.WatchingActions
@@ -214,6 +215,7 @@ fun MetaDetailsScreen(
     onPlay: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
     onPlayManually: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
     onOpenMeta: ((MetaPreview) -> Unit)? = null,
+    onFindAnimeTitle: ((String) -> Unit)? = null,
     onCastClick: ((MetaPerson, String?) -> Unit)? = null,
     onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -1464,6 +1466,7 @@ fun MetaDetailsScreen(
                                     },
                                     onSeasonLongPress = { season -> selectedSeasonForActions = season },
                                     onOpenMeta = onOpenMeta,
+                                    onFindAnimeTitle = onFindAnimeTitle,
                                     onCastClick = onCastClick,
                                     onCompanyClick = onCompanyClick,
                                     sharedTransitionScope = sharedTransitionScope,
@@ -1668,6 +1671,7 @@ fun MetaDetailsScreen(
                                     onEpisodeLongPress = { video -> selectedEpisodeForActions = video },
                                     onSeasonLongPress = { season -> selectedSeasonForActions = season },
                                     onOpenMeta = onOpenMeta,
+                                    onFindAnimeTitle = onFindAnimeTitle,
                                     onCastClick = onCastClick,
                                     onCompanyClick = onCompanyClick,
                                     sharedTransitionScope = sharedTransitionScope,
@@ -2417,6 +2421,7 @@ private fun LazyListScope.configuredMetaSectionItems(
     onEpisodeLongPress: (MetaVideo) -> Unit,
     onSeasonLongPress: (Int) -> Unit,
     onOpenMeta: ((MetaPreview) -> Unit)?,
+    onFindAnimeTitle: ((String) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
@@ -2498,6 +2503,7 @@ private fun LazyListScope.configuredMetaSectionItems(
                     onEpisodeLongPress = onEpisodeLongPress,
                     onSeasonLongPress = onSeasonLongPress,
                     onOpenMeta = onOpenMeta,
+                    onFindAnimeTitle = onFindAnimeTitle,
                     onCastClick = onCastClick,
                     onCompanyClick = onCompanyClick,
                     sharedTransitionScope = sharedTransitionScope,
@@ -2735,6 +2741,7 @@ private fun ConfiguredMetaSections(
     onEpisodeLongPress: (MetaVideo) -> Unit,
     onSeasonLongPress: (Int) -> Unit,
     onOpenMeta: ((MetaPreview) -> Unit)?,
+    onFindAnimeTitle: ((String) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
@@ -2785,6 +2792,11 @@ private fun ConfiguredMetaSections(
                     showOverallRatings = settings.showOverallRatings,
                     isMdbListActive = isMdbListActive,
                     horizontalScrollPadding = horizontalScrollPadding,
+                )
+                WatchOrderSection(
+                    meta = meta,
+                    currentTitleCompleted = isWatched,
+                    onFindTitle = onFindAnimeTitle,
                 )
             }
             MetaScreenSectionKey.PRODUCTION -> {

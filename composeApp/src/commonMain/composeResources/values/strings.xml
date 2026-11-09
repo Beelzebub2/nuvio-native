@@ -2893,4 +2893,22 @@
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">Bluetooth remote is available. Pair your phone with this PC in Bluetooth settings, then select Find Bluetooth PCs on the phone.</string>
     <string name="remote_bluetooth_host_unavailable">Bluetooth remote is not available on this PC. Local-network pairing still works.</string>
+    <string name="watch_order_title">Watch order</string>
+    <string name="watch_order_loading">Checking anime watch order…</string>
+    <string name="watch_order_verified">Reviewed watch order</string>
+    <string name="watch_order_inferred">Suggested order · not independently verified</string>
+    <string name="watch_order_recommended">Recommended</string>
+    <string name="watch_order_release">Release</string>
+    <string name="watch_order_chronological">Chronological</string>
+    <string name="watch_order_include_optional">Show optional content</string>
+    <string name="watch_order_movie">Movie</string>
+    <string name="watch_order_series">Series</string>
+    <string name="watch_order_optional">Optional</string>
+    <string name="watch_order_watched">Watched</string>
+    <string name="watch_order_current">Current</string>
+    <string name="watch_order_next">Next in watch order</string>
+    <string name="watch_order_find_in_starlit">Find in Starlit</string>
+    <string name="watch_order_unavailable">This viewing order is not verified or is currently unavailable.</string>
+    <string name="watch_order_disclaimer">Availability depends on your add-ons. Choosing a title opens normal Starlit search and source selection.</string>
+    <string name="watch_order_attribution">Franchise data: Junban (ODbL)</string>
 </resources>

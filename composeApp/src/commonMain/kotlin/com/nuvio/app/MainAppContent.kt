@@ -1601,6 +1601,12 @@ internal fun MainAppContent(
                         navController = navController,
                         onPlay = onPlay,
                         onPlayManually = onPlayManually,
+                        onFindAnimeTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            navController.popBackStack(route)
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = LocalNavAnimatedContentScope.current,
                     )

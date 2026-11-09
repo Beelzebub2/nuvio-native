@@ -2222,4 +2222,22 @@
     <string name="remote_pc_troubleshoot_firewall">No PC, confirma que o Windows reconhece esta rede como Privada. Depois abre Definições → Conta → Controlo por telemóvel → Problemas com a ligação? para verificar a firewall.</string>
     <string name="remote_firewall_unverified_title">Não foi possível verificar a Firewall do Windows</string>
     <string name="remote_firewall_unverified_body">O Starlit não conseguiu ler as definições da firewall. Isto não prova que o telemóvel esteja bloqueado. Tenta o QR ou o endereço IP do PC e, se necessário, verifica novamente ou pede permissão para redes privadas.</string>
+    <string name="watch_order_title">Ordem de visualização</string>
+    <string name="watch_order_loading">A verificar a ordem do anime…</string>
+    <string name="watch_order_verified">Ordem revista e verificada</string>
+    <string name="watch_order_inferred">Ordem sugerida · não verificada individualmente</string>
+    <string name="watch_order_recommended">Recomendada</string>
+    <string name="watch_order_release">Estreia</string>
+    <string name="watch_order_chronological">Cronológica</string>
+    <string name="watch_order_include_optional">Mostrar conteúdo opcional</string>
+    <string name="watch_order_movie">Filme</string>
+    <string name="watch_order_series">Série</string>
+    <string name="watch_order_optional">Opcional</string>
+    <string name="watch_order_watched">Visto</string>
+    <string name="watch_order_current">Atual</string>
+    <string name="watch_order_next">Próximo na ordem de visualização</string>
+    <string name="watch_order_find_in_starlit">Procurar no Starlit</string>
+    <string name="watch_order_unavailable">Esta ordem não foi verificada ou está temporariamente indisponível.</string>
+    <string name="watch_order_disclaimer">A disponibilidade depende dos add-ons. A escolha abre a pesquisa normal do Starlit e a seleção da fonte.</string>
+    <string name="watch_order_attribution">Dados das franquias: Junban (ODbL)</string>
 </resources>

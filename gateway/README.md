@@ -29,6 +29,34 @@ the preceding Cloudflare version/source for rollback. The separate approval emai
 Worker remains in use. New releases use the VPS URL directly; `NUVIO_AIRING_GATEWAY`
 still overrides the URL for development.
 
+## Anime viewing order (read-only, opt-in UI)
+
+The VPS metadata gateway also offers
+GET /watch-order?malId=30831&mode=recommended. The recognized modes are
+recommended (default), release, and chronological. It resolves a positive MAL
+anime ID using the Junban franchise directory, then uses Jikan-compatible
+MAL sequel/prequel relations from the Tenrai service when safe. Only the
+version-controlled Starlit override for KonoSuba's main progression is marked
+"verified"; other inferred results are identified as inferred or partial.
+Unknown chronology fails closed rather than fabricating viewing order.
+
+Junban's API and database are independent projects with their own terms.
+Attribution: Junban (https://junban.moe), database ODbL 1.0. Its franchise
+membership should not be confused with verified viewing order. Verify
+provider licensing, attribution and any share-alike obligations before
+production deployment. Tenrai is an independently hosted, Jikan-compatible
+beta service, **not** the retired api.jikan.moe public endpoint.
+
+The gateway has fixed upstream hosts, positive-ID validation, bounded provider
+responses, 4.5-second provider request timeouts, shared six-hour cache, seven
+days of stale data, concurrent-request coalescing and host-specific cooldowns
+for 429/5xx. It sends no account credentials, watched history, media sources,
+or tokens. An upstream outage doesn't block other metadata routes or change
+existing episode autoplay. The app UI opens normal Starlit search for the next
+title instead of making an unverified playback-ID guess.
+
+Run node --test watch-order.test.mjs for fixture, error and cache tests.
+
 ## Episode artwork
 
 Native Airing retains AniZip episode images first. Missing artwork is filled from

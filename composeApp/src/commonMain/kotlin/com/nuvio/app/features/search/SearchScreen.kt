@@ -135,6 +135,13 @@ fun SearchScreen(
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
     val networkStatusUiState by NetworkStatusRepository.uiState.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
+    val pendingPrefill by SearchPrefill.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingPrefill) {
+        pendingPrefill?.let {
+            query = it
+            SearchPrefill.consume(it)
+        }
+    }
     var lastRequestedQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var observedOfflineState by remember { mutableStateOf(false) }
     val discoverInFocus by remember(query, listState) {

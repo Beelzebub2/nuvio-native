@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { handleRequest } from './worker.mjs';
 import { handleTelemetryRequest, OpenObserveTelemetry } from './openobserve-telemetry.mjs';
+import { handleWatchOrderRequest } from './watch-order.mjs';
 
 // Process-local metadata only: eviction or restart never loses account data.
 export class MemoryCache {
@@ -87,7 +88,8 @@ export function createGatewayServer({
       // Ignore Host/forwarded headers so all requests share the same cache origin.
       const request = new Request(`http://gateway.internal${incoming.url}`, { method: incoming.method });
       const pending = [];
-      const response = await handleRequest(request, { waitUntil: task => pending.push(task) }, { cache, fetcher, tmdbToken });
+      const response = await handleWatchOrderRequest(request, { cache, fetcher })
+        || await handleRequest(request, { waitUntil: task => pending.push(task) }, { cache, fetcher, tmdbToken });
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
       outgoing.end(Buffer.from(await response.arrayBuffer()));
       await Promise.allSettled(pending);
