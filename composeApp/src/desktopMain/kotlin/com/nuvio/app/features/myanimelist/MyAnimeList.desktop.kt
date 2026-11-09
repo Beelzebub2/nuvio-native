@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioCompactActionButton
 import com.nuvio.app.core.ui.NuvioCompactActionTone
@@ -37,8 +38,16 @@ import kotlinx.coroutines.withTimeoutOrNull
     return connection.connected && connection.showTab
 }
 
-internal actual suspend fun markMyAnimeListRewatchOnPlayback(meta: MetaDetails, playbackProfileId: Int) {
-    MyAnimeListRepository.markRewatchingIfCompleted(meta, playbackProfileId)
+internal actual fun myAnimeListPlaybackUpdateThresholdPercent(): Int =
+    MyAnimeListRepository.playbackUpdateThresholdPercent()
+
+internal actual suspend fun markMyAnimeListRewatchOnPlayback(
+    meta: MetaDetails,
+    playbackProfileId: Int,
+    positionMs: Long,
+    durationMs: Long,
+) {
+    MyAnimeListRepository.markRewatchingIfCompleted(meta, playbackProfileId, positionMs, durationMs)
 }
 
 @Composable internal actual fun MyAnimeListSettingsCard() {
@@ -66,6 +75,19 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(meta: MetaDetails, 
                     enabled = connection.connected && !connection.busy,
                 )
             }
+            Text("Automatic MAL update: ${connection.playbackUpdateThresholdPercent}%", style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = connection.playbackUpdateThresholdPercent.toFloat(),
+                onValueChange = { MyAnimeListRepository.setPlaybackUpdateThresholdPercent(it.roundToInt()) },
+                valueRange = MinimumMalPlaybackUpdateThresholdPercent.toFloat()..MaximumMalPlaybackUpdateThresholdPercent.toFloat(),
+                steps = 7,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "A completed title is marked Rewatching only when playback reaches this percentage of an episode. " +
+                    "Short playback sessions do not update MAL. Episode counts are still edited manually.",
+                style = MaterialTheme.typography.bodySmall,
+            )
             if (connection.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             connection.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
