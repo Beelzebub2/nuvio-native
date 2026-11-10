@@ -1,3 +1,18 @@
+## Starlit 1.17.0
+
+### Private reliability diagnostics
+
+- **Useful errors and warnings, only with consent:** The optional Usage Statistics setting now covers fixed, anonymous technical signals for slow playback startup, torrent-engine errors, download retries, storage-quota pauses, playback failures and download failures. Successful playback and downloads can also be counted to evaluate reliability.
+- **No browsing or viewing history in usage diagnostics:** Starlit stops reporting screen visits, player openings and download-list refreshes. Technical health events contain no media titles, searches, stream URLs, account details, free-form error messages or permanent installation identifiers.
+- **Temporary abuse protection:** An opt-in diagnostic session uses a random token for brief request-rate limiting rather than keeping a persistent tracking ID. Older locally stored diagnostic identifiers are cleared after updating.
+- **Crash reports stay a separate choice:** Optional crash diagnostics retain sanitized stack traces and limited technical platform information, without navigation or network-request breadcrumbs, screenshots or replay.
+
+### Compatibility and limitations
+
+- The upgraded server collector accepts fixed technical signals from compatible older versions but no longer stores obsolete activity-only events. Historical records expire under the server's configured retention period.
+- Aggregate account counts and error summaries are available to the service operator; event totals are not unique-user or unique-installation counts.
+- Desktop and Android builds are included. Physical-device confirmation of the new warnings and crash-report consent remains outstanding; iOS is not released through the App Store in this version.
+
 ## Starlit 1.16.1
 
 ### Phone-to-PC playback
