@@ -105,14 +105,14 @@ case "$format" in
     work="$RUNNER_TEMP/starlit-flatpak-source"
     mkdir -p "$work"
     cp scripts/linux/nuvio-launcher.sh scripts/linux/linux-shortcut-definition.sh \
-       scripts/linux/com.nuvio.media.desktop.metainfo.xml scripts/linux/nuvio-flatpak.yml "$work/"
-    sed -i "s|version=\"0.0.0\"|version=\"$version\"|" "$work/com.nuvio.media.desktop.metainfo.xml"
-    sed -i "s|date=\"1970-01-01\"|date=\"$(date -u +%F)\"|" "$work/com.nuvio.media.desktop.metainfo.xml"
+       scripts/linux/uk.rrmtools.Starlit.metainfo.xml scripts/linux/nuvio-flatpak.yml "$work/"
+    sed -i "s|version=\"0.0.0\"|version=\"$version\"|" "$work/uk.rrmtools.Starlit.metainfo.xml"
+    sed -i "s|date=\"1970-01-01\"|date=\"$(date -u +%F)\"|" "$work/uk.rrmtools.Starlit.metainfo.xml"
     sed -i "s|\${app_root}|$app_root|g" "$work/nuvio-flatpak.yml"
     flatpak-builder --repo="$RUNNER_TEMP/starlit-flatpak-repo" --force-clean \
       "$RUNNER_TEMP/starlit-flatpak-build" "$work/nuvio-flatpak.yml"
     package="release/$name.flatpak"
-    flatpak build-bundle "$RUNNER_TEMP/starlit-flatpak-repo" "$package" com.nuvio.media.desktop
+    flatpak build-bundle "$RUNNER_TEMP/starlit-flatpak-repo" "$package" uk.rrmtools.Starlit
     test -s "$package"
     ;;
 esac
