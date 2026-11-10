@@ -347,14 +347,14 @@ internal fun unwrapDownloadHttpFailure(error: Throwable): Throwable {
 /** Only network failures get an extended retry budget; local filesystem errors do not. */
 private class RetryableDownloadNetworkFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
-/** A new byte range resets the outage budget; idle failures back off to 30 seconds. */
+/** Only a new high-water byte count resets retries; replaying a truncated response does not. */
 internal class DesktopDownloadRetryBudget(initialBytes: Long = 0L) {
     private var failuresWithoutProgress = 0
-    private var lastBytes = initialBytes
+    private var furthestWrittenBytes = initialBytes
 
     fun delayAfterFailure(partialBytes: Long, networkFailure: Boolean): Long? {
-        if (partialBytes > lastBytes) failuresWithoutProgress = 0
-        lastBytes = partialBytes
+        if (partialBytes > furthestWrittenBytes) failuresWithoutProgress = 0
+        furthestWrittenBytes = maxOf(furthestWrittenBytes, partialBytes)
         failuresWithoutProgress++
         val maxFailures = if (networkFailure) 10 else 3
         if (failuresWithoutProgress >= maxFailures) return null

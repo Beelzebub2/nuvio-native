@@ -442,6 +442,21 @@ class DesktopDownloadsTest {
         assertNull(disk.delayAfterFailure(0, networkFailure = false))
     }
 
+    @Test fun replayingTheSameTruncatedBytesDoesNotResetTheNetworkRetryBudget() {
+        val budget = DesktopDownloadRetryBudget()
+        assertEquals(2_000L, budget.delayAfterFailure(16, networkFailure = true))
+        assertEquals(4_000L, budget.delayAfterFailure(0, networkFailure = true))
+        repeat(7) {
+            assertNotNull(budget.delayAfterFailure(16, networkFailure = true))
+        }
+        assertNull(budget.delayAfterFailure(16, networkFailure = true))
+
+        val progressing = DesktopDownloadRetryBudget()
+        assertEquals(2_000L, progressing.delayAfterFailure(16, networkFailure = true))
+        assertEquals(4_000L, progressing.delayAfterFailure(16, networkFailure = true))
+        assertEquals(2_000L, progressing.delayAfterFailure(17, networkFailure = true))
+    }
+
     @Test fun fourTemporaryHttpFailuresRecoverWithoutPublishingAnIncompleteFile() = runBlocking {
         val root = Files.createTempDirectory("download-temporary-503").toFile()
         val calls = AtomicInteger()
