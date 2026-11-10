@@ -350,11 +350,15 @@ private class RetryableDownloadNetworkFailure(message: String, cause: Throwable?
 /** A new byte range resets the outage budget; idle failures back off to 30 seconds. */
 internal class DesktopDownloadRetryBudget(initialBytes: Long = 0L) {
     private var failuresWithoutProgress = 0
-    private var lastBytes = initialBytes
+    private var highestBytes = initialBytes
 
     fun delayAfterFailure(partialBytes: Long, networkFailure: Boolean): Long? {
-        if (partialBytes > lastBytes) failuresWithoutProgress = 0
-        lastBytes = partialBytes
+        // An ignored Range can reset the partial file. Re-downloading its old
+        // prefix must not repeatedly renew the outage budget.
+        if (partialBytes > highestBytes) {
+            failuresWithoutProgress = 0
+            highestBytes = partialBytes
+        }
         failuresWithoutProgress++
         val maxFailures = if (networkFailure) 10 else 3
         if (failuresWithoutProgress >= maxFailures) return null

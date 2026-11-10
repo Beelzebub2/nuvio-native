@@ -442,6 +442,17 @@ class DesktopDownloadsTest {
         assertNull(disk.delayAfterFailure(0, networkFailure = false))
     }
 
+    @Test fun rereadingTheSamePrefixAfterRangeResetCannotRenewRetriesForever() {
+        val budget = DesktopDownloadRetryBudget(initialBytes = 42L)
+        assertEquals(2_000L, budget.delayAfterFailure(0L, networkFailure = true))
+        assertEquals(4_000L, budget.delayAfterFailure(42L, networkFailure = true))
+        repeat(7) { attempt ->
+            assertNotNull(budget.delayAfterFailure(if (attempt % 2 == 0) 0L else 42L, networkFailure = true))
+        }
+        assertNull(budget.delayAfterFailure(42L, networkFailure = true))
+        assertEquals(2_000L, budget.delayAfterFailure(43L, networkFailure = true), "New bytes can renew the outage budget")
+    }
+
     @Test fun fourTemporaryHttpFailuresRecoverWithoutPublishingAnIncompleteFile() = runBlocking {
         val root = Files.createTempDirectory("download-temporary-503").toFile()
         val calls = AtomicInteger()
