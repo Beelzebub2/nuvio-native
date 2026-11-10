@@ -2,6 +2,7 @@ package com.nuvio.app.features.home
 
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingRailPriority
+import com.nuvio.app.features.watchprogress.isExplicitLiveMetaType
 
 /** Content types are reported by the provider. Unknown types stay visible in the Other row. */
 internal enum class ContinueWatchingRailKind {
@@ -59,7 +60,4 @@ internal fun buildContinueWatchingRails(
 
 /** Never infer live content from a title or a regular series `tv` type. */
 internal fun ContinueWatchingItem.isExplicitLiveContent(): Boolean =
-    when (parentMetaType.trim().lowercase()) {
-        "live", "live-tv", "live_tv", "livetv", "iptv", "channel", "m3u" -> true
-        else -> false
-    }
+    parentMetaType.isExplicitLiveMetaType()
