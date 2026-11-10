@@ -49,12 +49,13 @@ require their own client applications; they cannot install Android APKs.
 
 ## Release checks
 
-Android PR CI builds both debug and minified release TV APKs, verifies
-Leanback launcher metadata, temporarily signs the minified release APK with a
-CI-only test key, and smoke-tests launch and basic remote input on an anonymous
-Android TV 36 emulator. The temporary test-signed build is not distributed.
-This is not a replacement for a real
-television playback test. The tag-triggered release workflow builds a fresh
+Android PR CI builds debug and minified release TV APKs in separate runners to
+prevent large APK packaging jobs from competing for memory or disk I/O. Both
+jobs validate Leanback launcher metadata. CI temporarily signs the minified
+release APK with a CI-only test key, then smoke-tests launch and basic remote
+input on an anonymous Android TV 36 emulator. The temporary test-signed build
+is not distributed. This is not a replacement for a real television playback
+test. The tag-triggered release workflow builds a fresh
 minified TV APK, signs and validates it alongside Android phone APKs, uploads
 it as a separate artifact, and includes it in the published release and SHA256
 checksums. Before shipping signed TV releases, test the

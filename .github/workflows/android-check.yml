@@ -63,9 +63,10 @@ jobs:
             composeApp/build/reports/tests/
           if-no-files-found: warn
 
-  tv:
+  tv-debug:
+    # Keep the large debug APK packaging isolated from release R8/ZIP packaging.
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -77,36 +78,62 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
-      - name: Build Starlit TV debug and release APKs
+      - name: Build Starlit TV debug APK
         run: >-
-          ./gradlew :tvApp:assembleDebug :tvApp:assembleRelease
+          ./gradlew :tvApp:assembleDebug
           -Pnuvio.android.distribution=full
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
-      - name: Verify TV launcher and feature declarations
+      - name: Verify debug TV launcher and feature declarations
         run: |
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          for variant in debug release; do
-            if [ "$variant" = debug ]; then
-              APK="tvApp/build/outputs/apk/debug/tvApp-debug.apk"
-              PACKAGE='com.starlit.tv.debug'
-            else
-              APK="tvApp/build/outputs/apk/release/tvApp-release-unsigned.apk"
-              PACKAGE='com.starlit.tv'
-            fi
-            test -s "$APK"
-            "$AAPT" dump badging "$APK" > "tv-$variant-badging.txt"
-            grep -q "package: name='$PACKAGE'" "tv-$variant-badging.txt"
-            grep -q 'android.software.leanback' "tv-$variant-badging.txt"
-            grep -q 'leanback-launchable-activity' "tv-$variant-badging.txt"
-            grep -q "application-label:'Starlit TV'" "tv-$variant-badging.txt"
-          done
+          APK="tvApp/build/outputs/apk/debug/tvApp-debug.apk"
+          test -s "$APK"
+          "$AAPT" dump badging "$APK" > tv-debug-badging.txt
+          grep -q "package: name='com.starlit.tv.debug'" tv-debug-badging.txt
+          grep -q 'android.software.leanback' tv-debug-badging.txt
+          grep -q 'leanback-launchable-activity' tv-debug-badging.txt
+          grep -q "application-label:'Starlit TV'" tv-debug-badging.txt
       - uses: actions/upload-artifact@v7
         with:
           name: starlit-tv-android-debug
           path: tvApp/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  tv:
+    # This gate mirrors production's optimized TV build, on a fresh runner.
+    # A combined debug+release build intermittently stalled in packageRelease
+    # until the shared 40-minute timeout and skipped the TV emulator check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Android compilation SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Build the optimized Starlit TV release APK
+        run: >-
+          ./gradlew :tvApp:assembleRelease
+          -Pnuvio.android.distribution=full
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --max-workers=1 --no-configuration-cache --no-daemon --console=plain
+      - name: Verify release TV launcher and feature declarations
+        run: |
+          APK="tvApp/build/outputs/apk/release/tvApp-release-unsigned.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > tv-release-badging.txt
+          grep -q "package: name='com.starlit.tv'" tv-release-badging.txt
+          grep -q 'android.software.leanback' tv-release-badging.txt
+          grep -q 'leanback-launchable-activity' tv-release-badging.txt
+          grep -q "application-label:'Starlit TV'" tv-release-badging.txt
       - uses: actions/upload-artifact@v7
         with:
           name: starlit-tv-android-release-unsigned
