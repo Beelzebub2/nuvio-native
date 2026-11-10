@@ -1,3 +1,21 @@
+## Starlit 1.18.0
+
+### Android TV and Google TV
+
+- **Starlit on your television:** A dedicated Android TV / Google TV application provides a Leanback launcher and large-screen Home, Search, Library and quick Settings, with D-pad focus and basic remote playback controls. The TV installation shares Starlit's existing catalog, account, profiles, source picker, watch progress and streaming implementations.
+- **Separate signed TV installation:** Download the new universal `Starlit-TV-1.18.0.apk`, which installs independently of phone APKs. The television build includes native playback and torrent-engine libraries for the major Android TV architectures.
+- **Safer TV integration:** Notification actions target the TV launcher instead of phone icon aliases; television update policy never offers a phone APK. The TV build is now required in future tagged Starlit releases, including launcher checks, release signing and SHA256 verification.
+
+### Cross-device reliability
+
+- **More efficient large watch-progress synchronization:** Account progress snapshots are fetched in bounded pages with compatibility fallback for older servers, reducing the amount of data handled at once on large libraries.
+
+### Verification and limitations
+
+- Android Full and Play Store builds, optimized TV and debug APKs, iOS Kotlin, desktop diagnostics, native Unix checks and security checks passed on the merged feature. Android TV emulator tests confirmed startup and basic D-pad/Back navigation on the optimized release package; release signing and packaging remain enforced by the release workflow.
+- **First Android TV release:** Real-TV sign-in, full remote-only navigation through detailed settings and source selection, sustained streaming, P2P behavior, subtitles and audio-track switching have not yet been verified on physical devices. Some detailed screens retain phone-first layouts. Install TV updates manually from the matching signed TV release APK; automatic TV updates are not available yet.
+- Samsung Tizen and LG webOS require separate applications; Fire TV support is not confirmed. Windows and Android phone packages continue to be included, while iOS is not published through the App Store by this release.
+
 ## Starlit 1.17.1
 
 ### Private reliability diagnostics
