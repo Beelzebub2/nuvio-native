@@ -311,8 +311,18 @@ jobs:
           path: release-tv/*
           if-no-files-found: error
 
+  linux:
+    # The reusable workflow builds and verifies DEB, RPM, AppImage and Flatpak.
+    # A failure in any format blocks the entire tagged release.
+    uses: ./.github/workflows/linux-packages.yml
+    with:
+      release_tag: ${{ inputs.release_tag || github.ref_name }}
+    secrets:
+      STARLIT_OFFICIAL_SUPABASE_URL: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_URL }}
+      STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
+
   publish:
-    needs: [windows, android-sign]
+    needs: [windows, android-sign, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -329,16 +339,21 @@ jobs:
           node-version: '24'
       - uses: actions/download-artifact@v8
         with:
-          # The signed Windows and Android outputs only, never the unsigned intermediate APKs.
+          # Only verified release artifacts; unsigned Android intermediates are excluded.
           pattern: starlit-*-release
           path: release
           merge-multiple: true
-      - name: Attest the exact release installers and signed APKs
+      - name: Attest the exact release packages
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             release/*.exe
             release/*.apk
+            release/*.deb
+            release/*.rpm
+            release/*.AppImage
+            release/*.AppImage.zsync
+            release/*.flatpak
       - name: Publish the release after every build passed
         run: |
           version="${RELEASE_TAG#v}"
@@ -349,7 +364,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate --slurp > "$RUNNER_TEMP/published-releases.json"
           previous=$(node .github/release-notes.mjs previous "$RUNNER_TEMP/published-releases.json" "$RELEASE_TAG")
           cd release
-          { tr -d '\r' < SHA256SUMS.txt; cat SHA256SUMS-android.txt SHA256SUMS-tv.txt; } > SHA256SUMS-all.txt
+          { tr -d '\r' < SHA256SUMS.txt; cat SHA256SUMS-android.txt SHA256SUMS-tv.txt SHA256SUMS-linux-*.txt; } > SHA256SUMS-all.txt
           mv SHA256SUMS-all.txt SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
           args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Starlit $version"
@@ -361,4 +376,7 @@ jobs:
             "Starlit-Android-arm64-v8a-$version.apk" "Starlit-Android-armeabi-v7a-$version.apk" \
             "Starlit-Android-x86-$version.apk" "Starlit-Android-x86_64-$version.apk" \
             "Starlit-TV-$version.apk" \
+            "Starlit-Linux-x86_64-$version.deb" "Starlit-Linux-x86_64-$version.rpm" \
+            "Starlit-Linux-x86_64-$version.AppImage" "Starlit-Linux-x86_64-$version.AppImage.zsync" \
+            "Starlit-Linux-x86_64-$version.flatpak" \
             SHA256SUMS.txt
