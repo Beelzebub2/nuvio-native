@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Properties
+import java.util.UUID
 import javax.inject.Inject
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -1440,7 +1441,17 @@ tasks.matching {
 tasks.withType<Test>().configureEach {
     // Robolectric runtime JAR downloads from repo1.maven.org are rate-limited on hosted CI.
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
-    systemProperty("nuvio.dataDir", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
+    // Desktop tests mutate account/download preferences. A fixed test-data
+    // directory leaks fixtures into later runs and makes repeat executions fail.
+    // Allocate a fresh task-owned directory before launching each test worker;
+    // never point account-cleanup tests at the normal user profile.
+    doFirst {
+        val isolatedDataDir = temporaryDir.resolve("app-data-${UUID.randomUUID()}")
+        check(isolatedDataDir.mkdirs() || isolatedDataDir.isDirectory) {
+            "Unable to create isolated desktop test storage"
+        }
+        systemProperty("nuvio.dataDir", isolatedDataDir.absolutePath)
+    }
     systemProperty("nuvio.airingSmoke", providers.gradleProperty("nuvio.airingSmoke").orElse("false").get())
     systemProperty("nuvio.updateSmoke", providers.gradleProperty("nuvio.updateSmoke").orElse("false").get())
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -72,13 +73,19 @@ private suspend fun parseAddonSubtitles(response: String, request: SubtitleAddon
     return subtitles.mapIndexedNotNull { index, element ->
         val obj = element as? JsonObject ?: return@mapIndexedNotNull null
         val url = obj.stringValue("url") ?: return@mapIndexedNotNull null
-        val language = listOf("lang", "language", "languageCode", "locale", "label")
+        // A descriptive track label is not a language code.
+        val language = listOf("lang", "language", "languageCode", "locale")
             .firstNotNullOfOrNull(obj::stringValue) ?: "unknown"
+        val displayLabel = addonSubtitleDisplayLabel(
+            label = obj.stringValue("label"),
+            name = obj.stringValue("name"),
+            title = obj.stringValue("title"),
+        )
         AddonSubtitle(
             id = obj.stringValue("id") ?: "${request.addonId}_$index",
             url = url,
             language = normalizeLanguageCode(language) ?: language,
-            display = getString(
+            display = displayLabel ?: getString(
                 Res.string.player_addon_subtitle_display_format,
                 getLanguageLabelForCode(language),
                 request.addonName,
@@ -87,6 +94,15 @@ private suspend fun parseAddonSubtitles(response: String, request: SubtitleAddon
         )
     }
 }
+
+/** Keep distinct addon tracks identifiable without rendering control/bidi spoofing characters. */
+internal fun addonSubtitleDisplayLabel(label: String?, name: String?, title: String?): String? =
+    listOf(label, name, title).firstNotNullOfOrNull { candidate ->
+        candidate?.filterNot { char ->
+            char.code in 0..31 || char.code in 127..159 ||
+                char.code in 0x202A..0x202E || char.code in 0x2066..0x2069
+        }?.trim()?.takeIf { it.isNotBlank() }?.take(240)
+    }
 
 private fun canonicalSubtitleType(type: String): String =
     if (type.equals("tv", ignoreCase = true)) "series" else type.lowercase()
@@ -98,4 +114,4 @@ private fun AddonResource.supportsSubtitleType(type: String, videoId: String): B
 }
 
 private fun JsonObject.stringValue(name: String): String? =
-    this[name]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+    (this[name] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
