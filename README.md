@@ -65,7 +65,7 @@ Starting with the first release that includes Linux binaries, the same [GitHub R
 - **.deb** for Debian/Ubuntu derivatives (`sudo apt install ./Starlit-Linux-x86_64-<version>.deb`).
 - **.rpm** for RPM-based distributions (`sudo dnf install ./Starlit-Linux-x86_64-<version>.rpm`).
 - **.AppImage** for direct launch (mark executable before running); system libmpv and desktop graphics libraries may still be required.
-- **.flatpak** for a sandboxed installation (`flatpak install --user ./Starlit-Linux-x86_64-<version>.flatpak`). The GNOME runtime is downloaded by Flatpak if absent, and updates are managed by Flatpak rather than Starlit's updater.
+- **.flatpak** for a sandboxed installation (`flatpak install --user ./Starlit-Linux-x86_64-<version>.flatpak`). The GNOME runtime is downloaded by Flatpak if absent. Bundles installed from GitHub must be updated manually unless a Flatpak repository is configured. Starlit uses its own Flatpak app ID so the original Nuvio installation is not replaced.
 
 The native Linux player embeds libmpv through X11; Wayland sessions need working XWayland support. These are **x86_64 packages only**. Check the assets of a particular release before installing; older releases remain Windows/Android-only.
 
