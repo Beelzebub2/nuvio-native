@@ -136,6 +136,8 @@
     <string name="addons_loading_manifest_details">A carregar detalhes do manifesto...</string>
     <string name="addons_modal_checking_message">A validar o URL do manifesto e a carregar os detalhes do addon antes de instalar.</string>
     <string name="addons_modal_checking_title">A verificar addon</string>
+    <string name="addons_link_confirmation_title">Instalar addon a partir de uma ligação?</string>
+    <string name="addons_link_confirmation_message">Uma ligação externa pretende instalar um addon de %1$s. Os addons podem receber informações sobre os títulos que consultas e a instalação pode ser sincronizada com a tua conta. Continua apenas se confiares nesta origem.</string>
     <string name="addons_modal_failure_title">Falha na instalação</string>
     <string name="addons_modal_success_message">%1$s foi validado e adicionado com sucesso.</string>
     <string name="addons_modal_success_title">Addon instalado</string>

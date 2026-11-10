@@ -98,39 +98,23 @@ object HomeRepository {
                 putAll(cachedSections)
             }
             var firstErrorMessage: String? = null
-            var batchIndex = 0
-
-            prioritizedRequests.chunked(HOME_CATALOG_FETCH_BATCH_SIZE).forEach { batch ->
-                if (activeRequestKey != requestKey) return@launch
-                val results = batch.map { request ->
-                    async {
-                        request to runCatching {
-                            request.toSection(forceRefresh = force)
-                        }.onFailure { if (it is CancellationException) throw it }
-                    }
-                }.awaitAll()
-
-                if (activeRequestKey != requestKey) return@launch
-
-                results.mapNotNull { (request, result) ->
-                    result.getOrNull()?.let { section -> request.cacheKey to section }
-                }.forEach { (cacheKey, section) ->
-                    loadedSections[cacheKey] = section
+            fetchHomeRowsIndependently(
+                requests = prioritizedRequests,
+                maxConcurrent = HOME_CATALOG_FETCH_BATCH_SIZE,
+                timeoutMs = HOME_CATALOG_FETCH_TIMEOUT_MS,
+                fetch = { it.toSection(forceRefresh = force) },
+            ) { request, result ->
+                if (activeRequestKey != requestKey) return@fetchHomeRowsIndependently
+                result.getOrNull()?.let { section ->
+                    loadedSections[request.cacheKey] = section
                 }
                 if (firstErrorMessage == null) {
-                    firstErrorMessage = results.firstNotNullOfOrNull { (_, result) ->
-                        result.exceptionOrNull()?.message
-                    }
+                    firstErrorMessage = result.exceptionOrNull()?.message
                 }
                 cachedSections = loadedSections.toMap()
                 lastErrorMessage = firstErrorMessage
-                if (batchIndex == 0 || (batchIndex + 1) % HOME_CATALOG_PUBLISH_INTERVAL == 0) {
-                    publishCurrentState(
-                        isLoading = true,
-                        requestKey = requestKey,
-                    )
-                }
-                batchIndex++
+                // Publish healthy rows as they finish, independently of a slow addon.
+                publishCurrentState(isLoading = true, requestKey = requestKey)
             }
 
             if (activeRequestKey != requestKey) return@launch
@@ -512,10 +496,10 @@ private const val HOME_HERO_ITEM_LIMIT = 8
 private const val HOME_COLLECTION_HERO_SOURCE_LIMIT = 6
 private const val HOME_COLLECTION_HERO_SOURCE_ITEM_LIMIT = 8
 private const val HOME_CATALOG_FETCH_BATCH_SIZE = 4
+private const val HOME_CATALOG_FETCH_TIMEOUT_MS = 30_000L
 private const val HOME_CATALOG_PREVIEW_FETCH_LIMIT = 18
 private const val DESKTOP_HOME_CATALOG_PREVIEW_FETCH_LIMIT = 64
 private const val DESKTOP_HOME_CATALOG_PREVIEW_MAX_PAGES = 4
-private const val HOME_CATALOG_PUBLISH_INTERVAL = 2
 
 internal fun prioritizeDefinitions(
     definitions: List<HomeCatalogDefinition>,
