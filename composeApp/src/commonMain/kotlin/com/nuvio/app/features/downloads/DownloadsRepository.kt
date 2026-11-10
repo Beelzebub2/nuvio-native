@@ -1,5 +1,7 @@
 package com.nuvio.app.features.downloads
 
+import com.nuvio.app.core.diagnostics.UsageDiagnostics
+import com.nuvio.app.core.diagnostics.UsageEvent
 import com.nuvio.app.features.player.addonSubtitleRequests
 import com.nuvio.app.features.streams.StreamItem
 import kotlinx.coroutines.CancellationException
@@ -570,6 +572,7 @@ object DownloadsRepository {
             item.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
                 errorMessage = QuotaPausedReason)
         }
+        UsageDiagnostics.track(UsageEvent.DownloadQuotaWarning)
         handle?.cancel()
     }
 
@@ -594,6 +597,7 @@ object DownloadsRepository {
                         old.copy(status = DownloadStatus.Paused, phase = null, bytesPerSecond = 0L,
                             errorMessage = QuotaPausedReason)
                     }
+                    UsageDiagnostics.track(UsageEvent.DownloadQuotaWarning)
                 } else startDownload(item)
             }
         } finally { pumpingQueue = false }
@@ -662,6 +666,7 @@ object DownloadsRepository {
             onFailure = { message -> synchronized(lock) {
                 // The desktop transfer retries interrupted reads itself; mobile retries the whole task.
                 if (!isDesktop && attempt < MaxMobileDownloadAttempts && current()) {
+                    UsageDiagnostics.track(UsageEvent.DownloadRetryWarning)
                     tokens.remove(item.id); activeHandles.remove(item.id)
                     _uiState.value.items.firstOrNull { it.id == item.id }?.let { startDownload(it, attempt + 1) }
                     return@synchronized

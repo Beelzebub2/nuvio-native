@@ -625,18 +625,18 @@
     <string name="settings_advanced_section_windows_graphics">WINDOWS 圖形</string>
     <string name="settings_advanced_section_diagnostics">診斷</string>
     <string name="settings_root_privacy_section">隱私與診斷</string>
-    <string name="settings_advanced_usage_analytics">使用統計</string>
-    <string name="settings_advanced_usage_analytics_subtitle">選用版本、平台和功能使用隨機安裝 ID 進行計數。關閉直至啟用。</string>
+    <string name="settings_advanced_usage_analytics">匿名診斷</string>
+    <string name="settings_advanced_usage_analytics_subtitle">僅在同意後按版本與平台統計錯誤、警告及可靠性。不記錄使用軌跡或永久裝置識別碼。</string>
     <string name="diagnostics_consent_title">可選診斷
 無論您選擇哪一個，</string>
     <string name="diagnostics_consent_description">Starlit 的工作原理都是相同的。除非您將其打開，否則這兩個選項均處於關閉狀態。可以隨時在 %1$s 的 %2$s 下更改它們。
 無論您選擇哪一個，</string>
     <string name="diagnostics_consent_description_single">Starlit 的工作原理都是相同的。除非您將其打開，否則此選項將處於關閉狀態。可以隨時在 %1$s 的 %2$s 下進行變更。</string>
-    <string name="diagnostics_consent_usage">使用統計</string>
-    <string name="diagnostics_consent_usage_detail">應用程式版本、平台以及螢幕、播放和下載的使用頻率。使用隨機安裝 ID 進行計數，當您選擇退出時該 ID 會重設。</string>
+    <string name="diagnostics_consent_usage">匿名診斷</string>
+    <string name="diagnostics_consent_usage_detail">應用程式啟動；按應用程式版本與平台統計技術錯誤、警告、播放及下載結果。不記錄畫面造訪或永久裝置識別碼。</string>
     <string name="diagnostics_consent_crashes">崩潰報告 (Sentry)</string>
     <string name="diagnostics_consent_crashes_detail">當 Starlit 崩潰時，錯誤詳細資訊、應用程式版本和裝置資訊將會被傳送到 Sentry 以協助解決問題。</string>
-    <string name="diagnostics_consent_privacy">不包括媒體標題、搜尋、帳號 ID 或串流位址。使用資料最多保留 30 天。</string>
+    <string name="diagnostics_consent_privacy">不收集片名、搜尋詞、帳號、網址或原始記錄。暫時權杖僅用於防止濫用；資料最多保留30天。</string>
     <string name="diagnostics_consent_not_now">不用了，謝謝</string>
     <string name="diagnostics_consent_save">儲存選擇</string>
     <string name="settings_advanced_section_discord">不和諧</string>
@@ -661,8 +661,8 @@
     <string name="sentry_help_body">報告按應用程式版本、裝置型號、Android 版本和堆疊追蹤進行分組，因此可以先修復最常見的實際崩潰。</string>
     <string name="sentry_help_body_desktop">報告按應用程式版本、作業系統、體系結構和堆疊追蹤進行分組，因此可以先修復最常見的實際崩潰。</string>
     <string name="sentry_sent_title">已傳送</string>
-    <string name="sentry_sent_body">崩潰、當前 ANR、堆疊追蹤、應用程式版本、構建類型、風味、設備和作業系統元數據，以及包含方法、主機、路徑、狀態、持續時間和異常類型的安全網路麵包屑。</string>
-    <string name="sentry_sent_body_desktop">未處理的應用程式錯誤、堆疊追蹤、應用程式版本、作業系統、體系結構、Java 執行時間元資料和安全診斷麵包屑。</string>
+    <string name="sentry_sent_body">經同意後傳送當機與無回應報告、堆疊、版本及裝置系統技術資訊。不含網址或瀏覽軌跡。</string>
+    <string name="sentry_sent_body_desktop">經同意後傳送未處理錯誤、堆疊、版本及系統執行環境資訊。不含瀏覽軌跡。</string>
     <string name="sentry_not_sent_title">未發送</string>
     <string name="sentry_not_sent_body">密碼、存取權杖、刷新令牌、請求正文、回應正文、標頭、cookie、螢幕截圖、視圖層次結構、會話重播、原始診斷以及流 URL 查詢或片段值。</string>
     <string name="sentry_keep_enabled">繼續</string>

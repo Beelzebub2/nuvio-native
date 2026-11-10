@@ -2,6 +2,8 @@ package com.nuvio.app.core.diagnostics
 
 import com.nuvio.app.core.build.AppVersionPolicy
 import com.nuvio.app.core.storage.AnonymousWorkspaceStorage
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.post
@@ -20,19 +22,17 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Fixed, non-identifying event names. Never attach content, account, URL or search data. */
+/** Fixed health signals only: never attach content, account, URL or search data. */
 internal enum class UsageEvent(val wireName: String) {
     AppOpen("app_open"),
-    Home("screen_home"),
-    Search("screen_search"),
-    Library("screen_library"),
-    Settings("screen_settings"),
-    PlaybackOpened("playback_opened"),
     PlaybackReady("playback_ready"),
     PlaybackFailed("playback_failed"),
-    DownloadQueued("download_queued"),
+    PlaybackStartupSlow("playback_start_slow"),
+    TorrentEngineFailed("torrent_engine_failed"),
     DownloadCompleted("download_completed"),
     DownloadFailed("download_failed"),
+    DownloadRetryWarning("download_retry_warning"),
+    DownloadQuotaWarning("download_quota_warning"),
 }
 
 internal enum class DiagnosticsConsent { Undecided, Disabled, Enabled }
@@ -51,18 +51,21 @@ internal expect fun createDiagnosticsInstallationId(): String
 
 /**
  * Device-scoped consent independent of accounts and profiles. No network request is possible
- * until the user explicitly enables analytics. Disabling cancels outstanding sends and discards
- * the local pseudonymous installation ID.
+ * until the user explicitly enables diagnostics. The per-session random token is only used
+ * for server-side rate limiting, never persisted or included in stored diagnostic records.
+ * Disabling cancels outstanding sends and rotates that token.
  */
 internal object UsageDiagnostics {
     private const val ConsentKey = "usage_diagnostics_consent_v1"
-    private const val InstallationKey = "usage_diagnostics_installation_v1"
+    private const val LegacyInstallationKey = "usage_diagnostics_installation_v1"
     private const val Endpoint = "https://starlit-api.rrmtools.uk/gateway/telemetry/events"
 
     private val _consent = MutableStateFlow(DiagnosticsConsent.Undecided)
     val consent: StateFlow<DiagnosticsConsent> = _consent.asStateFlow()
     private var loaded = false
     private var sessionReported = false
+    private val sessionLock = SynchronizedObject()
+    private var sessionToken: String? = null
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val http by lazy {
         HttpClient {
@@ -80,6 +83,9 @@ internal object UsageDiagnostics {
         // Fail closed: absent storage or errors never grant consent.
         val saved = runCatching { AnonymousWorkspaceStorage.loadValue(ConsentKey) }.getOrNull()
         _consent.value = consentFromStoredPreference(saved)
+        // Older versions persisted a device-scoped ID. It is no longer needed, and
+        // must never be used for any new request.
+        runCatching { AnonymousWorkspaceStorage.saveValue(LegacyInstallationKey, null) }
         loaded = true
     }
 
@@ -92,10 +98,11 @@ internal object UsageDiagnostics {
             scope.cancel()
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             sessionReported = false
+            synchronized(sessionLock) { sessionToken = null }
         }
         try {
             AnonymousWorkspaceStorage.saveValue(ConsentKey, if (enabled) "yes" else "no")
-            if (!enabled) AnonymousWorkspaceStorage.saveValue(InstallationKey, null)
+            if (!enabled) AnonymousWorkspaceStorage.saveValue(LegacyInstallationKey, null)
         } catch (_: Exception) {
             // Storage failure must never opt a user in. A declined prompt should still close.
             _consent.value = DiagnosticsConsent.Disabled
@@ -117,12 +124,8 @@ internal object UsageDiagnostics {
         if (_consent.value != DiagnosticsConsent.Enabled) return
         val version = AppVersionPolicy.displayVersionName
         if (!isValidUsageVersion(version)) return
-        val id = try {
-            AnonymousWorkspaceStorage.loadValue(InstallationKey) ?: createDiagnosticsInstallationId().also {
-                AnonymousWorkspaceStorage.saveValue(InstallationKey, it)
-            }
-        } catch (_: Exception) {
-            return
+        val id = synchronized(sessionLock) {
+            sessionToken ?: createDiagnosticsInstallationId().also { sessionToken = it }
         }
         val payload = buildJsonObject {
             put("installationId", id)
