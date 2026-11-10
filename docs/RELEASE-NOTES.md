@@ -1,4 +1,4 @@
-## Starlit 1.17.0
+## Starlit 1.17.1
 
 ### Private reliability diagnostics
 
@@ -9,6 +9,7 @@
 
 ### Compatibility and limitations
 
+- This version replaces an earlier tagged release candidate that did not publish after a desktop Settings UI test expected the previous diagnostics label. The assertion now matches the current UI; diagnostic behavior is unchanged from the validated privacy update.
 - The upgraded server collector accepts fixed technical signals from compatible older versions but no longer stores obsolete activity-only events. Historical records expire under the server's configured retention period.
 - Aggregate account counts and error summaries are available to the service operator; event totals are not unique-user or unique-installation counts.
 - Desktop and Android builds are included. Physical-device confirmation of the new warnings and crash-report consent remains outstanding; iOS is not released through the App Store in this version.
