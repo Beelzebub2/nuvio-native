@@ -193,7 +193,7 @@ object TraktPublicListSourceResolver {
         return when (mediaType) {
             TmdbCollectionMediaType.MOVIE -> movie?.toPreview()
             TmdbCollectionMediaType.TV -> show?.toPreview()
-        }
+        }?.copy(dateAdded = listedAt)
     }
 
     private fun PublicTraktMovieDto.toPreview(): MetaPreview? {

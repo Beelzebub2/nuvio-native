@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -49,6 +50,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
+import com.nuvio.app.core.ui.NuvioDropdownChip
+import com.nuvio.app.core.ui.NuvioDropdownOption
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioDesktopVerticalScrollbar
@@ -81,8 +84,7 @@ import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.navigation.LocalUseNativeNavigation
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -97,6 +99,10 @@ fun CatalogScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by CatalogRepository.uiState.collectAsStateWithLifecycle()
+    val catalogSortSettings by remember {
+        CatalogSortSettingsRepository.ensureLoaded()
+        CatalogSortSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
     val homeCatalogSettingsUiState by HomeCatalogSettingsRepository.uiState.collectAsStateWithLifecycle()
     val posterCardStyle = rememberPosterCardStyleUiState()
     val networkStatusUiState by NetworkStatusRepository.uiState.collectAsStateWithLifecycle()
@@ -119,6 +125,17 @@ fun CatalogScreen(
     )
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    val sortKey = catalogSortKey(target)
+    val savedSort = sortKey?.let { catalogSortSettings.selections[it] } ?: CatalogSortOption.PROVIDER_ORDER
+    val sortOptions = remember(uiState.items, sortKey) {
+        if (sortKey == null) emptyList() else availableCatalogSortOptions(uiState.items)
+    }
+    val activeSort = effectiveCatalogSortOption(savedSort, sortOptions)
+    val displayedItems = remember(uiState.items, activeSort) {
+        sortCatalogItems(uiState.items, activeSort)
+    }
+    val loadMoreGate = remember(target, activeSort) { CatalogLoadMoreGate() }
 
     ScreenActivityEffect(target) { active ->
         if (active && target is CatalogTarget.WatchLater) CatalogRepository.load(target)
@@ -151,16 +168,33 @@ fun CatalogScreen(
             }
     }
 
-    LaunchedEffect(gridState, uiState.canLoadMore, uiState.isLoading) {
-        snapshotFlow { gridState.layoutInfo }
-            .map { layoutInfo ->
-                val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                lastVisible >= layoutInfo.totalItemsCount - 6
+    LaunchedEffect(gridState, loadMoreGate, uiState.canLoadMore, uiState.isLoading) {
+        snapshotFlow {
+                val layoutInfo = gridState.layoutInfo
+                CatalogPaginationViewport(
+                    scrolling = gridState.isScrollInProgress,
+                    firstIndex = gridState.firstVisibleItemIndex,
+                    firstOffset = gridState.firstVisibleItemScrollOffset,
+                    lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                    totalItems = layoutInfo.totalItemsCount,
+                    canScrollForward = gridState.canScrollForward,
+                )
             }
             .distinctUntilChanged()
-            .filter { it && uiState.canLoadMore && !uiState.isLoading }
-            .collect {
-                CatalogRepository.loadMore()
+            .collect { viewport ->
+                loadMoreGate.observeScroll(viewport.scrolling, viewport.firstIndex, viewport.firstOffset)
+                val nearEnd = viewport.totalItems > 0 &&
+                    viewport.lastVisibleIndex >= viewport.totalItems - 6
+                val underfilled = uiState.items.isNotEmpty() &&
+                    viewport.firstIndex == 0 && viewport.firstOffset == 0 &&
+                    !viewport.canScrollForward
+                if (loadMoreGate.shouldLoad(
+                        nearEnd = nearEnd,
+                        canLoadMore = uiState.canLoadMore,
+                        isLoading = uiState.isLoading,
+                        initialViewportUnderfilled = underfilled,
+                    )
+                ) CatalogRepository.loadMore()
             }
     }
 
@@ -271,7 +305,7 @@ fun CatalogScreen(
                     }
                 } else {
                     items(
-                        items = uiState.items.withDuplicateSafeLazyKeys { item -> item.stableKey() },
+                        items = displayedItems.withDuplicateSafeLazyKeys { item -> item.stableKey() },
                         key = { item -> item.lazyKey },
                     ) { keyedItem ->
                         val item = keyedItem.value
@@ -320,6 +354,16 @@ fun CatalogScreen(
                 pageHorizontalPadding = pageHorizontalPadding,
                 modifier = Modifier.onSizeChanged { headerHeightPx = it.height },
                 onBack = onBack,
+                sortOptions = sortOptions.takeIf { sortKey != null },
+                selectedSort = activeSort,
+                showUnavailablePreference = savedSort != activeSort && uiState.items.isNotEmpty(),
+                showMissingMetadata = uiState.items.isNotEmpty() && sortOptions.size <= 3,
+                showPartialSort = uiState.canLoadMore && activeSort != CatalogSortOption.PROVIDER_ORDER,
+                onSortSelected = { selected ->
+                    CatalogSortSettingsRepository.setSort(target, selected)
+                    CatalogRepository.saveScrollPosition(target, 0, 0)
+                    coroutineScope.launch { gridState.scrollToItem(0) }
+                },
             )
         }
     }
@@ -331,15 +375,34 @@ private fun CatalogHeader(
     subtitle: String,
     pageHorizontalPadding: Dp,
     onBack: (() -> Unit)?,
+    sortOptions: List<CatalogSortOption>?,
+    selectedSort: CatalogSortOption,
+    showUnavailablePreference: Boolean,
+    showMissingMetadata: Boolean,
+    showPartialSort: Boolean,
+    onSortSelected: (CatalogSortOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (LocalUseNativeNavigation.current) {
-        Box(
+        Column(
             modifier = modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .height(44.dp),
-        )
+                .padding(horizontal = pageHorizontalPadding),
+        ) {
+            Spacer(Modifier.height(44.dp))
+            if (sortOptions != null) {
+                CatalogSortControls(
+                    sortOptions = sortOptions,
+                    selectedSort = selectedSort,
+                    showUnavailablePreference = showUnavailablePreference,
+                    showMissingMetadata = showMissingMetadata,
+                    showPartialSort = showPartialSort,
+                    onSortSelected = onSortSelected,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+        }
         return
     }
 
@@ -379,7 +442,76 @@ private fun CatalogHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (sortOptions != null) {
+            Spacer(modifier = Modifier.height(14.dp))
+            CatalogSortControls(
+                sortOptions = sortOptions,
+                selectedSort = selectedSort,
+                showUnavailablePreference = showUnavailablePreference,
+                showMissingMetadata = showMissingMetadata,
+                showPartialSort = showPartialSort,
+                onSortSelected = onSortSelected,
+            )
+        }
     }
+}
+
+@Composable
+private fun CatalogSortControls(
+    sortOptions: List<CatalogSortOption>,
+    selectedSort: CatalogSortOption,
+    showUnavailablePreference: Boolean,
+    showMissingMetadata: Boolean,
+    showPartialSort: Boolean,
+    onSortSelected: (CatalogSortOption) -> Unit,
+) {
+    NuvioDropdownChip(
+        title = stringResource(Res.string.catalog_sort_title),
+        label = catalogSortLabel(selectedSort),
+        selectedKey = selectedSort.name,
+        options = sortOptions.map { option ->
+            NuvioDropdownOption(key = option.name, label = catalogSortLabel(option))
+        },
+        enabled = sortOptions.size > 1,
+        onSelected = { option ->
+            CatalogSortOption.entries.firstOrNull { it.name == option.key }?.let(onSortSelected)
+        },
+    )
+    if (showUnavailablePreference || showMissingMetadata) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = stringResource(
+                if (showUnavailablePreference) {
+                    Res.string.catalog_sort_preference_unavailable
+                } else {
+                    Res.string.catalog_sort_metadata_unavailable
+                },
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (showPartialSort) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = stringResource(Res.string.catalog_sort_partial_results),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun catalogSortLabel(option: CatalogSortOption): String = when (option) {
+    CatalogSortOption.PROVIDER_ORDER -> stringResource(Res.string.catalog_sort_provider_order)
+    CatalogSortOption.TITLE_ASC -> stringResource(Res.string.catalog_sort_title_asc)
+    CatalogSortOption.TITLE_DESC -> stringResource(Res.string.catalog_sort_title_desc)
+    CatalogSortOption.RATING_DESC -> stringResource(Res.string.catalog_sort_rating_desc)
+    CatalogSortOption.RATING_ASC -> stringResource(Res.string.catalog_sort_rating_asc)
+    CatalogSortOption.RELEASE_DESC -> stringResource(Res.string.catalog_sort_release_desc)
+    CatalogSortOption.RELEASE_ASC -> stringResource(Res.string.catalog_sort_release_asc)
+    CatalogSortOption.ADDED_DESC -> stringResource(Res.string.catalog_sort_added_desc)
+    CatalogSortOption.ADDED_ASC -> stringResource(Res.string.catalog_sort_added_asc)
 }
 
 @Composable

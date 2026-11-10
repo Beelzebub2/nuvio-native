@@ -10,6 +10,7 @@ import com.nuvio.app.core.sync.ProfileSettingsSync
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.core.tracking.ensureTrackingProvidersRegistered
 import com.nuvio.app.features.addons.AddonRepository
+import com.nuvio.app.features.catalog.CatalogSortSettingsRepository
 import com.nuvio.app.features.collection.CollectionMobileSettingsRepository
 import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.downloads.DownloadsRepository
@@ -196,6 +197,7 @@ object ProfileRepository {
         com.nuvio.app.features.watchlater.WatchLaterRepository.ensureLoaded()
         com.nuvio.app.features.watchlater.PersonalMediaRepository.ensureLoaded()
         LibraryDisplaySettingsRepository.onProfileChanged()
+        CatalogSortSettingsRepository.onProfileChanged()
         WatchProgressRepository.onProfileChanged(profileIndex)
         AddonRepository.onProfileChanged(profileIndex)
         if (com.nuvio.app.core.build.AppFeaturePolicy.pluginsEnabled) {
