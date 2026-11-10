@@ -102,4 +102,21 @@ class HomeCatalogParserTest {
         assertEquals("https://img/landscape-2.jpg", withoutBackground.landscapePoster)
         assertEquals("https://img/landscape-2.jpg", withoutBackground.banner)
     }
+
+    @Test
+    fun parseCatalogResponseCarriesExplicitAddedDateWithoutFabricatingOne() {
+        val result = HomeCatalogParser.parseCatalogResponse(
+            """
+            {
+              "metas": [
+                {"id":"one","type":"movie","name":"One","addedAt":"2024-04-15"},
+                {"id":"two","type":"movie","name":"Two","released":"2025-04-15"}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("2024-04-15", result.items[0].dateAdded)
+        assertEquals(null, result.items[1].dateAdded)
+    }
 }
