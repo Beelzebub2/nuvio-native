@@ -971,6 +971,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     notCompatibleWithConfigurationCache("Builds a host-local player bridge against WebView2 and libmpv for Windows.")
     enabled = isWindowsHost
     inputs.file(windowsPlayerBridgeSource)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_protocol.h"))
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
@@ -1060,6 +1061,64 @@ val buildWindowsBluetoothBridge = tasks.register<Exec>("buildWindowsBluetoothBri
     )
 }
 
+// Dedicated process for Discord screen-share audio. Hidden by default; its
+// optional DWM mirror is only for application-window sharing. Stereo output
+// uses a separate virtual endpoint without changing primary playback.
+val windowsDiscordShareSource = layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_companion.cpp")
+val windowsDiscordShareHeader = layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_protocol.h")
+val windowsDiscordShareOutput = layout.buildDirectory.file("native/windows/discord_share_companion.exe")
+val windowsDiscordShareObject = layout.buildDirectory.file("native/windows/discord_share_companion.obj")
+val windowsDiscordShareScript = layout.buildDirectory.file("native/windows/build-discord-share.bat")
+val windowsDiscordShareCompile = listOf(
+    "cl", "/nologo", "/EHsc", "/std:c++17", "/O2", "/MT", "/utf-8",
+    "/DUNICODE", "/D_UNICODE",
+    cmdQuote(windowsDiscordShareSource.asFile.absolutePath),
+    "/Fo${cmdQuote(windowsDiscordShareObject.get().asFile.absolutePath)}",
+    "/Fe${cmdQuote(windowsDiscordShareOutput.get().asFile.absolutePath)}",
+    "/link", "/NOLOGO", "/SUBSYSTEM:WINDOWS", "User32.lib", "Gdi32.lib", "Dwmapi.lib", "Ole32.lib",
+).joinToString(" ")
+val buildWindowsDiscordShareCompanion = tasks.register<Exec>("buildWindowsDiscordShareCompanion") {
+    notCompatibleWithConfigurationCache("Uses the installed Windows MSVC C++ compiler.")
+    enabled = isWindowsHost && windowsPlayerBridgeArch == "x64"
+    inputs.file(windowsDiscordShareSource)
+    inputs.file(windowsDiscordShareHeader)
+    outputs.file(windowsDiscordShareOutput)
+    outputs.file(windowsDiscordShareObject)
+    val template = windowsDiscordShareCompile.replace("\"", "__DQ__")
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        """
+        ${'$'}ErrorActionPreference = 'Stop'
+        ${'$'}dq = [char]34
+        ${'$'}vcvars = ${psSingleQuote(windowsVcvarsPath.orEmpty())}
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars)) {
+          ${'$'}vswhere = ${psSingleQuote(windowsVsWhere.absolutePath)}
+          if (Test-Path -LiteralPath ${'$'}vswhere) {
+            ${'$'}vcvars = & ${'$'}vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find ${psSingleQuote(windowsVcvarsRelativePath)} | Select-Object -First 1
+          }
+        }
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars) -or -not (Test-Path -LiteralPath ${'$'}vcvars)) {
+          Write-Error 'Visual Studio MSVC is required to build the Discord share companion.'
+          exit 1
+        }
+        ${'$'}vcvars = ([string]${'$'}vcvars).Trim()
+        ${'$'}bat = ${psSingleQuote(windowsDiscordShareScript.get().asFile.absolutePath)}
+        ${'$'}compile = ${psSingleQuote(template)}.Replace('__DQ__', ${'$'}dq)
+        ${'$'}lines = @(
+          '@echo off',
+          ('set {0}VCVARS={1}{0}' -f ${'$'}dq, ${'$'}vcvars),
+          ('call {0}%VCVARS%{0} >nul' -f ${'$'}dq),
+          'if errorlevel 1 exit /b %errorlevel%',
+          ${'$'}compile,
+          'exit /b %ERRORLEVEL%'
+        )
+        Set-Content -LiteralPath ${'$'}bat -Value ${'$'}lines -Encoding ASCII
+        & cmd.exe /d /c ${'$'}bat
+        exit ${'$'}LASTEXITCODE
+        """.trimIndent(),
+    )
+}
+
 tasks.withType<Copy>().configureEach {
     if (isWindowsHost && name == "desktopProcessResources") {
         dependsOn(buildWindowsBluetoothBridge)
@@ -1070,6 +1129,10 @@ tasks.withType<Copy>().configureEach {
 val prepareWindowsPlayerRuntime = tasks.register<Sync>("prepareWindowsPlayerRuntime") {
     enabled = isWindowsHost
     into(windowsPlayerRuntimeOutput)
+    if (windowsPlayerBridgeArch == "x64") {
+        dependsOn(buildWindowsDiscordShareCompanion)
+        from(windowsDiscordShareOutput)
+    }
     if (windowsWebView2LoaderDll.exists()) {
         from(windowsWebView2LoaderDll)
     }

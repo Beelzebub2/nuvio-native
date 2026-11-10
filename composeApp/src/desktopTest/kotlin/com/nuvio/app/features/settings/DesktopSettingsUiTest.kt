@@ -140,6 +140,16 @@ class DesktopSettingsUiTest {
     }
 
     @Test
+    fun advancedSettingsExposeOptInDiscordStereoSharingOnWindows() {
+        if (!DiscordShareModeSettings.isSupported) return
+        runDesktopComposeUiTest(width = 1440, height = 900) {
+            showSettings()
+            open("Advanced")
+            onNodeWithText("Discord fullscreen dialogue support (experimental)").performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    @Test
     fun searchShowsResultsAndClearingReturnsToThePreviousPage() = runDesktopComposeUiTest(width = 1100, height = 760) {
         showSettings()
         open("Playback")

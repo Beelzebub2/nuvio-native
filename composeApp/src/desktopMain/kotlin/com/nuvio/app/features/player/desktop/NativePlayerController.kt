@@ -28,6 +28,7 @@ import com.nuvio.app.features.player.inferForcedSubtitleTrack
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.desktop.hls.HlsHeaderProxy
 import com.nuvio.app.features.player.desktop.hls.isDefaultAllowedHlsTarget
+import com.nuvio.app.features.settings.DiscordShareModeSettings
 import com.nuvio.app.features.player.toStorageHexString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -62,6 +63,7 @@ internal class NativePlayerController(
     private val releaseTimeoutMs: Long = 10_000L,
     private val onCreateWaitCompleted: () -> Unit = {},
     private val nativeSetRtxCompareOriginal: (Long, Boolean) -> Boolean = NativePlayerBridge::setRtxCompareOriginal,
+    private val nativeSetDiscordShareEnabled: (Long, Boolean, Boolean) -> Boolean = NativePlayerBridge::setDiscordShareEnabled,
 ) : PlayerEngineController {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
@@ -89,6 +91,30 @@ internal class NativePlayerController(
 
     @Volatile
     private var handle: Long = 0L
+
+    @Volatile
+    private var discordShareEnabled: Boolean = false
+
+    @Volatile
+    private var discordShareShowWindow: Boolean = false
+
+    fun setDiscordShareEnabled(enabled: Boolean, showWindow: Boolean = false) {
+        // Hidden companion outputs only the centre dialogue channel, never a
+        // second full stereo mix. Visible companion outputs full stereo for
+        // sharing that application window alone.
+        discordShareEnabled = enabled
+        discordShareShowWindow = showWindow
+        if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
+        val current = synchronized(lifecycleLock) { handle }
+        if (current == 0L) return
+        val accepted = runCatching { nativeSetDiscordShareEnabled(current, enabled, showWindow) }
+            .onFailure { log.w(it) { "Discord share companion change failed" } }
+            .getOrDefault(false)
+        if (enabled && !accepted && synchronized(lifecycleLock) { handle == current }) {
+            log.w { "Discord share requires a separate available virtual audio endpoint" }
+            DiscordShareModeSettings.markUnavailable()
+        }
+    }
 
     /** Native teardown of the previous player, if one is still running. */
     @Volatile
@@ -345,6 +371,14 @@ internal class NativePlayerController(
                             .onFailure { error -> recordTerminalDisposeFailure(error, "superseded create", created) }
                         return@onSuccess
                     }
+                    if (discordShareEnabled && DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+                        val accepted = runCatching {
+                            nativeSetDiscordShareEnabled(created, true, discordShareShowWindow)
+                        }
+                            .onFailure { log.w(it) { "Discord share companion startup failed" } }
+                            .getOrDefault(false)
+                        if (!accepted) DiscordShareModeSettings.markUnavailable()
+                    }
                     SwingUtilities.invokeLater {
                         val shouldConfigure = synchronized(lifecycleLock) {
                             when {
@@ -466,6 +500,8 @@ internal class NativePlayerController(
         currentVolumeLevel = stateWithVolume.volumeLevel ?: currentVolumeLevel
         controlsState = stateWithVolume
         val isFullscreen = isDesktopAppFullscreen(SwingUtilities.getWindowAncestor(host))
+        val showDiscordShare = DiscordShareModeSettings.isSupported
+        val isDiscordShareEnabled = showDiscordShare && DiscordShareModeSettings.enabled.value
         val structureKey = NativeControlsStructureKey(
             state = stateWithVolume.nativeControlsStructureKey(),
             isFullscreen = isFullscreen,
@@ -473,6 +509,7 @@ internal class NativePlayerController(
             rtxComparisonAvailable = rtxComparisonAvailable,
             rtxShowingOriginal = rtxShowingOriginal,
             rtxComparisonFailed = rtxComparisonFailed,
+            discordShareEnabled = isDiscordShareEnabled,
         )
         if (structureKey == lastSentControlsStructureKey) return
         lastSentControlsStructureKey = structureKey
@@ -489,6 +526,8 @@ internal class NativePlayerController(
                 rtxComparisonAvailable = rtxComparisonAvailable,
                 rtxShowingOriginal = rtxShowingOriginal,
                 rtxComparisonFailed = rtxComparisonFailed,
+                showDiscordShare = showDiscordShare,
+                discordShareEnabled = isDiscordShareEnabled,
             ),
         )
     }
@@ -562,6 +601,17 @@ internal class NativePlayerController(
             log.d { "event received handle=$handle type=$type value=$value" }
         }
         when (type) {
+            "setDiscordShareEnabled" -> {
+                if (handle != 0L && DiscordShareModeSettings.isSupported) {
+                    DiscordShareModeSettings.setEnabled(value >= 0.5)
+                }
+            }
+            "discordShareFailed" -> {
+                if (discordShareEnabled) {
+                    log.w { "Discord share companion stopped unexpectedly; disabling mode" }
+                    DiscordShareModeSettings.markUnavailable()
+                }
+            }
             "cursorActivity" -> host.noteCursorActivity()
             "rtxCompareOriginal" -> {
                 val current = handle
@@ -1341,6 +1391,7 @@ private data class NativeControlsStructureKey(
     val rtxComparisonAvailable: Boolean,
     val rtxShowingOriginal: Boolean,
     val rtxComparisonFailed: Boolean,
+    val discordShareEnabled: Boolean,
 )
 
 private fun PlayerControlsState.toControlsJson(
@@ -1348,6 +1399,8 @@ private fun PlayerControlsState.toControlsJson(
     rtxComparisonAvailable: Boolean,
     rtxShowingOriginal: Boolean,
     rtxComparisonFailed: Boolean,
+    showDiscordShare: Boolean,
+    discordShareEnabled: Boolean,
 ): String =
     buildString {
         append('{')
@@ -1657,6 +1710,10 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("autoSkipIntroLabel", autoSkipIntroLabel)
         append(',')
         appendJsonField("autoNextEpisodeLabel", autoNextEpisodeLabel)
+        append(',')
+        appendJsonField("showDiscordShare", showDiscordShare)
+        append(',')
+        appendJsonField("discordShareEnabled", discordShareEnabled)
         append(',')
         appendJsonField("showSubmitIntro", showSubmitIntro)
         append(',')

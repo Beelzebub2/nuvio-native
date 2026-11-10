@@ -1,0 +1,61 @@
+// Run with: node composeApp/src/desktopTest/js/discord-share-toggle.test.mjs
+// Exercise the shipped toggle logic using the same tiny VM harness as player-prompts.test.mjs.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+
+const root = new URL("../../desktopMain/resources/player-ui/", import.meta.url);
+const source = readFileSync(new URL("controls.js", root), "utf8");
+const html = readFileSync(new URL("controls.html", root), "utf8");
+const css = readFileSync(new URL("controls.css", root), "utf8");
+assert.match(html, /id="discordShareButton"[^>]+data-command="setDiscordShareEnabled"[^>]+aria-pressed="false"/);
+assert.match(html, /<symbol id="icon-discord"[^>]*>[\s\S]*?fill="currentColor"/);
+assert.ok(html.indexOf('data-command="audio"') < html.indexOf('id="discordShareButton"'));
+assert.ok(css.includes(".action.toggle-action[aria-pressed=\"true\"]::after"));
+const mediumWindowRule = css.match(/@media \(min-width: 761px\) and \(max-width: 959px\) \{[\s\S]*?^\}/m)?.[0];
+assert.ok(mediumWindowRule, "medium-size player rules must be present");
+assert.doesNotMatch(mediumWindowRule, /discordShareButton|\.action\.toggle-action/,
+  "the Discord button stays visible at medium desktop widths");
+
+const button = () => ({
+  hidden: true, attributes: {}, text: { textContent: "" },
+  setAttribute(key, value) { this.attributes[key] = value; },
+  querySelector() { return this.text; },
+});
+const sent = [];
+const toasts = [];
+const context = {
+  autoSkipIntroButton: button(), autoNextEpisodeButton: button(), discordShareButton: button(),
+  state: { showAutoToggles: false, showDiscordShare: false, discordShareEnabled: false },
+  setVisible(element, visible) { element.hidden = !visible; },
+  showPlayerToast(message) { toasts.push(message); },
+  send(command, value) { sent.push([command, value]); },
+};
+const start = source.indexOf("const autoToggles = [");
+const end = source.indexOf("const setActionButtonLabel =", start);
+assert.ok(start >= 0 && end > start);
+vm.createContext(context);
+vm.runInContext(source.slice(start, end), context);
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.discordShareButton.hidden, true, "unsupported platforms hide Discord control");
+
+context.state.showDiscordShare = true;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.discordShareButton.hidden, false, "supported Windows players show the button");
+assert.equal(context.autoSkipIntroButton.hidden, true, "Discord visibility is independent of auto toggles");
+assert.equal(context.discordShareButton.attributes["aria-pressed"], "false");
+assert.equal(vm.runInContext('toggleAutoSetting("setDiscordShareEnabled")', context), true);
+assert.deepEqual(sent[0], ["setDiscordShareEnabled", 1]);
+assert.equal(context.discordShareButton.attributes["aria-pressed"], "true");
+assert.equal(context.discordShareButton.attributes.title, "Discord audio: On");
+assert.equal(toasts[0], "Discord audio: On");
+
+// Advanced Settings (or helper failure) can update the true state from Kotlin.
+context.state.discordShareEnabled = false;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.discordShareButton.attributes["aria-pressed"], "false");
+assert.equal(context.discordShareButton.attributes.title, "Discord audio: Off");
+assert.equal(vm.runInContext('toggleAutoSetting("setDiscordShareEnabled")', context), true);
+assert.equal(vm.runInContext('toggleAutoSetting("setDiscordShareEnabled")', context), true);
+assert.deepEqual(sent.at(-1), ["setDiscordShareEnabled", 0]);
+console.log("Discord player button: visibility, on/off commands, and state re-sync passed.");

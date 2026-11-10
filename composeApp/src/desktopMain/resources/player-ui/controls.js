@@ -27,6 +27,7 @@ const nextEpisodeButton = document.getElementById("nextEpisodeButton");
 const nextEpisodeButtonLabel = document.getElementById("nextEpisodeButtonLabel");
 const autoSkipIntroButton = document.getElementById("autoSkipIntroButton");
 const autoNextEpisodeButton = document.getElementById("autoNextEpisodeButton");
+const discordShareButton = document.getElementById("discordShareButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const pipButton = document.getElementById("pipButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
@@ -391,6 +392,8 @@ let state = {
   showAutoToggles: false,
   autoSkipIntroEnabled: false,
   autoNextEpisodeEnabled: false,
+  showDiscordShare: false,
+  discordShareEnabled: false,
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
@@ -873,6 +876,14 @@ const autoToggles = [
     fallbackLabel: "Auto Next Episode",
     icon: "icon-auto-next-episode",
   },
+  {
+    button: discordShareButton,
+    command: "setDiscordShareEnabled",
+    stateKey: "discordShareEnabled",
+    visibleKey: "showDiscordShare",
+    fallbackLabel: "Discord audio",
+    icon: "icon-discord",
+  },
 ];
 
 const autoToggleLabel = toggle => String(state[toggle.labelKey] || toggle.fallbackLabel);
@@ -883,7 +894,7 @@ const syncAutoToggleButtons = () => {
     if (!toggle.button) return;
     const enabled = Boolean(state[toggle.stateKey]);
     const label = autoToggleLabel(toggle);
-    setVisible(toggle.button, Boolean(state.showAutoToggles));
+    setVisible(toggle.button, Boolean(state[toggle.visibleKey || "showAutoToggles"]));
     toggle.button.setAttribute("aria-pressed", enabled ? "true" : "false");
     toggle.button.setAttribute("aria-label", label);
     toggle.button.setAttribute("title", `${label}: ${autoToggleStateLabel(enabled)}`);

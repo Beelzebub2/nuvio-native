@@ -1999,7 +1999,8 @@ button:disabled {
 
 /* The auto toggles also live in Settings, so they give way first when space runs out. */
 @media (min-width: 761px) and (max-width: 959px) {
-  .action.toggle-action {
+  #autoSkipIntroButton,
+  #autoNextEpisodeButton {
     display: none;
   }
 }

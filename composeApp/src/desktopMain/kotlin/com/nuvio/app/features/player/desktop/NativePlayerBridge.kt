@@ -61,6 +61,8 @@ internal object NativePlayerBridge {
     fun reparentSurface(handle: Long, hostViewPtr: Long): Boolean =
         runCatching { reparentSurfaceNative(handle, hostViewPtr) }.isSuccess
     external fun setPaused(handle: Long, paused: Boolean)
+    /** Windows only: control the stereo companion and optional visible mirror window. */
+    external fun setDiscordShareEnabled(handle: Long, enabled: Boolean, showWindow: Boolean): Boolean
     /** Windows only: switch the current video filter for a temporary RTX A/B preview. */
     external fun setRtxCompareOriginal(handle: Long, original: Boolean): Boolean
     external fun seekTo(handle: Long, positionMs: Long)
