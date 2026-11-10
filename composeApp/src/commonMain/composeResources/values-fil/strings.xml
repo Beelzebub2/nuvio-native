@@ -625,18 +625,18 @@ Ang</string>
     <string name="settings_advanced_section_windows_graphics">WINDOWS GRAPHICS</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTICS</string>
     <string name="settings_root_privacy_section">PRIVACY at DIAGNOSTICS</string>
-    <string name="settings_advanced_usage_analytics">Mga istatistika ng paggamit</string>
-    <string name="settings_advanced_usage_analytics_subtitle">Opsyonal na bersyon, platform at mga bilang ng feature gamit ang random na installation ID. Naka-off hanggang sa paganahin.</string>
+    <string name="settings_advanced_usage_analytics">Anonymous na diagnostics</string>
+    <string name="settings_advanced_usage_analytics_subtitle">Opsyonal na bilang ng mga error, babala at pagiging maaasahan ayon sa bersyon at platform. Walang history ng paggamit o permanenteng device ID.</string>
     <string name="diagnostics_consent_title">Mga opsyonal na diagnostic
 Gumagana ang</string>
     <string name="diagnostics_consent_description">Starlit alinman ang pipiliin mo. Naka-off ang parehong opsyon maliban kung i-on mo ang mga ito. Baguhin ang mga ito anumang oras sa %1$s, sa ilalim ng %2$s.
 Gumagana ang</string>
     <string name="diagnostics_consent_description_single">Starlit alinman ang pipiliin mo. Naka-off ang opsyong ito maliban kung i-on mo ito. Baguhin ito anumang oras sa %1$s, sa ilalim ng %2$s.</string>
-    <string name="diagnostics_consent_usage">Mga istatistika ng paggamit</string>
-    <string name="diagnostics_consent_usage_detail">Bersyon ng app, platform at kung gaano kadalas ginagamit ang mga screen, playback at pag-download. Binibilang gamit ang random na installation ID na nagre-reset kapag nag-opt out ka.</string>
+    <string name="diagnostics_consent_usage">Anonymous na diagnostics</string>
+    <string name="diagnostics_consent_usage_detail">Pagbukas ng app; Mga teknikal na error, babala at resulta ng playback/download ayon sa bersyon at platform. Walang tala ng binuksang screen o permanenteng ID.</string>
     <string name="diagnostics_consent_crashes">Mga ulat ng pag-crash (Sentry)</string>
     <string name="diagnostics_consent_crashes_detail">Kapag nag-crash ang Starlit, ipinapadala ang mga detalye ng error, bersyon ng app at impormasyon ng device sa Sentry upang makatulong na ayusin ang problema.</string>
-    <string name="diagnostics_consent_privacy">Hindi kasama ang mga pamagat ng media, paghahanap, account ID o stream address. Ang data ng paggamit ay pinapanatili nang hanggang 30 araw.</string>
+    <string name="diagnostics_consent_privacy">Walang pamagat, paghahanap, account, URL o raw log. Pansamantalang token lang para pigilan ang abuso; iniingatan nang hanggang 30 araw.</string>
     <string name="diagnostics_consent_not_now">Hindi, salamat</string>
     <string name="diagnostics_consent_save">I-save ang mga pagpipilian</string>
     <string name="settings_advanced_section_discord">DISCORD</string>
@@ -661,8 +661,8 @@ Gumagana ang</string>
     <string name="sentry_help_body">Nakapangkat ang mga ulat ayon sa bersyon ng app, modelo ng device, bersyon ng Android, at stack trace para maayos muna ang mga pinakakaraniwang totoong pag-crash.</string>
     <string name="sentry_help_body_desktop">Ang mga ulat ay pinagsama-sama ayon sa bersyon ng app, operating system, arkitektura, at stack trace para maayos muna ang mga pinakakaraniwang totoong pag-crash.</string>
     <string name="sentry_sent_title">Ipinadala</string>
-    <string name="sentry_sent_body">Mga pag-crash, kasalukuyang ANR, stack trace, bersyon ng app, uri ng build, flavor, device at metadata ng OS, at mga breadcrumb ng ligtas na network na may paraan, host, path, status, tagal, at uri ng exception.</string>
-    <string name="sentry_sent_body_desktop">Mga hindi nahawakang error sa application, stack trace, bersyon ng app, operating system, arkitektura, Java runtime metadata, at ligtas na diagnostic breadcrumb.</string>
+    <string name="sentry_sent_body">Mga ulat ng crash at ANR na may pahintulot, stack trace, bersyon at teknikal na detalye ng device. Walang URL o history ng pag-navigate.</string>
+    <string name="sentry_sent_body_desktop">Mga ulat ng error na may pahintulot, stack trace, bersyon at detalye ng OS at runtime. Walang history ng pag-navigate.</string>
     <string name="sentry_not_sent_title">Hindi naipadala</string>
     <string name="sentry_not_sent_body">Mga password, access token, refresh token, request body, response body, header, cookies, screenshot, view hierarchy, session replay, raw diagnostics, at stream URL query o fragment value.</string>
     <string name="sentry_keep_enabled">Magpatuloy</string>

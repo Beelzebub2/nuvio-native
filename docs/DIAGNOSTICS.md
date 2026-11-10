@@ -1,51 +1,59 @@
 # Optional Starlit diagnostics
 
-Usage analytics and crash reporting are separate **opt-in** choices. Existing
-saved crash-reporting preferences are retained; new installations have neither
-reporting category enabled until the user chooses. After entering the app for the
-first time, users see a consent prompt with independent switches, both off by
-default. Declining is remembered, and either option can be changed later in
-Settings → Advanced. Neither choice is required to use the app.
+Reliability diagnostics and crash reports are **separate opt-in choices**, both
+off by default for new installations. Existing crash-report preferences are
+preserved. A consent prompt appears after entering the app, and either choice
+can be changed in Settings > Advanced. Neither option is required.
 
-## What usage analytics report
+## Anonymous reliability diagnostics
 
-Only allowlisted events are transmitted: application opens; Home, Search,
-Library and Settings visits; player openings; and download starts, completions
-and failures. Each event contains the app version, platform (Android, desktop,
-iOS), fixed event code and a random installation ID. It does not contain names,
-media IDs, watched content, search terms, IP metadata, account identity, emails,
-URLs, addons, authentication data or device-specific hardware fingerprints.
-The gateway necessarily sees the connection address to service the HTTPS
-request, but the telemetry collector does not write it to its records.
+Only fixed health codes are accepted:
 
-The ID exists only for distinguishing active installations across app versions;
-the gateway HMAC hashes it before sending a record to the self-hosted OpenObserve
-`starlit_usage` stream. OpenObserve stores the hash, platform, version and fixed
-event name, never the raw installation ID.
-Turning analytics off cancels queued sends and removes the local identifier.
-Past records are not immediately erased when a user opts out, but expire after
-the stream's configured 30-day retention period. A subsequent opt-in uses a fresh ID.
+- **Info:** app launches, successful playback readiness and completed downloads.
+- **Warnings:** slow playback startup, mobile download retries and storage-quota pauses.
+- **Errors:** playback failures, torrent-engine startup failures and download failures.
 
-Authorized operators can query OpenObserve for version and platform counts,
-with active-installation estimates and event counts for a 1–30 day window.
-These figures only reflect *consenting active installations*, not total
-installs or individuals. Network failures never interrupt Starlit.
+The server derives severity and component from each fixed code. OpenObserve
+records only app version, platform, code, severity and component. There are
+**no screen visits, search events, playback titles, media or episode IDs,
+source URLs, server names, account IDs, credentials, stack traces or free-form
+error messages** in this stream. The server acknowledges and discards older
+clients' screen-visit, player-opening and download-queue-snapshot events.
 
-## Crash reports
+An opt-in client supplies a random **session-only** token for gateway rate
+limiting. The server hashes it only in memory, and **does not store either
+the token or its hash**. The app no longer persists a diagnostics installation
+identifier and erases an identifier left by older app versions. As with any
+network connection, the reverse proxy sees the source address to serve the
+HTTPS request; telemetry itself does not save the address or request body.
+Configure the reverse proxy not to log these bodies.
 
-Sentry receives error stack traces and platform diagnostics only when its
-separate setting is enabled. Sentry's existing event sanitization and redaction
-remain in force. Crash diagnostics are managed independently of usage
-analytics and do not use the usage-statistics installation identifier.
+Turning off diagnostics cancels queued work and rotates the session token.
+Previously ingested records expire according to OpenObserve's configured
+30-day retention. Old schema-1 records may temporarily retain a hashed
+installation identifier until they expire. Event totals reflect consenting
+reports, **not** distinct users, devices or watched titles.
+If the network or telemetry server fails, normal app operation continues.
+
+## Optional crash reporting
+
+Sentry reports are enabled independently of reliability diagnostics. When
+explicitly enabled, the Android and desktop SDKs provide stack traces and
+limited app, OS and device technical metadata, with the existing request,
+user and exception-message sanitization. Screenshots, UI hierarchy,
+tracing/replay and breadcrumbs (including navigation and network
+destinations) are disabled. iOS Sentry reporting is not currently supported.
+Disabling this option prevents future reporting.
 
 ## Deployment and operational safeguards
 
-See [the gateway configuration](../gateway/README.md#opt-in-usage-diagnostics)
-for the HMAC key, private OpenObserve ingestion endpoint, dedicated server-only
-credentials, HTTPS path, 30-day stream retention and verification steps. The
-gateway endpoint is disabled unless all secrets and the endpoint are configured.
-Installations do not upload analytics on the basis of signing into an account.
+See [gateway configuration](../gateway/README.md#opt-in-usage-diagnostics) for
+the private ingestion endpoint, server-only HMAC key and credentials,
+request-body and rate limits, schema validation, 30-day retention and
+verification. Ingestion fails closed without required settings.
+Signing into an account does not opt a device into either diagnostics option.
 
-Before public release, update the user-facing privacy policy on the official
-site to describe both categories, the collection purpose, retention and contact
-for privacy requests. Confirm the reverse proxy doesn't log request bodies.
+Before public release, ensure the official website privacy policy describes
+the two consent categories, the diagnostic fields, retention and contact for
+privacy requests. Check that the public reverse proxy does not log telemetry
+request bodies.

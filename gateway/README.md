@@ -130,8 +130,8 @@ values. The deployment currently uses `network_mode: host`, so
 `http://127.0.0.1:5080/api/default/starlit_usage/_json` reaches OpenObserve
 without exposing its ingest port publicly.
 
-OpenObserve errors or a four-second timeout return 502; the app treats analytics
-as best-effort. A four-request concurrency budget, per-installation minute cap,
+OpenObserve errors or a four-second timeout return 502; the app treats diagnostics
+as best-effort. A four-request concurrency budget, per-session minute cap,
 and 100,000-event daily process cap keep telemetry from starving provider
 requests. Configure edge IP rate limits too, because client installation IDs are
 unauthenticated. Existing GET routes and the old `workers.dev` compatibility
@@ -140,22 +140,29 @@ shim are unchanged; the shim does not forward telemetry POST requests.
 **Retention:** Set the `starlit_usage` stream's data retention to **30 days** in
 OpenObserve. The collector no longer writes JSONL files and does not expose an
 operator summary endpoint. Restrict stream access to authorized operators.
+Health signals (schema 2) contain only event, severity, component, app version
+and platform. Requests use a random per-session token, hashed only in memory for
+abuse protection. Neither the token nor its hash is stored in OpenObserve.
+Old clients' screen-visit, playback-open and queue-snapshot events are
+acknowledged but discarded by the gateway. No titles, URLs, searches,
+free-form errors or account identifiers are accepted.
+
 In the OpenObserve Logs or Dashboard interface, select `starlit_usage` and query:
 
 ```sql
-SELECT version, platform,
-       COUNT(DISTINCT installation_hash) AS active_installations,
-       COUNT(*) AS app_opens
+SELECT version, platform, COUNT(*) AS app_opens
 FROM "starlit_usage"
 WHERE event = 'app_open'
 GROUP BY version, platform
-ORDER BY active_installations DESC;
+ORDER BY app_opens DESC;
 ```
 
-For feature usage, query `SELECT event, COUNT(*) AS events FROM "starlit_usage"
-GROUP BY event ORDER BY events DESC`. Choose the 1–30 day time window in the
-OpenObserve UI. These are *consenting active installations*, not all users or
-unique real people.
+For diagnostic failures, query `SELECT version, platform, component, severity,
+event, COUNT(*) AS occurrences FROM "starlit_usage" WHERE schema_version = 2
+AND severity IN ('warning', 'error') GROUP BY version, platform, component,
+severity, event ORDER BY occurrences DESC`. Choose a 1–30 day time window.
+App opens are consenting launches, **not** unique users or devices. Historical
+schema-1 records may contain installation hashes until their retention expires.
 
 **Deployment:** Nginx must forward `/gateway/telemetry/` to the metadata Node
 service after stripping `/gateway/`. Ensure the metadata container can reach

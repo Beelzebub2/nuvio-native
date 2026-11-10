@@ -1,17 +1,33 @@
 import { createHmac } from 'node:crypto';
 
-// The public client only sends these fixed events and metadata fields. Reject
-// all arbitrary properties before they reach the observability service.
+// A fixed dictionary of aggregate health outcomes. These dimensions are
+// derived on the server, not supplied by devices. No free text is accepted.
+export const TELEMETRY_SIGNALS = Object.freeze({
+  app_open: { severity: 'info', component: 'app' },
+  playback_ready: { severity: 'info', component: 'playback' },
+  playback_failed: { severity: 'error', component: 'playback' },
+  playback_start_slow: { severity: 'warning', component: 'playback' },
+  torrent_engine_failed: { severity: 'error', component: 'torrent' },
+  download_completed: { severity: 'info', component: 'downloads' },
+  download_failed: { severity: 'error', component: 'downloads' },
+  download_retry_warning: { severity: 'warning', component: 'downloads' },
+  download_quota_warning: { severity: 'warning', component: 'downloads' },
+});
+// Old clients may still send screen visits or download-list refresh events.
+// Acknowledge them without storing anything, even before they update.
+export const LEGACY_DISCARDED_EVENTS = Object.freeze([
+  'screen_home', 'screen_search', 'screen_library', 'screen_settings',
+  'playback_opened', 'download_queued',
+]);
 export const TELEMETRY_EVENTS = Object.freeze([
-  'app_open', 'screen_home', 'screen_search', 'screen_library',
-  'screen_settings', 'playback_opened', 'playback_ready', 'playback_failed',
-  'download_queued', 'download_completed', 'download_failed',
+  ...Object.keys(TELEMETRY_SIGNALS), ...LEGACY_DISCARDED_EVENTS,
 ]);
 const events = new Set(TELEMETRY_EVENTS);
+const discardedEvents = new Set(LEGACY_DISCARDED_EVENTS);
 const platforms = new Set(['android', 'desktop', 'ios']);
 const MAX_BODY_BYTES = 1024;
 const MAX_DAILY_EVENTS = 100_000;
-const MAX_EVENTS_PER_INSTALLATION_PER_MINUTE = 30;
+const MAX_EVENTS_PER_SESSION_PER_MINUTE = 30;
 const headers = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
@@ -46,8 +62,9 @@ function validIngestUrl(value) {
 }
 
 /**
- * Server-side OpenObserve adapter. No ingestion credential or raw installation ID
- * ever reaches the response or disk. Rate-limit state exists only in memory.
+ * Server-side OpenObserve adapter. The random request token is HMACed only
+ * for short-lived abuse controls; neither it nor its hash is persisted.
+ * Ingestion stores only fixed categorical signals, platform and version.
  */
 export class OpenObserveTelemetry {
   constructor({ ingestUrl, authorization, hashKey, fetcher = fetch, clock = Date.now } = {}) {
@@ -57,6 +74,7 @@ export class OpenObserveTelemetry {
     this.fetcher = fetcher;
     this.clock = clock;
     this.rate = new Map();
+    this.rateMinute = -1;
     this.day = '';
     this.dailyCount = 0;
   }
@@ -80,23 +98,30 @@ export class OpenObserveTelemetry {
     }
     const idHash = createHmac('sha256', this.hashKey).update(event.installationId).digest('hex');
     const minute = Math.floor(now / 60_000);
-    const previous = this.rate.get(idHash);
-    const used = previous?.minute === minute ? previous.count : 0;
-    if (used >= MAX_EVENTS_PER_INSTALLATION_PER_MINUTE) {
+    if (minute !== this.rateMinute) {
+      // Rotate the entire in-memory ledger every minute; no cross-minute
+      // session history is useful or retained for abuse protection.
+      this.rateMinute = minute;
+      this.rate.clear();
+    }
+    const used = this.rate.get(idHash) || 0;
+    if (used >= MAX_EVENTS_PER_SESSION_PER_MINUTE) {
       return { status: 429, error: 'Rate limit exceeded' };
     }
-    this.rate.set(idHash, { minute, count: used + 1 });
+    this.rate.set(idHash, used + 1);
     if (this.rate.size > 30_000) this.rate.clear();
+    if (discardedEvents.has(event.event)) return { status: 202 };
     // Reserve capacity synchronously, before yielding to the network. This
     // bounds concurrent attempts and includes failed upstream requests.
     this.dailyCount++;
 
-    // OpenObserve assigns the timestamp on ingestion. A stable server-side hash
-    // supports per-version active installation counts without storing raw IDs.
+    // OpenObserve timestamps each health signal. There is deliberately no
+    // stable installation identity, fingerprint, path, resource ID or message.
+    const signal = TELEMETRY_SIGNALS[event.event];
     const body = JSON.stringify([{
-      app: 'starlit', schema_version: 1, event: event.event,
+      app: 'starlit', schema_version: 2, event: event.event,
       platform: event.platform, version: event.version,
-      installation_hash: idHash,
+      severity: signal.severity, component: signal.component,
     }]);
     try {
       const response = await this.fetcher(this.ingestUrl, {

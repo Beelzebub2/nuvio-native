@@ -53,6 +53,7 @@ import org.jetbrains.compose.resources.getString
 internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     var playbackReadyReported by remember(activePlaybackKey) { mutableStateOf(false) }
     var playbackFailedReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    var torrentEngineFailureReported by remember(activePlaybackKey) { mutableStateOf(false) }
     LaunchedEffect(activePlaybackKey, playbackSnapshot.isPlaying) {
         if (playbackSnapshot.isPlaying && !playbackReadyReported) {
             playbackReadyReported = true
@@ -63,6 +64,14 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         if (errorMessage != null && !playbackFailedReported) {
             playbackFailedReported = true
             UsageDiagnostics.track(UsageEvent.PlaybackFailed)
+        }
+    }
+    // Fixed slow-start warning, no URL, title, tracker, source or playback position.
+    LaunchedEffect(activePlaybackKey, activeSourceUrl, activeTorrentInfoHash) {
+        if (activeSourceUrl == null && activeTorrentInfoHash == null) return@LaunchedEffect
+        delay(30_000)
+        if (!playbackReadyReported && !playbackFailedReported && errorMessage == null) {
+            UsageDiagnostics.track(UsageEvent.PlaybackStartupSlow)
         }
     }
     val currentFeedback = liveGestureFeedback ?: gestureFeedback
@@ -215,6 +224,10 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            if (!torrentEngineFailureReported) {
+                torrentEngineFailureReported = true
+                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+            }
             errorMessage = getString(
                 Res.string.player_error_failed_start_torrent,
                 error.message ?: genericUnknownLabel,
@@ -228,6 +241,10 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         val state = p2pStreamingState
         applyP2pRecoveryState(state)
         if (activeTorrentInfoHash != null && state is P2pStreamingState.Error) {
+            if (!torrentEngineFailureReported) {
+                torrentEngineFailureReported = true
+                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+            }
             p2pRecoveryInProgress = false
             p2pResolvedSourceUrl = null
             playerController = null
