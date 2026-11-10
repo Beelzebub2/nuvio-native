@@ -1,3 +1,17 @@
+## Starlit 1.19.0
+
+### Linux desktop
+
+- **Starlit for Linux x86_64:** Download a Debian/Ubuntu `.deb`, Fedora/RPM `.rpm`, portable `.AppImage` or sandboxed `.flatpak` from the same release page as Windows, Android phones and Android TV.
+- **Native desktop integration:** Linux packages use the Starlit launcher and desktop entry, with a separate Flatpak application ID to avoid replacing a Nuvio installation. The desktop player uses system libmpv and X11/XWayland embedding; TorrentServer integration is included for compatible desktop streaming and downloads.
+- **Verified package distribution:** All Linux formats now build through required automated release jobs. Package metadata, dependencies and SHA-256 checksums are validated before any release can publish. AppImage releases also contain `.zsync` update metadata. Flatpak bundles from GitHub require manual updates unless installed from a configured Flatpak repository.
+
+### Compatibility and limitations
+
+- Linux installers currently target **x86_64**. X11 or a working XWayland session is required for the embedded native player. DEB, RPM and AppImage installations depend on compatible system media/graphics libraries; Flatpak downloads its GNOME runtime separately.
+- All four Linux packaging/checksum jobs passed the pre-release pull-request checks, alongside desktop authentication, Android phone and TV builds, TV emulator, iOS Kotlin, release policy and source-security checks. Full Linux installation, audio/video presentation, desktop environments and sustained playback still need field validation on representative distributions.
+- Existing Windows and Android install packages and account data remain unchanged by the Linux packaging integration. This release does not add a public iOS App Store build.
+
 ## Starlit 1.18.0
 
 ### Android TV and Google TV
