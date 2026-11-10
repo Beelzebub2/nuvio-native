@@ -8,7 +8,7 @@
 
 ### Compatibility and limitations
 
-- Linux installers currently target **x86_64**. X11 or a working XWayland session is required for the embedded native player. DEB, RPM and AppImage installations depend on compatible system media/graphics libraries; Flatpak downloads its GNOME runtime separately.
+- Linux installers currently target **x86_64** and are distributed as GitHub Release downloads, not through configured APT/DNF repositories or Flathub. X11 or a working XWayland session is required for the embedded native player. DEB, RPM and AppImage installations depend on compatible system media/graphics libraries; Flatpak downloads its GNOME runtime separately.
 - All four Linux packaging/checksum jobs passed the pre-release pull-request checks, alongside desktop authentication, Android phone and TV builds, TV emulator, iOS Kotlin, release policy and source-security checks. Full Linux installation, audio/video presentation, desktop environments and sustained playback still need field validation on representative distributions.
 - Existing Windows and Android install packages and account data remain unchanged by the Linux packaging integration. This release does not add a public iOS App Store build.
 
