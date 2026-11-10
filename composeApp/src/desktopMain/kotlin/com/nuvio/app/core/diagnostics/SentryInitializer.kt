@@ -94,7 +94,8 @@ object SentryInitializer {
         options.isEnableShutdownHook = true
         options.isEnableEventSizeLimiting = true
         options.tracesSampleRate = 0.0
-        options.setMaxBreadcrumbs(50)
+        // Never attach a user's navigation or request timeline to crash reports.
+        options.setMaxBreadcrumbs(0)
         options.cacheDirPath = DesktopStorage.cacheDir.resolve("sentry").toString()
         options.addInAppInclude("com.nuvio.app")
         options.setIgnoredErrors(SentryEventSanitizer.ignoredIssueText)

@@ -1,10 +1,10 @@
 <resources>
     <string name="auth_google_sign_in_failed">N?o foi poss?vel iniciar sess?o com o Google. Tenta novamente.</string>
     <string name="auth_sign_up_pending_confirmation">Verifica a tua caixa de entrada e confirma o e-mail antes de iniciares sess?o.</string>
-    <string name="settings_advanced_usage_analytics">Estatísticas de utilização</string>
+    <string name="settings_advanced_usage_analytics">Diagnósticos anónimos</string>
     <string name="settings_root_privacy_section">PRIVACIDADE E DIAGNÓSTICOS</string>
     <string name="compose_settings_root_privacy_policy_description">Sabe como o Starlit trata os teus dados</string>
-    <string name="settings_advanced_usage_analytics_subtitle">Versão, plataforma e utilização de funcionalidades com identificador aleatório da instalação. Desativado até autorizares.</string>
+    <string name="settings_advanced_usage_analytics_subtitle">Contagens opcionais de erros, avisos e fiabilidade por versão e plataforma. Sem histórico de utilização nem ID persistente.</string>
     <string name="settings_advanced_sentry_reports">Relatórios de falhas (Sentry)</string>
     <string name="settings_advanced_sentry_reports_subtitle">Envia relatórios de falhas e bloqueios (ANR) com informação técnica limitada. Desativado até autorizares.</string>
     <string name="settings_advanced_sentry_reports_subtitle_desktop">Envia relatórios de falhas com informação técnica limitada. Desativado até autorizares.</string>
@@ -18,8 +18,8 @@
     <string name="sentry_help_body">Os relatórios são agrupados por versão, modelo do dispositivo, versão do Android e rasto de erros para corrigirmos primeiro as falhas mais frequentes.</string>
     <string name="sentry_help_body_desktop">Os relatórios são agrupados por versão, sistema operativo, arquitetura e rasto de erros para corrigirmos primeiro as falhas mais frequentes.</string>
     <string name="sentry_sent_title">Enviado</string>
-    <string name="sentry_sent_body">Falhas, bloqueios (ANR), rastos de erros, versão, tipo de compilação, variante, informações do dispositivo e sistema, e dados técnicos de rede limitados (método, domínio, caminho, estado, duração e tipo de erro).</string>
-    <string name="sentry_sent_body_desktop">Erros não tratados, rastos de erros, versão, sistema operativo, arquitetura, informações do Java e registos técnicos limitados.</string>
+    <string name="sentry_sent_body">Falhas e bloqueios (ANR) com autorização, rastos de erros, versão e dados técnicos do dispositivo e sistema. Sem URLs nem histórico de navegação.</string>
+    <string name="sentry_sent_body_desktop">Erros não tratados com autorização, rastos, versão, sistema operativo, arquitetura e Java. Sem histórico de navegação.</string>
     <string name="sentry_not_sent_title">Não enviado</string>
     <string name="sentry_not_sent_body">Palavras-passe, tokens de acesso ou atualização, conteúdos dos pedidos e respostas, cabeçalhos, cookies, capturas de ecrã, hierarquia da interface, reprodução de sessões, dados de diagnóstico brutos e parâmetros ou fragmentos dos URLs de streams.</string>
     <string name="sentry_keep_enabled">Manter ativo</string>
@@ -28,11 +28,11 @@
     <string name="diagnostics_consent_title">Diagnóstico opcional</string>
     <string name="diagnostics_consent_description">O Starlit funciona da mesma forma, escolhas o que escolheres. Ambas as opções ficam desligadas até as ativares. Podes alterá-las em %1$s, na secção %2$s.</string>
     <string name="diagnostics_consent_description_single">O Starlit funciona da mesma forma, escolhas o que escolheres. Esta opção fica desligada até a ativares. Podes alterá-la em %1$s, na secção %2$s.</string>
-    <string name="diagnostics_consent_usage">Estatísticas de utilização</string>
-    <string name="diagnostics_consent_usage_detail">Versão da aplicação, plataforma e frequência de utilização dos ecrãs, reprodução e transferências. Um identificador aleatório da instalação é reposto quando desativas esta opção.</string>
+    <string name="diagnostics_consent_usage">Diagnósticos anónimos</string>
+    <string name="diagnostics_consent_usage_detail">Aberturas da aplicação; Erros técnicos, avisos e resultados de reprodução e transferências por versão e plataforma. Sem registo de ecrãs nem ID persistente.</string>
     <string name="diagnostics_consent_crashes">Relatórios de falhas (Sentry)</string>
     <string name="diagnostics_consent_crashes_detail">Quando o Starlit falha, os detalhes do erro, a versão e as informações do dispositivo são enviados para o Sentry para podermos corrigir o problema.</string>
-    <string name="diagnostics_consent_privacy">Não inclui títulos, pesquisas, identificadores de conta nem endereços de streams. Os dados são conservados até 30 dias.</string>
+    <string name="diagnostics_consent_privacy">Sem títulos, pesquisas, contas, URLs ou registos brutos. Um token temporário limita abusos; os dados são guardados até 30 dias.</string>
     <string name="diagnostics_consent_not_now">Não partilhar</string>
     <string name="diagnostics_consent_save">Guardar escolhas</string>
     <string name="auth_google_sign_in">Iniciar sessão com o Google</string>

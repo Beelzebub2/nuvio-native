@@ -58,7 +58,9 @@ object SentryInitializer {
             options.isAttachScreenshot = false
             options.isAttachViewHierarchy = false
             options.tracesSampleRate = 0.0
-            options.setMaxBreadcrumbs(50)
+            // Even SDK-provided breadcrumbs can indirectly reveal activity.
+            // Crash diagnostics need stack traces, not a navigation timeline.
+            options.setMaxBreadcrumbs(0)
             options.setIgnoredErrors(droppedIssueText)
             options.setIgnoredTransactions(droppedIssueText)
             options.setTraceOptionsRequests(false)

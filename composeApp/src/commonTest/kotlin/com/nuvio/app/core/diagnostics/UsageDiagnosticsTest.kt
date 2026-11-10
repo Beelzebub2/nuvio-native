@@ -27,13 +27,21 @@ class UsageDiagnosticsTest {
     }
 
     @Test
-    fun eventNamesCannotContainMediaOrUserValues() {
+    fun eventNamesAreFixedHealthSignalsAndNeverRecordNavigation() {
         val names = UsageEvent.entries.map { it.wireName }
         assertEquals(names.size, names.distinct().size)
         assertTrue(names.all { it.matches(Regex("[a-z_]+")) })
-        assertTrue("app_open" in names)
-        assertTrue("playback_failed" in names)
-        assertTrue("download_completed" in names)
+        assertEquals(
+            setOf(
+                "app_open", "playback_ready", "playback_failed", "playback_start_slow",
+                "torrent_engine_failed", "download_completed", "download_failed",
+                "download_retry_warning", "download_quota_warning",
+            ),
+            names.toSet(),
+        )
+        assertFalse(names.any { it.startsWith("screen_") })
+        assertFalse("playback_opened" in names)
+        assertFalse("download_queued" in names)
     }
 
     @Test

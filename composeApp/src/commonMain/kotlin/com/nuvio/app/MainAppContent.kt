@@ -255,15 +255,6 @@ internal fun MainAppContent(
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
         var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
-        LaunchedEffect(selectedTab) {
-            val event = when (selectedTab) {
-                AppScreenTab.Home -> UsageEvent.Home
-                AppScreenTab.Search -> UsageEvent.Search
-                AppScreenTab.Library, AppScreenTab.WatchLater, AppScreenTab.MyAnimeList -> UsageEvent.Library
-                AppScreenTab.Settings -> UsageEvent.Settings
-            }
-            UsageDiagnostics.track(event)
-        }
         var searchFocusRequestCount by remember { mutableStateOf(0) }
         val homeScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val searchScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -276,11 +267,6 @@ internal fun MainAppContent(
             warmProfileBoundRepositories()
         }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
-        LaunchedEffect(currentRoute) {
-            if (currentRoute is PlayerRoute) {
-                UsageDiagnostics.track(UsageEvent.PlaybackOpened)
-            }
-        }
         LaunchedEffect(ownsAppRuntime) {
             if (!ownsAppRuntime) return@LaunchedEffect
             var previous: Map<String, DownloadStatus>? = null
@@ -290,7 +276,6 @@ internal fun MainAppContent(
                     for (item in state.items) {
                         val old = before[item.id]
                         val event = when {
-                            old == null && item.status == DownloadStatus.Downloading -> UsageEvent.DownloadQueued
                             old != null && old != DownloadStatus.Completed && item.status == DownloadStatus.Completed -> UsageEvent.DownloadCompleted
                             old != null && old != DownloadStatus.Failed && item.status == DownloadStatus.Failed -> UsageEvent.DownloadFailed
                             else -> null
