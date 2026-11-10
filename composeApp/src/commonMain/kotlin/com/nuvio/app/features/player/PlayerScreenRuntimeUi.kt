@@ -1989,6 +1989,12 @@ private fun BoxScope.RenderPlaybackOverlays(
 
 @Composable
 private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
+    val localSubtitlePickerTitle = stringResource(Res.string.player_local_subtitle_choose)
+    val unsupportedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unsupported)
+    val unreadableLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unreadable)
+    val oversizedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_oversized)
+    val failedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_failed)
+    val playerNotReadyMessage = stringResource(Res.string.player_local_subtitle_player_not_ready)
     PlayerScreenModalHosts(
         pendingP2pSwitch = pendingP2pSwitch,
         onPendingP2pSwitchChanged = { pendingP2pSwitch = it },
@@ -2021,12 +2027,47 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         subtitleDelayMs = subtitleDelayMs,
         selectedAddonSubtitle = selectedAddonSubtitle,
         subtitleAutoSyncState = subtitleAutoSyncState,
+        localSubtitleName = selectedLocalSubtitleName,
+        canChooseLocalSubtitle = playerController != null && !isChoosingLocalSubtitle,
         onBuiltInSubtitleTrackSelected = { index ->
             selectUserSubtitleTrack(index)
         },
         onAddonSubtitleSelected = { addon ->
             selectUserAddonSubtitle(addon)
         },
+        onChooseLocalSubtitle = {
+            if (!isChoosingLocalSubtitle) {
+                val requestedPlaybackKey = activePlaybackKey
+                isChoosingLocalSubtitle = true
+                scope.launch {
+                    try {
+                        val result = chooseLocalSubtitleFile(localSubtitlePickerTitle)
+                        // A file chooser can outlive the stream or episode that opened it.
+                        if (activePlaybackKey != requestedPlaybackKey) return@launch
+                        when (result) {
+                            is LocalSubtitleFileResult.Selected -> {
+                                if (!selectUserLocalSubtitleFile(result)) {
+                                    NuvioToastController.show(playerNotReadyMessage)
+                                }
+                            }
+                            is LocalSubtitleFileResult.Rejected -> {
+                                val message = when (result.reason) {
+                                    LocalSubtitleFileError.UNSUPPORTED_FORMAT -> unsupportedLocalSubtitleMessage
+                                    LocalSubtitleFileError.UNREADABLE -> unreadableLocalSubtitleMessage
+                                    LocalSubtitleFileError.TOO_LARGE -> oversizedLocalSubtitleMessage
+                                    LocalSubtitleFileError.PICKER_FAILED -> failedLocalSubtitleMessage
+                                }
+                                NuvioToastController.show(message)
+                            }
+                            LocalSubtitleFileResult.Cancelled -> Unit
+                        }
+                    } finally {
+                        isChoosingLocalSubtitle = false
+                    }
+                }
+            }
+        },
+        onRemoveLocalSubtitle = { removeUserLocalSubtitleFile() },
         onFetchAddonSubtitles = { fetchAddonSubtitlesForActiveItem() },
         onSubtitleStyleChanged = PlayerSettingsRepository::setSubtitleStyle,
         onSubtitleDelayChanged = { delayMs -> setSubtitleDelay(delayMs) },

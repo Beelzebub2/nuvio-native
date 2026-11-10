@@ -256,6 +256,8 @@ internal class PlayerScreenRuntime(
     var selectedAudioIndex by mutableStateOf(-1)
     var selectedSubtitleIndex by mutableStateOf(-1)
     var selectedAddonSubtitleId by mutableStateOf<String?>(null)
+    var localSubtitleSelection by mutableStateOf<SessionLocalSubtitleSelection?>(null)
+    var isChoosingLocalSubtitle by mutableStateOf(false)
     var useCustomSubtitles by mutableStateOf(false)
     var preferredAudioSelectionApplied by mutableStateOf(false)
     var appliedAudioPreferences: AppliedAudioPreferences? = null

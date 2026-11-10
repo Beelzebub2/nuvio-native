@@ -542,6 +542,14 @@
     <string name="compose_player_subs">Subs</string>
     <string name="compose_player_subtitle_delay">Subtitle Delay</string>
     <string name="compose_player_subtitles">Subtitles</string>
+    <string name="player_local_subtitle_label">Local file</string>
+    <string name="player_local_subtitle_choose">Open subtitle file</string>
+    <string name="player_local_subtitle_remove">Remove file</string>
+    <string name="player_local_subtitle_unsupported">Choose an SRT, ASS, SSA, or VTT subtitle file.</string>
+    <string name="player_local_subtitle_unreadable">This subtitle file is empty, missing, or cannot be read.</string>
+    <string name="player_local_subtitle_oversized">Subtitle files must be 16 MiB or smaller.</string>
+    <string name="player_local_subtitle_failed">Could not open the file picker. Please try again.</string>
+    <string name="player_local_subtitle_player_not_ready">The player is not ready to load a subtitle file.</string>
     <string name="compose_player_text_opacity">Text Opacity</string>
     <string name="compose_player_brightness_level">Brightness %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
