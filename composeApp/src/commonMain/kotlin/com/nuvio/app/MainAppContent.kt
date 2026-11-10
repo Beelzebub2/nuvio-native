@@ -731,6 +731,7 @@ internal fun MainAppContent(
         }
     }
     var resumePromptItem by remember { mutableStateOf<ContinueWatchingItem?>(null) }
+    var pendingExternalAddonUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var lastExternalPlayerLaunch by remember { mutableStateOf<PlayerLaunch?>(null) }
     val activePlaybackProfileId = profileState.activeProfile?.profileIndex ?: ProfileRepository.activeProfileId
     val launchExternalPlayer = rememberExternalPlayerLauncher { result ->
@@ -787,23 +788,9 @@ internal fun MainAppContent(
                     }
 
                     is AppDeepLink.AddonInstall -> {
-                        activateTab(AppScreenTab.Settings)
-                        navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) {
-                            launchSingleTop = true
-                        }
-                        NuvioToastController.show(getString(Res.string.addons_modal_checking_title))
-                        AddonRepository.initialize()
-                        when (val result = AddonRepository.addAddon(deepLink.manifestUrl)) {
-                            is AddAddonResult.Success -> {
-                                NuvioToastController.show(
-                                    getString(Res.string.addons_modal_success_message, result.manifest.name),
-                                )
-                            }
-
-                            is AddAddonResult.Error -> {
-                                NuvioToastController.show(result.message)
-                            }
-                        }
+                        // An OS/deep link is an untrusted request, not permission to
+                        // enable and sync a third-party addon. The user must opt in.
+                        pendingExternalAddonUrl = deepLink.manifestUrl
                         AppDeepLinkRepository.markConsumed(deepLink)
                     }
 
@@ -2156,6 +2143,36 @@ internal fun MainAppContent(
             TrackingMembershipRemovalConfirmationHost(
                 pending = pendingTrackingRemoval,
                 onPendingChange = { pendingTrackingRemoval = it },
+            )
+
+            NuvioStatusModal(
+                title = stringResource(Res.string.addons_link_confirmation_title),
+                message = stringResource(
+                    Res.string.addons_link_confirmation_message,
+                    pendingExternalAddonUrl?.let { if (it.length > 300) it.take(300) + "…" else it }.orEmpty(),
+                ),
+                isVisible = pendingExternalAddonUrl != null,
+                confirmText = stringResource(Res.string.addons_install_button),
+                dismissText = stringResource(Res.string.action_cancel),
+                onConfirm = {
+                    val approvedUrl = pendingExternalAddonUrl ?: return@NuvioStatusModal
+                    pendingExternalAddonUrl = null
+                    coroutineScope.launch {
+                        activateTab(AppScreenTab.Settings)
+                        navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) {
+                            launchSingleTop = true
+                        }
+                        NuvioToastController.show(getString(Res.string.addons_modal_checking_title))
+                        AddonRepository.initialize()
+                        when (val result = AddonRepository.addAddon(approvedUrl)) {
+                            is AddAddonResult.Success -> NuvioToastController.show(
+                                getString(Res.string.addons_modal_success_message, result.manifest.name),
+                            )
+                            is AddAddonResult.Error -> NuvioToastController.show(result.message)
+                        }
+                    }
+                },
+                onDismiss = { pendingExternalAddonUrl = null },
             )
 
             NuvioStatusModal(

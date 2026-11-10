@@ -22,6 +22,14 @@ import kotlin.test.assertTrue
 
 class PlayerScreenRuntimeStateTest {
 
+    @Test
+    fun terminalStopReportsEofAsCompleteAndNeverDowngradesCompletedPlayback() {
+        assertEquals(100f, resolveStopScrobblePercent(50f, isEnded = true, hasSentCompletionScrobble = false))
+        assertNull(resolveStopScrobblePercent(50f, isEnded = true, hasSentCompletionScrobble = true))
+        assertNull(resolveStopScrobblePercent(45f, isEnded = false, hasSentCompletionScrobble = true))
+        assertEquals(45f, resolveStopScrobblePercent(45f, isEnded = false, hasSentCompletionScrobble = false))
+    }
+
     @AfterTest
     fun restorePluginSearchState() {
         PluginRepository.setLocalPluginSearchPaused(false)

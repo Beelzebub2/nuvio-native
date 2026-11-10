@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Properties
+import java.util.UUID
 import javax.inject.Inject
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -1440,7 +1441,17 @@ tasks.matching {
 tasks.withType<Test>().configureEach {
     // Robolectric runtime JAR downloads from repo1.maven.org are rate-limited on hosted CI.
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
-    systemProperty("nuvio.dataDir", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
+    // Desktop tests mutate account/download preferences. A fixed test-data
+    // directory leaks fixtures into later runs and makes repeat executions fail.
+    // Allocate a fresh task-owned directory before launching each test worker;
+    // never point account-cleanup tests at the normal user profile.
+    doFirst {
+        val isolatedDataDir = temporaryDir.resolve("app-data-${UUID.randomUUID()}")
+        check(isolatedDataDir.mkdirs() || isolatedDataDir.isDirectory) {
+            "Unable to create isolated desktop test storage"
+        }
+        systemProperty("nuvio.dataDir", isolatedDataDir.absolutePath)
+    }
     systemProperty("nuvio.airingSmoke", providers.gradleProperty("nuvio.airingSmoke").orElse("false").get())
     systemProperty("nuvio.updateSmoke", providers.gradleProperty("nuvio.updateSmoke").orElse("false").get())
 }
@@ -1527,7 +1538,7 @@ compose.desktop {
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon-transparent.png"))
-                debMaintainer = "contact@nuvio.tv"
+                debMaintainer = "65181309+Beelzebub2@users.noreply.github.com"
                 shortcut = true
                 menuGroup = desktopPackageName
                 appCategory = "AudioVideo"
@@ -1821,16 +1832,22 @@ if (isLinuxHost) {
             doLast {
                 val effectiveLinuxPackageName = linuxPackageName.orNull ?: packageName.get().lowercase()
                 val effectiveLinuxAppRelease = linuxAppRelease.orNull ?: "1"
-                val artifactPrefix =
-                    "${effectiveLinuxPackageName}_${packageVersion.get()}-${effectiveLinuxAppRelease}_"
+                // jpackage emits <name>_<version>_<arch>.deb on Ubuntu,
+                // but some toolchains insert the Linux package release suffix.
+                // Match only the exact requested version in either layout.
+                val artifactPrefixes = listOf(
+                    "${effectiveLinuxPackageName}_${packageVersion.get()}_",
+                    "${effectiveLinuxPackageName}_${packageVersion.get()}-${effectiveLinuxAppRelease}_",
+                )
                 val debs = destinationDir.get().asFile
                     .listFiles { file ->
-                        file.isFile && file.name.startsWith(artifactPrefix) && file.extension == "deb"
+                        file.isFile && file.extension == "deb" &&
+                            artifactPrefixes.any { file.name.startsWith(it) }
                     }
                     ?.sortedBy { it.name }
                     .orEmpty()
                 require(debs.size == 1) {
-                    "Expected exactly one current Linux DEB matching $artifactPrefix in " +
+                    "Expected one current Linux DEB matching $artifactPrefixes in " +
                         "${destinationDir.get().asFile.absolutePath}, found ${debs.size}."
                 }
                 val deb = debs.single()
