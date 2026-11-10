@@ -16,6 +16,12 @@ class AndroidBatchDownloadDialogTest {
     )
     private val meta = MetaDetails("show", "series", "Series", videos = episodes)
 
+    @Test fun batchDefaultsToBothDirectAndTorrentSources() {
+        assertEquals("Any", androidBatchSourceSelection(null, DownloadQuality.Highest).transport)
+        assertEquals("Torrents", androidBatchSourceSelection("addon-id", "1080p", "Torrents").transport)
+        assertEquals("addon-id", androidBatchSourceSelection("addon-id", "1080p", "Torrents").providerId)
+    }
+
     @Test fun onlyAlreadyReleasedEpisodesCanBeQueued() {
         val available = androidBatchAvailableEpisodes(meta, episodes, emptyList(), "2026-11-01")
         assertEquals(listOf("show:1:1", "show:1:2"), available.map { it.id })
