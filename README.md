@@ -10,11 +10,12 @@
 Made by [Beelzebub2](https://github.com/Beelzebub2) · Based on [Nuvio](https://github.com/NuvioMedia/NuvioDesktop) by Tapframe and friends
 
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3965D4?style=flat-square)](https://github.com/Beelzebub2/nuvio-native/releases/latest)
+[![Linux x86-64](https://img.shields.io/badge/Linux-x86--64-3965D4?style=flat-square)](https://github.com/Beelzebub2/nuvio-native/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-B250EF?style=flat-square)](LICENSE)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-45D6EB?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-3965D4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/compose-multiplatform/)
 
-**[Download for Windows](https://github.com/Beelzebub2/nuvio-native/releases/latest)** · [What's new](docs/RELEASE-NOTES.md) · [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md)
+**[Download for Windows and Linux](https://github.com/Beelzebub2/nuvio-native/releases/latest)** · [What's new](docs/RELEASE-NOTES.md) · [Install and build guide](docs/PRIVATE-WINDOWS-BUILD.md)
 
 </div>
 
@@ -56,6 +57,17 @@ Starlit runs on Windows 10 and 11 (64-bit).
 3. Starlit checks public GitHub releases for updates at startup, every six hours, and from Settings → About. GitHub CLI sign-in is not needed.
 
 Settings, profiles and your library live in `%APPDATA%\NuvioNative` and are kept across updates. The [install and build guide](docs/PRIVATE-WINDOWS-BUILD.md) covers silent installs, update verification, and moving over from Nuvio Native.
+
+### Linux desktop (x86_64)
+
+Starting with the first release that includes Linux binaries, the same [GitHub Releases](https://github.com/Beelzebub2/nuvio-native/releases/latest) page provides four packages named `Starlit-Linux-x86_64-<version>`:
+
+- **.deb** for Debian/Ubuntu derivatives (`sudo apt install ./Starlit-Linux-x86_64-<version>.deb`).
+- **.rpm** for RPM-based distributions (`sudo dnf install ./Starlit-Linux-x86_64-<version>.rpm`).
+- **.AppImage** for direct launch (mark executable before running); system libmpv and desktop graphics libraries may still be required.
+- **.flatpak** for a sandboxed installation (`flatpak install --user ./Starlit-Linux-x86_64-<version>.flatpak`). The GNOME runtime is downloaded by Flatpak if absent. Bundles installed from GitHub must be updated manually unless a Flatpak repository is configured. Starlit uses its own Flatpak app ID so the original Nuvio installation is not replaced.
+
+The native Linux player embeds libmpv through X11; Wayland sessions need working XWayland support. These are **x86_64 packages only**. Check the assets of a particular release before installing; older releases remain Windows/Android-only.
 
 ## Build from source
 

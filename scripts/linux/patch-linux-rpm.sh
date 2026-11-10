@@ -61,9 +61,7 @@ rpm2cpio "$rpm_path" | (cd "$payload_dir" && cpio -idm --quiet)
 
 # Ensure a launcher is present for desktop integration. Some jpackage/rpm
 # combinations may omit it; in that case, synthesize a minimal entry.
-if ! nuvio_linux_desktop_entry_exists "$payload_dir"; then
-    nuvio_linux_write_desktop_entry "$payload_dir"
-fi
+nuvio_linux_write_desktop_entry "$payload_dir"
 nuvio_linux_ensure_startup_wm_class "$payload_dir"
 nuvio_linux_ensure_uri_handler "$payload_dir"
 
@@ -81,10 +79,10 @@ if [[ "$license" == "(none)" || -z "$license" ]]; then
     license="Proprietary"
 fi
 if [[ "$vendor" == "(none)" || -z "$vendor" ]]; then
-    vendor="Nuvio Media"
+    vendor="Beelzebub2"
 fi
 if [[ "$summary" == "(none)" || -z "$summary" ]]; then
-    summary="Nuvio"
+    summary="Starlit"
 fi
 if [[ "$url" == "(none)" ]]; then
     url=""

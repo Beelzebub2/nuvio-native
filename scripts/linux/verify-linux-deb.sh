@@ -26,7 +26,7 @@ if [[ ! -f "$deb" ]]; then
     exit 1
 fi
 
-expected_maintainer="Nuvio Media <contact@nuvio.tv>"
+expected_maintainer="Beelzebub2 <65181309+Beelzebub2@users.noreply.github.com>"
 maintainer="$(dpkg-deb -f "$deb" Maintainer)"
 if [[ "$maintainer" != "$expected_maintainer" ]]; then
     echo "Unexpected Maintainer: '$maintainer'" >&2
