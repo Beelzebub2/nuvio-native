@@ -157,11 +157,18 @@ export class AuthAuditReporter {
 
 export async function exportSuccessfulLogins(db, reporter, geoLookup = () => null, now = Date.now()) {
   const state = (await db.query(
-    "SELECT cursor_time, cursor_id FROM starlit_analytics.export_cursor WHERE source='success'",
+    `SELECT to_char(cursor_time AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time, cursor_id
+     FROM starlit_analytics.export_cursor WHERE source='success'`,
   )).rows[0];
   if (!state) throw new Error('Missing success audit cursor');
   const rows = (await db.query(
-    'SELECT event_id,login_at,login_method,ip_address FROM starlit_analytics.login_successes($1,$2,$3)',
+    // node-postgres converts TIMESTAMPTZ to a JavaScript Date, losing its
+    // microseconds. Preserve the exact database timestamp for the cursor.
+    `SELECT event_id,
+            to_char(login_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS login_at,
+            login_method, ip_address
+     FROM starlit_analytics.login_successes($1,$2,$3)`,
     [state.cursor_time, state.cursor_id || ZERO_UUID, 100],
   )).rows;
   if (!rows.length) return 0;
