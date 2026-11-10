@@ -42,6 +42,8 @@ import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.SourceResultsFilterControls
 import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -459,6 +461,11 @@ internal fun RemoteSourcePickerDialog(
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
     var noResponse by remember(requestId) { mutableStateOf(false) }
+    var sourceFilters by remember(requestId) { mutableStateOf(SourceResultsFilters()) }
+    val filterAvailability = remember(state.sources) { remoteSourceFilterAvailability(state.sources) }
+    val filteredSources = remember(state.sources, sourceFilters) {
+        filterRemoteSourceChoices(state.sources, sourceFilters)
+    }
     LaunchedEffect(requestId, matches, connected) {
         if (matches) {
             noResponse = false
@@ -508,7 +515,21 @@ internal fun RemoteSourcePickerDialog(
                 DialogHint(state.message)
             }
             if (matches && state.sources.isNotEmpty() && state.phase in setOf("searching", "ready")) {
-                val recommended = state.sources.firstOrNull { it.recommended }
+                SourceResultsFilterControls(
+                    filters = sourceFilters,
+                    availability = filterAvailability,
+                    onFiltersChange = { sourceFilters = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (filteredSources.isEmpty()) {
+                    DialogHint(stringResource(Res.string.source_filter_no_matches))
+                    Text(
+                        stringResource(Res.string.source_filter_adjust),
+                        color = tokens.colors.textSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                val recommended = filteredSources.firstOrNull { it.recommended }
                 Column(
                     Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())
                         .testTag("remote-initial-sources"),
@@ -548,20 +569,21 @@ internal fun RemoteSourcePickerDialog(
                             onClick = { DesktopRemote.selectPhoneSource(recommended.id) },
                         )
                     }
-                    state.sources.filterNot { it.recommended }.forEach { source ->
+                    filteredSources.filterNot { it.recommended }.forEach { source ->
                         RemoteSourceOption(
                             source = source,
                             isRecommended = false,
                             onClick = { DesktopRemote.selectPhoneSource(source.id) },
                         )
                     }
-                    if (state.sources.any { it.qualityStars != null }) {
+                    if (filteredSources.any { it.qualityStars != null }) {
                         Text(
                             stringResource(Res.string.remote_source_quality_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = tokens.colors.textMuted,
                         )
                     }
+                }
                 }
             }
         }

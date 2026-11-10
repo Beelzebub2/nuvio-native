@@ -254,15 +254,18 @@ internal fun TabletStreamsLayout(
                         .fillMaxSize()
                         .padding(12.dp),
                 ) {
-                    var qualityFilter by remember(uiState.requestToken) { mutableStateOf<StreamQuality?>(null) }
+                    var sourceFilters by remember(uiState.requestToken) { mutableStateOf(SourceResultsFilters()) }
+                    val filterAvailability = remember(uiState.filteredGroups) {
+                        sourceFilterAvailability(uiState.allStreams.map { it.sourceFilterMetadata() })
+                    }
                     val best = remember(uiState, debridEnabled) { bestMatch(uiState, debridEnabled) }
                     DesktopSourcesHeader(
                         uiState = uiState,
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
-                        qualityFilter = qualityFilter,
-                        onQualityFilterChange = { qualityFilter = it },
-                        best = best,
+                        qualityFilter = sourceFilters.quality,
+                        onQualityFilterChange = { sourceFilters = sourceFilters.copy(quality = it) },
+                        best = best?.takeIf { it.stream.sourceFilterMetadata().matches(sourceFilters) },
                         onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
                         onStreamSecondaryClick = onStreamSecondaryClick,
                     )
@@ -272,6 +275,12 @@ internal fun TabletStreamsLayout(
                         selectedFilter = uiState.selectedFilter,
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
+                    )
+                    SourceResultsFilterControls(
+                        filters = sourceFilters,
+                        availability = filterAvailability,
+                        onFiltersChange = { sourceFilters = it },
+                        showQuality = false,
                     )
 
                     StreamList(
@@ -285,7 +294,8 @@ internal fun TabletStreamsLayout(
                         resumeProgressFraction = resumeProgressFraction,
                         modifier = Modifier.weight(1f),
                         groupByQuality = true,
-                        qualityFilter = qualityFilter,
+                        qualityFilter = sourceFilters.quality,
+                        sourceFilters = sourceFilters,
                     )
                 }
             }
@@ -315,6 +325,10 @@ private fun LegacyTabletStreamsLayout(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var sourceFilters by remember(uiState.requestToken) { mutableStateOf(SourceResultsFilters()) }
+    val filterAvailability = remember(uiState.filteredGroups) {
+        sourceFilterAvailability(uiState.allStreams.map { it.sourceFilterMetadata() })
+    }
     val hazeState = rememberHazeState()
     val tabletBackdrop = remember(background, poster) {
         background ?: poster
@@ -444,6 +458,11 @@ private fun LegacyTabletStreamsLayout(
                             onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                             onRefresh = onRefresh,
                         )
+                        SourceResultsFilterControls(
+                            filters = sourceFilters,
+                            availability = filterAvailability,
+                            onFiltersChange = { sourceFilters = it },
+                        )
 
                         ActiveScrapersStatusBlock(
                             groups = uiState.groups,
@@ -460,6 +479,7 @@ private fun LegacyTabletStreamsLayout(
                             resumePositionMs = resumePositionMs,
                             resumeProgressFraction = resumeProgressFraction,
                             modifier = Modifier.weight(1f),
+                            sourceFilters = sourceFilters,
                         )
                     }
                 }

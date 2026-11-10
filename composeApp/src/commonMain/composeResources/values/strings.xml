@@ -2043,6 +2043,17 @@
     <string name="streams_no_direct_link">No direct stream link available</string>
     <string name="streams_no_metadata">No metadata available</string>
     <string name="streams_refresh">Refresh streams</string>
+    <string name="source_filter_search">Search provider, release, codec...</string>
+    <string name="source_filter_hdr">HDR</string>
+    <string name="source_filter_atmos">Atmos</string>
+    <string name="source_filter_surround">Surround</string>
+    <string name="source_filter_seeds_ten">10+ seeds</string>
+    <string name="source_filter_seeds_fifty">50+ seeds</string>
+    <string name="source_filter_size_two">Up to 2 GiB</string>
+    <string name="source_filter_size_five">Up to 5 GiB</string>
+    <string name="source_filter_clear">Clear filters</string>
+    <string name="source_filter_no_matches">No matching sources</string>
+    <string name="source_filter_adjust">Try a different search or clear some filters.</string>
     <string name="streams_resume_from_percent">Resume from %1$d%</string>
     <string name="streams_resume_from_time">Resume from %1$s</string>
     <string name="streams_size">SIZE %1$s</string>
