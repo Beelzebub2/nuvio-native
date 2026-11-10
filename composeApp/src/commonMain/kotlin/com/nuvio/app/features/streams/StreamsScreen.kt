@@ -471,6 +471,10 @@ private fun MobileStreamsLayout(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var sourceFilters by remember(uiState.requestToken) { mutableStateOf(SourceResultsFilters()) }
+    val filterAvailability = remember(uiState.filteredGroups) {
+        sourceFilterAvailability(uiState.allStreams.map { it.sourceFilterMetadata() })
+    }
     Box(modifier = modifier.fillMaxSize()) {
         if (backgroundMode == StreamBackgroundMode.Cinematic && heroArtwork != null) {
             AsyncImage(
@@ -544,6 +548,11 @@ private fun MobileStreamsLayout(
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
                     )
+                    SourceResultsFilterControls(
+                        filters = sourceFilters,
+                        availability = filterAvailability,
+                        onFiltersChange = { sourceFilters = it },
+                    )
 
                     StreamList(
                         uiState = uiState,
@@ -555,6 +564,7 @@ private fun MobileStreamsLayout(
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
                         modifier = Modifier.weight(1f),
+                        sourceFilters = sourceFilters,
                     )
                 }
             }
@@ -810,10 +820,16 @@ internal fun StreamList(
     groupByQuality: Boolean = false,
     qualityFilter: StreamQuality? = null,
     excludedStream: StreamItem? = null,
+    sourceFilters: SourceResultsFilters = SourceResultsFilters(),
 ) {
-    val filteredGroups = uiState.filteredGroups
+    val originalGroups = uiState.filteredGroups
+    val effectiveFilters = if (qualityFilter != null) sourceFilters.copy(quality = qualityFilter) else sourceFilters
+    val filteredGroups = remember(originalGroups, effectiveFilters) {
+        filterStreamGroups(originalGroups, effectiveFilters)
+    }
     val hasGroups = filteredGroups.isNotEmpty()
     val hasAnyStreams = filteredGroups.any { it.streams.isNotEmpty() }
+    val hasUnfilteredStreams = originalGroups.any { it.streams.isNotEmpty() }
     val anyLoading = filteredGroups.any { it.isLoading }
     val otherQualityLabel = stringResource(Res.string.streams_quality_other)
     val streamSections = remember(filteredGroups, groupByQuality, qualityFilter, excludedStream, otherQualityLabel) {
@@ -849,6 +865,30 @@ internal fun StreamList(
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             when {
+                hasUnfilteredStreams && !hasAnyStreams && effectiveFilters.isActive -> {
+                    item(
+                        key = "streams_filtered_empty",
+                        contentType = STREAM_CONTENT_TYPE_EMPTY,
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                stringResource(Res.string.source_filter_no_matches),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                stringResource(Res.string.source_filter_adjust),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
                 hasGroups && anyLoading && !hasAnyStreams -> {
                     item(
                         key = "streams_loading",

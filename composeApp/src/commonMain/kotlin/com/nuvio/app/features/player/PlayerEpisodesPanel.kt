@@ -47,6 +47,10 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.SourceResultsFilterControls
+import com.nuvio.app.features.streams.sourceFilterAvailability
+import com.nuvio.app.features.streams.sourceFilterMetadata
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watching.application.WatchingState
@@ -442,6 +446,10 @@ private fun EpisodeStreamsPanelContent(
     val tokens = MaterialTheme.nuvio
     val episode = state.selectedEpisode ?: return
     val streamsUiState = state.streamsUiState
+    var sourceFilters by remember(episode.id, streamsUiState.requestToken) { mutableStateOf(SourceResultsFilters()) }
+    val availability = remember(streamsUiState.filteredGroups) {
+        sourceFilterAvailability(streamsUiState.allStreams.map { it.sourceFilterMetadata() })
+    }
 
     Column(modifier = modifier) {
         Row(
@@ -487,6 +495,11 @@ private fun EpisodeStreamsPanelContent(
             streamsUiState = streamsUiState,
             onFilterSelected = onFilterSelected,
         )
+        SourceResultsFilterControls(
+            filters = sourceFilters,
+            availability = availability,
+            onFiltersChange = { sourceFilters = it },
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -495,6 +508,7 @@ private fun EpisodeStreamsPanelContent(
             onStreamSelected = { stream -> onStreamSelected(stream, episode) },
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp),
+            sourceFilters = sourceFilters,
         )
     }
 }

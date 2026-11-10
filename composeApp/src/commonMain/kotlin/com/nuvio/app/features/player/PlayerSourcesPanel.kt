@@ -8,12 +8,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.SourceResultsFilterControls
+import com.nuvio.app.features.streams.sourceFilterAvailability
+import com.nuvio.app.features.streams.sourceFilterMetadata
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_close
 import nuvio.composeapp.generated.resources.compose_action_reload
@@ -39,6 +47,10 @@ fun PlayerSourcesPanel(
     modifier: Modifier = Modifier,
 ) {
     val tokens = MaterialTheme.nuvio
+    var sourceFilters by remember(streamsUiState.requestToken) { mutableStateOf(SourceResultsFilters()) }
+    val availability = remember(streamsUiState.filteredGroups) {
+        sourceFilterAvailability(streamsUiState.allStreams.map { it.sourceFilterMetadata() })
+    }
     val contentLabel = if (currentSeason != null && currentEpisode != null) {
         buildString {
             append(stringResource(Res.string.compose_player_episode_code_full, currentSeason, currentEpisode))
@@ -90,6 +102,11 @@ fun PlayerSourcesPanel(
                 streamsUiState = streamsUiState,
                 onFilterSelected = onFilterSelected,
             )
+            SourceResultsFilterControls(
+                filters = sourceFilters,
+                availability = availability,
+                onFiltersChange = { sourceFilters = it },
+            )
 
             Spacer(Modifier.height(16.dp))
 
@@ -100,6 +117,7 @@ fun PlayerSourcesPanel(
                 currentStreamUrl = currentStreamUrl,
                 currentStreamName = currentStreamName,
                 currentLabel = stringResource(Res.string.compose_player_playing),
+                sourceFilters = sourceFilters,
             )
         }
     }

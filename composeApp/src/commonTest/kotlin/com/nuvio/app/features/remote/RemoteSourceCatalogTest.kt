@@ -8,11 +8,21 @@ import com.nuvio.app.features.streams.StreamDebridCacheStatus
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.streams.StreamParser
+import com.nuvio.app.features.streams.StreamClientResolve
+import com.nuvio.app.features.streams.StreamClientResolveStream
+import com.nuvio.app.features.streams.StreamClientResolveRaw
+import com.nuvio.app.features.streams.StreamClientResolveParsed
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.SourceAudioFilter
+import com.nuvio.app.features.streams.SOURCE_GIB
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertSame
 
 class RemoteSourceCatalogTest {
     private fun source(
@@ -113,5 +123,55 @@ class RemoteSourceCatalogTest {
         val excluded = recommendedRemoteSources(autoplay, streams.drop(6), debridEnabled = false)
         assertFalse(excluded.streams.contains(streams[5]))
         assertEquals(streams[39], excluded.best?.stream)
+    }
+
+    @Test
+    fun remoteFilteringRetainsRecommendedHandleAndSelectionIdentity() {
+        val best = source(infoHash = "a".repeat(40), name = "4K HDR10 Atmos")
+            .copy(seeders = 85, behaviorHints = StreamBehaviorHints(videoSize = 2 * SOURCE_GIB))
+            .remoteSourceChoice("opaque-top", BestMatchReason.HighestQuality)
+        val other = source(infoHash = "b".repeat(40), name = "720p")
+            .remoteSourceChoice("opaque-low")
+        val filters = SourceResultsFilters(search = "provider 4k", minSeeders = 50, hdrOnly = true,
+            audio = SourceAudioFilter.ATMOS, maxSizeBytes = 2 * SOURCE_GIB)
+        val result = filterRemoteSourceChoices(listOf(best, other), filters)
+        assertEquals(listOf("opaque-top"), result.map { it.id })
+        assertSame(best, result.single())
+        assertTrue(result.single().recommended)
+        assertEquals(2, filterRemoteSourceChoices(listOf(best, other), SourceResultsFilters()).size)
+        assertTrue(filterRemoteSourceChoices(listOf(best, other), filters.copy(search = "does-not-exist")).isEmpty())
+    }
+
+    @Test
+    fun optionalRemoteMetadataSupportsReleaseCodecAudioSizeAndLegacyPayloads() {
+        val stream = source(name = "1080p source", infoHash = "a".repeat(40))
+            .copy(
+                behaviorHints = StreamBehaviorHints(videoSize = 3 * SOURCE_GIB),
+                clientResolve = StreamClientResolve(stream = StreamClientResolveStream(
+                    raw = StreamClientResolveRaw(parsed = StreamClientResolveParsed(
+                        group = "Release-Group https://private.example/secret",
+                        codec = "HEVC",
+                        hdr = listOf("Dolby Vision"),
+                        audio = listOf("Atmos"),
+                    )),
+                )),
+            )
+        val choice = stream.remoteSourceChoice("safe-id")
+        assertEquals("HEVC", choice.codec)
+        assertTrue(choice.hdr)
+        assertEquals(3 * SOURCE_GIB, choice.sizeBytes)
+        assertFalse(choice.release.orEmpty().contains("private.example"))
+        assertTrue(choice.sourceFilterMetadata().matches(SourceResultsFilters(search = "release hevc")))
+        assertTrue(choice.sourceFilterMetadata().matches(SourceResultsFilters(audio = SourceAudioFilter.ATMOS)))
+        assertTrue(remoteSourceFilterAvailability(listOf(choice)).hasSize)
+
+        val legacy = Json.decodeFromString<RemoteChoice>(
+            """{"id":"old-pc","label":"Provider 720p","quality":"720p"}""",
+        )
+        assertNull(legacy.codec)
+        assertNull(legacy.sizeBytes)
+        assertFalse(legacy.hdr)
+        assertEquals("old-pc",
+            filterRemoteSourceChoices(listOf(legacy), SourceResultsFilters(search = "provider 720p")).single().id)
     }
 }

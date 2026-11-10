@@ -28,6 +28,13 @@ internal data class RemoteChoice(
     val cached: Boolean = false,
     val recommended: Boolean = false,
     val recommendationReason: String? = null,
+    // Descriptive metadata only; optional to remain compatible with older desktop/phone peers.
+    val provider: String? = null,
+    val release: String? = null,
+    val codec: String? = null,
+    val audio: String? = null,
+    val hdr: Boolean = false,
+    val sizeBytes: Long? = null,
 )
 
 /** Track IDs are scoped to the current playback and include the player's logical track index. */
