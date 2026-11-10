@@ -40,6 +40,7 @@ import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.isReleasedBy
+import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.streams.streamAddonInstanceId
 import com.nuvio.app.features.streams.supportsStream
@@ -47,6 +48,13 @@ import com.nuvio.app.features.watchprogress.CurrentDateProvider
 
 internal fun androidBatchEpisodeKey(video: MetaVideo): String =
     "${video.season}:${video.episode}:${video.id}"
+
+/** Keep batch downloads transport-neutral by default; Android can save both file and torrent sources. */
+internal fun androidBatchSourceSelection(
+    providerId: String?,
+    quality: String,
+    transport: String = "Any",
+): DownloadSourceSelection = DownloadSourceSelection(providerId, quality, transport)
 
 /** Skip future episodes and existing tasks; failed tasks may be retried in a batch. */
 internal fun androidBatchAvailableEpisodes(
@@ -89,6 +97,7 @@ internal fun AndroidBatchDownloadDialog(
             .map(::androidBatchEpisodeKey).toSet())
     }
     var quality by remember { mutableStateOf(DownloadQuality.Highest) }
+    var transport by remember(meta.id) { mutableStateOf(androidBatchSourceSelection(null, DownloadQuality.Highest).transport) }
     val providers = remember(meta.id, allVideos) {
         buildList<Pair<String?, String>> {
             add(null to "Any provider")
@@ -167,6 +176,12 @@ internal fun AndroidBatchDownloadDialog(
                 Chip(label = value, selected = quality == value, onClick = { quality = value })
             }
         }
+        DialogSectionLabel("Source type")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Any", "Direct files", "Torrents").forEach { value ->
+                Chip(label = value, selected = transport == value, onClick = { transport = value })
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogSectionLabel("Provider", Modifier.weight(1f))
             Box {
@@ -191,7 +206,7 @@ internal fun AndroidBatchDownloadDialog(
                 }
             }
         }
-        DialogHint("Android saves direct video files inside Starlit's offline storage.")
+        DialogHint("Direct videos and torrents can be saved for offline playback. Torrent sources require P2P enabled in Settings.")
         DialogButtons {
             DialogButton(text = "Cancel", onClick = onDismiss)
             DialogButton(
@@ -199,11 +214,17 @@ internal fun AndroidBatchDownloadDialog(
                 style = DialogButtonStyle.Primary,
                 enabled = eligible.isNotEmpty(),
                 onClick = {
-                    val sourceMeta = if (movie) meta.copy(videos = allVideos) else meta
-                    val count = DownloadsRepository.enqueueBatch(sourceMeta, eligible,
-                        DownloadSourceSelection(provider, quality, "Direct files"))
-                    NuvioToastController.show("$count episode(s) queued in Downloads")
-                    onDismiss()
+                    P2pSettingsRepository.ensureLoaded()
+                    if (transport == "Torrents" &&
+                        (!P2pSettingsRepository.isVisible || !P2pSettingsRepository.uiState.value.p2pEnabled)) {
+                        NuvioToastController.show("Enable P2P in Settings to download torrent sources.")
+                    } else {
+                        val sourceMeta = if (movie) meta.copy(videos = allVideos) else meta
+                        val count = DownloadsRepository.enqueueBatch(sourceMeta, eligible,
+                            androidBatchSourceSelection(provider, quality, transport))
+                        NuvioToastController.show("$count episode(s) queued in Downloads")
+                        onDismiss()
+                    }
                 },
             )
         }
