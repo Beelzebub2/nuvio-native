@@ -80,15 +80,12 @@ case "$format" in
     cp -- "composeApp/build/compose/release-appimages/$name.AppImage" "$package"
     test -s "$package"
     chmod +x "$package"
-    # appimagetool already generates the matching zsync metadata when
-    # UPDATE_INFORMATION is embedded; keep its exact output and URL.
-    zsync_source="composeApp/build/compose/binaries/main-release/app/$name.AppImage.zsync"
-    if [[ ! -s "$zsync_source" ]]; then
-      echo "Missing appimagetool-generated zsync metadata: $zsync_source" >&2
-      exit 1
-    fi
-    cp -- "$zsync_source" "$package.zsync"
+    # Generate metadata at the release asset path with an explicit
+    # same-directory URL. appimagetool may generate its own zsync metadata
+    # in a tool-dependent location, so do not assume its output directory.
+    zsyncmake -u "$name.AppImage" -o "$package.zsync" "$package"
     test -s "$package.zsync"
+    grep -Fqx "URL: $name.AppImage" "$package.zsync"
     ;;
   flatpak)
     ./gradlew :composeApp:createReleaseDistributable "${gradle_args[@]}"
