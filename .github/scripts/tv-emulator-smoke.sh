@@ -2,11 +2,27 @@
 # Runs only with an ephemeral Android TV emulator and an anonymous test install.
 set -euo pipefail
 
-apk='tv-apk/tvApp-debug.apk'
-package='com.starlit.tv.debug'
+unsigned_apk='tv-apk/tvApp-release-unsigned.apk'
+package='com.starlit.tv'
 activity='com.starlit.tv.TelevisionActivity'
 
-test -s "$apk"
+test -s "$unsigned_apk"
+
+# R8/minified TV release builds must start too, not merely the debug variant.
+# Use an ephemeral, non-production key; this signed output is never uploaded.
+keystore="$RUNNER_TEMP/tv-smoke.jks"
+aligned="$RUNNER_TEMP/tv-smoke-aligned.apk"
+apk="$RUNNER_TEMP/tv-smoke-signed.apk"
+tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
+keytool -genkeypair -noprompt -keyalg RSA -keysize 2048 -validity 1 \
+  -alias tv-smoke -dname 'CN=Ephemeral TV CI' -keystore "$keystore" \
+  -storepass ci-only-tv-test -keypass ci-only-tv-test
+"$tools/zipalign" -f -p 4 "$unsigned_apk" "$aligned"
+"$tools/apksigner" sign --ks "$keystore" --ks-key-alias tv-smoke \
+  --ks-pass pass:ci-only-tv-test --key-pass pass:ci-only-tv-test \
+  --out "$apk" "$aligned"
+"$tools/apksigner" verify "$apk"
+
 adb install -r "$apk"
 adb shell pm path "$package" | grep -q '^package:'
 
