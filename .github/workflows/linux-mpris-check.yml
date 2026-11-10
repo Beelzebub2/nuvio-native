@@ -1,0 +1,44 @@
+name: Check Linux MPRIS session bus
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/linux-mpris-check.yml'
+      - 'composeApp/build.gradle.kts'
+      - 'composeApp/src/desktopMain/kotlin/com/nuvio/app/Main.kt'
+      - 'composeApp/src/desktopMain/kotlin/com/nuvio/app/features/player/PlayerEngine.desktop.kt'
+      - 'composeApp/src/desktopMain/kotlin/com/nuvio/app/features/player/desktop/LinuxMpris*.kt'
+      - 'composeApp/src/desktopTest/kotlin/com/nuvio/app/features/player/desktop/LinuxMpris*.kt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-mpris-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  session-bus:
+    name: Linux MPRIS D-Bus smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Linux desktop build dependencies
+        run: bash scripts/linux/install-desktop-build-dependencies.sh
+      - name: Confirm session bus tools
+        run: |
+          command -v dbus-run-session
+          command -v xvfb-run
+      - name: Test MPRIS state and real session bus
+        run: >-
+          dbus-run-session -- xvfb-run -a ./gradlew :composeApp:desktopTest
+          --tests '*LinuxMprisStateTest'
+          --tests '*LinuxMprisDbusSmokeTest'
+          --max-workers=1 --console=plain

@@ -1368,6 +1368,11 @@ kotlin {
                 }
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation("net.java.dev.jna:jna:5.19.1")
+                // Linux MPRIS media controls over the user session D-Bus (Java 21 Unix sockets).
+                implementation("com.github.hypfvieh:dbus-java-core:5.2.0")
+                if (isLinuxHost) {
+                    runtimeOnly("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.2.0")
+                }
                 implementation(libs.ktor.client.cio)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.quickjs.kt)

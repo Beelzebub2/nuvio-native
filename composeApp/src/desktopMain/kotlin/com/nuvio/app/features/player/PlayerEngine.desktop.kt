@@ -35,6 +35,7 @@ import com.nuvio.app.features.player.desktop.DesktopHostOs
 import com.nuvio.app.features.player.desktop.DesktopPlayerPictureInPicture
 import com.nuvio.app.features.player.desktop.NativePlayerController
 import com.nuvio.app.features.player.desktop.NativePlayerHost
+import com.nuvio.app.features.player.desktop.LinuxMprisService
 import com.nuvio.app.features.player.desktop.desktopFullscreenChanges
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
@@ -177,6 +178,21 @@ private fun NativePlayerSurface(
         onDispose { controller.dispose() }
     }
 
+    DisposableEffect(controller) {
+        if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+            LinuxMprisService.bindPlayer(
+                controller = controller,
+                onStop = { latestOnPlayerControlsAction.value(PlayerControlsAction.Back) },
+                onNext = { latestOnPlayerControlsEvent.value("playNextEpisode", 0.0) },
+            )
+        }
+        onDispose {
+            if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+                LinuxMprisService.unbindPlayer(controller)
+            }
+        }
+    }
+
     // The controls overlay owns the player shortcuts. After alt-tab, desktop
     // window focus can return to the AWT/Compose host instead of the embedded
     // WebView, so explicitly hand keyboard focus back to the native controls
@@ -260,7 +276,17 @@ private fun NativePlayerSurface(
     LaunchedEffect(controller, sourceAvailable, sourceUrl) {
         if (!sourceAvailable) return@LaunchedEffect
         while (true) {
-            onSnapshot(controller.snapshot())
+            val snapshot = controller.snapshot()
+            if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+                LinuxMprisService.updatePlayer(
+                    controller = controller,
+                    sourceIdentity = sourceUrl,
+                    controls = latestPlayerControlsState.value,
+                    snapshot = snapshot,
+                    presence = AppPresenceState.current.value as? PresenceSnapshot.Player,
+                )
+            }
+            onSnapshot(snapshot)
             delay(500L)
         }
     }

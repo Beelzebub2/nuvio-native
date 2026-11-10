@@ -35,6 +35,7 @@ import com.nuvio.app.features.player.desktop.DesktopHostOs
 import com.nuvio.app.features.player.desktop.DesktopWindowGeometry
 import com.nuvio.app.features.player.desktop.DesktopWindowModeStorage
 import com.nuvio.app.features.player.desktop.NativePlayerBridge
+import com.nuvio.app.features.player.desktop.LinuxMprisService
 import com.nuvio.app.features.player.desktop.applyNativeDesktopWindowChrome
 import com.nuvio.app.features.player.desktop.configureMacosWindowBeforePeer
 import com.nuvio.app.features.player.desktop.installDesktopAppFullscreenShortcuts
@@ -151,6 +152,7 @@ private fun runDesktopApplication(args: Array<String>, singleInstance: DesktopSi
 
         SwingWindow(
             onCloseRequest = {
+                if (DesktopHostOs.current == DesktopHostOs.LINUX) LinuxMprisService.shutdown()
                 com.nuvio.app.features.myanimelist.clearMyAnimeListState()
                 P2pStreamingEngine.shutdown()
                 DiscordPresenceManager.shutdown()
@@ -179,6 +181,23 @@ private fun runDesktopApplication(args: Array<String>, singleInstance: DesktopSi
                 }
                 onDispose { singleInstance?.setActivationHandler(null) }
             }
+            DisposableEffect(window) {
+                if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+                    LinuxMprisService.setWindowRaiseHandler {
+                        if (window.isDisplayable) {
+                            windowState.isMinimized = false
+                            window.isVisible = true
+                            window.toFront()
+                            window.requestFocus()
+                        }
+                    }
+                }
+                onDispose {
+                    if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+                        LinuxMprisService.shutdown()
+                    }
+                }
+            }
             SideEffect {
                 window.background = NuvioDesktopNativeBackground
                 window.rootPane.background = NuvioDesktopNativeBackground
@@ -201,6 +220,9 @@ private fun runDesktopApplication(args: Array<String>, singleInstance: DesktopSi
                 launch(Dispatchers.IO) { SentryInitializer.start() }
                 launch(Dispatchers.IO) { P2pStreamingEngine.prepare() }
                 launch(Dispatchers.IO) { DiscordPresenceManager.start() }
+                if (DesktopHostOs.current == DesktopHostOs.LINUX) {
+                    launch(Dispatchers.IO) { LinuxMprisService.start() }
+                }
                 launch { AppUpdaterPlatform.removeLeftoverUpdateInstallers() }
                 withContext(Dispatchers.IO) { runCatching { NativePlayerBridge.ensureLoaded() } }
                 applyNativeDesktopWindowChrome(window)
