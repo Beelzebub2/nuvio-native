@@ -31,6 +31,13 @@ enum class ContinueWatchingSortMode {
 }
 
 @Serializable
+enum class ContinueWatchingRailPriority {
+    MOVIES,
+    SERIES,
+    ANIME,
+}
+
+@Serializable
 data class WatchProgressEntry(
     val contentType: String,
     val parentMetaId: String,
@@ -243,6 +250,9 @@ data class ContinueWatchingPreferencesUiState(
     val dismissedNextUpKeys: Set<String> = emptySet(),
     val showResumePromptOnLaunch: Boolean = true,
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,
+    val separateRowsByType: Boolean = false,
+    val hideLiveContent: Boolean = false,
+    val railPriority: ContinueWatchingRailPriority = ContinueWatchingRailPriority.MOVIES,
 )
 
 internal fun nextUpDismissKey(
