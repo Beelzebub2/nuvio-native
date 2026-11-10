@@ -362,16 +362,38 @@ data class PlayerControlSubtitleCueItem(
     val text: String = "",
 )
 
+private const val MaxPlaybackHeaders = 32
+private const val MaxPlaybackHeaderNameLength = 128
+private const val MaxPlaybackHeaderValueLength = 8 * 1024
+private val PlaybackHeaderNamePattern = Regex("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$")
+private val PlayerOwnedHeaders = setOf(
+    "host", "connection", "keep-alive", "content-length", "transfer-encoding",
+    "proxy-authorization", "proxy-authenticate", "proxy-connection", "te",
+    "trailer", "upgrade", "expect", "range",
+)
+
+/** Reject malformed, hop-by-hop and oversized addon headers before native or proxy playback. */
 internal fun sanitizePlaybackHeaders(headers: Map<String, String>?): Map<String, String> {
     val rawHeaders = headers ?: return emptyMap()
     if (rawHeaders.isEmpty()) return emptyMap()
 
-    val sanitized = LinkedHashMap<String, String>(rawHeaders.size)
-    rawHeaders.forEach { (rawKey, rawValue) ->
+    val connectionNamedHeaders = rawHeaders.entries
+        .asSequence()
+        .filter { it.key.equals("Connection", ignoreCase = true) }
+        .flatMap { it.value.split(',').asSequence() }
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+    val sanitized = LinkedHashMap<String, String>(minOf(rawHeaders.size, MaxPlaybackHeaders))
+    for ((rawKey, rawValue) in rawHeaders) {
+        if (sanitized.size >= MaxPlaybackHeaders) break
         val key = rawKey.trim()
         val value = rawValue.trim()
-        if (key.isEmpty() || value.isEmpty()) return@forEach
-        if (key.equals("Range", ignoreCase = true)) return@forEach
+        if (key.length !in 1..MaxPlaybackHeaderNameLength || value.isEmpty()) continue
+        if (!PlaybackHeaderNamePattern.matches(key)) continue
+        if (value.length > MaxPlaybackHeaderValueLength) continue
+        if (value.any { char -> char.code < 0x20 || char.code == 0x7f }) continue
+        if (key.lowercase() in PlayerOwnedHeaders || key.lowercase() in connectionNamedHeaders) continue
         sanitized[key] = value
     }
     return sanitized
