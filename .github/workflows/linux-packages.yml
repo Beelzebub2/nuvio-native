@@ -1,0 +1,84 @@
+name: Linux desktop packages
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/linux-packages.yml'
+      - '.github/workflows/windows-release.yml'
+      - 'scripts/linux/**'
+      - 'composeApp/**'
+      - 'gradle/**'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing immutable release tag
+        required: true
+        type: string
+    secrets:
+      STARLIT_OFFICIAL_SUPABASE_URL:
+        required: true
+      STARLIT_OFFICIAL_SUPABASE_ANON_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Linux x86_64 (${{ matrix.format }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [deb, rpm, appimage, flatpak]
+    env:
+      STARLIT_OFFICIAL_SUPABASE_URL: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_URL }}
+      STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+      - name: Verify release source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version in DesktopVersion.properties"; exit 1
+          fi
+          if [[ "${{ github.event_name }}" != "pull_request" && "${{ inputs.release_tag }}" != "v$version" ]]; then
+            echo "::error::Release tag and source version differ"; exit 1
+          fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Linux native build and packaging dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.format }}" in
+            deb) extras=(fakeroot) ;;
+            rpm) extras=(fakeroot rpm cpio) ;;
+            appimage) extras=(zsync curl) ;;
+            flatpak) extras=(flatpak flatpak-builder desktop-file-utils) ;;
+          esac
+          bash scripts/linux/install-desktop-build-dependencies.sh "${extras[@]}"
+      - name: Verify DEB package patcher
+        if: matrix.format == 'deb'
+        shell: bash
+        run: bash scripts/linux/test-linux-deb-tools.sh
+      - name: Build and verify Linux package
+        shell: bash
+        run: bash scripts/linux/build-starlit-package.sh "${{ matrix.format }}" "$RELEASE_VERSION"
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
+        with:
+          name: starlit-linux-${{ matrix.format }}-release
+          path: release/*
+          if-no-files-found: error
