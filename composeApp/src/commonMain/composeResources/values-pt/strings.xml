@@ -477,6 +477,14 @@
     <string name="compose_player_subs">Legendas</string>
     <string name="compose_player_subtitle_delay">Atraso das legendas</string>
     <string name="compose_player_subtitles">Legendas</string>
+    <string name="player_local_subtitle_label">Ficheiro local</string>
+    <string name="player_local_subtitle_choose">Abrir ficheiro de legendas</string>
+    <string name="player_local_subtitle_remove">Remover ficheiro</string>
+    <string name="player_local_subtitle_unsupported">Escolhe um ficheiro de legendas SRT, ASS, SSA ou VTT.</string>
+    <string name="player_local_subtitle_unreadable">O ficheiro de legendas está vazio, não existe ou não pode ser lido.</string>
+    <string name="player_local_subtitle_oversized">Os ficheiros de legendas têm de ter, no máximo, 16 MiB.</string>
+    <string name="player_local_subtitle_failed">Não foi possível abrir o seletor de ficheiros. Tenta novamente.</string>
+    <string name="player_local_subtitle_player_not_ready">O leitor ainda não está pronto para carregar legendas.</string>
     <string name="compose_player_text_opacity">Opacidade do texto</string>
     <string name="compose_player_brightness_level">Brilho %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
