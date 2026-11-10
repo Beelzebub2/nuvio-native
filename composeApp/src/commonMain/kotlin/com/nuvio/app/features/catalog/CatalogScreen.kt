@@ -84,8 +84,6 @@ import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.navigation.LocalUseNativeNavigation
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -137,6 +135,7 @@ fun CatalogScreen(
     val displayedItems = remember(uiState.items, activeSort) {
         sortCatalogItems(uiState.items, activeSort)
     }
+    val loadMoreGate = remember(target, activeSort) { CatalogLoadMoreGate() }
 
     ScreenActivityEffect(target) { active ->
         if (active && target is CatalogTarget.WatchLater) CatalogRepository.load(target)
@@ -169,16 +168,33 @@ fun CatalogScreen(
             }
     }
 
-    LaunchedEffect(gridState, uiState.canLoadMore, uiState.isLoading) {
-        snapshotFlow { gridState.layoutInfo }
-            .map { layoutInfo ->
-                val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                lastVisible >= layoutInfo.totalItemsCount - 6
+    LaunchedEffect(gridState, loadMoreGate, uiState.canLoadMore, uiState.isLoading) {
+        snapshotFlow {
+                val layoutInfo = gridState.layoutInfo
+                CatalogPaginationViewport(
+                    scrolling = gridState.isScrollInProgress,
+                    firstIndex = gridState.firstVisibleItemIndex,
+                    firstOffset = gridState.firstVisibleItemScrollOffset,
+                    lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                    totalItems = layoutInfo.totalItemsCount,
+                    canScrollForward = gridState.canScrollForward,
+                )
             }
             .distinctUntilChanged()
-            .filter { it && uiState.canLoadMore && !uiState.isLoading }
-            .collect {
-                CatalogRepository.loadMore()
+            .collect { viewport ->
+                loadMoreGate.observeScroll(viewport.scrolling, viewport.firstIndex, viewport.firstOffset)
+                val nearEnd = viewport.totalItems > 0 &&
+                    viewport.lastVisibleIndex >= viewport.totalItems - 6
+                val underfilled = uiState.items.isNotEmpty() &&
+                    viewport.firstIndex == 0 && viewport.firstOffset == 0 &&
+                    !viewport.canScrollForward
+                if (loadMoreGate.shouldLoad(
+                        nearEnd = nearEnd,
+                        canLoadMore = uiState.canLoadMore,
+                        isLoading = uiState.isLoading,
+                        initialViewportUnderfilled = underfilled,
+                    )
+                ) CatalogRepository.loadMore()
             }
     }
 
