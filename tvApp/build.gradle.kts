@@ -6,7 +6,7 @@ plugins {
 }
 
 val versionProperties = Properties().apply {
-    rootProject.file("iosApp/Configuration/Version.xcconfig").forEachLine { line ->
+    rootProject.file("composeApp/Configuration/DesktopVersion.properties").forEachLine { line ->
         val parts = line.split('=', limit = 2)
         if (parts.size == 2) setProperty(parts[0].trim(), parts[1].trim())
     }
@@ -22,11 +22,11 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionName = providers.gradleProperty("nuvio.app.versionName").orNull
-            ?: versionProperties.getProperty("MARKETING_VERSION")
-            ?: error("MARKETING_VERSION missing")
+            ?: versionProperties.getProperty("VERSION_NAME")
+            ?: error("VERSION_NAME missing")
         versionCode = (providers.gradleProperty("nuvio.app.versionCode").orNull
-            ?: versionProperties.getProperty("CURRENT_PROJECT_VERSION"))
-            ?.toIntOrNull() ?: error("CURRENT_PROJECT_VERSION missing")
+            ?: versionProperties.getProperty("VERSION_CODE"))
+            ?.toIntOrNull() ?: error("VERSION_CODE missing")
     }
 
     sourceSets.getByName("main") {

@@ -19,7 +19,10 @@ On Windows, use `gradlew.bat` instead of `./gradlew`. Enable Android TV develope
 options and network debugging, or use USB debugging where available. The build
 uses the **full** Android distribution to retain the native streaming engine.
 The debug APK is separately identified as `com.starlit.tv.debug` and is not
-intended as a signed production release.
+intended as a signed production release. A tagged release produces a signed
+`Starlit-TV-<version>.apk` alongside the existing phone and desktop files.
+TV build, launcher verification, signing and checksums are required release
+steps; a failure blocks release publication instead of silently omitting TV.
 
 ## TV UI and compatibility
 
@@ -31,9 +34,9 @@ intended as a signed production release.
   account can synchronize eligible data across devices.
 - Requires Android 7.0/API 24 or newer, an Android TV/Google TV-compatible
   device, and a remote or other keyboard input device.
-- TV-specific update assets are not yet published. The phone APK updater is
-  intentionally disabled in the TV package to avoid installing incompatible
-  releases. Upgrade TV installations using a signed TV APK when available.
+- The phone APK updater is intentionally disabled in the TV package to avoid
+  installing incompatible releases. Upgrade TV installations using the signed
+  TV APK from the matching GitHub release (no automatic update channel yet).
 
 The phone-first authentication, profile management, detailed settings, title
 details, source picker and player overlays are currently shared rather than
@@ -46,8 +49,13 @@ require their own client applications; they cannot install Android APKs.
 
 ## Release checks
 
-The Android CI workflow builds the standalone TV debug APK and verifies
-Leanback launcher metadata. Before shipping signed TV releases, test the
+Android PR CI builds both debug and minified release TV APKs, verifies
+Leanback launcher metadata, and smoke-tests launch and basic remote input on
+an anonymous Android TV 36 emulator. This is not a replacement for a real
+television playback test. The tag-triggered release workflow builds a fresh
+minified TV APK, signs and validates it alongside Android phone APKs, uploads
+it as a separate artifact, and includes it in the published release and SHA256
+checksums. Before shipping signed TV releases, test the
 following on a hardware TV or TV emulator:
 
 1. Launch from the television app grid with no touch input.
