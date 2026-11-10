@@ -1002,6 +1002,7 @@ object WatchProgressRepository {
             lastSourceUrl = cached?.lastSourceUrl,
             isCompleted = isWatchProgressComplete(position, duration, false),
             progressKey = resolvedProgressKey(),
+            mediaCategory = cached?.mediaCategory,
         )
 
     private fun ProgressDeltaEvent.toProgressSyncRecord(): ProgressSyncRecord =

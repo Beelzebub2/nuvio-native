@@ -12,6 +12,15 @@ import kotlin.test.assertTrue
 
 class WatchProgressIdentityTest {
     @Test
+    fun `updated progress keeps provider anime classification and opaque server identity`() {
+        val prior = entry(progressKey = "opaque/provider-episode").copy(mediaCategory = "anime")
+        val playback = entry(progressKey = null, lastUpdatedEpochMs = 12L)
+        val merged = listOf(prior).resolveIdentityForUpsert(playback)
+        assertEquals("anime", merged.mediaCategory)
+        assertEquals("opaque/provider-episode", merged.progressKey)
+    }
+
+    @Test
     fun `provider hidden content changes progress ui state without changing entries`() {
         val entry = entry(
             parentMetaId = "show",

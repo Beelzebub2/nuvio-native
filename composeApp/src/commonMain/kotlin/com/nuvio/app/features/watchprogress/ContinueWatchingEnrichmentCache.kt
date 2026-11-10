@@ -33,6 +33,7 @@ data class CachedNextUpItem(
     val seedEpisode: Int? = null,
     val isReleaseAlert: Boolean = false,
     val isNewSeasonRelease: Boolean = false,
+    val mediaCategory: String? = null,
 )
 
 @Serializable
@@ -54,6 +55,7 @@ data class CachedInProgressItem(
     val lastWatched: Long,
     val progressPercent: Float? = null,
     val progressKey: String? = null,
+    val mediaCategory: String? = null,
 )
 
 internal fun CachedInProgressItem.resolvedProgressKey(): String =

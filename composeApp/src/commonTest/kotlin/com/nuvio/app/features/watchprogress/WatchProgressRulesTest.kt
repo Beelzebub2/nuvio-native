@@ -12,12 +12,26 @@ import kotlin.test.assertTrue
 class WatchProgressRulesTest {
 
     @Test
-    fun `optional live progress exclusion keeps other profiles and series intact`() {
+    fun `optional live progress exclusion drops stale profile callbacks and preserves series`() {
         assertTrue(shouldSkipLivePlaybackProgress("channel", 1, 1, hideLiveContent = true))
         assertTrue(shouldSkipLivePlaybackProgress("live-tv", 1, 1, hideLiveContent = true))
         assertFalse(shouldSkipLivePlaybackProgress("tv", 1, 1, hideLiveContent = true))
-        assertFalse(shouldSkipLivePlaybackProgress("channel", 2, 1, hideLiveContent = true))
+        assertTrue(shouldSkipLivePlaybackProgress("channel", 2, 1, hideLiveContent = true))
+        assertTrue(shouldSkipLivePlaybackProgress("channel", 2, 1, hideLiveContent = false))
+        assertFalse(shouldSkipLivePlaybackProgress("tv", 2, 1, hideLiveContent = true))
         assertFalse(shouldSkipLivePlaybackProgress("channel", 1, 1, hideLiveContent = false))
+    }
+
+    @Test
+    fun `codec preserves anime category alongside compatible playback type`() {
+        val anime = entry(videoId = "show:1:2", parentMetaType = "series")
+            .copy(mediaCategory = "anime")
+        val decoded = WatchProgressCodec.decodeEntries(
+            WatchProgressCodec.encodeEntries(listOf(anime)),
+        ).single()
+        assertEquals("series", decoded.parentMetaType)
+        assertEquals("anime", decoded.mediaCategory)
+        assertEquals("anime", decoded.toContinueWatchingItem().mediaCategory)
     }
 
     @Test

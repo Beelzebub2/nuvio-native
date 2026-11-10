@@ -27,16 +27,22 @@ internal fun buildContinueWatchingRails(
     separateRowsByType: Boolean,
     hideLiveContent: Boolean,
     priority: ContinueWatchingRailPriority = ContinueWatchingRailPriority.MOVIES,
+    animeLibraryIds: Set<String> = emptySet(),
 ): List<ContinueWatchingRail> {
     val visibleItems = if (hideLiveContent) items.filterNot { it.isExplicitLiveContent() } else items
     if (visibleItems.isEmpty()) return emptyList()
     if (!separateRowsByType) return listOf(ContinueWatchingRail(ContinueWatchingRailKind.COMBINED, visibleItems))
 
     val grouped = visibleItems.groupBy { item ->
-        when (item.parentMetaType.trim().lowercase()) {
-            "movie", "film" -> ContinueWatchingRailKind.MOVIES
-            "anime", "anime_series", "anime-series", "anime_movie", "anime-movie" -> ContinueWatchingRailKind.ANIME
-            "series", "tv", "show", "tv_series", "tv-series" -> ContinueWatchingRailKind.SERIES
+        val type = item.parentMetaType.trim().lowercase()
+        when {
+            type in setOf("anime", "anime_series", "anime-series", "anime_movie", "anime-movie") ->
+                ContinueWatchingRailKind.ANIME
+            type in setOf("movie", "film", "series", "tv", "show", "tv_series", "tv-series") &&
+                (item.mediaCategory.equals("anime", ignoreCase = true) || item.parentMetaId in animeLibraryIds) ->
+                ContinueWatchingRailKind.ANIME
+            type == "movie" || type == "film" -> ContinueWatchingRailKind.MOVIES
+            type in setOf("series", "tv", "show", "tv_series", "tv-series") -> ContinueWatchingRailKind.SERIES
             else -> ContinueWatchingRailKind.OTHER
         }
     }

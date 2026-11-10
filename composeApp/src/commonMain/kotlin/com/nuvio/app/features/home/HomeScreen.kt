@@ -63,6 +63,7 @@ import com.nuvio.app.features.home.components.HomeHeroSection
 import com.nuvio.app.features.home.components.HomeSkeletonHero
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.ContinueWatchingLayout
+import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.watched.WatchedItem
@@ -172,7 +173,13 @@ fun HomeScreen(
         }
     }
     val collections by CollectionRepository.collections.collectAsStateWithLifecycle()
+    val libraryUiState by LibraryRepository.uiState.collectAsStateWithLifecycle()
     val continueWatchingPreferences by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(continueWatchingPreferences.separateRowsByType) {
+        if (continueWatchingPreferences.separateRowsByType) {
+            withContext(Dispatchers.Default) { LibraryRepository.ensureLoaded() }
+        }
+    }
     val watchedUiState by WatchedRepository.uiState.collectAsStateWithLifecycle()
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
     val watchProgressUiState by WatchProgressRepository.uiState.collectAsStateWithLifecycle()
@@ -577,17 +584,26 @@ fun HomeScreen(
             mode = continueWatchingPreferences.sortMode,
         )
     }
+    val animeLibraryIds = remember(libraryUiState.items) {
+        libraryUiState.items.asSequence()
+            .filter { it.mediaCategory.equals("anime", ignoreCase = true) }
+            .map { it.id.trim() }
+            .filter(String::isNotEmpty)
+            .toSet()
+    }
     val continueWatchingRails = remember(
         continueWatchingItems,
         continueWatchingPreferences.separateRowsByType,
         continueWatchingPreferences.hideLiveContent,
         continueWatchingPreferences.railPriority,
+        animeLibraryIds,
     ) {
         buildContinueWatchingRails(
             items = continueWatchingItems,
             separateRowsByType = continueWatchingPreferences.separateRowsByType,
             hideLiveContent = continueWatchingPreferences.hideLiveContent,
             priority = continueWatchingPreferences.railPriority,
+            animeLibraryIds = animeLibraryIds,
         )
     }
     val visibleUpcomingItems = remember(upcomingItems, continueWatchingPreferences.hideLiveContent) {
@@ -1878,6 +1894,7 @@ private fun saveContinueWatchingSnapshots(
         CachedNextUpItem(
             contentId = contentId,
             contentType = item.parentMetaType,
+            mediaCategory = item.mediaCategory,
             name = item.title,
             poster = item.poster,
             backdrop = item.background,
@@ -1931,6 +1948,7 @@ internal fun buildHomeInProgressCacheSnapshot(
         CachedInProgressItem(
             contentId = entry.parentMetaId,
             contentType = entry.contentType,
+            mediaCategory = item.mediaCategory,
             name = item.title,
             poster = item.poster,
             backdrop = item.background,
@@ -1989,6 +2007,7 @@ private fun CachedNextUpItem.toContinueWatchingItem(
     return ContinueWatchingItem(
         parentMetaId = contentId,
         parentMetaType = contentType,
+        mediaCategory = mediaCategory,
         videoId = videoId,
         title = name,
         subtitle = buildContinueWatchingEpisodeSubtitle(
@@ -2036,6 +2055,7 @@ private fun CachedInProgressItem.toContinueWatchingItem(): ContinueWatchingItem 
     return ContinueWatchingItem(
         parentMetaId = contentId,
         parentMetaType = contentType,
+        mediaCategory = mediaCategory,
         videoId = videoId,
         title = name,
         subtitle = buildContinueWatchingEpisodeSubtitle(
@@ -2095,6 +2115,7 @@ private fun ContinueWatchingItem.withFallbackMetadata(
         episodeThumbnail = episodeThumbnail.orNonBlank(fallback?.episodeThumbnail),
         pauseDescription = pauseDescription.orNonBlank(fallback?.pauseDescription),
         released = released.orNonBlank(fallback?.released),
+        mediaCategory = mediaCategory ?: fallback?.mediaCategory,
     )
 }
 

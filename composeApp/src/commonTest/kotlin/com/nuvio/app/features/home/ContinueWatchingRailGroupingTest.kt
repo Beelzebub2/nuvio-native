@@ -9,7 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ContinueWatchingRailGroupingTest {
-    private fun item(id: String, type: String) = ContinueWatchingItem(
+    private fun item(id: String, type: String, category: String? = null) = ContinueWatchingItem(
         parentMetaId = id,
         parentMetaType = type,
         videoId = "$id:1",
@@ -19,6 +19,7 @@ class ContinueWatchingRailGroupingTest {
         resumePositionMs = 30_000L,
         durationMs = 60_000L,
         progressFraction = 0.5f,
+        mediaCategory = category,
     )
 
     @Test
@@ -81,5 +82,25 @@ class ContinueWatchingRailGroupingTest {
         assertTrue(item("broadcast", "iptv").isExplicitLiveContent())
         assertFalse(item("regular", "tv").isExplicitLiveContent())
         assertTrue(buildContinueWatchingRails(listOf(item("only", "channel")), true, true).isEmpty())
+    }
+
+    @Test
+    fun `anime library provenance separates series and movies without altering playback types`() {
+        val items = listOf(
+            item("anime-provider", "series", "anime"),
+            item("anime-library", "movie"),
+            item("regular-show", "tv"),
+            item("regular-film", "movie"),
+        )
+        val rails = buildContinueWatchingRails(
+            items, separateRowsByType = true, hideLiveContent = false,
+            animeLibraryIds = setOf("anime-library"),
+        )
+        assertEquals(listOf("anime-provider", "anime-library"),
+            rails.single { it.kind == ContinueWatchingRailKind.ANIME }.items.map { it.parentMetaId })
+        assertEquals(listOf("regular-show"),
+            rails.single { it.kind == ContinueWatchingRailKind.SERIES }.items.map { it.parentMetaId })
+        assertEquals(listOf("regular-film"),
+            rails.single { it.kind == ContinueWatchingRailKind.MOVIES }.items.map { it.parentMetaId })
     }
 }

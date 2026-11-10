@@ -183,15 +183,14 @@ internal fun String?.isExplicitLiveMetaType(): Boolean = when (this?.trim()?.low
     else -> false
 }
 
-/** Keep the optional live exclusion scoped to the active profile during playback. */
+/** Drop late live callbacks from inactive profiles: their opt-out setting is no longer loaded. */
 internal fun shouldSkipLivePlaybackProgress(
     metaType: String?,
     sessionProfileId: Int,
     activeProfileId: Int,
     hideLiveContent: Boolean,
-): Boolean = hideLiveContent &&
-    sessionProfileId == activeProfileId &&
-    metaType.isExplicitLiveMetaType()
+): Boolean = metaType.isExplicitLiveMetaType() &&
+    (sessionProfileId != activeProfileId || hideLiveContent)
 
 internal fun isMalformedNextUpSeedContentId(contentId: String?): Boolean {
     val trimmed = contentId?.trim().orEmpty()
