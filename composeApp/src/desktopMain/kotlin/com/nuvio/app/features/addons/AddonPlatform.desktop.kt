@@ -62,6 +62,7 @@ private val desktopHttpClient = OkHttpClient.Builder()
     .build()
 
 private const val truncationSuffix = "\n...[truncated]"
+internal const val MAX_ADDON_TEXT_RESPONSE_BYTES = 8 * 1024 * 1024
 
 actual suspend fun httpGetText(url: String, timeoutMillis: Long?): String =
     executeTextRequest(
@@ -253,11 +254,24 @@ private fun readResponseBodyLimited(body: ResponseBody?, maxBytes: Int): String 
 
 private fun readResponseBody(body: ResponseBody?): String {
     if (body == null) return ""
-    val bytes = body.bytes()
+    // Content-Length cannot be trusted: read at most the configured budget even
+    // for chunked responses, so an addon cannot exhaust the desktop heap.
+    val length = body.contentLength()
+    check(length <= MAX_ADDON_TEXT_RESPONSE_BYTES) {
+        "Addon response exceeds the 8 MiB size limit"
+    }
+    val bytes = body.byteStream().use { readAddonTextBytes(it) }
     return runCatching {
         val charset = body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
         String(bytes, charset)
     }.getOrElse {
         String(bytes, Charsets.UTF_8)
     }
+}
+
+internal fun readAddonTextBytes(stream: InputStream, maxBytes: Int = MAX_ADDON_TEXT_RESPONSE_BYTES): ByteArray {
+    require(maxBytes > 0)
+    return readAtMostBytes(stream, maxBytes).also { result ->
+        check(!result.truncated) { "Addon response exceeds the 8 MiB size limit" }
+    }.bytes
 }
