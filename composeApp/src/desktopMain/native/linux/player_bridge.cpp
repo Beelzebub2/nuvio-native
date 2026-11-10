@@ -399,6 +399,19 @@ void setOverlayCursorHidden(Player *player, bool hidden) {
     NUVIO_LOG("overlay cursor %s", hidden ? "hidden" : "shown");
 }
 
+// Find the X11 toplevel containing a window. Call under an X error trap.
+Window x11ToplevelOf(Display *dpy, Window window) {
+    while (window) {
+        Window root = 0, parent = 0, *children = nullptr;
+        unsigned int childCount = 0;
+        if (!XQueryTree(dpy, window, &root, &parent, &children, &childCount)) return 0;
+        if (children) XFree(children);
+        if (parent == root || parent == 0) return window;
+        window = parent;
+    }
+    return 0;
+}
+
 // Give the overlay window real X input focus so the page's keydown handlers
 // run — the same position WKWebView (first responder) and WebView2 (SetFocus/
 // MoveFocus) hold on macOS/Windows. The overlay is composite-redirected but
@@ -409,20 +422,25 @@ void focusOverlay(Player *player) {
     GdkWindow *gw = gtk_widget_get_window(player->gtkWindow);
     if (!gw) return;
     Display *dpy = GDK_WINDOW_XDISPLAY(gw);
-    // Remember the previous focus owner (normally the AWT toplevel) so
-    // teardown can hand the keyboard back. Only on the first grab: re-grabs
-    // (fullscreen toggles, window refocus) must not save our own overlay.
-    if (!player->savedFocusXid) {
-        Window cur = 0;
-        int revert = 0;
-        XGetInputFocus(dpy, &cur, &revert);
-        if (cur != player->overlayXid && cur != None && cur != PointerRoot) {
-            player->savedFocusXid = cur;
+    GdkDisplay *gdpy = gdk_window_get_display(gw);
+    Window currentFocus = 0;
+    int revert = 0;
+    XGetInputFocus(dpy, &currentFocus, &revert);
+    if (currentFocus != player->overlayXid) {
+        bool insideApp = false;
+        if (currentFocus != None && currentFocus != PointerRoot) {
+            gdk_x11_display_error_trap_push(gdpy);
+            const Window focusedTop = x11ToplevelOf(dpy, currentFocus);
+            insideApp = focusedTop && focusedTop == x11ToplevelOf(dpy, player->hostXid);
+            gdk_x11_display_error_trap_pop_ignored(gdpy);
         }
+        // A media change must never steal keyboard input from another app.
+        // The window-focus listener will restore the overlay when activated.
+        if (!insideApp) return;
+        if (!player->savedFocusXid) player->savedFocusXid = currentFocus;
     }
     // Route GTK-side key delivery to the webkit widget once the X events arrive.
     if (player->webview) gtk_widget_grab_focus(GTK_WIDGET(player->webview));
-    GdkDisplay *gdpy = gdk_window_get_display(gw);
     gdk_x11_display_error_trap_push(gdpy);
     XSetInputFocus(dpy, player->overlayXid, RevertToParent, CurrentTime);
     XFlush(dpy);
@@ -634,9 +652,18 @@ void compositeOverlay(Player *player) {
     XWindowAttributes hostWa;
     if (XGetWindowAttributes(dpy, player->hostXid, &hostWa) && hostWa.width > 0 &&
         hostWa.height > 0) {
+        // GDK layouts use logical pixels but the host X window uses device
+        // pixels. Round up odd dimensions so a HiDPI overlay settles rather
+        // than repeatedly resizing one pixel short and flickering.
+        int ovScale = gdk_window_get_scale_factor(gw);
+        if (ovScale < 1) ovScale = 1;
+        const int logicalW = (hostWa.width + ovScale - 1) / ovScale;
+        const int logicalH = (hostWa.height + ovScale - 1) / ovScale;
+        const int wantedW = logicalW * ovScale;
+        const int wantedH = logicalH * ovScale;
         XWindowAttributes ovWa0;
         if (XGetWindowAttributes(dpy, player->overlayXid, &ovWa0) &&
-            (ovWa0.width != hostWa.width || ovWa0.height != hostWa.height)) {
+            (ovWa0.width != wantedW || ovWa0.height != wantedH)) {
             // gtk_window_resize alone never lands here: GTK applies it in the
             // frame-clock layout phase, and the redirected overlay's clock is
             // stalled (the same stall the forcing below works around) — on
@@ -652,10 +679,6 @@ void compositeOverlay(Player *player) {
             // so the mismatch could never settle: every tick resized, took the
             // overlay down and repushed it a tick later — a continuous
             // add/remove cycle that reads on screen as flicker.
-            int ovScale = gdk_window_get_scale_factor(gw);
-            if (ovScale < 1) ovScale = 1;
-            const int logicalW = hostWa.width / ovScale;
-            const int logicalH = hostWa.height / ovScale;
             gdk_window_resize(gw, logicalW, logicalH);
             gtk_window_resize(GTK_WINDOW(player->gtkWindow), logicalW, logicalH);
             // The X window now resizes, but the WebKit view renders at the GTK
@@ -1155,7 +1178,8 @@ gboolean createWebviewOnGtk(gpointer data) {
     if (XGetWindowAttributes(dpy, s->hostXid, &attrs)) {
         int initScale = gdk_window_get_scale_factor(gdkWin);
         if (initScale < 1) initScale = 1;
-        gtk_window_resize(GTK_WINDOW(win), attrs.width / initScale, attrs.height / initScale);
+        gtk_window_resize(GTK_WINDOW(win), (attrs.width + initScale - 1) / initScale,
+                          (attrs.height + initScale - 1) / initScale);
     }
 
     // Reparent THROUGH GDK (not raw XReparentWindow): GDK must know the window is
