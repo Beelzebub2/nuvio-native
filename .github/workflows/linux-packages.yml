@@ -27,6 +27,12 @@ on:
 permissions:
   contents: read
 
+# A newer PR commit supersedes the earlier package checks, but tagged
+# releases are never cancelled by a subsequent push.
+concurrency:
+  group: starlit-linux-packages-${{ github.event.pull_request.number || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   package:
     name: Linux x86_64 (${{ matrix.format }})
