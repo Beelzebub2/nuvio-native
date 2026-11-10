@@ -924,6 +924,8 @@ val windowsPlayerBridgeCommand = if (missingWindowsPlayerBridgeInputs.isNotEmpty
         "Gdi32.lib",
         "Dwmapi.lib",
         "Shell32.lib",
+        "WindowsApp.lib",
+        "RuntimeObject.lib",
     ).joinToString(" ")
     val powershellCompileCommand = compileCommand.replace("\"", "__DQ__")
     val powershellCommand = """
@@ -971,6 +973,8 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     inputs.file(windowsPlayerBridgeSource)
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions.h"))
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)
     }
@@ -981,6 +985,24 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     outputs.file(windowsPlayerBridgeImportLib)
     outputs.file(windowsPlayerBridgePdb)
     commandLine(windowsPlayerBridgeCommand)
+}
+
+val windowsMediaSessionTestScript =
+    layout.projectDirectory.file("src/desktopMain/native/windows/test_media_session_actions.ps1")
+val windowsMediaSessionTest = tasks.register<Exec>("testWindowsMediaSessionActions") {
+    notCompatibleWithConfigurationCache("Compiles and runs the Windows native media-session test using MSVC.")
+    enabled = isWindowsHost
+    inputs.file(windowsMediaSessionTestScript)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions_test.cpp"))
+    outputs.upToDateWhen { false }
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+        windowsMediaSessionTestScript.asFile.absolutePath, "-VcvarsPath", windowsVcvarsPath.orEmpty(),
+    )
+}
+tasks.matching { it.name == "desktopTest" }.configureEach {
+    dependsOn(windowsMediaSessionTest)
 }
 
 // Windows RFCOMM host runs in a small isolated native helper. Unlike the
