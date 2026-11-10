@@ -202,15 +202,7 @@ private class DesktopKeepAwakeController : AutoCloseable {
     // Holds a systemd-logind idle/sleep lock for as long as this child process stays alive.
     private fun tryStartSystemdInhibit(): Boolean {
         linuxInhibitProcess = runCatching {
-            ProcessBuilder(
-                "systemd-inhibit",
-                "--what=idle:sleep",
-                "--who=Nuvio",
-                "--why=Media playback",
-                "--mode=block",
-                "sleep",
-                "infinity",
-            ).start()
+            ProcessBuilder(linuxSystemdInhibitCommand(ProcessHandle.current().pid())).start()
         }.getOrNull()
         return linuxInhibitProcess?.isAlive == true
     }
@@ -233,4 +225,24 @@ private class DesktopKeepAwakeController : AutoCloseable {
             executor.shutdown()
         }
     }
+}
+
+/**
+ * Unlike `sleep infinity`, this command releases the inhibit lock even when
+ * the JVM exits via an updater, fatal crash or forced process termination.
+ */
+internal fun linuxSystemdInhibitCommand(parentPid: Long): List<String> {
+    require(parentPid > 0)
+    return listOf(
+        "systemd-inhibit",
+        "--what=idle:sleep",
+        "--who=Starlit",
+        "--why=Media playback",
+        "--mode=block",
+        "/bin/sh",
+        "-c",
+        "while kill -0 \"\$1\" 2>/dev/null; do sleep 1; done",
+        "starlit-inhibit",
+        parentPid.toString(),
+    )
 }
