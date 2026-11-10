@@ -102,6 +102,8 @@
     <string name="airing_hide_named">Hide %1$s from Recently released</string>
     <string name="airing_hidden">Hidden %1$d</string>
     <string name="airing_hidden_title">Hidden from Recently released</string>
+    <string name="airing_hidden_search">Search hidden titles</string>
+    <string name="airing_hidden_no_matches">No hidden titles match your search.</string>
     <string name="airing_hidden_note">They stay out of Recently released, Coming up and the Airing Now page. Your library, Watch Later and notifications are not affected.</string>
     <string name="airing_hidden_toast">Hid %1$s. Find it under Hidden to show it again.</string>
     <string name="airing_show_again">Show again</string>

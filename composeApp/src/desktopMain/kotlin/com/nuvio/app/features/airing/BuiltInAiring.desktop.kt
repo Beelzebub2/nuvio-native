@@ -6,6 +6,7 @@ import nuvio.composeapp.generated.resources.airing_settings_window
 import nuvio.composeapp.generated.resources.airing_settings_source
 import com.nuvio.app.core.ui.nuvioSwitchColors
 import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.DialogTextField
 import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogButtonStyle
 import com.nuvio.app.core.ui.DialogButton
@@ -18,6 +19,7 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
@@ -87,6 +89,8 @@ import nuvio.composeapp.generated.resources.airing_footer
 import nuvio.composeapp.generated.resources.airing_hidden
 import nuvio.composeapp.generated.resources.airing_hidden_note
 import nuvio.composeapp.generated.resources.airing_hidden_title
+import nuvio.composeapp.generated.resources.airing_hidden_search
+import nuvio.composeapp.generated.resources.airing_hidden_no_matches
 import nuvio.composeapp.generated.resources.airing_hidden_toast
 import nuvio.composeapp.generated.resources.airing_hide_named
 import nuvio.composeapp.generated.resources.airing_next_items
@@ -279,7 +283,13 @@ internal fun AiringBrowser(
         )
     }
     if (showSettings) AiringSettingsDialog(state.settings, onDismiss = { showSettings = false },
-        onSave = { settings -> showSettings = false; scope.launch { repository.updateSettings(settings) } })
+        onSave = { settings, restoredIds ->
+            showSettings = false
+            scope.launch {
+                repository.updateSettings(settings)
+                restoredIds.forEach { repository.showAgain(it) }
+            }
+        })
 }
 
 /** "Hidden N" button and the list where hidden titles can be shown again. */
@@ -292,16 +302,23 @@ private fun HiddenTitlesButton(
     if (hidden.isEmpty()) return
     val colors = MaterialTheme.nuvio.colors
     var open by remember { mutableStateOf(false) }
+    var hiddenQuery by remember { mutableStateOf("") }
+    val matchingHidden = remember(hidden, hiddenQuery) {
+        filterAndSortHiddenAiringTitles(hidden, hiddenQuery) { it.name }
+    }
     Box {
         NuvioCompactActionButton(
             label = stringResource(Res.string.airing_hidden, hidden.size),
             icon = Icons.Rounded.VisibilityOff,
-            onClick = { open = !open },
+            onClick = {
+                open = !open
+                if (!open) hiddenQuery = ""
+            },
             tone = NuvioCompactActionTone.Ghost,
             size = NuvioActionSize.Small,
             selected = open,
         )
-        Menu(expanded = open, onDismissRequest = { open = false }) {
+        Menu(expanded = open, onDismissRequest = { open = false; hiddenQuery = "" }) {
             Column(
                 modifier = Modifier.widthIn(min = 320.dp, max = 360.dp).padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -310,7 +327,24 @@ private fun HiddenTitlesButton(
                     fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
                 Text(stringResource(Res.string.airing_hidden_note), style = MaterialTheme.typography.bodySmall, color = colors.textMuted)
             }
-            hidden.sortedByDescending { it.hiddenAt }.forEach { title ->
+            DialogTextField(
+                value = hiddenQuery,
+                onValueChange = { hiddenQuery = it },
+                label = stringResource(Res.string.airing_hidden_search),
+                modifier = Modifier.widthIn(min = 320.dp, max = 360.dp)
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .testTag("airing-hidden-search"),
+            )
+            if (matchingHidden.isEmpty()) {
+                Text(
+                    stringResource(Res.string.airing_hidden_no_matches),
+                    modifier = Modifier.widthIn(min = 320.dp, max = 360.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textMuted,
+                )
+            }
+            matchingHidden.forEach { title ->
                 Row(
                     modifier = Modifier.widthIn(min = 320.dp, max = 360.dp).padding(horizontal = 14.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -327,7 +361,13 @@ private fun HiddenTitlesButton(
                     NuvioCompactActionButton(
                         label = stringResource(Res.string.airing_show_again),
                         icon = Icons.Rounded.Visibility,
-                        onClick = { onShowAgain(title.mediaId); if (hidden.size == 1) open = false },
+                        onClick = {
+                            onShowAgain(title.mediaId)
+                            if (hidden.size == 1) {
+                                open = false
+                                hiddenQuery = ""
+                            }
+                        },
                         tone = NuvioCompactActionTone.Secondary,
                         size = NuvioActionSize.Small,
                         accessibilityLabel = stringResource(Res.string.airing_show_again_named, title.name),
@@ -335,7 +375,8 @@ private fun HiddenTitlesButton(
                 }
             }
             if (hidden.size > 1) {
-                TextButton(onClick = { onShowAllAgain(); open = false }, modifier = Modifier.padding(horizontal = 6.dp)) {
+                TextButton(onClick = { onShowAllAgain(); open = false; hiddenQuery = "" },
+                    modifier = Modifier.padding(horizontal = 6.dp)) {
                     Text(stringResource(Res.string.airing_show_all_again))
                 }
             }
@@ -422,20 +463,28 @@ private fun AiringPoster(
 }
 
 @Composable
-private fun AiringSettingsDialog(settings: AiringSettings, onDismiss: () -> Unit, onSave: (AiringSettings) -> Unit) {
+private fun AiringSettingsDialog(
+    settings: AiringSettings,
+    onDismiss: () -> Unit,
+    onSave: (AiringSettings, List<Int>) -> Unit,
+) {
     val colors = MaterialTheme.nuvio.colors
     var zone by remember { mutableStateOf(settings.zone) }
     var airType by remember { mutableStateOf(settings.airType) }
     var days by remember { mutableStateOf(settings.historyDays.coerceIn(1, MAX_AIRING_HISTORY_DAYS)) }
     var estimated by remember { mutableStateOf(settings.includeEstimated) }
     var hideNsfw by remember { mutableStateOf(settings.hideNsfw) }
+    var hiddenDraft by remember(settings) { mutableStateOf(settings.hidden) }
     val validZone = remember(zone) { runCatching { ZoneId.of(zone.trim()) }.isSuccess }
     DialogSurface(
         onDismissRequest = onDismiss,
         title = stringResource(Res.string.airing_settings_title),
         message = stringResource(Res.string.airing_settings_intro),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(top = 4.dp)) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            modifier = Modifier.padding(top = 4.dp).heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+        ) {
             AiringSettingsField(stringResource(Res.string.airing_settings_source)) {
                 NuvioSegmentedControl(
                     segments = listOf("broadcast" to "Broadcast", "sub" to "Sub", "dub" to "Dub")
@@ -486,13 +535,27 @@ private fun AiringSettingsDialog(settings: AiringSettings, onDismiss: () -> Unit
                     switchModifier = Modifier.testTag("airing-hide-nsfw"),
                 )
             }
+            if (hiddenDraft.isNotEmpty()) {
+                AiringSettingsField(stringResource(Res.string.airing_hidden_title)) {
+                    HiddenTitlesButton(
+                        hidden = hiddenDraft,
+                        onShowAgain = { mediaId ->
+                            hiddenDraft = hiddenDraft.filterNot { it.mediaId == mediaId }
+                        },
+                        onShowAllAgain = { hiddenDraft = emptyList() },
+                    )
+                }
+            }
             DialogButtons {
                 DialogButton(text = stringResource(Res.string.action_cancel), onClick = onDismiss)
                 DialogButton(
                     text = stringResource(Res.string.action_save),
                     onClick = {
-                        onSave(settings.copy(zone = zone.trim(), airType = airType, historyDays = days,
-                            includeEstimated = estimated, hideNsfw = hideNsfw))
+                        onSave(
+                            settings.copy(zone = zone.trim(), airType = airType, historyDays = days,
+                                includeEstimated = estimated, hideNsfw = hideNsfw),
+                            hiddenAiringIdsToRestore(settings.hidden, hiddenDraft) { it.mediaId },
+                        )
                     },
                     style = DialogButtonStyle.Primary,
                     enabled = validZone,
