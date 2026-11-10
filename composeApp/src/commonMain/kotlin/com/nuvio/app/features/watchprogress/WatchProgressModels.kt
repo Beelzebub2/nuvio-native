@@ -31,6 +31,13 @@ enum class ContinueWatchingSortMode {
 }
 
 @Serializable
+enum class ContinueWatchingRailPriority {
+    MOVIES,
+    SERIES,
+    ANIME,
+}
+
+@Serializable
 data class WatchProgressEntry(
     val contentType: String,
     val parentMetaId: String,
@@ -62,6 +69,8 @@ data class WatchProgressEntry(
     /** Stable server/storage identity. [videoId] remains the playback identity. */
     val progressKey: String? = null,
     val excludedNextUpSeasons: Set<Int> = emptySet(),
+    /** Optional provider classification; playback still uses [parentMetaType]. */
+    val mediaCategory: String? = null,
 ) : TrackingAttributedItem {
     override val trackingContentId: String
         get() = parentMetaId
@@ -225,6 +234,7 @@ data class ContinueWatchingItem(
     val rawBackgroundUrl: String? = null,
     val shufflePlayback: Boolean = false,
     val isWatched: Boolean = false,
+    val mediaCategory: String? = null,
 )
 
 internal fun continueWatchingItemKey(item: ContinueWatchingItem): String {
@@ -243,6 +253,9 @@ data class ContinueWatchingPreferencesUiState(
     val dismissedNextUpKeys: Set<String> = emptySet(),
     val showResumePromptOnLaunch: Boolean = true,
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,
+    val separateRowsByType: Boolean = false,
+    val hideLiveContent: Boolean = false,
+    val railPriority: ContinueWatchingRailPriority = ContinueWatchingRailPriority.MOVIES,
 )
 
 internal fun nextUpDismissKey(
@@ -270,6 +283,7 @@ internal fun WatchProgressEntry.toContinueWatchingItem(): ContinueWatchingItem {
     return ContinueWatchingItem(
         parentMetaId = normalizedEntry.parentMetaId,
         parentMetaType = normalizedEntry.parentMetaType,
+        mediaCategory = normalizedEntry.mediaCategory,
         videoId = normalizedEntry.videoId,
         title = normalizedEntry.title,
         subtitle = buildContinueWatchingEpisodeSubtitle(
@@ -325,6 +339,7 @@ internal fun WatchProgressEntry.toUpNextContinueWatchingItem(
     return ContinueWatchingItem(
         parentMetaId = parentMetaId,
         parentMetaType = parentMetaType,
+        mediaCategory = mediaCategory,
         videoId = nextEpisode.id.takeIf { it.isNotBlank() } ?: buildPlaybackVideoId(
             parentMetaId = parentMetaId,
             seasonNumber = nextEpisode.season,

@@ -456,6 +456,7 @@ internal fun SimklPlaybackSession.toWatchProgressEntry(
         isCompleted = normalizedProgress >= SIMKL_WATCHED_THRESHOLD_PERCENT,
         progressPercent = normalizedProgress.toFloat(),
         source = WatchProgressSourceSimklPlayback,
+        mediaCategory = if (mediaType == SimklMediaType.ANIME) "anime" else null,
         trackingProviderId = TrackingProviderId.SIMKL.storageId,
         trackingProviderItemId = media.simklTrackingProviderItemId(),
         trackingSourceUrl = buildSimklSourceUrl(mediaType, media),

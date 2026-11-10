@@ -63,6 +63,7 @@ import com.nuvio.app.features.home.components.HomeHeroSection
 import com.nuvio.app.features.home.components.HomeSkeletonHero
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.ContinueWatchingLayout
+import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.watched.WatchedItem
@@ -156,15 +157,29 @@ fun HomeScreen(
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val continueWatchingListState = rememberLazyListState()
     val upcomingListState = rememberLazyListState()
+    val moviesContinueWatchingListState = rememberLazyListState()
+    val seriesContinueWatchingListState = rememberLazyListState()
+    val animeContinueWatchingListState = rememberLazyListState()
+    val otherContinueWatchingListState = rememberLazyListState()
     ScreenActivityEffect(homeListState, continueWatchingListState, upcomingListState) { active ->
         if (!active) {
             homeListState.stopScroll(MutatePriority.PreventUserInput)
             continueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
             upcomingListState.stopScroll(MutatePriority.PreventUserInput)
+            moviesContinueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
+            seriesContinueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
+            animeContinueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
+            otherContinueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
         }
     }
     val collections by CollectionRepository.collections.collectAsStateWithLifecycle()
+    val libraryUiState by LibraryRepository.uiState.collectAsStateWithLifecycle()
     val continueWatchingPreferences by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(continueWatchingPreferences.separateRowsByType) {
+        if (continueWatchingPreferences.separateRowsByType) {
+            withContext(Dispatchers.Default) { LibraryRepository.ensureLoaded() }
+        }
+    }
     val watchedUiState by WatchedRepository.uiState.collectAsStateWithLifecycle()
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
     val watchProgressUiState by WatchProgressRepository.uiState.collectAsStateWithLifecycle()
@@ -569,13 +584,46 @@ fun HomeScreen(
             mode = continueWatchingPreferences.sortMode,
         )
     }
-    val hasContinueWatchingRows = continueWatchingItems.isNotEmpty() || upcomingItems.isNotEmpty()
+    val animeLibraryIds = remember(libraryUiState.items) {
+        libraryUiState.items.asSequence()
+            .filter { it.mediaCategory.equals("anime", ignoreCase = true) }
+            .map { it.id.trim() }
+            .filter(String::isNotEmpty)
+            .toSet()
+    }
+    val continueWatchingRails = remember(
+        continueWatchingItems,
+        continueWatchingPreferences.separateRowsByType,
+        continueWatchingPreferences.hideLiveContent,
+        continueWatchingPreferences.railPriority,
+        animeLibraryIds,
+    ) {
+        buildContinueWatchingRails(
+            items = continueWatchingItems,
+            separateRowsByType = continueWatchingPreferences.separateRowsByType,
+            hideLiveContent = continueWatchingPreferences.hideLiveContent,
+            priority = continueWatchingPreferences.railPriority,
+            animeLibraryIds = animeLibraryIds,
+        )
+    }
+    val visibleUpcomingItems = remember(upcomingItems, continueWatchingPreferences.hideLiveContent) {
+        if (continueWatchingPreferences.hideLiveContent) {
+            upcomingItems.filterNot(ContinueWatchingItem::isExplicitLiveContent)
+        } else {
+            upcomingItems
+        }
+    }
+    val hasContinueWatchingRows = continueWatchingRails.isNotEmpty() || visibleUpcomingItems.isNotEmpty()
 
     LaunchedEffect(activeProfileId) {
         hasUserScrolledContinueWatching = false
         hasUserScrolledUpcoming = false
         continueWatchingListState.scrollToItem(0)
         upcomingListState.scrollToItem(0)
+        moviesContinueWatchingListState.scrollToItem(0)
+        seriesContinueWatchingListState.scrollToItem(0)
+        animeContinueWatchingListState.scrollToItem(0)
+        otherContinueWatchingListState.scrollToItem(0)
     }
     val enabledAddons = remember(addonsUiState.addons) {
         addonsUiState.addons.enabledAddons()
@@ -1061,6 +1109,10 @@ fun HomeScreen(
                         layout = continueWatchingLayout,
                         continueWatchingListState = continueWatchingListState,
                         upcomingListState = upcomingListState,
+                        moviesListState = moviesContinueWatchingListState,
+                        seriesListState = seriesContinueWatchingListState,
+                        animeListState = animeContinueWatchingListState,
+                        otherListState = otherContinueWatchingListState,
                         onItemClick = onContinueWatchingClick,
                         onItemLongPress = onContinueWatchingLongPress,
                         disintegrationRequest = continueWatchingDisintegrationRequest,
@@ -1086,6 +1138,10 @@ fun HomeScreen(
                         layout = continueWatchingLayout,
                         continueWatchingListState = continueWatchingListState,
                         upcomingListState = upcomingListState,
+                        moviesListState = moviesContinueWatchingListState,
+                        seriesListState = seriesContinueWatchingListState,
+                        animeListState = animeContinueWatchingListState,
+                        otherListState = otherContinueWatchingListState,
                         onItemClick = onContinueWatchingClick,
                         onItemLongPress = onContinueWatchingLongPress,
                         disintegrationRequest = continueWatchingDisintegrationRequest,
@@ -1187,6 +1243,10 @@ fun HomeScreen(
                         layout = continueWatchingLayout,
                         continueWatchingListState = continueWatchingListState,
                         upcomingListState = upcomingListState,
+                        moviesListState = moviesContinueWatchingListState,
+                        seriesListState = seriesContinueWatchingListState,
+                        animeListState = animeContinueWatchingListState,
+                        otherListState = otherContinueWatchingListState,
                         onItemClick = onContinueWatchingClick,
                         onItemLongPress = onContinueWatchingLongPress,
                         disintegrationRequest = continueWatchingDisintegrationRequest,
@@ -1251,24 +1311,52 @@ private fun LazyListScope.homeContinueWatchingSections(
     layout: ContinueWatchingLayout,
     continueWatchingListState: LazyListState,
     upcomingListState: LazyListState,
+    moviesListState: LazyListState,
+    seriesListState: LazyListState,
+    animeListState: LazyListState,
+    otherListState: LazyListState,
     onItemClick: ((ContinueWatchingItem) -> Unit)?,
     onItemLongPress: ((ContinueWatchingItem) -> Unit)?,
     disintegrationRequest: DisintegrationRequest<String>?,
 ) {
     if (!preferences.isVisible) return
 
-    if (continueWatchingItems.isNotEmpty()) {
-        item(key = HOME_CONTINUE_WATCHING_SECTION_KEY, contentType = "continue_watching") {
+    val visibleRails = buildContinueWatchingRails(
+        items = continueWatchingItems,
+        separateRowsByType = preferences.separateRowsByType,
+        hideLiveContent = preferences.hideLiveContent,
+        priority = preferences.railPriority,
+    )
+    visibleRails.forEach { rail ->
+        val rowKey = if (rail.kind == ContinueWatchingRailKind.COMBINED) {
+            HOME_CONTINUE_WATCHING_SECTION_KEY
+        } else {
+            "${HOME_CONTINUE_WATCHING_SECTION_KEY}_${rail.kind.name.lowercase()}"
+        }
+        item(key = rowKey, contentType = "continue_watching") {
             HomeContinueWatchingSection(
-                items = continueWatchingItems,
+                items = rail.items,
                 dataSourceKey = dataSourceKey,
                 style = preferences.style,
                 useEpisodeThumbnails = preferences.useEpisodeThumbnails,
                 blurNextUp = preferences.blurNextUp,
                 modifier = Modifier.padding(bottom = 12.dp),
+                title = when (rail.kind) {
+                    ContinueWatchingRailKind.COMBINED -> null
+                    ContinueWatchingRailKind.MOVIES -> stringResource(Res.string.continue_watching_movies_title)
+                    ContinueWatchingRailKind.SERIES -> stringResource(Res.string.continue_watching_series_title)
+                    ContinueWatchingRailKind.ANIME -> stringResource(Res.string.continue_watching_anime_title)
+                    ContinueWatchingRailKind.OTHER -> stringResource(Res.string.continue_watching_other_title)
+                },
                 sectionPadding = sectionPadding,
                 layout = layout,
-                listState = continueWatchingListState,
+                listState = when (rail.kind) {
+                    ContinueWatchingRailKind.COMBINED -> continueWatchingListState
+                    ContinueWatchingRailKind.MOVIES -> moviesListState
+                    ContinueWatchingRailKind.SERIES -> seriesListState
+                    ContinueWatchingRailKind.ANIME -> animeListState
+                    ContinueWatchingRailKind.OTHER -> otherListState
+                },
                 onItemClick = onItemClick,
                 onItemLongPress = onItemLongPress,
                 disintegrationRequest = disintegrationRequest,
@@ -1276,10 +1364,15 @@ private fun LazyListScope.homeContinueWatchingSections(
         }
     }
 
-    if (upcomingItems.isNotEmpty()) {
+    val visibleUpcomingItems = if (preferences.hideLiveContent) {
+        upcomingItems.filterNot(ContinueWatchingItem::isExplicitLiveContent)
+    } else {
+        upcomingItems
+    }
+    if (visibleUpcomingItems.isNotEmpty()) {
         item(key = HOME_UPCOMING_SECTION_KEY, contentType = "continue_watching") {
             HomeContinueWatchingSection(
-                items = upcomingItems,
+                items = visibleUpcomingItems,
                 dataSourceKey = dataSourceKey,
                 style = preferences.style,
                 useEpisodeThumbnails = preferences.useEpisodeThumbnails,
@@ -1801,6 +1894,7 @@ private fun saveContinueWatchingSnapshots(
         CachedNextUpItem(
             contentId = contentId,
             contentType = item.parentMetaType,
+            mediaCategory = item.mediaCategory,
             name = item.title,
             poster = item.poster,
             backdrop = item.background,
@@ -1854,6 +1948,7 @@ internal fun buildHomeInProgressCacheSnapshot(
         CachedInProgressItem(
             contentId = entry.parentMetaId,
             contentType = entry.contentType,
+            mediaCategory = item.mediaCategory,
             name = item.title,
             poster = item.poster,
             backdrop = item.background,
@@ -1912,6 +2007,7 @@ private fun CachedNextUpItem.toContinueWatchingItem(
     return ContinueWatchingItem(
         parentMetaId = contentId,
         parentMetaType = contentType,
+        mediaCategory = mediaCategory,
         videoId = videoId,
         title = name,
         subtitle = buildContinueWatchingEpisodeSubtitle(
@@ -1959,6 +2055,7 @@ private fun CachedInProgressItem.toContinueWatchingItem(): ContinueWatchingItem 
     return ContinueWatchingItem(
         parentMetaId = contentId,
         parentMetaType = contentType,
+        mediaCategory = mediaCategory,
         videoId = videoId,
         title = name,
         subtitle = buildContinueWatchingEpisodeSubtitle(
@@ -2018,6 +2115,7 @@ private fun ContinueWatchingItem.withFallbackMetadata(
         episodeThumbnail = episodeThumbnail.orNonBlank(fallback?.episodeThumbnail),
         pauseDescription = pauseDescription.orNonBlank(fallback?.pauseDescription),
         released = released.orNonBlank(fallback?.released),
+        mediaCategory = mediaCategory ?: fallback?.mediaCategory,
     )
 }
 

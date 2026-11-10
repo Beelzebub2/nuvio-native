@@ -177,6 +177,21 @@ internal fun shouldCascadeCompletedProgressToWatchedHistory(
 internal fun String?.isSeriesTypeForContinueWatching(): Boolean =
     equals("series", ignoreCase = true) || equals("tv", ignoreCase = true)
 
+/** Explicit addon content types only; `tv` means a regular episodic series here. */
+internal fun String?.isExplicitLiveMetaType(): Boolean = when (this?.trim()?.lowercase()) {
+    "live", "live-tv", "live_tv", "livetv", "iptv", "channel", "m3u" -> true
+    else -> false
+}
+
+/** Drop late live callbacks from inactive profiles: their opt-out setting is no longer loaded. */
+internal fun shouldSkipLivePlaybackProgress(
+    metaType: String?,
+    sessionProfileId: Int,
+    activeProfileId: Int,
+    hideLiveContent: Boolean,
+): Boolean = metaType.isExplicitLiveMetaType() &&
+    (sessionProfileId != activeProfileId || hideLiveContent)
+
 internal fun isMalformedNextUpSeedContentId(contentId: String?): Boolean {
     val trimmed = contentId?.trim().orEmpty()
     if (trimmed.isEmpty()) return true
