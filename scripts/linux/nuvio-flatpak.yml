@@ -21,6 +21,8 @@ add-extensions:
     download-if: have-kernel-module-nvidia
     enable-if: have-kernel-module-nvidia
 build-options:
+  # The GNOME SDK runtime does not guarantee eu-strip; avoid extracting debug extensions.
+  no-debuginfo: true
   append-pkg-config-path: /app/lib/pkgconfig:/app/lib64/pkgconfig
 
 finish-args:
