@@ -1,3 +1,25 @@
+## Starlit 1.20.0
+
+### Playback and desktop reliability
+
+- **Reliable completion tracking:** Completed playback and external-player endings now report 100% progress to tracking integrations; a later partial stop event cannot overwrite a completed result.
+- **Header-protected desktop streaming:** Authenticated HLS playlists, segments, initialization data and keys use a bounded local relay where required. Origin-scoped headers and redirect checks prevent credential forwarding to unrelated hosts.
+- **Subtitles and player controls:** Windows native subtitle URLs load asynchronously; add-on subtitle names remain legible; unsafe control characters are filtered. Linux X11/XWayland focus and HiDPI player overlays are more stable.
+- **Open local subtitle files directly:** Desktop players can select, replace and remove `.srt`, `.ass`, `.ssa` and `.vtt` subtitle files with the native file picker. Selected paths stay local to the current playback session and are not synced to accounts.
+- **Desktop library and packaging:** Apply configured poster sizes consistently, avoid hero overscroll, improve avatar fallback, and correct the Linux AppImage launcher invocation.
+- **Linux playback sleep controls:** The system sleep/idle inhibitor now follows the desktop process lifetime instead of leaving an indefinite helper after an unexpected exit or update.
+
+### Airing Now
+
+- **Find hidden titles quickly:** Search titles hidden from Recently released and browse them alphabetically on Android and desktop. Restoring items from settings preserves the saved list's synchronization order.
+
+### Verification and limitations
+
+- The merged player reliability change passed 2,104 Windows desktop tests with no failures, plus 16 cross-platform/security CI checks. The hidden-title search change passed eight CI checks and has focused search, ordering and restore tests.
+- The local subtitle file-picker integration passed 2,115 Windows desktop tests with no failures and 11 of 11 cross-platform/security PR checks, including the Android TV emulator.
+- The Linux sleep-inhibitor change passed 11 of 11 cross-platform/security CI checks. A Linux systemd/logind smoke test confirmed the active inhibitor disappears within two seconds of the monitored process exiting.
+- Real provider playback with header-protected HLS, Windows remote subtitle latency, Linux X11/Wayland focus and desktop-environment sleep behavior, local subtitle chooser/rendering on Windows/Linux/macOS and cross-device Airing Now settings require physical-system validation. These checks are not implied by automated test results.
+
 ## Starlit 1.19.0
 
 ### Linux desktop
