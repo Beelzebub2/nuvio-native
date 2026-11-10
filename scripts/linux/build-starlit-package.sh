@@ -107,11 +107,9 @@ case "$format" in
     package="release/$name.flatpak"
     flatpak build-bundle "$RUNNER_TEMP/starlit-flatpak-repo" "$package" com.nuvio.media.desktop
     test -s "$package"
-    flatpak info --show-metadata "$package" >/dev/null 2>&1 || true
     ;;
 esac
 
-(cd release && sha256sum "$name.${format/appimage/AppImage}" >/dev/null 2>&1) || true
 (
   cd release
   case "$format" in
