@@ -8,6 +8,7 @@
 #include <wrl.h>
 #include <WebView2.h>
 #include <jni.h>
+#include "windows_media_session.h"
 
 #include <algorithm>
 #include <atomic>
@@ -982,18 +983,50 @@ public:
     void onTimer() {
         if (shuttingDown.load()) return;
         layoutNativeSubviews();
+        syncSystemMediaSession();
         syncControls();
     }
 
     void updateControlsJson(const std::string &controlsJson) {
         if (controlsJson.empty()) return;
+        const auto key = controlsJson.find("\"nextEpisodePlayable\"");
+        bool nextPlayable = false;
+        if (key != std::string::npos) {
+            const auto colon = controlsJson.find(':', key + sizeof("\"nextEpisodePlayable\"") - 1);
+            if (colon != std::string::npos) {
+                const auto start = controlsJson.find_first_not_of(" \t\r\n", colon + 1);
+                nextPlayable = start != std::string::npos &&
+                    controlsJson.compare(start, 4, "true") == 0;
+            }
+        }
         {
             std::lock_guard<std::mutex> lock(controlsMutex);
             pendingControlsJson = controlsJson;
         }
-        postUiTask([self = shared_from_this()]() {
+        postUiTask([self = shared_from_this(), nextPlayable]() {
+            self->systemMediaSession.updateNextPlayable(nextPlayable);
             self->flushPendingControlsJsonIfReady();
         });
+    }
+
+    void updateSystemNowPlayingMetadata(std::wstring title, std::wstring subtitle) {
+        postUiTask([self = shared_from_this(), title = std::move(title), subtitle = std::move(subtitle)]() {
+            self->systemMediaSession.updateMetadata(title, subtitle);
+        });
+    }
+
+    void onSystemMediaCommand(starlit::MediaCommand command, int64_t milliseconds) {
+        if (shuttingDown.load()) return;
+        const char* event = starlit::mediaPlayerEventName(command);
+        if (!event) return;
+        if (command == starlit::MediaCommand::Play) {
+            if (isEnded()) seekToMilliseconds(0);
+            setPaused(false);
+        } else if (command == starlit::MediaCommand::Pause) {
+            setPaused(true);
+        }
+        sendPlayerEvent(event, command == starlit::MediaCommand::Play ? 1.0 :
+            command == starlit::MediaCommand::SeekTo ? static_cast<double>(milliseconds) : 0.0);
     }
 
     void requestFocus() {
@@ -1407,6 +1440,12 @@ private:
     JavaVM *javaVm = nullptr;
     jobject eventSink = nullptr;
     jmethodID eventMethod = nullptr;
+    starlit::WindowsMediaSession systemMediaSession;
+
+    void syncSystemMediaSession() {
+        if (shuttingDown.load()) return;
+        systemMediaSession.sync(durationMs(), positionMs(), isPaused(), isLoading(), isEnded());
+    }
 
     std::atomic_bool controlsWebReady = false;
     bool diagnosticsEnabled = false;
@@ -1514,6 +1553,18 @@ private:
 
         startWebView(controlsUrl);
         startMpv(sourceUrl, headerLines, playWhenReady, initialPositionMs, decoderPriority, nvidiaRtxSuperResolutionEnabled);
+        auto weakPlayer = weak_from_this();
+        HWND rootWindow = GetAncestor(hostHwnd, GA_ROOT);
+        systemMediaSession.start(rootWindow, [weakPlayer](starlit::MediaCommand command, int64_t positionMs) {
+            if (auto player = weakPlayer.lock()) {
+                player->postUiTask([weakPlayer, command, positionMs]() {
+                    if (auto current = weakPlayer.lock()) {
+                        current->onSystemMediaCommand(command, positionMs);
+                    }
+                });
+            }
+        });
+        syncSystemMediaSession();
         layoutNativeSubviews();
         if (!SetTimer(messageHwnd, NUVIO_TIMER_ID, 500, nullptr)) {
             throw std::runtime_error("Unable to start native player timer.");
@@ -1521,6 +1572,7 @@ private:
     }
 
     void cleanupUiResources() {
+        systemMediaSession.stop();
         if (messageHwnd) {
             KillTimer(messageHwnd, NUVIO_TIMER_ID);
         }
@@ -2515,6 +2567,18 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_updateControls(JNI
     auto player = playerFromHandle(handle);
     std::string controlsJsonText = jstringToUtf8(env, controlsJson);
     if (player) player->updateControlsJson(controlsJsonText);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setNowPlayingMetadata(
+    JNIEnv *env, jobject, jlong handle, jstring title, jstring subtitle, jstring
+) {
+    auto player = playerFromHandle(handle);
+    if (player) {
+        player->updateSystemNowPlayingMetadata(
+            toWide(jstringToUtf8(env, title)),
+            toWide(jstringToUtf8(env, subtitle)));
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

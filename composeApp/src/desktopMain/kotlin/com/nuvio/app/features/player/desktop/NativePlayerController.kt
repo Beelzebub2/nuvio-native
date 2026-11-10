@@ -528,7 +528,7 @@ internal class NativePlayerController(
     }
 
     fun setNowPlayingMetadata(title: String?, subtitle: String?, artworkUrl: String?) {
-        if (DesktopHostOs.current != DesktopHostOs.MACOS) return
+        if (DesktopHostOs.current != DesktopHostOs.MACOS && DesktopHostOs.current != DesktopHostOs.WINDOWS) return
         currentNowPlayingTitle = title.orEmpty()
         currentNowPlayingSubtitle = subtitle.orEmpty()
         currentArtworkUrl = artworkUrl.orEmpty()

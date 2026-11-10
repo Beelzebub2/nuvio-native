@@ -49,7 +49,7 @@ internal object NativePlayerBridge {
     external fun dispose(handle: Long)
     external fun updateControls(handle: Long, controlsJson: String)
 
-    /** macOS only: title, episode line, and poster for the system now-playing widget (Control Center). */
+    /** Desktop shell now playing: macOS Control Center or Windows SMTC (title/episode line). */
     external fun setNowPlayingMetadata(handle: Long, title: String, subtitle: String, artworkUrl: String)
     external fun requestFocus(handle: Long)
     external fun beginWindowDrag(handle: Long)
