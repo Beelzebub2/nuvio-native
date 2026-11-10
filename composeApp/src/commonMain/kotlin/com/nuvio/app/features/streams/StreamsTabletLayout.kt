@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -137,6 +138,8 @@ internal fun TabletStreamsLayout(
         label = "stream_dominant_backdrop_color",
     )
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        // Reserve usable list space on short desktop windows without hiding search or controls.
+        val compactHeight = maxHeight < 740.dp
         val aspectRatio = maxWidth.value / maxHeight.value
         val isWideLayout = aspectRatio >= 2f
         val useWideArtworkFrame = aspectRatio > StandardDesktopViewportAspectRatio
@@ -234,7 +237,7 @@ internal fun TabletStreamsLayout(
                 .width(if (isWideLayout) resultsWidth else maxWidth * 0.6f)
                 .fillMaxHeight()
                 .padding(
-                    top = if (isIos) 20.dp else 60.dp,
+                    top = if (isIos) 20.dp else if (compactHeight) 44.dp else 60.dp,
                     end = 12.dp,
                     bottom = 12.dp,
                 ),
@@ -268,6 +271,7 @@ internal fun TabletStreamsLayout(
                         best = best?.takeIf { it.stream.sourceFilterMetadata().matches(sourceFilters) },
                         onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
                         onStreamSecondaryClick = onStreamSecondaryClick,
+                        compactHeight = compactHeight,
                     )
 
                     ProviderFilterRow(
@@ -275,6 +279,7 @@ internal fun TabletStreamsLayout(
                         selectedFilter = uiState.selectedFilter,
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = if (compactHeight) 4.dp else 8.dp),
                     )
                     SourceResultsFilterControls(
                         filters = sourceFilters,
