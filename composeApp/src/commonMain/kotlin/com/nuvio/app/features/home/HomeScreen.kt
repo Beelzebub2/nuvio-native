@@ -1508,9 +1508,15 @@ internal fun cachedNextUpHasAired(
     cached: CachedNextUpItem,
     nowEpochMs: Long = WatchProgressClock.nowEpochMs(),
     releaseEpochMs: Long? = com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(cached.released),
-): Boolean =
-    releaseEpochMs?.let { nowEpochMs >= it }
-        ?: cached.hasAired
+    todayIsoDate: String = CurrentDateProvider.todayIsoDate(),
+): Boolean {
+    val released = cached.released?.trim().orEmpty()
+    return if (releaseEpochMs != null && released.isNotEmpty()) {
+        isReleasedBy(todayIsoDate = todayIsoDate, releasedDate = released, nowEpochMs = nowEpochMs)
+    } else {
+        cached.hasAired
+    }
+}
 
 internal fun hasHomeNextUpSeedChangedFromCache(
     currentSeason: Int,
