@@ -8,6 +8,23 @@ import kotlin.test.assertNull
 class PlayerTrackSelectionTest {
 
     @Test
+    fun subtitleLanguageMatchesCanonicalIso639AndVarietyCodes() {
+        val tracks = listOf(
+            subtitleTrack(index = 0, language = "nob", isForced = false),
+            subtitleTrack(index = 1, language = "yue", isForced = false),
+            subtitleTrack(index = 2, language = "cmn", isForced = false),
+        )
+        assertEquals(0, findPreferredSubtitleTrackIndex(tracks, listOf("no"), SubtitleAutoSelectionMode.NORMAL_ONLY))
+        assertEquals(2, findPreferredSubtitleTrackIndex(tracks, listOf("zh"), SubtitleAutoSelectionMode.NORMAL_ONLY))
+        assertEquals(-1, findPreferredSubtitleTrackIndex(tracks.take(2), listOf("zh"), SubtitleAutoSelectionMode.NORMAL_ONLY))
+        assertEquals("no", normalizeLanguageCode("nno"))
+        assertEquals("no", normalizeLanguageCode("no-nob"))
+        assertEquals("zh", normalizeLanguageCode("zh-cmn"))
+        assertEquals("zh", SubtitleLanguageMatching.normalizeLanguageCode("cmn"))
+        assertEquals("yue", SubtitleLanguageMatching.normalizeLanguageCode("yue"))
+    }
+
+    @Test
     fun forcedSelectionUsesPrimaryPreferredLanguageInsteadOfTrackOrder() {
         val tracks = listOf(
             subtitleTrack(index = 0, language = "ja", isForced = true),
