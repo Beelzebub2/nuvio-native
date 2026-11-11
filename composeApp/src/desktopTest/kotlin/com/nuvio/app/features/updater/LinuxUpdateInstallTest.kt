@@ -171,6 +171,15 @@ class LinuxUpdateInstallTest {
     }
 
     @Test
+    fun `only appimage and distro packages are installed through the app`() {
+        assertTrue(linuxInstallsUpdatesInApp(LinuxInstallMethod.APP_IMAGE))
+        assertTrue(linuxInstallsUpdatesInApp(LinuxInstallMethod.RPM))
+        assertTrue(linuxInstallsUpdatesInApp(LinuxInstallMethod.DEB))
+        assertFalse(linuxInstallsUpdatesInApp(LinuxInstallMethod.FLATPAK))
+        assertFalse(linuxInstallsUpdatesInApp(LinuxInstallMethod.UNKNOWN))
+    }
+
+    @Test
     fun `a package install is handed to the desktop package handler`() {
         val command = linuxInstallerCommand(
             method = LinuxInstallMethod.RPM,

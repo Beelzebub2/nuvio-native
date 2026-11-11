@@ -137,4 +137,35 @@ class UpdateBannerUiTest {
         }
         onNodeWithText("Update").assertIsNotEnabled()
     }
+
+    @Test fun unsupportedInstallOffersReleasePageInsteadOfInstall() = runDesktopComposeUiTest(width = 1100, height = 240) {
+        val clicks = mutableListOf<String>()
+        setContent {
+            NuvioTheme {
+                val state = AppUpdaterUiState(
+                    update = update,
+                    isUpdateAvailable = true,
+                    showDialog = true,
+                    downloadedUpdatePath = "C:/old/stale-installer.msi",
+                )
+                AppUpdateBanner(
+                    state = state,
+                    update = update,
+                    primaryAction = primaryUpdateAction(
+                        state = state,
+                        onDownload = { clicks += "release" },
+                        onInstall = { clicks += "installer" },
+                        installsUpdatesInApp = false,
+                    ),
+                    onShowReleaseNotes = {},
+                    onDismiss = {},
+                    installsUpdatesInApp = false,
+                )
+            }
+        }
+        onNodeWithText("This installation needs an external update. Use your package manager or open the release page.")
+            .assertIsDisplayed()
+        onNodeWithText("Update").performClick()
+        runOnIdle { assertEquals(listOf("release"), clicks) }
+    }
 }

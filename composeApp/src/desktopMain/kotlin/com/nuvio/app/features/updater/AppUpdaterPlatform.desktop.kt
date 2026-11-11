@@ -55,6 +55,9 @@ actual object AppUpdaterPlatform {
     actual val isSupported: Boolean
         get() = currentOs != DesktopUpdaterOs.UNKNOWN && linuxInstallMethod != LinuxInstallMethod.FLATPAK
 
+    actual val installsUpdatesInApp: Boolean
+        get() = currentOs != DesktopUpdaterOs.LINUX || linuxInstallsUpdatesInApp(linuxInstallMethod)
+
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
         repo = "starlit",
@@ -349,6 +352,12 @@ internal fun linuxUpdateFileExtensions(method: LinuxInstallMethod): List<String>
     LinuxInstallMethod.DEB -> listOf(".deb")
     LinuxInstallMethod.FLATPAK -> emptyList()
     LinuxInstallMethod.UNKNOWN -> listOf(".deb", ".AppImage")
+}
+
+/** Unrecognized installation methods need an external package manager or manual install. */
+internal fun linuxInstallsUpdatesInApp(method: LinuxInstallMethod): Boolean = when (method) {
+    LinuxInstallMethod.APP_IMAGE, LinuxInstallMethod.RPM, LinuxInstallMethod.DEB -> true
+    LinuxInstallMethod.FLATPAK, LinuxInstallMethod.UNKNOWN -> false
 }
 
 internal fun resolveLinuxInstallMethod(
