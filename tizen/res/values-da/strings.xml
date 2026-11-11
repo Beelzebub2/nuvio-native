@@ -598,7 +598,7 @@
     <string name="settings_advanced_subtitle">Ydeevne, navigation, cache og diagnostik</string>
     <string name="experience_mode_essential">Grundlæggende</string>
     <string name="experience_mode_advanced">Avanceret</string>
-    <string name="experience_mode_choose_title">Vælg din Nuvio-oplevelse</string>
+    <string name="experience_mode_choose_title">Vælg din Starlit-oplevelse</string>
     <string name="experience_mode_choose_subtitle">Start simpelt eller lås alle tilpasninger op. Du kan skifte når som helst.</string>
     <string name="experience_mode_essential_card_subtitle">Fokuseret opsætning, add-ons, afspilningsgrundlag, Trakt og kontoindstillinger.</string>
     <string name="experience_mode_advanced_card_subtitle">Fulde indstillinger, layoutkontrol, katalogrækkefølge, samlinger, plug-ins og diagnostik.</string>
@@ -1891,7 +1891,7 @@
     <string name="catalog_see_all_from">fra %1$s</string>
     <string name="catalog_see_all_empty_title">Ingen indhold tilgængeligt</string>
     <string name="catalog_see_all_empty_subtitle">Prøv et andet katalog, eller kom tilbage senere</string>
-    <string name="layout_selection_welcome">Velkommen til Nuvio</string>
+    <string name="layout_selection_welcome">Velkommen til Starlit</string>
     <string name="layout_selection_subtitle">Vælg dit startskærm-layout</string>
     <string name="layout_selection_continue">Fortsæt</string>
     <string name="update_title">App-opdatering</string>

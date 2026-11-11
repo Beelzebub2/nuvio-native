@@ -368,7 +368,7 @@
     <string name="settings_advanced_subtitle">Εκτέλεση διαγνωστικών ταχύτητας δικτύου</string>
     <string name="experience_mode_essential">Βασική</string>
     <string name="experience_mode_advanced">Προχωρημένη</string>
-    <string name="experience_mode_choose_title">Επιλέξτε την εμπειρία Nuvio σας</string>
+    <string name="experience_mode_choose_title">Επιλέξτε την εμπειρία Starlit σας</string>
     <string name="experience_mode_choose_subtitle">Ξεκινήστε απλά ή ξεκλειδώστε κάθε προσαρμογή. Μπορείτε να αλλάξετε ανά πάσα στιγμή.</string>
     <string name="experience_mode_essential_card_subtitle">Εστιασμένη ρύθμιση, πρόσθετα, βασικά αναπαραγωγής, Trakt και ρυθμίσεις λογαριασμού.</string>
     <string name="experience_mode_advanced_card_subtitle">Πλήρεις ρυθμίσεις, έλεγχοι διάταξης, σειρά καταλόγων, συλλογές, plug-ins και διαγνωστικά.</string>
@@ -1618,7 +1618,7 @@
     <string name="catalog_see_all_from">από %1$s</string>
     <string name="catalog_see_all_empty_title">Δεν υπάρχουν διαθέσιμα στοιχεία</string>
     <string name="catalog_see_all_empty_subtitle">Δοκιμάστε διαφορετικό κατάλογο ή ελέγξτε αργότερα</string>
-    <string name="layout_selection_welcome">Καλώς ήρθατε στο Nuvio</string>
+    <string name="layout_selection_welcome">Καλώς ήρθατε στο Starlit</string>
     <string name="layout_selection_subtitle">Επιλέξτε τη διάταξη αρχικής οθόνης</string>
     <string name="layout_selection_continue">Συνέχεια</string>
   <string name="update_title">Ενημέρωση εφαρμογής</string>

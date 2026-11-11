@@ -1369,7 +1369,7 @@
     <string name="catalog_see_all_from">od %1$s</string>
     <string name="catalog_see_all_empty_title">Žádné položky nejsou k dispozici</string>
     <string name="catalog_see_all_empty_subtitle">Zkuste jiný katalog nebo to zkontrolujte později</string>
-    <string name="layout_selection_welcome">Vítejte v Nuvio</string>
+    <string name="layout_selection_welcome">Vítejte v Starlit</string>
     <string name="layout_selection_subtitle">Vyberte rozvržení domovské obrazovky</string>
     <string name="layout_selection_continue">Pokračovat</string>
     <string name="update_title">Aktualizace aplikace</string>
@@ -1865,7 +1865,7 @@
     <string name="settings_content_discovery_addons_subtitle">Spravovat doplňky, pořadí katalogů a kolekce</string>
     <string name="settings_content_discovery_plugins_subtitle">Spravovat repozitáře a poskytovatele streamů</string>
     <string name="experience_mode_advanced">Pokročilý</string>
-    <string name="experience_mode_choose_title">Vyberte si režim Nuvio</string>
+    <string name="experience_mode_choose_title">Vyberte si režim Starlit</string>
     <string name="experience_mode_choose_subtitle">Začněte jednoduše nebo si odemkněte veškeré přizpůsobení. Kdykoli můžete přepnout.</string>
     <string name="experience_mode_essential_card_subtitle">Základní nastavení, doplňky, základy přehrávání, Trakt a účet.</string>
     <string name="experience_mode_advanced_card_subtitle">Plné nastavení, ovládání rozvržení, pořadí katalogů, kolekce, pluginy a diagnostika.</string>

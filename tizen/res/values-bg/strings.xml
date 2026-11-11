@@ -615,7 +615,7 @@
     <string name="settings_advanced_subtitle">Производителност, навигация, кеш и диагностика</string>
     <string name="experience_mode_essential">Основно</string>
     <string name="experience_mode_advanced">Разширено</string>
-    <string name="experience_mode_choose_title">Изберете вашето Nuvio изживяване</string>
+    <string name="experience_mode_choose_title">Изберете вашето Starlit изживяване</string>
     <string name="experience_mode_choose_subtitle">Започнете с простото или отключете всяка персонализация. Можете да превключвате по всяко време.</string>
     <string name="experience_mode_essential_card_subtitle">Фокусирана настройка, добавки, основи на възпроизвеждането, Trakt и настройки на акаунта.</string>
     <string name="experience_mode_advanced_card_subtitle">Пълни настройки, контроли за оформление, подреждане в каталога, колекции, плъгини и диагностика.</string>
@@ -1969,7 +1969,7 @@
     <string name="catalog_see_all_from">от %1$s</string>
     <string name="catalog_see_all_empty_title">Няма налични артикули</string>
     <string name="catalog_see_all_empty_subtitle">Опитайте друг каталог или проверете отново по-късно</string>
-    <string name="layout_selection_welcome">Добре дошли в Nuvio</string>
+    <string name="layout_selection_welcome">Добре дошли в Starlit</string>
     <string name="layout_selection_subtitle">Изберете оформлението на началния си екран</string>
     <string name="layout_selection_continue">Продължи</string>
     <string name="update_title">Актуализация на приложението</string>

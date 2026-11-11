@@ -1137,7 +1137,7 @@
     <string name="catalog_see_all_from">من %1$s</string>
     <string name="catalog_see_all_empty_title">لا توجد عناصر متاحة</string>
     <string name="catalog_see_all_empty_subtitle">جرب فئة أخرى أو تفقدها لاحقاً</string>
-    <string name="layout_selection_welcome">مرحباً بك في Nuvio</string>
+    <string name="layout_selection_welcome">مرحباً بك في Starlit</string>
     <string name="layout_selection_subtitle">إختر تنسيق شاشتك الرئيسية</string>
     <string name="layout_selection_continue">متابعة</string>
     <string name="update_title">تحديث التطبيق</string>
@@ -1419,7 +1419,7 @@
     <string name="settings_experience_subtitle">أساسية او متقدمة</string>
     <string name="experience_mode_essential">أساسية</string>
     <string name="experience_mode_advanced">متقدمة</string>
-    <string name="experience_mode_choose_title">إختر مستوى إعدادات Nuvio</string>
+    <string name="experience_mode_choose_title">إختر مستوى إعدادات Starlit</string>
     <string name="experience_mode_choose_subtitle">ابدأ ببساطة أو افتح جميع خيارات التخصيص. يمكنك التبديل في أي وقت.</string>
     <string name="experience_mode_essential_card_subtitle">إعداد مركز، الإضافات، أساسيات التشغيل، Trakt، وإعدادات الحساب.</string>
     <string name="experience_mode_advanced_card_subtitle">الإعدادات الكاملة، التحكم بالواجهة، ترتيب الفئات، المجموعات، الملحقات، والتشخيصات.</string>

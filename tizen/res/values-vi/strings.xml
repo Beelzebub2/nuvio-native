@@ -742,7 +742,7 @@
     <string name="catalog_see_all_from">từ %1$s</string>
     <string name="catalog_see_all_empty_title">Không có mục nào</string>
     <string name="catalog_see_all_empty_subtitle">Thử danh mục khác hoặc quay lại sau</string>
-    <string name="layout_selection_welcome">Chào mừng đến Nuvio</string>
+    <string name="layout_selection_welcome">Chào mừng đến Starlit</string>
     <string name="layout_selection_subtitle">Chọn bố cục màn hình chính</string>
     <string name="layout_selection_continue">Tiếp tục</string>
     <string name="update_title">Cập nhật ứng dụng</string>
@@ -1969,7 +1969,7 @@
     <string name="settings_advanced_subtitle">Hiệu năng, điều hướng, bộ nhớ đệm và chẩn đoán</string>
     <string name="experience_mode_essential">Cơ bản</string>
     <string name="experience_mode_advanced">Nâng cao</string>
-    <string name="experience_mode_choose_title">Chọn trải nghiệm Nuvio của bạn</string>
+    <string name="experience_mode_choose_title">Chọn trải nghiệm Starlit của bạn</string>
     <string name="experience_mode_choose_subtitle">Bắt đầu đơn giản hoặc mở khóa mọi tùy chọn cá nhân hóa. Bạn có thể chuyển đổi bất cứ lúc nào.</string>
     <string name="experience_mode_essential_card_subtitle">Tập trung thiết lập, tiện ích, tùy chọn phát cơ bản, Trakt và cài đặt tài khoản.</string>
     <string name="experience_mode_advanced_card_subtitle">Đầy đủ cài đặt, tùy chọn bố cục, thứ tự danh mục, bộ sưu tập, tiện ích và chẩn đoán.</string>

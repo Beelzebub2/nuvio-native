@@ -598,7 +598,7 @@
     <string name="settings_advanced_subtitle">Запуск діагностики швидкості мережі</string>
     <string name="experience_mode_essential">Базовий</string>
     <string name="experience_mode_advanced">Розширений</string>
-    <string name="experience_mode_choose_title">Оберіть свій режим Nuvio</string>
+    <string name="experience_mode_choose_title">Оберіть свій режим Starlit</string>
     <string name="experience_mode_choose_subtitle">Почніть з простого або розблокуйте всі налаштування. Можна змінювати в будь-який час.</string>
     <string name="experience_mode_essential_card_subtitle">Спрощене налаштування: адони, базове відтворення, Trakt та акаунт.</string>
     <string name="experience_mode_advanced_card_subtitle">Повні налаштування: інтерфейс, порядок каталогів, колекції, плагіни та діагностика.</string>
@@ -1891,7 +1891,7 @@
     <string name="catalog_see_all_from">з %1$s</string>
     <string name="catalog_see_all_empty_title">Немає доступних елементів</string>
     <string name="catalog_see_all_empty_subtitle">Спробуйте інший каталог або зайдіть пізніше</string>
-    <string name="layout_selection_welcome">Ласкаво просимо до Nuvio</string>
+    <string name="layout_selection_welcome">Ласкаво просимо до Starlit</string>
     <string name="layout_selection_subtitle">Оберіть макет вашого головного екрана</string>
     <string name="layout_selection_continue">Продовжити</string>
     <string name="update_title">Оновлення застосунку</string>

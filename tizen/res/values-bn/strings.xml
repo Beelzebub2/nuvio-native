@@ -391,7 +391,7 @@
     <string name="settings_advanced_subtitle">পারফরম্যান্স, নেভিগেশন, ক্যাশে এবং ডায়াগনস্টিকস</string>
     <string name="experience_mode_essential">এসেনশিয়াল</string>
     <string name="experience_mode_advanced">উন্নত</string>
-    <string name="experience_mode_choose_title">আপনার Nuvio এক্সপেরিয়েন্স বেছে নিন</string>
+    <string name="experience_mode_choose_title">আপনার Starlit এক্সপেরিয়েন্স বেছে নিন</string>
     <string name="experience_mode_choose_subtitle">সহজভাবে শুরু করুন বা প্রতিটি কাস্টমাইজেশন আনলক করুন। আপনি যেকোনো সময় সুইচ করতে পারবেন।</string>
     <string name="experience_mode_essential_card_subtitle">ফোকাসড সেটআপ, অ্যাডন, প্লেব্যাক বেসিক, Trakt এবং অ্যাকাউন্ট সেটিংস।</string>
     <string name="experience_mode_advanced_card_subtitle">সম্পূর্ণ সেটিংস, লেআউট কন্ট্রোল, ক্যাটালগ অর্ডার, কালেকশন, প্লাগইন এবং ডায়াগনস্টিকস।</string>
@@ -1997,7 +1997,7 @@
     <string name="catalog_see_all_from">%1$s থেকে</string>
     <string name="catalog_see_all_empty_title">কোনো আইটেম উপলব্ধ নেই</string>
     <string name="catalog_see_all_empty_subtitle">ভিন্ন একটি ক্যাটালগ চেষ্টা করুন বা পরে আবার দেখুন</string>
-    <string name="layout_selection_welcome">Nuvio-তে স্বাগতম</string>
+    <string name="layout_selection_welcome">Starlit-তে স্বাগতম</string>
     <string name="layout_selection_subtitle">আপনার হোম স্ক্রিন লেআউট বেছে নিন</string>
     <string name="layout_selection_continue">চালিয়ে যান</string>
     <string name="update_title">অ্যাপ আপডেট</string>

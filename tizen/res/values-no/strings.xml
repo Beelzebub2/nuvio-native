@@ -967,7 +967,7 @@
     <string name="catalog_see_all_from">fra %1$s</string>
     <string name="catalog_see_all_empty_title">Ingen elementer tilgjengelig</string>
     <string name="catalog_see_all_empty_subtitle">Prøv en annen katalog eller kom tilbake senere</string>
-    <string name="layout_selection_welcome">Velkommen til Nuvio</string>
+    <string name="layout_selection_welcome">Velkommen til Starlit</string>
     <string name="layout_selection_subtitle">Velg oppsettet for hjemmeskjermen</string>
     <string name="layout_selection_continue">Fortsett</string>
     <string name="update_title">Appoppdatering</string>
@@ -1737,7 +1737,7 @@
     <string name="settings_content_discovery_plugins_subtitle">Administrer arkiver og strømmetjenester</string>
     <string name="experience_mode_essential">Viktig</string>
     <string name="experience_mode_advanced">Avansert</string>
-    <string name="experience_mode_choose_title">Velg din Nuvio-opplevelse</string>
+    <string name="experience_mode_choose_title">Velg din Starlit-opplevelse</string>
     <string name="experience_mode_choose_subtitle">Begynn enkelt, eller få tilgang til alle tilpasningsmuligheter. Du kan bytte når som helst.</string>
     <string name="experience_mode_essential_card_subtitle">Fokusert oppsett, tilleggsprogrammer, grunnleggende avspilling, Trakt og kontoinnstillinger.</string>
     <string name="experience_mode_advanced_card_subtitle">Fullstendige innstillinger, layoutkontroller, katalogrekkefølge, samlinger, tilleggsprogrammer og diagnostikk.</string>

@@ -857,7 +857,7 @@ Klaida: Bandomoji simuliuojama klaida — tai nėra tikras gedimas. Šaltinis gr
     <string name="catalog_see_all_from">iš %1$s</string>
     <string name="catalog_see_all_empty_title">Elementų nėra</string>
     <string name="catalog_see_all_empty_subtitle">Šiame kataloge turinio nerasta</string>
-    <string name="layout_selection_welcome">Sveiki atvykę į Nuvio</string>
+    <string name="layout_selection_welcome">Sveiki atvykę į Starlit</string>
     <string name="layout_selection_subtitle">Pasirinkite, kaip norite matyti pradinį ekraną</string>
     <string name="layout_selection_continue">Tęsti</string>
     <string name="update_title">Programos atnaujinimas</string>
@@ -1655,7 +1655,7 @@ Klaida: Bandomoji simuliuojama klaida — tai nėra tikras gedimas. Šaltinis gr
     <string name="settings_advanced_subtitle">Našumas, navigacija, talpyklos ir diagnostika</string>
     <string name="experience_mode_essential">Būtina</string>
     <string name="experience_mode_advanced">Išplėstiniai</string>
-    <string name="experience_mode_choose_title">Pasirinkite savo Nuvio patirtį</string>
+    <string name="experience_mode_choose_title">Pasirinkite savo Starlit patirtį</string>
     <string name="experience_mode_choose_subtitle">Pradėkite nuo paprastų nustatymų arba išnaudokite visas pritaikymo galimybes. Galite bet kada pakeisti pasirinkimą.</string>
     <string name="experience_mode_essential_card_subtitle">Pagrindiniai nustatymų, papildinių, atkūrimo pagrindų, Trakt ir paskyros nustatymų aprašymai.</string>
     <string name="experience_mode_advanced_card_subtitle">Išsamūs nustatymai, išdėstymo valdymas, katalogų tvarka, kolekcijos, papildiniai ir diagnostika.</string>

@@ -29,9 +29,9 @@ export const ExperienceModeSelectionScreen = {
     this.step = "mode";
     ScreenUtils.show(this.container);
     this.render();
-    this.onKeyDownBound = this.onKeyDown.bind(this);
     this.onClickBound = this.onClick.bind(this);
-    document.addEventListener("keydown", this.onKeyDownBound);
+    // Keydown is forwarded by FocusEngine; a second document listener would
+    // move two layout cards on one physical remote press.
     this.container.addEventListener("click", this.onClickBound);
     ScreenUtils.setInitialFocus(this.container);
   },
@@ -40,8 +40,8 @@ export const ExperienceModeSelectionScreen = {
     this.container.innerHTML = `
       <main class="experience-mode-screen">
         ${renderBrandWordmarkImage({ className: "experience-mode-logo" })}
-        <h1>${escapeHtml(isLayout ? t("layout_selection_welcome", "Welcome to Nuvio") : t("experience_mode_choose_title", "Choose your Nuvio experience"))}</h1>
-        <p>${escapeHtml(isLayout ? t("layout_selection_subtitle", "Choose how Nuvio should look on your TV.") : t("experience_mode_choose_subtitle", "Start simple or unlock every customization. You can switch anytime."))}</p>
+        <h1>${escapeHtml(isLayout ? t("layout_selection_welcome", "Welcome to Starlit") : t("experience_mode_choose_title", "Choose your Starlit experience"))}</h1>
+        <p>${escapeHtml(isLayout ? t("layout_selection_subtitle", "Choose how Starlit should look on your TV.") : t("experience_mode_choose_subtitle", "Start simple or unlock every customization. You can switch anytime."))}</p>
         <div class="experience-mode-options ${isLayout ? "is-layout" : ""}">
           ${
             isLayout
@@ -96,26 +96,39 @@ export const ExperienceModeSelectionScreen = {
     if (node.dataset.layout) await this.chooseLayout(node.dataset.layout);
   },
   async onKeyDown(event) {
-    const key = event.key;
-    if (["ArrowLeft", "ArrowRight"].includes(key)) {
+    const code = Number(event?.keyCode || event?.which || 0);
+    const key = event?.key || "";
+    const left = code === 37 || key === "ArrowLeft" || key === "Left";
+    const right = code === 39 || key === "ArrowRight" || key === "Right";
+    if (left || right) {
       event.preventDefault();
-      ScreenUtils.moveFocus(this.container, key === "ArrowLeft" ? -1 : 1);
+      ScreenUtils.moveFocus(this.container, left ? -1 : 1);
       return;
     }
-    if (key === "Enter") {
+    if (code === 13 || key === "Enter" || key === "Return") {
       event.preventDefault();
-      this.container.querySelector(".focusable.focused")?.click();
+      if (!event?.repeat) {
+        this.container.querySelector(".focusable.focused")?.click();
+      }
       return;
     }
-    if ((key === "Escape" || key === "Backspace") && this.step === "layout") {
+    if ([27, 461, 10009].includes(code) || key === "Escape" || key === "Backspace") {
       event.preventDefault();
-      this.step = "mode";
-      this.render();
-      ScreenUtils.setInitialFocus(this.container);
+      this.consumeBackRequest();
     }
   },
+  consumeBackRequest() {
+    // Samsung Back is intercepted by FocusEngine before onKeyDown; keep
+    // this substep in the onboarding route instead of exiting the app.
+    if (this.step !== "layout") {
+      return false;
+    }
+    this.step = "mode";
+    this.render();
+    ScreenUtils.setInitialFocus(this.container);
+    return true;
+  },
   cleanup() {
-    document.removeEventListener("keydown", this.onKeyDownBound);
     this.container?.removeEventListener("click", this.onClickBound);
     ScreenUtils.hide(this.container);
   }

@@ -56,9 +56,10 @@ export const LicensesAttributionsScreen = {
         </div>
       </main>`;
     this.onClickBound = this.onClick.bind(this);
-    this.onKeyDownBound = this.onKeyDown.bind(this);
     this.container.addEventListener("click", this.onClickBound);
-    document.addEventListener("keydown", this.onKeyDownBound);
+    // FocusEngine delivers the normalized key event once per remote press.
+    // The section-local data-index values must be globally sequential.
+    ScreenUtils.indexFocusables(this.container);
     ScreenUtils.setInitialFocus(this.container);
   },
   onClick(event) {
@@ -66,20 +67,24 @@ export const LicensesAttributionsScreen = {
     if (url) window.open?.(url, "_blank");
   },
   async onKeyDown(event) {
-    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    const code = Number(event?.keyCode || event?.which || 0);
+    const up = code === 38 || event?.key === "ArrowUp" || event?.key === "Up";
+    const down = code === 40 || event?.key === "ArrowDown" || event?.key === "Down";
+    if (up || down) {
       event.preventDefault();
-      ScreenUtils.moveFocus(this.container, event.key === "ArrowUp" ? -1 : 1);
-    } else if (event.key === "Enter") {
+      ScreenUtils.moveFocus(this.container, up ? -1 : 1);
+    } else if (code === 13 || event?.key === "Enter" || event?.key === "Return") {
       event.preventDefault();
-      this.container.querySelector(".focusable.focused")?.click();
-    } else if (event.key === "Escape" || event.key === "Backspace") {
+      if (!event?.repeat) {
+        this.container.querySelector(".focusable.focused")?.click();
+      }
+    } else if ([27, 461, 10009].includes(code) || event?.key === "Escape" || event?.key === "Backspace") {
       event.preventDefault();
       await Router.back();
     }
   },
   cleanup() {
     this.container?.removeEventListener("click", this.onClickBound);
-    document.removeEventListener("keydown", this.onKeyDownBound);
     ScreenUtils.hide(this.container);
   }
 };

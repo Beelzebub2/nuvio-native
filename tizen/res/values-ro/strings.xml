@@ -694,7 +694,7 @@
     <string name="catalog_see_all_from">din %1$s</string>
     <string name="catalog_see_all_empty_title">Niciun element disponibil</string>
     <string name="catalog_see_all_empty_subtitle">Încearcă un catalog diferit sau revino mai târziu</string>
-    <string name="layout_selection_welcome">Bine ai venit la Nuvio</string>
+    <string name="layout_selection_welcome">Bine ai venit la Starlit</string>
     <string name="layout_selection_subtitle">Alege aspectul ecranului de pornire</string>
     <string name="layout_selection_continue">Continuă</string>
     <string name="update_title">Actualizare aplicație</string>
@@ -1551,7 +1551,7 @@
     <string name="settings_advanced_subtitle">Performanță, navigare, cache și diagnosticare</string>
     <string name="experience_mode_essential">Esențial</string>
     <string name="experience_mode_advanced">Avansat</string>
-    <string name="experience_mode_choose_title">Alegeți-vă experiența Nuvio</string>
+    <string name="experience_mode_choose_title">Alegeți-vă experiența Starlit</string>
     <string name="experience_mode_choose_subtitle">Începeți cu opțiunile simple sau deblocați toate opțiunile de personalizare. Puteți schimba oricând.</string>
     <string name="experience_mode_essential_card_subtitle">Configurare specifică, add-ons, noțiuni de bază privind redarea, Trakt și setările contului.</string>
     <string name="experience_mode_advanced_card_subtitle">Setări complete, controale de aspect, ordinea catalogului, colecții, pluginuri și diagnosticare.</string>

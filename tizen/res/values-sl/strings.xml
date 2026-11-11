@@ -358,7 +358,7 @@
     <string name="settings_advanced_subtitle">Zmogljivost, navigacija, predpomnilnik in diagnostika</string>
     <string name="experience_mode_essential">Osnovno</string>
     <string name="experience_mode_advanced">Napredno</string>
-    <string name="experience_mode_choose_title">Izberite svojo izkušnjo Nuvio</string>
+    <string name="experience_mode_choose_title">Izberite svojo izkušnjo Starlit</string>
     <string name="experience_mode_choose_subtitle">Začnite preprosto ali odklenite vsako prilagoditev. Kadarkoli lahko preklopite.</string>
     <string name="experience_mode_essential_card_subtitle">Osredotočena nastavitev, dodatki, osnove predvajanja, Trakt in nastavitve računa.</string>
     <string name="experience_mode_advanced_card_subtitle">Vse nastavitve, kontrolniki postavitve, vrstni red kataloga, zbirke, vtičniki in diagnostika.</string>
@@ -1448,7 +1448,7 @@
     <string name="catalog_see_all_from">od %1$s</string>
     <string name="catalog_see_all_empty_title">Ni elementov na voljo</string>
     <string name="catalog_see_all_empty_subtitle">Poskusite z drugim katalogom ali preverite kasneje</string>
-    <string name="layout_selection_welcome">Dobrodošli v Nuvio</string>
+    <string name="layout_selection_welcome">Dobrodošli v Starlit</string>
     <string name="layout_selection_subtitle">Izberite postavitev vašega domačega zaslona</string>
     <string name="layout_selection_continue">Nadaljuj</string>
     <string name="update_title">Posodobitev aplikacije</string>

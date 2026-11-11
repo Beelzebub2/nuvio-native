@@ -366,7 +366,7 @@
     <string name="settings_advanced_subtitle">Performa, navigasi, cache, dan diagnostik</string>
     <string name="experience_mode_essential">Esensial</string>
     <string name="experience_mode_advanced">Lanjutan</string>
-    <string name="experience_mode_choose_title">Pilih pengalaman Nuvio Anda</string>
+    <string name="experience_mode_choose_title">Pilih pengalaman Starlit Anda</string>
     <string name="experience_mode_choose_subtitle">Mulai sederhana atau buka semua kustomisasi. Anda bisa beralih kapan saja.</string>
     <string name="experience_mode_essential_card_subtitle">Pengaturan terfokus, add-on, dasar pemutaran, Trakt, dan pengaturan akun.</string>
     <string name="experience_mode_advanced_card_subtitle">Pengaturan lengkap, kontrol tata letak, urutan katalog, koleksi, plug-in, dan diagnostik.</string>
@@ -1634,7 +1634,7 @@
     <string name="catalog_see_all_from">dari %1$s</string>
     <string name="catalog_see_all_empty_title">Tidak ada item tersedia</string>
     <string name="catalog_see_all_empty_subtitle">Coba katalog lain atau periksa kembali nanti</string>
-    <string name="layout_selection_welcome">Selamat datang di Nuvio</string>
+    <string name="layout_selection_welcome">Selamat datang di Starlit</string>
     <string name="layout_selection_subtitle">Pilih tata letak layar beranda Anda</string>
     <string name="layout_selection_continue">Lanjutkan</string>
     <string name="update_title">Pembaruan Aplikasi</string>

@@ -390,7 +390,7 @@
     <string name="settings_advanced_subtitle">Teljesítmény, navigáció, gyorsítótár és diagnosztika</string>
     <string name="experience_mode_essential">Alapvető</string>
     <string name="experience_mode_advanced">Haladó</string>
-    <string name="experience_mode_choose_title">Válaszd ki a Nuvio használati módját</string>
+    <string name="experience_mode_choose_title">Válaszd ki a Starlit használati módját</string>
     <string name="experience_mode_choose_subtitle">Kezdj az alapbeállításokkal, vagy tedd elérhetővé az összes testreszabási lehetőséget. Bármikor válthatsz.</string>
     <string name="experience_mode_essential_card_subtitle">Egyszerű beállítások, bővítmények, alapvető lejátszási funkciók, Trakt és fiókbeállítások.</string>
     <string name="experience_mode_advanced_card_subtitle">Minden beállítás, elrendezés, katalógussorrend, gyűjtemények, beépülő modulok és diagnosztika.</string>
@@ -1956,7 +1956,7 @@
     <string name="catalog_see_all_from">innen: %1$s</string>
     <string name="catalog_see_all_empty_title">Nincsenek elérhető tételek</string>
     <string name="catalog_see_all_empty_subtitle">Próbálkozz másik katalógussal, vagy térj vissza később</string>
-    <string name="layout_selection_welcome">Üdvözöl a Nuvio</string>
+    <string name="layout_selection_welcome">Üdvözöl a Starlit</string>
     <string name="layout_selection_subtitle">Válaszd ki a kezdőképernyő elrendezését</string>
     <string name="layout_selection_continue">Folytatás</string>
     <string name="update_title">Alkalmazásfrissítés</string>

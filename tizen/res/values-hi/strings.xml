@@ -846,7 +846,7 @@
     <string name="catalog_see_all_from">%1$s से</string>
     <string name="catalog_see_all_empty_title">कोई आइटम उपलब्ध नहीं</string>
     <string name="catalog_see_all_empty_subtitle">कोई दूसरा कैटलॉग आज़माएँ या बाद में देखें</string>
-    <string name="layout_selection_welcome">Nuvio में आपका स्वागत है</string>
+    <string name="layout_selection_welcome">Starlit में आपका स्वागत है</string>
     <string name="layout_selection_subtitle">अपना होम स्क्रीन लेआउट चुनें</string>
     <string name="layout_selection_continue">जारी रखें</string>
     <string name="update_title">ऐप अपडेट</string>
@@ -1774,7 +1774,7 @@
     <string name="settings_advanced_subtitle">प्रदर्शन, नेविगेशन, कैश, और निदान</string>
     <string name="experience_mode_essential">आवश्यक</string>
     <string name="experience_mode_advanced">एडवांस्ड</string>
-    <string name="experience_mode_choose_title">अपनाNuvioअनुभव चुनें</string>
+    <string name="experience_mode_choose_title">अपनाStarlitअनुभव चुनें</string>
     <string name="experience_mode_choose_subtitle">सरल से शुरू करें या हर अनुकूलन अनलॉक करें। आप कभी भी स्विच कर सकते हैं।</string>
     <string name="experience_mode_essential_card_subtitle">केंद्रित सेटअप, ऐड-ऑन, प्लेबैक की मूल बातें, Trakt और खाता सेटिंग्स।</string>
     <string name="experience_mode_advanced_card_subtitle">पूर्ण सेटिंग्स, लेआउट नियंत्रण, कैटलॉग क्रम, संग्रह, प्लग-इन, और निदान।</string>

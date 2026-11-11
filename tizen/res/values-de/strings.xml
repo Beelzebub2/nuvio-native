@@ -366,7 +366,7 @@
     <string name="settings_advanced_subtitle">Netzwerkgeschwindigkeit testen</string>
     <string name="experience_mode_essential">Standard</string>
     <string name="experience_mode_advanced">Fortgeschritten</string>
-    <string name="experience_mode_choose_title">Wähle dein Nuvio-Erlebnis</string>
+    <string name="experience_mode_choose_title">Wähle dein Starlit-Erlebnis</string>
     <string name="experience_mode_choose_subtitle">Fangen Sie ganz einfach an oder nutzen Sie alle Anpassungsmöglichkeiten. Sie können jederzeit wechseln.</string>
     <string name="experience_mode_essential_card_subtitle">Schwerpunkt auf Einrichtung, add-ons, Grundlagen der Wiedergabe, Trakt und Kontoeinstellungen.</string>
     <string name="experience_mode_advanced_card_subtitle">Umfassende Einstellungen, Layout-Steuerelemente, Katalogreihenfolge, Sammlungen, Plug-ins und Diagnosefunktionen.</string>
@@ -1465,7 +1465,7 @@
     <string name="catalog_see_all_from">von %1$s</string>
     <string name="catalog_see_all_empty_title">Keine Artikel verfügbar</string>
     <string name="catalog_see_all_empty_subtitle">Versuchen Sie es mit einem anderen Katalog oder schauen Sie später noch einmal vorbei</string>
-    <string name="layout_selection_welcome">Willkommen bei Nuvio</string>
+    <string name="layout_selection_welcome">Willkommen bei Starlit</string>
     <string name="layout_selection_subtitle">Wählen Sie Ihr Startbildschirm-Layout aus</string>
     <string name="layout_selection_continue">Weiter</string>
     <string name="update_title">App-Aktualisierung</string>

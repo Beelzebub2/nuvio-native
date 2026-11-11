@@ -18,6 +18,7 @@ function escapeHtml(value = "") {
 export const EssentialAddonSetupScreen = {
   async mount() {
     this.container = document.getElementById("essentialAddonSetup");
+    this.returningToMode = false;
     ScreenUtils.show(this.container);
     this.container.innerHTML = `
       <main class="experience-mode-screen essential-addon-setup">
@@ -29,9 +30,9 @@ export const EssentialAddonSetupScreen = {
           <button class="experience-mode-card focusable" data-index="1" data-action="skip"><strong>${escapeHtml(t("essential_addon_continue_for_now", "Continue for now"))}</strong><span>${escapeHtml(t("essential_addon_setup_subtitle", "You can add them later from Settings."))}</span></button>
         </div>
       </main>`;
-    this.onKeyDownBound = this.onKeyDown.bind(this);
     this.onClickBound = this.onClick.bind(this);
-    document.addEventListener("keydown", this.onKeyDownBound);
+    // FocusEngine is the single capture-phase remote-key dispatcher.
+    // Another document listener would advance focus/activate twice per press.
     this.container.addEventListener("click", this.onClickBound);
     ScreenUtils.setInitialFocus(this.container);
   },
@@ -55,16 +56,35 @@ export const EssentialAddonSetupScreen = {
     if (action === "skip") await this.finish(true);
   },
   onKeyDown(event) {
-    if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    const code = Number(event?.keyCode || event?.which || 0);
+    const left = code === 37 || event?.key === "ArrowLeft" || event?.key === "Left";
+    const right = code === 39 || event?.key === "ArrowRight" || event?.key === "Right";
+    if (left || right) {
       event.preventDefault();
-      ScreenUtils.moveFocus(this.container, event.key === "ArrowLeft" ? -1 : 1);
-    } else if (event.key === "Enter") {
+      ScreenUtils.moveFocus(this.container, left ? -1 : 1);
+    } else if (code === 13 || event?.key === "Enter" || event?.key === "Return") {
       event.preventDefault();
-      this.container.querySelector(".focusable.focused")?.click();
+      if (!event?.repeat) {
+        this.container.querySelector(".focusable.focused")?.click();
+      }
     }
   },
+  consumeBackRequest() {
+    // This onboarding route replaces the mode-selection history entry.
+    // Samsung Back should let the viewer revise that choice, not exit.
+    if (this.returningToMode) return true;
+    this.returningToMode = true;
+    Promise.resolve()
+      .then(() => Router.navigate(
+        "experienceModeSelection",
+        {},
+        { replaceHistory: true, skipStackPush: true }
+      ))
+      .catch((error) => console.warn("Could not return to experience selection", error))
+      .then(() => { this.returningToMode = false; });
+    return true;
+  },
   cleanup() {
-    document.removeEventListener("keydown", this.onKeyDownBound);
     this.container?.removeEventListener("click", this.onClickBound);
     ScreenUtils.hide(this.container);
   }

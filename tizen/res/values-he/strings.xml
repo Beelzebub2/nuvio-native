@@ -391,7 +391,7 @@
     <string name="settings_advanced_subtitle">הפעלת אבחון מהירות רשת</string>
     <string name="experience_mode_essential">בסיסי</string>
     <string name="experience_mode_advanced">מתקדם</string>
-    <string name="experience_mode_choose_title">בחירת חוויית ה-Nuvio</string>
+    <string name="experience_mode_choose_title">בחירת חוויית ה-Starlit</string>
     <string name="experience_mode_choose_subtitle">אפשר להתחיל בפשטות או לפתוח את כל האפשרויות להגדרה. ניתן להחליף בכל עת.</string>
     <string name="experience_mode_essential_card_subtitle">הגדרה ממוקדת, תוספים, הפעלה בסיסית, Trakt והגדרות חשבון.</string>
     <string name="experience_mode_advanced_card_subtitle">הגדרות מלאות, בחירת תצוגה, סדר קטלוגים, אוספים, פלאגינים ואבחון.</string>
@@ -1970,7 +1970,7 @@
     <string name="catalog_see_all_from">מ-%1$s</string>
     <string name="catalog_see_all_empty_title">אין פריטים זמינים</string>
     <string name="catalog_see_all_empty_subtitle">אפשר לנסות קטלוג אחר או לחזור מאוחר יותר</string>
-    <string name="layout_selection_welcome">ברוכים הבאים ל-Nuvio</string>
+    <string name="layout_selection_welcome">ברוכים הבאים ל-Starlit</string>
     <string name="layout_selection_subtitle">בחירת פריסת מסך הבית</string>
     <string name="layout_selection_continue">המשך</string>
     <string name="update_title">עדכון אפליקציה</string>

@@ -368,7 +368,7 @@
     <string name="settings_advanced_subtitle">性能、导航、缓存和诊断</string>
     <string name="experience_mode_essential">基础模式</string>
     <string name="experience_mode_advanced">高级模式</string>
-    <string name="experience_mode_choose_title">选择您的 Nuvio 使用体验</string>
+    <string name="experience_mode_choose_title">选择您的 Starlit 使用体验</string>
     <string name="experience_mode_choose_subtitle">从简洁开始或解锁所有自定义选项。您随时可以切换。</string>
     <string name="experience_mode_essential_card_subtitle">专注于设置、扩展、播放基础、Trakt 和账户设置。</string>
     <string name="experience_mode_advanced_card_subtitle">完整设置、布局控制、目录顺序、收藏、插件和诊断。</string>
@@ -1553,7 +1553,7 @@
     <string name="catalog_see_all_from">来自 %1$s</string>
     <string name="catalog_see_all_empty_title">没有可用项目</string>
     <string name="catalog_see_all_empty_subtitle">尝试其他目录或稍后再来</string>
-    <string name="layout_selection_welcome">欢迎使用 Nuvio</string>
+    <string name="layout_selection_welcome">欢迎使用 Starlit</string>
     <string name="layout_selection_subtitle">选择您的首页画面布局</string>
     <string name="layout_selection_continue">继续</string>
     <string name="update_title">应用更新</string>

@@ -719,7 +719,7 @@
     <string name="catalog_see_all_from">van %1$s</string>
     <string name="catalog_see_all_empty_title">Geen items beschikbaar</string>
     <string name="catalog_see_all_empty_subtitle">Probeer een andere catalogus of kom later terug</string>
-    <string name="layout_selection_welcome">Welkom bij Nuvio</string>
+    <string name="layout_selection_welcome">Welkom bij Starlit</string>
     <string name="layout_selection_subtitle">Kies je startschermindeling</string>
     <string name="layout_selection_continue">Doorgaan</string>
 <string name="update_title">App-update</string>
@@ -1767,7 +1767,7 @@
     <string name="settings_advanced_subtitle">Prestaties, navigatie, cache en diagnostiek</string>
     <string name="experience_mode_essential">Essentieel</string>
     <string name="experience_mode_advanced">Geavanceerd</string>
-    <string name="experience_mode_choose_title">Kies je Nuvio-ervaring</string>
+    <string name="experience_mode_choose_title">Kies je Starlit-ervaring</string>
     <string name="experience_mode_choose_subtitle">Begin eenvoudig of ontgrendel elke aanpassing. Je kunt altijd wisselen.</string>
     <string name="experience_mode_essential_card_subtitle">Gerichte installatie, add-ons, afspeelbasis, Trakt en accountinstellingen.</string>
     <string name="experience_mode_advanced_card_subtitle">Volledige instellingen, indelingsopties, catalogusvolgorde, collecties, plug-ins en diagnostiek.</string>

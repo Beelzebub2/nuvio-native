@@ -361,7 +361,7 @@
     <string name="settings_advanced_subtitle">Ağ hızı tanılaması çalıştır</string>
     <string name="experience_mode_essential">Basit</string>
     <string name="experience_mode_advanced">Gelişmiş</string>
-    <string name="experience_mode_choose_title">Nuvio deneyimini seç</string>
+    <string name="experience_mode_choose_title">Starlit deneyimini seç</string>
     <string name="experience_mode_choose_subtitle">Basit başla veya tüm özelleştirmeleri aç. İstediğin zaman değiştirebilirsin.</string>
     <string name="experience_mode_essential_card_subtitle">Odaklı kurulum, eklentiler, oynatma temelleri, Trakt ve hesap ayarları.</string>
     <string name="experience_mode_advanced_card_subtitle">Tam ayarlar, düzen kontrolleri, katalog sırası, koleksiyonlar, uzantılar ve teşhis.</string>
@@ -1594,7 +1594,7 @@
     <string name="catalog_see_all_from">Kaynak: %1$s</string>
     <string name="catalog_see_all_empty_title">Görsel öğe bulunamadı</string>
     <string name="catalog_see_all_empty_subtitle">Daha sonra başka bir alt alan türünü denemek de faydalı olacaktır</string>
-    <string name="layout_selection_welcome">Nuvio\'ya Hoş Geldiniz</string>
+    <string name="layout_selection_welcome">Starlit\'e Hoş Geldiniz</string>
     <string name="layout_selection_subtitle">Ana sayfa düzeninizi seçin</string>
     <string name="layout_selection_continue">Devam Et</string>
     <string name="update_title">Güncelleme</string>

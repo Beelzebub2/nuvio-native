@@ -434,7 +434,7 @@
     <string name="settings_advanced_subtitle">Performanca, navigimi, cache-i dhe diagnostikimi</string>
     <string name="experience_mode_essential">Bazë</string>
     <string name="experience_mode_advanced">Të avancuara</string>
-    <string name="experience_mode_choose_title">Zgjidh përvojën tënde në Nuvio</string>
+    <string name="experience_mode_choose_title">Zgjidh përvojën tënde në Starlit</string>
     <string name="experience_mode_choose_subtitle">Fillo thjesht ose zhblloko çdo personalizim. Mund ta ndryshosh në çdo kohë.</string>
     <string name="experience_mode_essential_card_subtitle">Konfigurim i fokusuar, shtesa, bazat e riprodhimit, Trakt dhe cilësimet e llogarisë.</string>
     <string name="experience_mode_advanced_card_subtitle">Cilësime të plota, kontrolle të paraqitjes, renditje katalogësh, koleksione, shtojca dhe diagnostikim.</string>
@@ -2014,7 +2014,7 @@
     <string name="catalog_see_all_from">nga %1$s</string>
     <string name="catalog_see_all_empty_title">Nuk ka artikuj të disponueshëm</string>
     <string name="catalog_see_all_empty_subtitle">Provo një katalog tjetër ose kontrollo përsëri më vonë</string>
-    <string name="layout_selection_welcome">Mirë se vini në Nuvio</string>
+    <string name="layout_selection_welcome">Mirë se vini në Starlit</string>
     <string name="layout_selection_subtitle">Zgjidh paraqitjen e ekranit kryesor</string>
     <string name="layout_selection_continue">Vazhdo</string>
     <string name="update_title">Përditësimi i aplikacionit</string>

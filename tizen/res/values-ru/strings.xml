@@ -1125,7 +1125,7 @@
     <string name="catalog_see_all_from">из %1$s</string>
     <string name="catalog_see_all_empty_title">Нет доступных элементов</string>
     <string name="catalog_see_all_empty_subtitle">Попробуйте другой каталог или загляните позже</string>
-    <string name="layout_selection_welcome">Добро пожаловать в Nuvio</string>
+    <string name="layout_selection_welcome">Добро пожаловать в Starlit</string>
     <string name="layout_selection_subtitle">Выберите макет вашего главного экрана</string>
     <string name="layout_selection_continue">Продолжить</string>
     <string name="update_title">Обновление приложения</string>
@@ -1460,7 +1460,7 @@
     <string name="settings_experience_subtitle">Базовый или расширенный</string>
     <string name="experience_mode_essential">Базовый</string>
     <string name="experience_mode_advanced">Расширенный</string>
-    <string name="experience_mode_choose_title">Выберите свой режим Nuvio</string>
+    <string name="experience_mode_choose_title">Выберите свой режим Starlit</string>
     <string name="experience_mode_choose_subtitle">Начните с простого или разблокируйте все настройки. Можно менять в любое время.</string>
     <string name="experience_mode_essential_card_subtitle">Упрощённая настройка: аддоны, базовое воспроизведение, Trakt и аккаунт.</string>
     <string name="experience_mode_advanced_card_subtitle">Полные настройки: интерфейс, порядок каталогов, коллекции, плагины и диагностика.</string>

@@ -1327,7 +1327,7 @@
     <string name="catalog_see_all_from">depuis %1$s</string>
     <string name="catalog_see_all_empty_title">Aucun élément disponible</string>
     <string name="catalog_see_all_empty_subtitle">Essaie un autre catalogue ou reviens plus tard</string>
-    <string name="layout_selection_welcome">Bienvenue sur Nuvio</string>
+    <string name="layout_selection_welcome">Bienvenue sur Starlit</string>
     <string name="layout_selection_subtitle">Choisissez la disposition de votre écran d’accueil</string>
     <string name="layout_selection_continue">Continuer</string>
     <string name="update_title">Mise à jour de l’application</string>
@@ -1797,7 +1797,7 @@
     <string name="experience_mode_confirm_essential_title">Passer en mode essentiel&#160;?</string>
     <string name="experience_mode_essential">Essentiel</string>
     <string name="experience_mode_advanced">Avancé</string>
-    <string name="experience_mode_choose_title">Choisissez votre expérience Nuvio</string>
+    <string name="experience_mode_choose_title">Choisissez votre expérience Starlit</string>
     <string name="experience_mode_choose_subtitle">Commencez simple ou débloquez toutes les options. Vous pouvez changer à tout moment.</string>
     <string name="experience_mode_essential_card_subtitle">Configuration ciblée, addons, options de lecture de base, Trakt et paramètres de compte.</string>
     <string name="experience_mode_advanced_card_subtitle">Tous les paramètres&#160;: mise en page, ordre des catalogues, collections, plug-ins et diagnostics.</string>

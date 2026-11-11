@@ -1144,7 +1144,7 @@
     <string name="catalog_see_all_from">od %1$s</string>
     <string name="catalog_see_all_empty_title">Nema dostupnih stavki</string>
     <string name="catalog_see_all_empty_subtitle">Pokušaj sa drugim katalogom ili provjeri kasnije</string>
-    <string name="layout_selection_welcome">Dobrodošli u Nuvio</string>
+    <string name="layout_selection_welcome">Dobrodošli u Starlit</string>
     <string name="layout_selection_subtitle">Odaberi raspored početnog ekrana</string>
     <string name="layout_selection_continue">Nastavi</string>
     <string name="update_title">Ažuriranje Aplikacije</string>
@@ -2007,7 +2007,7 @@
     <string name="settings_content_discovery_plugins_subtitle">Upravljanje repozitorijima i pružateljima streamova</string>
     <string name="experience_mode_essential">Osnovno</string>
     <string name="experience_mode_advanced">Napredno</string>
-    <string name="experience_mode_choose_title">Odaberite svoje iskustvo s aplikacijom Nuvio</string>
+    <string name="experience_mode_choose_title">Odaberite svoje iskustvo s aplikacijom Starlit</string>
     <string name="experience_mode_choose_subtitle">Počnite jednostavno ili otključajte sve mogućnosti prilagođavanja. Možete promijeniti u bilo kojem trenutku.</string>
     <string name="experience_mode_essential_card_subtitle">Fokusirana postavka, add-ons, osnove reprodukcije, Trakt i postavke računa.</string>
     <string name="experience_mode_advanced_card_subtitle">Potpuna podešavanja, kontrole rasporeda, redoslijed kataloga, kolekcije, dodatci i dijagnostika.</string>

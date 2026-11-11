@@ -368,7 +368,7 @@
     <string name="settings_advanced_subtitle">Výkon, navigácia, cache a diagnostika</string>
     <string name="experience_mode_essential">Základná</string>
     <string name="experience_mode_advanced">Pokročilá</string>
-    <string name="experience_mode_choose_title">Vyberte svoju skúsenosť s Nuvio</string>
+    <string name="experience_mode_choose_title">Vyberte svoju skúsenosť s Starlit</string>
     <string name="experience_mode_choose_subtitle">Začnite jednoducho alebo odomknite každé prispôsobenie. Môžete prepínať kedykoľvek.</string>
     <string name="experience_mode_essential_card_subtitle">Zameraná konfigurácia, doplnky, základy prehrávania, Trakt a nastavenia účtu.</string>
     <string name="experience_mode_advanced_card_subtitle">Úplné nastavenia, ovládanie rozloženia, poradie katalógov, kolekcie, pluginy a diagnostika.</string>
@@ -1637,7 +1637,7 @@
     <string name="catalog_see_all_from">z %1$s</string>
     <string name="catalog_see_all_empty_title">Žiadne položky nie sú dostupné</string>
     <string name="catalog_see_all_empty_subtitle">Skúste iný katalóg alebo sa vráťte neskôr</string>
-    <string name="layout_selection_welcome">Vitajte v Nuvio</string>
+    <string name="layout_selection_welcome">Vitajte v Starlit</string>
     <string name="layout_selection_subtitle">Vyberte rozloženie domovskej obrazovky</string>
     <string name="layout_selection_continue">Pokračovať</string>
     <string name="update_title">Aktualizácia aplikácie</string>

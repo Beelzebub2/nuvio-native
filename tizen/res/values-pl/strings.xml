@@ -888,7 +888,7 @@
     <string name="catalog_see_all_from">z %1$s</string>
     <string name="catalog_see_all_empty_title">Brak dostępnych pozycji</string>
     <string name="catalog_see_all_empty_subtitle">Spróbuj innego katalogu lub wróć później</string>
-    <string name="layout_selection_welcome">Witaj w Nuvio</string>
+    <string name="layout_selection_welcome">Witaj w Starlit</string>
     <string name="layout_selection_subtitle">Wybierz układ ekranu głównego</string>
     <string name="layout_selection_continue">Kontynuuj</string>
     <string name="update_title">Aktualizacja aplikacji</string>
@@ -1939,7 +1939,7 @@
     <string name="experience_mode_advanced">Zaawansowany</string>
     <string name="experience_mode_advanced_card_subtitle">Pełne ustawienia, kontrola układu, kolejność katalogów, kolekcje, wtyczki i diagnostyka.</string>
     <string name="experience_mode_choose_subtitle">Zacznij prosto lub odblokuj każdą personalizację. Możesz zmienić w dowolnym momencie.</string>
-    <string name="experience_mode_choose_title">Wybierz swoje doświadczenie Nuvio</string>
+    <string name="experience_mode_choose_title">Wybierz swoje doświadczenie Starlit</string>
     <string name="experience_mode_essential_card_subtitle">Skupiona konfiguracja, dodatki, podstawy odtwarzania, Trakt i ustawienia konta.</string>
     <string name="language_english">Angielski</string>
     <string name="layout_cw_sort_default">Domyślne</string>

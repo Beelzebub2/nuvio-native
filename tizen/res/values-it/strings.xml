@@ -1287,7 +1287,7 @@
     <string name="catalog_see_all_from">da %1$s</string>
     <string name="catalog_see_all_empty_title">Nessun elemento disponibile</string>
     <string name="catalog_see_all_empty_subtitle">Prova un catalogo diverso o ricontrolla più tardi</string>
-    <string name="layout_selection_welcome">Benvenuto su Nuvio</string>
+    <string name="layout_selection_welcome">Benvenuto su Starlit</string>
     <string name="layout_selection_subtitle">Scegli il layout della tua schermata home</string>
     <string name="layout_selection_continue">Continua</string>
     <string name="update_title">Aggiornamento App</string>
@@ -1893,7 +1893,7 @@
     <string name="licenses_attributions_libmpv_title">libmpv / libmpv-android</string>
     <string name="licenses_attributions_libmpv_body">Utilizzato come motore di riproduzione Android. Il wrapper libmpv-android è distribuito sotto licenza MIT; mpv/libmpv e i componenti nativi inclusi mantengono i termini di licenza originali.</string>
     <string name="experience_mode_advanced">Avanzata</string>
-    <string name="experience_mode_choose_title">Scegli la tua esperienza Nuvio</string>
+    <string name="experience_mode_choose_title">Scegli la tua esperienza Starlit</string>
     <string name="experience_mode_choose_subtitle">Inizia in modo semplice o sblocca ogni personalizzazione. Puoi cambiare idea in qualsiasi momento.</string>
     <string name="experience_mode_essential_card_subtitle">Configurazione rapida, add-on, basi della riproduzione, Trakt e impostazioni account.</string>
     <string name="experience_mode_advanced_card_subtitle">Impostazioni complete, controlli layout, ordine catalogo, collezioni, plug-in e diagnostica.</string>

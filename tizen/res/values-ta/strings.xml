@@ -366,7 +366,7 @@
     <string name="settings_advanced_subtitle">செயல்திறன், வழிசெலுத்தல், கேச் மற்றும் ஆய்வு</string>
     <string name="experience_mode_essential">எளிமை</string>
     <string name="experience_mode_advanced">மேம்பட்டது</string>
-    <string name="experience_mode_choose_title">உங்கள் நுவியோ பயன்பாட்டு முறையை தேர்ந்தெடுக்கவும்</string>
+    <string name="experience_mode_choose_title">உங்கள் Starlit பயன்பாட்டு முறையை தேர்ந்தெடுக்கவும்</string>
     <string name="experience_mode_choose_subtitle">எளிமையாக தொடங்கவும் அல்லது முழு தனிப்பயனாக்கத்தையும் திறக்கவும். எப்போது வேண்டுமானாலும் மாற்றலாம்.</string>
     <string name="experience_mode_essential_card_subtitle">அடிப்படை அமைப்பு, ஆட்-ஆன்கள், இயக்கம் மற்றும் அக்கவுண்ட் அமைப்புகள்.</string>
     <string name="experience_mode_advanced_card_subtitle">முழு அமைப்புகள், வடிவமைப்பு கட்டுப்பாடுகள், தொகுப்புகள் மற்றும் ஆய்வுகள்.</string>
@@ -1465,7 +1465,7 @@
     <string name="catalog_see_all_from">%1$s இலிருந்து</string>
     <string name="catalog_see_all_empty_title">உருப்படிகள் எதுவும் இல்லை</string>
     <string name="catalog_see_all_empty_subtitle">வேறு கேட்டலாக் முயற்சிக்கவும் அல்லது பின்னர் பார்க்கவும்</string>
-    <string name="layout_selection_welcome">நூவியோவிற்கு வரவேற்கிறோம்</string>
+    <string name="layout_selection_welcome">Starlit-க்கு வரவேற்கிறோம்</string>
     <string name="layout_selection_subtitle">உங்கள் முகப்புத்திரை வடிவமைப்பை தேர்ந்தெடுக்கவும்</string>
     <string name="layout_selection_continue">தொடர்க</string>
     <string name="update_title">செயலி புதுப்பிப்பு</string>
