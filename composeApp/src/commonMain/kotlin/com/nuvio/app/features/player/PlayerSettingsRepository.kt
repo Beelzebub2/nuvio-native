@@ -41,6 +41,9 @@ data class PlayerSettingsUiState(
     val resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
     val holdToSpeedEnabled: Boolean = true,
     val holdToSpeedValue: Float = 2f,
+    val shortSeekSeconds: Int = DEFAULT_SHORT_SEEK_SECONDS,
+    val mediumSeekSeconds: Int = DEFAULT_MEDIUM_SEEK_SECONDS,
+    val longSeekSeconds: Int = DEFAULT_LONG_SEEK_SECONDS,
     val touchGesturesEnabled: Boolean = true,
     val externalPlayerEnabled: Boolean = false,
     val externalPlayerForwardSubtitles: Boolean = false,
@@ -113,6 +116,9 @@ object PlayerSettingsRepository {
     private var resizeMode = PlayerResizeMode.Fit
     private var holdToSpeedEnabled = true
     private var holdToSpeedValue = 2f
+    private var shortSeekSeconds = DEFAULT_SHORT_SEEK_SECONDS
+    private var mediumSeekSeconds = DEFAULT_MEDIUM_SEEK_SECONDS
+    private var longSeekSeconds = DEFAULT_LONG_SEEK_SECONDS
     private var touchGesturesEnabled = true
     private var externalPlayerEnabled = false
     private var externalPlayerForwardSubtitles = false
@@ -190,6 +196,9 @@ object PlayerSettingsRepository {
         resizeMode = PlayerResizeMode.Fit
         holdToSpeedEnabled = true
         holdToSpeedValue = 2f
+        shortSeekSeconds = DEFAULT_SHORT_SEEK_SECONDS
+        mediumSeekSeconds = DEFAULT_MEDIUM_SEEK_SECONDS
+        longSeekSeconds = DEFAULT_LONG_SEEK_SECONDS
         touchGesturesEnabled = true
         externalPlayerEnabled = false
         externalPlayerForwardSubtitles = false
@@ -262,6 +271,15 @@ object PlayerSettingsRepository {
             ?: PlayerResizeMode.Fit
         holdToSpeedEnabled = PlayerSettingsStorage.loadHoldToSpeedEnabled() ?: true
         holdToSpeedValue = PlayerSettingsStorage.loadHoldToSpeedValue() ?: 2f
+        shortSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadShortSeekSeconds() ?: DEFAULT_SHORT_SEEK_SECONDS,
+        )
+        mediumSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadMediumSeekSeconds() ?: DEFAULT_MEDIUM_SEEK_SECONDS,
+        )
+        longSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadLongSeekSeconds() ?: DEFAULT_LONG_SEEK_SECONDS,
+        )
         touchGesturesEnabled = PlayerSettingsStorage.loadTouchGesturesEnabled() ?: true
         externalPlayerEnabled = if (AppFeaturePolicy.externalPlayerSupported) {
             PlayerSettingsStorage.loadExternalPlayerEnabled() ?: false
@@ -465,6 +483,33 @@ object PlayerSettingsRepository {
         holdToSpeedValue = normalized
         publish()
         PlayerSettingsStorage.saveHoldToSpeedValue(normalized)
+    }
+
+    fun setShortSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (shortSeekSeconds == normalized) return
+        shortSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveShortSeekSeconds(normalized)
+    }
+
+    fun setMediumSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (mediumSeekSeconds == normalized) return
+        mediumSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveMediumSeekSeconds(normalized)
+    }
+
+    fun setLongSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (longSeekSeconds == normalized) return
+        longSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveLongSeekSeconds(normalized)
     }
 
     fun setTouchGesturesEnabled(enabled: Boolean) {
@@ -1011,6 +1056,9 @@ object PlayerSettingsRepository {
             resizeMode = resizeMode,
             holdToSpeedEnabled = holdToSpeedEnabled,
             holdToSpeedValue = holdToSpeedValue,
+            shortSeekSeconds = shortSeekSeconds,
+            mediumSeekSeconds = mediumSeekSeconds,
+            longSeekSeconds = longSeekSeconds,
             touchGesturesEnabled = touchGesturesEnabled,
             externalPlayerEnabled = externalPlayerEnabled && AppFeaturePolicy.externalPlayerSupported,
             externalPlayerForwardSubtitles = externalPlayerForwardSubtitles && AppFeaturePolicy.externalPlayerSupported,

@@ -27,7 +27,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 
-private const val SEEK_INTERVAL_MS = 10_000L
+private fun currentSeekIntervalMs(): Long {
+    PlayerSettingsRepository.ensureLoaded()
+    return PlayerSettingsRepository.uiState.value.seekStepMs(PlayerSeekStep.SHORT)
+}
 private const val MAX_ARTWORK_DOWNLOAD_BYTES = 12 * 1024 * 1024
 private const val MAX_ARTWORK_EDGE_PX = 1_024
 
@@ -74,9 +77,9 @@ internal class AndroidPlayerNowPlayingController(
 
                 override fun onSeekTo(pos: Long) = controls.seekTo(pos.coerceAtLeast(0L))
 
-                override fun onFastForward() = controls.seekBy(SEEK_INTERVAL_MS)
+                override fun onFastForward() = controls.seekBy(currentSeekIntervalMs())
 
-                override fun onRewind() = controls.seekBy(-SEEK_INTERVAL_MS)
+                override fun onRewind() = controls.seekBy(-currentSeekIntervalMs())
             },
             mainHandler,
         )
@@ -178,8 +181,8 @@ internal class AndroidPlayerNowPlayingController(
         when (action) {
             ACTION_PLAY -> controls.play()
             ACTION_PAUSE -> controls.pause()
-            ACTION_REWIND -> controls.seekBy(-SEEK_INTERVAL_MS)
-            ACTION_FAST_FORWARD -> controls.seekBy(SEEK_INTERVAL_MS)
+            ACTION_REWIND -> controls.seekBy(-currentSeekIntervalMs())
+            ACTION_FAST_FORWARD -> controls.seekBy(currentSeekIntervalMs())
         }
     }
 

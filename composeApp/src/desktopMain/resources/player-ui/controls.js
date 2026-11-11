@@ -194,6 +194,9 @@ const playerToastText = document.getElementById("playerToastText");
 
 let state = {
   title: "",
+  shortSeekSeconds: 10,
+  mediumSeekSeconds: 30,
+  longSeekSeconds: 60,
   episodeText: "",
   streamTitle: "",
   providerName: "",
@@ -625,8 +628,26 @@ const syncVolumeControl = () => {
 };
 
 const seekToastLabel = command => {
-  if (command === "seekBack" || command === "keyboardSeekBack") return "-10s";
-  if (command === "seekForward" || command === "keyboardSeekForward") return "+10s";
+  const secondsFor = (value, fallback) => {
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds >= 1 && seconds <= 120
+      ? Math.round(seconds)
+      : fallback;
+  };
+  const seekBack = command === "seekBack" || command === "keyboardSeekBack";
+  const seekForward = command === "seekForward" || command === "keyboardSeekForward";
+  if (seekBack || seekForward) {
+    const seconds = secondsFor(state.shortSeekSeconds, 10);
+    return `${seekBack ? "-" : "+"}${seconds}s`;
+  }
+  if (command === "keyboardMediumSeekBack" || command === "keyboardMediumSeekForward") {
+    const seconds = secondsFor(state.mediumSeekSeconds, 30);
+    return `${command.endsWith("Back") ? "-" : "+"}${seconds}s`;
+  }
+  if (command === "keyboardLongSeekBack" || command === "keyboardLongSeekForward") {
+    const seconds = secondsFor(state.longSeekSeconds, 60);
+    return `${command.endsWith("Back") ? "-" : "+"}${seconds}s`;
+  }
   if (command === "pictureInPicture" || command === "pip") return state.pipLabel || "";
   return "";
 };
@@ -2663,20 +2684,28 @@ const isInteractiveControlTarget = target => Boolean(
   target && target.closest && target.closest("button, input, textarea, select, a, [contenteditable='true']"),
 );
 const shortcutCommandForEvent = event => {
-  if (event.metaKey || event.ctrlKey || event.altKey) return "";
+  if (event.metaKey || event.altKey) return "";
   const isShift = Boolean(event.shiftKey);
+  const isCtrl = Boolean(event.ctrlKey);
   switch (event.code) {
     case "KeyK":
+      if (isCtrl) return "";
       return "keyboardToggle";
     case "ArrowLeft":
-    case "KeyJ":
-      return isShift ? "keyboardFineSeekBack" : "keyboardSeekBack";
+      return isCtrl ? "keyboardLongSeekBack" : isShift ? "keyboardMediumSeekBack" : "keyboardSeekBack";
     case "ArrowRight":
+      return isCtrl ? "keyboardLongSeekForward" : isShift ? "keyboardMediumSeekForward" : "keyboardSeekForward";
+    case "KeyJ":
+      if (isCtrl) return "";
+      return isShift ? "keyboardFineSeekBack" : "keyboardSeekBack";
     case "KeyL":
+      if (isCtrl) return "";
       return isShift ? "keyboardFineSeekForward" : "keyboardSeekForward";
     case "ArrowUp":
+      if (isCtrl) return "";
       return "keyboardVolumeUp";
     case "ArrowDown":
+      if (isCtrl) return "";
       return "keyboardVolumeDown";
     default:
       return "";
@@ -3823,7 +3852,10 @@ document.addEventListener("keydown", event => {
     togglePlayerFullscreen();
     return;
   }
-  if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
+  const isCtrlSeekArrow = event.ctrlKey && !event.metaKey && !event.altKey && !activeModal
+    && (event.code === "ArrowLeft" || event.code === "ArrowRight");
+  if (event.metaKey || (event.ctrlKey && !isCtrlSeekArrow) || event.altKey
+      || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
     clearSpaceHoldTimerAndStopSpeedBoost();
     return;
   }

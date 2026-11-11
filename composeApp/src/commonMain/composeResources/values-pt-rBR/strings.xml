@@ -442,11 +442,13 @@
     <string name="compose_player_resize_fit">Ajustar</string>
     <string name="compose_player_resize_zoom">Zoom</string>
     <string name="compose_player_seek_back_10">Retroceder 10 segundos</string>
+    <string name="compose_player_seek_back_seconds">Retroceder %1$d segundos</string>
     <string name="compose_player_seek_delta_backward">-%1$ds</string>
     <string name="compose_player_seek_delta_forward">+%1$ds</string>
     <string name="compose_player_seek_feedback_backward">-%1$ds</string>
     <string name="compose_player_seek_feedback_forward">+%1$ds</string>
     <string name="compose_player_seek_forward_10">Avançar 10 segundos</string>
+    <string name="compose_player_seek_forward_seconds">Avançar %1$d segundos</string>
     <string name="compose_player_sources">Fontes</string>
     <string name="compose_player_style">Estilo</string>
     <string name="compose_player_subs">Legendas</string>
@@ -1114,6 +1116,11 @@
     <string name="settings_playback_section_decoder">DECODIFICADOR</string>
     <string name="settings_playback_section_next_episode">PRÓXIMO EPISÓDIO</string>
     <string name="settings_playback_section_player">PLAYER</string>
+    <string name="settings_playback_section_seek">INTERVALOS DE AVANÇO</string>
+    <string name="settings_playback_seek_short">Avanço curto (setas / botões do player)</string>
+    <string name="settings_playback_seek_medium">Avanço médio (Shift + setas)</string>
+    <string name="settings_playback_seek_long">Avanço longo (Ctrl + setas)</string>
+    <string name="settings_playback_seek_seconds">%1$d segundos</string>
     <string name="settings_playback_section_skip_segments">PULAR SEGMENTOS</string>
     <string name="settings_playback_section_stream_auto_play">REPRODUÇÃO AUTOMÁTICA DE STREAM</string>
     <string name="settings_playback_section_stream_selection">SELEÇÃO DE STREAM</string>

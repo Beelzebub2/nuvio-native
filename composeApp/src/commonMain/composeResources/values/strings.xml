@@ -530,11 +530,13 @@
     <string name="compose_player_resize_stretch">Stretch</string>
     <string name="compose_player_resize_zoom">Zoom</string>
     <string name="compose_player_seek_back_10">Seek backward 10 seconds</string>
+    <string name="compose_player_seek_back_seconds">Seek backward %1$d seconds</string>
     <string name="compose_player_seek_delta_backward">-%1$ds</string>
     <string name="compose_player_seek_delta_forward">+%1$ds</string>
     <string name="compose_player_seek_feedback_backward">-%1$ds</string>
     <string name="compose_player_seek_feedback_forward">+%1$ds</string>
     <string name="compose_player_seek_forward_10">Seek forward 10 seconds</string>
+    <string name="compose_player_seek_forward_seconds">Seek forward %1$d seconds</string>
     <string name="compose_player_sources">Sources</string>
     <string name="compose_player_style">Style</string>
     <string name="compose_player_use_custom_styling">Use custom styling</string>
@@ -1544,6 +1546,11 @@
     <string name="settings_playback_libmpv_yuv420p_description">Force YUV420P output for devices with renderer or color issues.</string>
     <string name="settings_playback_section_next_episode">NEXT EPISODE</string>
     <string name="settings_playback_section_player">PLAYER</string>
+    <string name="settings_playback_section_seek">SEEK INTERVALS</string>
+    <string name="settings_playback_seek_short">Short seek (arrows / player buttons)</string>
+    <string name="settings_playback_seek_medium">Medium seek (Shift + arrows)</string>
+    <string name="settings_playback_seek_long">Long seek (Ctrl + arrows)</string>
+    <string name="settings_playback_seek_seconds">%1$d seconds</string>
     <string name="settings_playback_section_skip_segments">SKIP SEGMENTS</string>
     <string name="settings_playback_section_stream_auto_play">STREAM AUTO-PLAY</string>
     <string name="settings_playback_section_stream_selection">STREAM SELECTION</string>
