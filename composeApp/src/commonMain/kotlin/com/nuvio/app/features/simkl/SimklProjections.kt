@@ -170,6 +170,29 @@ internal fun SimklSyncSnapshot.toSimklProgressEntries(): List<WatchProgressEntry
         .mapNotNull { (_, candidates) -> candidates.maxByOrNull(WatchProgressEntry::lastUpdatedEpochMs) }
         .sortedByDescending(WatchProgressEntry::lastUpdatedEpochMs)
 
+/** Known aliases to retry only after the requested metadata ID has failed. */
+internal fun SimklSyncSnapshot.alternateContentIdsFor(contentId: String): List<String> {
+    val media = entries.firstOrNull { it.matchesContentId(contentId) }?.media ?: return emptyList()
+    val ownImdbId = media.ids.idValue("imdb")
+    val tvdbId = media.ids.idValue("tvdb")
+    val siblingImdbIds = if (tvdbId.isNullOrBlank()) emptyList() else entries
+        .mapNotNull { it.media }
+        .filter { candidate -> tvdbId.equals(candidate.ids.idValue("tvdb"), ignoreCase = true) }
+        .mapNotNull { it.ids.idValue("imdb") }
+        .filterNot { it.equals(ownImdbId, ignoreCase = true) }
+        .groupingBy { it.lowercase() }
+        .eachCount()
+        .entries
+        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        .map { it.key }
+
+    return (siblingImdbIds + media.alternateContentIds())
+        .map(String::trim)
+        .filter { it.isNotEmpty() && !it.equals(contentId, ignoreCase = true) }
+        .distinctBy(String::lowercase)
+        .take(8)
+}
+
 internal fun SimklSyncSnapshot.toSimklShowIdSiblings(): Map<String, Set<String>> {
     val siblingsMap = mutableMapOf<String, MutableSet<String>>()
     entries.forEach { entry ->

@@ -50,10 +50,14 @@ import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryRepository
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.findPlaybackTargetForProgress
+import com.nuvio.app.features.details.CompletedSeriesEpisode
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.SeriesPrimaryAction
+import com.nuvio.app.features.details.latestCompletedSeriesEpisode
+import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.alternateContentIdsFor
 import com.nuvio.app.features.details.seriesPrimaryAction
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeContinueWatchingSection
@@ -1581,6 +1585,27 @@ internal fun classifyHomeNextUpCandidateMetadata(
     )
 }
 
+/** Recompute the Next Up seed when an addon resolves metadata through another content ID. */
+internal fun reanchorHomeNextUpCandidate(
+    candidate: CompletedSeriesCandidate,
+    resolvedContentId: String?,
+    resolvedLatestCompleted: CompletedSeriesEpisode?,
+): CompletedSeriesCandidate? {
+    val resolvedId = resolvedContentId?.trim().orEmpty()
+    if (resolvedId.isBlank() || resolvedId.equals(candidate.content.id.trim(), ignoreCase = true)) {
+        return candidate
+    }
+    // A different metadata ID may represent the complete series while the
+    // requested ID identifies one season; do not reuse the season's old seed.
+    val completed = resolvedLatestCompleted?.takeIf { it.seasonNumber > 0 } ?: return null
+    return CompletedSeriesCandidate(
+        content = candidate.content.copy(id = resolvedId),
+        seasonNumber = completed.seasonNumber,
+        episodeNumber = completed.episodeNumber,
+        markedAtEpochMs = completed.markedAtEpochMs,
+    )
+}
+
 private suspend fun resolveHomeNextUpCandidate(
     completedEntry: CompletedSeriesCandidate,
     watchProgressEntries: List<WatchProgressEntry>,
@@ -1606,11 +1631,36 @@ private suspend fun resolveHomeNextUpCandidate(
         return HomeNextUpResolutionAttempt.transientFailure()
     }
 
+    // Only adopt a different metadata ID when tracking actually recognizes it
+    // as the same content. Some addons rewrite IDs independently of the user
+    // history and must not silently hide a valid Next Up candidate.
+    val resolvedContentId = meta.id.takeIf { id ->
+        id.isNotBlank() && (
+            id.equals(contentId, ignoreCase = true) ||
+                SimklSyncRepository.state.value.snapshot.alternateContentIdsFor(contentId)
+                    .any { alias -> alias.equals(id, ignoreCase = true) }
+            )
+    } ?: contentId
     val resolvedProgressEntries = WatchProgressRepository.prepareNextUpProgressEntries(
         entries = watchProgressEntries,
-        contentId = contentId,
+        contentId = resolvedContentId,
     )
     val resolvedWatchedItems = watchedItems
+    val anchoredEntry = if (resolvedContentId.equals(contentId, ignoreCase = true)) {
+        completedEntry
+    } else {
+        reanchorHomeNextUpCandidate(
+            candidate = completedEntry,
+            resolvedContentId = resolvedContentId,
+            resolvedLatestCompleted = latestCompletedSeriesEpisode(
+                parentMetaId = resolvedContentId,
+                parentMetaType = completedEntry.content.type,
+                progressEntries = resolvedProgressEntries,
+                watchedItems = resolvedWatchedItems,
+                preferFurthestEpisode = preferFurthestEpisode,
+            ),
+        ) ?: return HomeNextUpResolutionAttempt.conclusiveNone()
+    }
     val resolvedWatchedKeys = resolvedWatchedItems.mapTo(linkedSetOf()) { item ->
         watchedItemKey(item.type, item.id, item.season, item.episode)
     }
@@ -1632,7 +1682,7 @@ private suspend fun resolveHomeNextUpCandidate(
     }
 
     val action = meta.seriesPrimaryAction(
-        content = completedEntry.content,
+        content = anchoredEntry.content,
         entries = resolvedProgressEntries,
         watchedItems = resolvedWatchedItems,
         todayIsoDate = todayIsoDate,
@@ -1651,7 +1701,7 @@ private suspend fun resolveHomeNextUpCandidate(
         return HomeNextUpResolutionAttempt.conclusiveNone()
     }
     val metadataDecision = classifyHomeNextUpCandidateMetadata(
-        freshItem = completedEntry.toContinueWatchingSeed(meta)
+        freshItem = anchoredEntry.toContinueWatchingSeed(meta)
             .toUpNextContinueWatchingItem(nextEpisode),
         cachedFallbackItem = cachedFallbackItem,
         dismissedNextUpKeys = dismissedNextUpKeys,
@@ -1665,12 +1715,12 @@ private suspend fun resolveHomeNextUpCandidate(
     }
 
     val sortTimestamp = if (item.isReleaseAlert) {
-        com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(item.released) ?: completedEntry.markedAtEpochMs
+        com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(item.released) ?: anchoredEntry.markedAtEpochMs
     } else {
-        completedEntry.markedAtEpochMs
+        anchoredEntry.markedAtEpochMs
     }
     return HomeNextUpResolutionAttempt.success(
-        contentId to (sortTimestamp to item),
+        anchoredEntry.content.id to (sortTimestamp to item),
     )
 }
 

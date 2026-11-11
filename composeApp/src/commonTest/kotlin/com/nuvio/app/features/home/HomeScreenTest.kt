@@ -7,6 +7,7 @@ import com.nuvio.app.features.cloud.CloudLibraryProviderState
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.playbackVideoId
 import com.nuvio.app.features.debrid.DebridProviders
+import com.nuvio.app.features.details.CompletedSeriesEpisode
 import com.nuvio.app.features.watchprogress.CachedInProgressItem
 import com.nuvio.app.features.watchprogress.CachedNextUpItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
@@ -23,10 +24,59 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeScreenTest {
+
+    @Test
+    fun `next up metadata keeps the seed when original content identity resolves`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001001"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        assertEquals(candidate, reanchorHomeNextUpCandidate(candidate, "tt0001001", null))
+        assertEquals(candidate, reanchorHomeNextUpCandidate(candidate, null, null))
+    }
+
+    @Test
+    fun `next up reanchors a fallback series to its own watched history`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001002"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        val result = reanchorHomeNextUpCandidate(
+            candidate = candidate,
+            resolvedContentId = "tt0001001",
+            resolvedLatestCompleted = CompletedSeriesEpisode(4, 5, 2000L),
+        )
+        assertNotNull(result)
+        assertEquals("tt0001001", result.content.id)
+        assertEquals(4, result.seasonNumber)
+        assertEquals(5, result.episodeNumber)
+        assertEquals(2000L, result.markedAtEpochMs)
+        assertEquals(
+            nextUpDismissKey("tt0001001", 4, 5),
+            nextUpDismissKey(result.content.id, result.seasonNumber, result.episodeNumber),
+        )
+    }
+
+    @Test
+    fun `next up fallback without a usable completed episode stays hidden`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001002"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        assertNull(reanchorHomeNextUpCandidate(candidate, "tt0001001", null))
+        assertNull(reanchorHomeNextUpCandidate(candidate, "tt0001001", CompletedSeriesEpisode(0, 1, 2000L)))
+    }
 
     @Test
     fun `home remains loading while initial addon manifests are pending`() {
