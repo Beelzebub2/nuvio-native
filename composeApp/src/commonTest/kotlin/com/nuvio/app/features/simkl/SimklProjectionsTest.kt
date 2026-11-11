@@ -344,6 +344,38 @@ class SimklProjectionsTest {
         assertNull(parseSimklUtcEpochMs("2024-01-01T00:00:00+01:00"))
     }
 
+    @Test
+    fun `alternate metadata IDs prioritize a sibling show IMDb identity`() {
+        val snapshot = SimklSyncSnapshot(entries = listOf(
+            entry(type = SimklMediaType.ANIME, status = SimklListStatus.WATCHING,
+                id = 1001L, imdb = "tt0000101", tvdb = 800L),
+            entry(type = SimklMediaType.ANIME, status = SimklListStatus.COMPLETED,
+                id = 1002L, imdb = "tt0000101", tvdb = 800L),
+            entry(type = SimklMediaType.ANIME, status = SimklListStatus.WATCHING,
+                id = 1003L, imdb = "tt0000103", tvdb = 800L, mal = 1234L),
+        ))
+
+        val alternates = snapshot.alternateContentIdsFor("tt0000103")
+
+        assertEquals("tt0000101", alternates.first())
+        assertFalse(alternates.contains("tt0000103"))
+        assertEquals(1, alternates.count { it == "tt0000101" })
+        assertEquals(alternates.size, alternates.distinct().size)
+    }
+
+    @Test
+    fun `alternate metadata IDs do not borrow identities from unrelated shows`() {
+        val snapshot = SimklSyncSnapshot(entries = listOf(
+            entry(type = SimklMediaType.ANIME, status = SimklListStatus.WATCHING,
+                id = 2001L, imdb = "tt0000201", tvdb = 900L),
+            entry(type = SimklMediaType.ANIME, status = SimklListStatus.WATCHING,
+                id = 2002L, imdb = "tt0000202", tvdb = 901L),
+        ))
+
+        assertFalse(snapshot.alternateContentIdsFor("tt0000201").contains("tt0000202"))
+        assertEquals(emptyList(), snapshot.alternateContentIdsFor("tt9999999"))
+    }
+
     private fun entry(
         type: SimklMediaType,
         status: SimklListStatus,
@@ -351,6 +383,7 @@ class SimklProjectionsTest {
         imdb: String? = null,
         mal: Long? = null,
         slug: String? = null,
+        tvdb: Long? = null,
         addedAt: String? = null,
         lastWatchedAt: String? = null,
         seasons: List<SimklSeason> = emptyList(),
@@ -360,8 +393,8 @@ class SimklProjectionsTest {
         addedToWatchlistAt = addedAt,
         lastWatchedAt = lastWatchedAt,
         seasons = seasons,
-        movie = if (type == SimklMediaType.MOVIES) media(id, imdb, mal, slug = slug) else null,
-        show = if (type != SimklMediaType.MOVIES) media(id, imdb, mal, slug = slug) else null,
+        movie = if (type == SimklMediaType.MOVIES) media(id, imdb, mal, slug = slug, tvdb = tvdb) else null,
+        show = if (type != SimklMediaType.MOVIES) media(id, imdb, mal, slug = slug, tvdb = tvdb) else null,
     )
 
     private fun media(
@@ -370,6 +403,7 @@ class SimklProjectionsTest {
         mal: Long? = null,
         runtime: Int? = null,
         slug: String? = null,
+        tvdb: Long? = null,
     ): SimklMedia = SimklMedia(
         title = "Title $id",
         poster = "12/poster",
@@ -380,6 +414,7 @@ class SimklProjectionsTest {
             imdb?.let { put("imdb", it) }
             mal?.let { put("mal", it) }
             slug?.let { put("slug", it) }
+            tvdb?.let { put("tvdb", it) }
         },
     )
 }
