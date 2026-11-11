@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import android.app.Application
 import android.content.Context
+import com.nuvio.app.disposeRouteResources
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.tracking.TrackingMediaKind
 import com.nuvio.app.features.tracking.TrackingMediaReference
@@ -11,6 +12,9 @@ import com.nuvio.app.features.tracking.TrackingScrobbleEvent
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.WatchProgressStorage
+import com.nuvio.app.features.watchprogress.ResumePromptRepository
+import com.nuvio.app.features.watchprogress.ResumePromptStorage
+import com.nuvio.app.navigation.PlayerRoute
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -55,11 +59,48 @@ class PrivatePlaybackSessionTest {
         context.getSharedPreferences("nuvio_watch_progress", Context.MODE_PRIVATE).edit().clear().commit()
         WatchProgressStorage.initialize(context)
         WatchProgressRepository.clearLocalState()
+        context.getSharedPreferences("nuvio_resume_prompt", Context.MODE_PRIVATE).edit().clear().commit()
+        ResumePromptStorage.initialize(context)
     }
 
     @After
     fun cleanup() {
         WatchProgressRepository.clearLocalState()
+        ResumePromptRepository.markPlayerExitedNormally()
+    }
+
+    @Test
+    fun privateRouteDisposalDoesNotClearAnotherSessionResumeMarker() {
+        fun launch(privatePlayback: Boolean) = PlayerLaunch(
+            profileId = profile,
+            title = "Example Movie",
+            sourceUrl = "https://example.com/video.mp4",
+            streamTitle = "Example Stream",
+            providerName = "Example Provider",
+            parentMetaId = "normal-movie",
+            parentMetaType = "movie",
+            privatePlayback = privatePlayback,
+        )
+
+        ResumePromptRepository.markPlayerEntered("normal-movie")
+        val privateId = PlayerLaunchStore.put(launch(privatePlayback = true))
+        try {
+            disposeRouteResources(PlayerRoute(privateId))
+            assertNull(PlayerLaunchStore.get(privateId))
+            assertTrue(ResumePromptStorage.loadWasInPlayer())
+            assertEquals("normal-movie", ResumePromptStorage.loadLastPlayerVideoId())
+
+            val normalId = PlayerLaunchStore.put(launch(privatePlayback = false))
+            try {
+                disposeRouteResources(PlayerRoute(normalId))
+                assertFalse(ResumePromptStorage.loadWasInPlayer())
+                assertNull(ResumePromptStorage.loadLastPlayerVideoId())
+            } finally {
+                PlayerLaunchStore.remove(normalId)
+            }
+        } finally {
+            PlayerLaunchStore.remove(privateId)
+        }
     }
 
     @Test
