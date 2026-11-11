@@ -1,6 +1,8 @@
 package com.nuvio.app.features.updater
 
 import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -204,10 +206,15 @@ class LinuxUpdateInstallTest {
         assertEquals("-c", command[1])
         val script = command[2]
         assertTrue(script.contains("kill -0 4242"))
-        val downloaded = File("/tmp/updates/Nuvio.AppImage").absolutePath
-        assertTrue(script.contains("cp -f -- '$downloaded' '/home/user/Apps/Nuvio.AppImage'"))
-        assertTrue(script.contains("exec '/home/user/Apps/Nuvio.AppImage'"))
-        assertTrue(script.contains("else xdg-open '$downloaded'"))
+        assertTrue(script.contains("stage=\$(mktemp -- \"\${target}.update.XXXXXXXXXX\")"))
+        assertTrue(script.contains("backup=\$(mktemp -- \"\${target}.backup.XXXXXXXXXX\")"))
+        assertTrue(script.contains("cp -- \"\$downloaded\" \"\$stage\""))
+        assertTrue(script.contains("chmod u+x -- \"\$stage\""))
+        assertTrue(script.contains("mv -f -- \"\$stage\" \"\$target\""))
+        assertTrue(script.contains("cp -p -- \"\$backup\" \"\$target\""))
+        assertTrue(script.contains("exec \"\$target\""))
+        assertTrue(script.contains("xdg-open \"\$downloaded\""))
+        assertFalse(script.contains("cp -f --"))
     }
 
     @Test
@@ -233,6 +240,126 @@ class LinuxUpdateInstallTest {
         assertTrue(script.contains("'/home/user/Ar'\\''jun/Nuvio.AppImage'"))
         assertFalse(script.contains("Ar'jun"))
     }
+
+    @Test
+    fun `app image update swaps a staged executable and relaunches it`() = withLinuxSandbox { root ->
+        val target = File(root, "Apps with ' quote/Image; touch INJECTED.AppImage")
+        target.parentFile.mkdirs()
+        target.writeExecutable("#!/bin/sh\nprintf old > \"\$RESTART_LOG\"\n")
+        val downloaded = File(root, "updates/New ' AppImage")
+        downloaded.parentFile.mkdirs()
+        val updatedContents = "#!/bin/sh\nprintf updated > \"\$RESTART_LOG\"\n"
+        downloaded.writeExecutable(updatedContents)
+
+        val result = runShellUpdater(root, downloaded, target)
+
+        assertEquals(0, result.exitCode, result.output)
+        assertEquals(updatedContents, target.readText())
+        assertTrue(target.canExecute())
+        assertEquals("updated", File(root, "restarted.log").readText())
+        assertFalse(downloaded.exists())
+        assertFalse(File(root, "INJECTED.AppImage").exists())
+        assertFalse(File(root, "fallback.log").exists())
+        assertNoStagedFiles(target)
+    }
+
+    @Test
+    fun `partial staged copy leaves original app image intact`() = withLinuxSandbox { root ->
+        val target = File(root, "Original.AppImage")
+        target.writeExecutable("original executable")
+        val downloaded = File(root, "updated.AppImage")
+        downloaded.writeText("new executable")
+        File(root, "commands/cp").writeExecutable(
+            "#!/bin/sh\n" +
+                "if [ \"\$1\" = '--' ]; then printf partial > \"\$3\"; kill -KILL \$\$; fi\n" +
+                "exec /bin/cp \"\$@\"\n",
+        )
+
+        val result = runShellUpdater(root, downloaded, target)
+
+        assertEquals(0, result.exitCode, result.output)
+        assertEquals("original executable", target.readText())
+        assertTrue(target.canExecute())
+        assertTrue(downloaded.exists())
+        assertEquals(downloaded.absolutePath, File(root, "fallback.log").readText())
+        assertNoStagedFiles(target)
+    }
+
+    @Test
+    fun `failed rename restores a partially damaged target from backup`() = withLinuxSandbox { root ->
+        val target = File(root, "Original.AppImage")
+        target.writeExecutable("original executable")
+        val downloaded = File(root, "updated.AppImage")
+        downloaded.writeText("new executable")
+        // Simulate a nonconforming rename operation that has damaged its target
+        // before reporting failure. The rollback must also work without mv.
+        File(root, "commands/mv").writeExecutable(
+            "#!/bin/sh\nprintf damaged > \"\$4\"\nexit 73\n",
+        )
+
+        val result = runShellUpdater(root, downloaded, target)
+
+        assertEquals(0, result.exitCode, result.output)
+        assertEquals("original executable", target.readText())
+        assertTrue(target.canExecute())
+        assertTrue(downloaded.exists())
+        assertEquals(downloaded.absolutePath, File(root, "fallback.log").readText())
+        assertNoStagedFiles(target)
+    }
+
+    private inline fun withLinuxSandbox(block: (File) -> Unit) {
+        // The generated shell script is still checked on Windows; filesystem
+        // replacement behavior needs the Linux shell and GNU utilities.
+        if (!System.getProperty("os.name").contains("linux", ignoreCase = true)) return
+
+        val root = Files.createTempDirectory("appimage-install-test-").toFile()
+        try {
+            val commands = File(root, "commands")
+            commands.mkdirs()
+            File(commands, "xdg-open").writeExecutable(
+                "#!/bin/sh\nprintf '%s' \"\$1\" > \"\$FALLBACK_LOG\"\n",
+            )
+            block(root)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    private fun runShellUpdater(root: File, downloaded: File, target: File): ShellResult {
+        val process = ProcessBuilder(
+            "sh", "-c", appImageReplaceScript(downloaded.absolutePath, target.absolutePath, 999_999_999L),
+        ).directory(root).redirectErrorStream(true)
+        process.environment().apply {
+            put("PATH", File(root, "commands").absolutePath + File.pathSeparator + get("PATH").orEmpty())
+            put("FALLBACK_LOG", File(root, "fallback.log").absolutePath)
+            put("RESTART_LOG", File(root, "restarted.log").absolutePath)
+        }
+
+        val running = process.start()
+        if (!running.waitFor(10, TimeUnit.SECONDS)) {
+            running.destroyForcibly()
+            error("AppImage updater shell command timed out")
+        }
+        return ShellResult(running.exitValue(), running.inputStream.bufferedReader().use { it.readText() })
+    }
+
+    private fun File.writeExecutable(contents: String) {
+        parentFile?.mkdirs()
+        writeText(contents)
+        check(setExecutable(true)) { "Unable to create executable test fixture: $name" }
+    }
+
+    private fun assertNoStagedFiles(target: File) {
+        val prefix = target.name
+        assertTrue(
+            target.parentFile.listFiles().orEmpty().none { file ->
+                file.name.startsWith("$prefix.update.") || file.name.startsWith("$prefix.backup.")
+            },
+            "Temporary AppImage replacement and backup files must be removed",
+        )
+    }
+
+    private data class ShellResult(val exitCode: Int, val output: String)
 
     private fun selectFor(method: LinuxInstallMethod): AppUpdateAssetCandidate? =
         selectBestUpdateAsset(
