@@ -115,6 +115,11 @@ export const FocusEngine = {
         timeStamp: keyEventTime(event)
       });
     }
+    // A lost Back key-up on older Tizen firmware must not leave Back locked.
+    // Another key-down proves the previous remote key cycle has ended.
+    if (!Platform.isBackEvent(normalizedEvent)) {
+      this.activeBackKeyIdentities.clear();
+    }
     if (
       Platform.isBackEvent({
         target: normalizedEvent.target,

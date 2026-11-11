@@ -1,4 +1,5 @@
 import { normalizeKeyEvent, isBackEvent } from "../sharedKeys.js";
+import { registerTizenMediaKeys } from "../tizen/tizenRemoteKeys.js";
 function getAvplayApi() {
   const webapis = globalThis.webapis;
   const avplay =
@@ -48,32 +49,7 @@ export const tizenAdapter = {
     if (globalThis.__NUVIO_TIZEN_MEDIA_KEYS_REGISTERED__ === true) {
       return;
     }
-    const mediaKeys = [
-      "Info",
-      "MediaPlayPause",
-      "MediaPlay",
-      "MediaPause",
-      "MediaStop",
-      "MediaFastForward",
-      "MediaRewind",
-      "MediaTrackPrevious",
-      "MediaTrackNext"
-    ];
-    if (typeof tvInputDevice.registerKeyBatch === "function") {
-      try {
-        tvInputDevice.registerKeyBatch(mediaKeys);
-        return;
-      } catch (_) {
-        // Fall through to per-key registration.
-      }
-    }
-    mediaKeys.forEach((keyName) => {
-      try {
-        tvInputDevice.registerKey?.(keyName);
-      } catch (_) {
-        // Ignore missing media-key support on older firmware.
-      }
-    });
+    registerTizenMediaKeys(tvInputDevice);
   },
   exitApp() {
     try {

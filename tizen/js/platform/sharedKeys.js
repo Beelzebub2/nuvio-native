@@ -45,8 +45,8 @@ function getKeyCodeFromName(keyName) {
     mediastop: 413,
     mediafastforward: 417,
     mediarewind: 412,
-    mediatracknext: 176,
-    mediatrackprevious: 177
+    mediatracknext: 10233,
+    mediatrackprevious: 10232
   };
   return keyMap[normalized] || 0;
 }
@@ -72,8 +72,8 @@ function isMediaKeyEvent(event, normalizedCode = null) {
     return true;
   }
   return (
-    [179, 10252, 415, 19, 413, 178, 417, 412, 176, 177].includes(effectiveCode) ||
-    [179, 10252, 415, 19, 413, 178, 417, 412, 176, 177].includes(rawCode)
+    [179, 10252, 415, 19, 413, 178, 417, 412, 176, 177, 10232, 10233].includes(effectiveCode) ||
+    [179, 10252, 415, 19, 413, 178, 417, 412, 176, 177, 10232, 10233].includes(rawCode)
   );
 }
 function isEditableTarget(target) {

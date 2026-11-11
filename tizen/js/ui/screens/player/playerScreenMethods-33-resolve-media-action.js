@@ -40,6 +40,8 @@ export function createPlayerScreenMethods33() {
         178: "stop",
         417: "fastForward",
         412: "rewind",
+        10233: "next",
+        10232: "previous",
         176: "next",
         177: "previous",
         427: "chapterNext",

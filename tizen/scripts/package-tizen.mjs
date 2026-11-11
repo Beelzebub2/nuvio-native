@@ -7,6 +7,7 @@ import JSZip from "jszip";
 import { readAppMetadata, syncVersionFiles } from "./appMetadata.mjs";
 import { compatibilityPolicy } from "./compatibilityPolicy.mjs";
 import { writeRuntimeEnvScriptFile } from "./envProperties.mjs";
+import { TIZEN_MEDIA_KEY_NAMES } from "../js/platform/tizen/tizenRemoteKeys.js";
 import { pruneCssFileForPlatform } from "./pruneCssForPlatform.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -196,27 +197,34 @@ window.__NUVIO_TIZEN_PLUGIN_SERVICE_ENABLED__ = ${includePluginService};
 window.__NUVIO_TIZEN_PLUGIN_SERVICE_ID__ = ${JSON.stringify(configuredPluginServiceId)};
 var tvInput = window.tizen && window.tizen.tvinputdevice;
 if (tvInput && typeof tvInput.registerKey === "function") {
-  // Registered once here, before the app bundle loads, so the keys work during
-  // the compatibility gate. The Tizen adapter skips its own registration when
-  // this flag is set (the two lists used to overlap on eight media keys).
-  [
-    "Back",
-    "Return",
-    "Info",
-    "MediaPlay",
-    "MediaPause",
-    "MediaPlayPause",
-    "MediaStop",
-    "MediaFastForward",
-    "MediaRewind",
-    "MediaTrackPrevious",
-    "MediaTrackNext"
-  ].forEach(function registerKey(keyName) {
+  // Optional media buttons are registered before the UI bundle loads.
+  // D-pad, Enter and Back are mandatory keys and must never be registered.
+  var remoteKeys = ${JSON.stringify(TIZEN_MEDIA_KEY_NAMES)};
+  var supportedNames = null;
+  try {
+    if (typeof tvInput.getSupportedKeys === "function") {
+      var supportedKeys = tvInput.getSupportedKeys();
+      if (supportedKeys && typeof supportedKeys.length === "number") {
+        supportedNames = {};
+        for (var i = 0; i < supportedKeys.length; i++) {
+          if (supportedKeys[i] && supportedKeys[i].name) {
+            supportedNames[supportedKeys[i].name] = true;
+          }
+        }
+      }
+    }
+  } catch (_) {}
+  var allRegistered = true;
+  remoteKeys.forEach(function registerKey(keyName) {
+    if (supportedNames && !supportedNames[keyName]) return;
     try {
       tvInput.registerKey(keyName);
-    } catch (_) {}
+    } catch (_) {
+      allRegistered = false;
+    }
   });
-  window.__NUVIO_TIZEN_MEDIA_KEYS_REGISTERED__ = true;
+  // A partial failure lets the adapter retry the supported keys later.
+  window.__NUVIO_TIZEN_MEDIA_KEYS_REGISTERED__ = allRegistered;
 }
 function loadScript(src) {
   var script = document.createElement("script");
