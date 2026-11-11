@@ -10,6 +10,7 @@ import kotlin.random.Random
 
 private const val DefaultRetryDelayMs = 1_000L
 private const val MaximumFallbackDelayMs = 30_000L
+private const val MaximumServerRetryDelayMs = 300_000L
 private const val MaximumJitterMs = 1_000L
 
 internal class BackendRateLimitCoordinator(
@@ -89,17 +90,26 @@ internal fun retryAfterDelayMillis(
     fallbackDelayMs: Long = DefaultRetryDelayMs,
 ): Long {
     val value = retryAfterHeader?.trim().orEmpty()
-    val secondsDelay = value.toLongOrNull()
-        ?.coerceAtLeast(0L)
-        ?.let { seconds -> saturatedMultiply(seconds, 1_000L) }
+    val secondsDelay = if (value.isNotEmpty() && value.all { it in '0'..'9' }) {
+        (value.trimStart('0').ifEmpty { "0" }.toLongOrNull() ?: Long.MAX_VALUE)
+            .coerceAtMost(MaximumServerRetryDelayMs / 1_000L) * 1_000L
+    } else {
+        value.toLongOrNull()?.coerceIn(0L, MaximumServerRetryDelayMs / 1_000L)?.times(1_000L)
+    }
     val dateDelay = if (secondsDelay == null && value.isNotEmpty()) {
-        runCatching { value.fromHttpToGmtDate().timestamp - nowEpochMs }
+        runCatching { value.fromHttpToGmtDate().timestamp }
             .getOrNull()
-            ?.coerceAtLeast(0L)
+            ?.let { serverEpochMs ->
+                when {
+                    serverEpochMs <= nowEpochMs -> 0L
+                    serverEpochMs >= saturatedAdd(nowEpochMs, MaximumServerRetryDelayMs) -> MaximumServerRetryDelayMs
+                    else -> serverEpochMs - nowEpochMs
+                }
+            }
     } else {
         null
     }
-    return secondsDelay ?: dateDelay ?: fallbackDelayMs.coerceAtLeast(0L)
+    return secondsDelay ?: dateDelay ?: fallbackDelayMs.coerceIn(0L, MaximumServerRetryDelayMs)
 }
 
 internal fun backendRetryDelayMillis(
@@ -116,13 +126,11 @@ internal fun backendRetryDelayMillis(
         fallbackDelayMs = exponentialDelay,
     )
     return saturatedAdd(retryDelay, jitterMs.coerceIn(0L, MaximumJitterMs))
+        .coerceAtMost(MaximumServerRetryDelayMs)
 }
 
 private fun saturatedAdd(left: Long, right: Long): Long =
     if (right > 0L && left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right
-
-private fun saturatedMultiply(left: Long, right: Long): Long =
-    if (left > Long.MAX_VALUE / right) Long.MAX_VALUE else left * right
 
 private val safeReadRpcNames = setOf(
     "get_avatar_catalog",
