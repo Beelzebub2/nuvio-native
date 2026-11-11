@@ -33,3 +33,10 @@ Account linking uses short-lived, one-use device authorization. Only the human a
 MyAnimeList: connect on Starlit desktop, then explicitly select **Sync connection to linked TVs** in desktop Tracking settings. This shares OAuth credentials through the private provider-credential contract (the account server administrator is trusted). In TV Settings → Integrations → MyAnimeList, load the linked account. The TV can manage statuses and update watched episodes only for explicit `mal:` IDs after the watched threshold. Clearing the TV session keeps the desktop connection. Refresh tokens are reconciled through account sync; concurrent external token revocation requires reconnecting.
 
 See [Apps2Samsung installation](docs/INSTALL.md), [port ownership](docs/PORT-MAP.md), [license notices](docs/NOTICES.md), and [device acceptance](docs/DEVICE-ACCEPTANCE.md). Android and desktop download functionality is unchanged.
+
+The app checks for matching stable Tizen release assets on startup and offers
+a scannable update link. Store-distributed releases opt into Samsung's
+scheduled auto-updates; developer-sideloaded WGTs use Apps2Samsung/TV-Store
+or the optional checksum-verifying PC updater described in
+[installation and updates](docs/INSTALL.md). A sideloaded app cannot
+silently self-install without the Tizen platform privilege.

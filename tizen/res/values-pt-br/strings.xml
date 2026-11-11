@@ -1730,7 +1730,7 @@
     <string name="layout_selection_subtitle">Escolha o layout da sua tela inicial</string>
     <string name="layout_selection_continue">Continuar</string>
     <string name="update_title">Atualização do App</string>
-    <string name="update_installer_required">Use o Starlit TV Installer para atualizar o app na TV.</string>
+    <string name="update_installer_required">Use o Apps2Samsung no celular ou computador para atualizar o aplicativo na TV.</string>
     <string name="update_release_notes">Notas de versão</string>
     <string name="update_release_notes_unavailable">Nenhuma descrição da versão está disponível.</string>
     <string name="update_downloading">Baixando atualização</string>
@@ -3405,4 +3405,5 @@
     <string name="stream_test_label_parallel16">Conexão paralela (chunks de 16 MB)</string>
     <string name="stream_test_error_connection">Falha na conexão. O link do último stream reproduzido pode ter expirado ou estar inacessível. Por favor, reproduza o vídeo novamente e tente de novo.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="update_via_phone">Escaneie este código no celular e instale a atualização com o Apps2Samsung.</string>
 </resources>

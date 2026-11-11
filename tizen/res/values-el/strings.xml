@@ -1622,7 +1622,7 @@
     <string name="layout_selection_subtitle">Επιλέξτε τη διάταξη αρχικής οθόνης</string>
     <string name="layout_selection_continue">Συνέχεια</string>
   <string name="update_title">Ενημέρωση εφαρμογής</string>
-  <string name="update_installer_required">Χρησιμοποιήστε το Starlit TV Installer για να ενημερώσετε την εφαρμογή στην τηλεόρασή σας.</string>
+  <string name="update_installer_required">Χρησιμοποιήστε το Apps2Samsung για να ενημερώσετε την εφαρμογή στην τηλεόρασή σας.</string>
   <string name="update_release_notes">Τι νέο υπάρχει</string>
   <string name="update_release_notes_unavailable">Δεν υπάρχει διαθέσιμη περιγραφή έκδοσης.</string>
     <string name="update_downloading">Λήψη ενημέρωσης</string>

@@ -96,6 +96,25 @@
   scrollbar-color: var(--focus-color, #f5f5f5) transparent;
 }
 
+.app-update-has-qr .app-update-notes {
+  max-height: min(21vh, 228px);
+}
+
+.app-update-installer-hint {
+  color: #e0e3e8;
+  font-size: 23px;
+  line-height: 1.4;
+}
+
+.app-update-qr {
+  display: block;
+  width: 208px;
+  height: 208px;
+  border-radius: 10px;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
 .app-update-notes-heading {
   color: #ffffff;
   font-weight: 600;

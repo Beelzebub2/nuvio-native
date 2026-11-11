@@ -1,4 +1,5 @@
 import { I18n } from "../../i18n/index.js";
+import { QrCodeGenerator } from "../../core/qr/qrCodeGenerator.js";
 import { NuvioDialog } from "./nuvioDialog.js";
 function t(key, fallback) {
   return I18n.t(key, {}, { fallback });
@@ -65,6 +66,25 @@ export function showAppUpdatePrompt(update, { documentRef = globalThis.document,
   content.appendChild(notesLabel);
   const notes = buildReleaseNotesContent(update.notes, documentRef);
   content.appendChild(notes);
+  // The public app cannot call tizen.package.install: that requires a
+  // platform-level privilege. Offer a scannable official release URL so a
+  // sideloaded installation can be updated by Apps2Samsung on a phone/PC.
+  if (/^https:\/\/github\.com\/Beelzebub2\/nuvio-native\/releases\/tag\/v\d+\.\d+\.\d+$/.test(update.releaseUrl || "")) {
+    content.classList.add("app-update-has-qr");
+    const instructions = documentRef.createElement("div");
+    instructions.className = "app-update-installer-hint";
+    instructions.textContent = t(
+      "update_via_phone",
+      "Scan to open this release on your phone, then update the TV using Apps2Samsung."
+    );
+    content.appendChild(instructions);
+    const qr = documentRef.createElement("canvas");
+    qr.className = "app-update-qr";
+    qr.setAttribute("aria-label", "Official Starlit TV release QR code");
+    content.appendChild(qr);
+    void QrCodeGenerator.generate(qr, update.releaseUrl, 208)
+      .catch(() => qr.remove());
+  }
   let dialog = null;
   let closed = false;
   const notifyClosed = () => {
@@ -86,7 +106,7 @@ export function showAppUpdatePrompt(update, { documentRef = globalThis.document,
     title: t("update_title", "App Update"),
     subtitle: t(
       "update_installer_required",
-      "Use Starlit TV Installer to update the app on your TV."
+      "Use Apps2Samsung on a phone or computer to update sideloaded TV apps."
     ),
     widthVw: 52.1,
     panelClassName: "app-update-dialog",

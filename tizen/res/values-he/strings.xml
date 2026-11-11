@@ -1974,7 +1974,7 @@
     <string name="layout_selection_subtitle">בחירת פריסת מסך הבית</string>
     <string name="layout_selection_continue">המשך</string>
     <string name="update_title">עדכון אפליקציה</string>
-    <string name="update_installer_required">יש להשתמש ב-Starlit TV Installer כדי לעדכן את האפליקציה בטלוויזיה.</string>
+    <string name="update_installer_required">יש להשתמש ב-Apps2Samsung כדי לעדכן את האפליקציה בטלוויזיה.</string>
     <string name="update_release_notes">מה חדש</string>
     <string name="update_release_notes_unavailable">אין תיאור גרסה זמין.</string>
     <string name="update_downloading">מוריד עדכון</string>

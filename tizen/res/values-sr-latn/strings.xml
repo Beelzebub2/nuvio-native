@@ -2920,7 +2920,7 @@
     <string name="plugin_preserved_subtitle">%1$d nasledni izvori i %2$d nepoznati daljinski redovi se zadržavaju, ali se nikada ne izvršavaju niti prepisuju.</string>
     <string name="plugin_security_note">Kod dodatka se izvršava u ograničenom radniku. Pristup mreži posreduje upakovana TV usluga, sa HTTP(S) ciljevima kompatibilnim sa Android-om, ograničenjima veličine, vremenskim ograničenjima, mogućnošću otkazivanja i bez pristupa TV skladištu ili izvornim API-jima.</string>
     <string name="plugin_disable">Onemogući</string>
-    <string name="update_installer_required">Koristite instalater TV-aNuvio da biste ažurirali aplikaciju na svom televizoru.</string>
+    <string name="update_installer_required">Koristite Apps2Samsung da biste ažurirali aplikaciju na televizoru.</string>
     <string name="update_release_notes">Napomene o izdanju</string>
     <string name="update_release_notes_unavailable">Opis izdanja nije dostupan.</string>
     <string name="player_error_p2p_disabled">P2P striming je onemogućen. Uključite P2P u podešavanjima da biste reprodukovali torrent strimove.</string>

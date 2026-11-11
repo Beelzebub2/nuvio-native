@@ -2786,7 +2786,7 @@
     <string name="plugin_preserved_subtitle">%1$d ældre kilde(r) og %2$d ukendte fjernbetjeningsrække(r) bevares, men udføres eller omskrives aldrig.</string>
     <string name="plugin_security_note">Plugin-koden kører i en afgrænset Worker. Netværksadgangen formidles af den medfølgende tv-tjeneste med Android-kompatible HTTP(S)-mål, størrelsesbegrænsninger, timeouts, annullering og ingen adgang til tv-lageret eller native API\'er.</string>
     <string name="plugin_disable">Deaktivér</string>
-    <string name="update_installer_required">Brug Starlit TV Installer til at opdatere appen på dit tv.</string>
+    <string name="update_installer_required">Brug Apps2Samsung til at opdatere appen på dit tv.</string>
     <string name="update_release_notes">Hvad er nyt</string>
     <string name="update_release_notes_unavailable">Der findes ingen beskrivelse af udgivelsen.</string>
     <string name="update_latest_version">Du bruger den nyeste version.</string>

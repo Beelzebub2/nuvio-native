@@ -2001,7 +2001,7 @@
     <string name="layout_selection_subtitle">আপনার হোম স্ক্রিন লেআউট বেছে নিন</string>
     <string name="layout_selection_continue">চালিয়ে যান</string>
     <string name="update_title">অ্যাপ আপডেট</string>
-    <string name="update_installer_required">Starlit TV ইনস্টলার ব্যবহার করে আপনার টিভিতে অ্যাপটি আপডেট করুন।</string>
+    <string name="update_installer_required">Apps2Samsung ব্যবহার করে আপনার টিভিতে অ্যাপটি আপডেট করুন।</string>
     <string name="update_release_notes">রিলিজ নোট</string>
     <string name="update_release_notes_unavailable">কোনো রিলিজ বিবরণ উপলব্ধ নেই।</string>
     <string name="update_downloading">আপডেট ডাউনলোড হচ্ছে</string>

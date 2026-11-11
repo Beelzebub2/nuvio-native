@@ -3229,7 +3229,7 @@
     <string name="server_options_login_with_qr">Hyr me QR</string>
     <string name="server_options_login_with_email">Hyni me email</string>
     <string name="plugin_disable">Çaktivizo</string>
-    <string name="update_installer_required">Përdorni instaluesin e televizionitNuvio për të përditësuar aplikacionin në televizorin tuaj.</string>
+    <string name="update_installer_required">Përdorni Apps2Samsung për të përditësuar aplikacionin në televizor.</string>
     <string name="update_release_notes_unavailable">Nuk ka përshkrim të versionit të disponueshëm.</string>
     <string name="player_error_p2p_disabled">Transmetimi P2P është ç\'aktivizuar. Aktivizoni P2P në Cilësimet për të luajtur transmetimet torrent.</string>
     <string name="cd_membership_qr">Kodi QR i anëtarësimit</string>

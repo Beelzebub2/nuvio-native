@@ -3003,7 +3003,7 @@
     <string name="plugin_preserved_subtitle">%1$d стари източника(и) и %2$d неизвестни отдалечени реда(и) се запазват, но никога не се изпълняват или презаписват.</string>
     <string name="plugin_security_note">Кодът на приставката се изпълнява в ограничен Worker. Достъпът до мрежата се осъществява чрез пакетираната телевизионна услуга, с HTTP(S) дестинации, съвместими с Android, ограничения за размер, времеви лимити, възможност за отмяна и без достъп до телевизионното хранилище или нативните API-та.</string>
     <string name="plugin_disable">Деактивиране</string>
-    <string name="update_installer_required">Използвайте Starlit TV Installer, за да актуализирате приложението на телевизора си.</string>
+    <string name="update_installer_required">Използвайте Apps2Samsung, за да актуализирате приложението на телевизора си.</string>
     <string name="update_release_notes">Бележки по изданието</string>
     <string name="update_release_notes_unavailable">Няма налично описание на версията.</string>
     <string name="player_error_p2p_disabled">P2P стриймингът е деактивиран. Активирайте P2P в „Настройки“, за да възпроизвеждате торент потоци.</string>

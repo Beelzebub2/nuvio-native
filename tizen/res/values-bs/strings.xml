@@ -1148,7 +1148,7 @@
     <string name="layout_selection_subtitle">Odaberi raspored početnog ekrana</string>
     <string name="layout_selection_continue">Nastavi</string>
     <string name="update_title">Ažuriranje Aplikacije</string>
-    <string name="update_installer_required">Koristite Starlit TV Installer za ažuriranje aplikacije na TV-u.</string>
+    <string name="update_installer_required">Koristite Apps2Samsung za ažuriranje aplikacije na TV-u.</string>
     <string name="update_release_notes">Šta je novo</string>
     <string name="update_release_notes_unavailable">Opis izdanja nije dostupan.</string>
     <string name="update_downloading">Preuzimanje ažuriranja</string>

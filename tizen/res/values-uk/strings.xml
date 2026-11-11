@@ -2791,7 +2791,7 @@
     <string name="plugin_preserved_subtitle">%1$d застарілих джерел та %2$d невідомих віддалених рядків зберігаються, але ніколи не виконуються та не перезаписуються.</string>
     <string name="plugin_security_note">Код плагіна виконується в обмеженому робочому процесі (Worker). Доступ до мережі забезпечується вбудованою телевізійною службою, яка підтримує сумісні з Android цілі HTTP(S), обмеження розміру, тайм-аути, скасування та не надає доступу до телевізійного сховища або нативних API.</string>
     <string name="plugin_disable">Вимкнути</string>
-    <string name="update_installer_required">Скористайтеся програмою «Starlit TV Installer», щоб оновити додаток на телевізорі.</string>
+    <string name="update_installer_required">Скористайтеся програмою «Apps2Samsung», щоб оновити додаток на телевізорі.</string>
     <string name="update_release_notes">Що нового</string>
     <string name="update_release_notes_unavailable">Опис версії відсутній.</string>
     <string name="update_latest_version">Ви використовуєте останню версію.</string>

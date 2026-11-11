@@ -2963,7 +2963,7 @@
     <string name="plugin_preserved_subtitle">%1$d 個舊版來源和 %2$d 個未知遠端列將被保留，但絕不會被執行或重寫。</string>
     <string name="plugin_security_note">外掛程式碼在受限的 Worker 中執行。網路存取由封裝的電視服務進行中介，具備相容於 Android 的 HTTP(S) 目標、大小限制、超時設定及取消機制，且無法存取電視儲存空間或原生 API。</string>
     <string name="plugin_disable">停用</string>
-    <string name="update_installer_required">請使用 Starlit TV Installer 來更新電視上的應用程式。</string>
+    <string name="update_installer_required">請使用 Apps2Samsung 來更新電視上的應用程式。</string>
     <string name="update_release_notes">發行說明</string>
     <string name="update_release_notes_unavailable">目前沒有版本說明。</string>
     <string name="player_error_p2p_disabled">P2P 串流功能已停用。請在「設定」中啟用 P2P 功能，以播放種子串流。</string>

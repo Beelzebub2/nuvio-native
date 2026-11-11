@@ -1,4 +1,8 @@
-const LATEST_RELEASE_URL = "https://api.github.com/repos/Beelzebub2/nuvio-native/releases/latest";
+// The newest native release often has no Tizen asset. Inspect a bounded batch
+// of stable releases rather than treating GitHub's latest overall tag as the
+// newest version available for this TV.
+export const TIZEN_RELEASES_URL = "https://api.github.com/repos/Beelzebub2/nuvio-native/releases?per_page=50";
+const TIZEN_RELEASE_URL_PREFIX = "https://github.com/Beelzebub2/nuvio-native/releases/tag/";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_RETRY_DELAY_MS = 2000;
 const DEFAULT_MAX_ATTEMPTS = 2;
@@ -44,19 +48,39 @@ function releaseTag(release) {
   return String(release?.tag_name || release?.name || "").trim();
 }
 export function parseLatestRelease(release) {
-  if (!release || release.draft || release.prerelease || !release.assets?.some(asset => /^Starlit-Tizen-\d+\.\d+\.\d+\.wgt$/.test(asset.name)) || !release.assets?.some(asset => asset.name === "SHA256SUMS-Tizen")) {
+  if (!release || release.draft || release.prerelease) {
     return null;
   }
   const tag = releaseTag(release);
-  if (!tag) {
+  const version = /^v(\d+\.\d+\.\d+)$/.exec(tag)?.[1];
+  const assetName = version ? `Starlit-Tizen-${version}.wgt` : "";
+  if (
+    !version ||
+    !Array.isArray(release.assets) ||
+    !release.assets.some((asset) => asset.name === assetName) ||
+    !release.assets.some((asset) => asset.name === "SHA256SUMS-Tizen")
+  ) {
     return null;
   }
   return {
     tag,
     title: String(release.name || tag).trim() || tag,
     notes: String(release.body || "").trim(),
-    releaseUrl: String(release.html_url || "").trim() || null
+    releaseUrl: TIZEN_RELEASE_URL_PREFIX + encodeURIComponent(tag),
+    assetName
   };
+}
+export function selectLatestTizenRelease(releases, currentVersion) {
+  if (!Array.isArray(releases)) return null;
+  const candidates = releases
+    .map(parseLatestRelease)
+    .filter((release) => release && isRemoteAppVersionNewer(release.tag, currentVersion));
+  // GitHub usually orders releases by publication time, but a later published
+  // backport should never trigger a downgrade from a newer Tizen package.
+  candidates.sort((a, b) =>
+    isRemoteAppVersionNewer(a.tag, b.tag) ? -1 : isRemoteAppVersionNewer(b.tag, a.tag) ? 1 : 0
+  );
+  return candidates[0] || null;
 }
 export async function getLatestAppUpdate({
   currentVersion,
@@ -70,7 +94,7 @@ export async function getLatestAppUpdate({
   const controller = supportsAbort ? new AbortController() : null;
   let timeoutId = null;
   try {
-    const request = fetchImpl(LATEST_RELEASE_URL, {
+    const request = fetchImpl(TIZEN_RELEASES_URL, {
       method: "GET",
       headers: {
         Accept: "application/vnd.github+json"
@@ -78,8 +102,15 @@ export async function getLatestAppUpdate({
       cache: "no-store",
       signal: controller?.signal
     });
-    const response = await Promise.race([
-      request,
+    const result = await Promise.race([
+      Promise.resolve(request).then(async (response) => {
+        if (!response?.ok) {
+          const error = new Error(`GitHub release check failed: HTTP ${response?.status || 0}`);
+          error.status = Number(response?.status || 0);
+          throw error;
+        }
+        return response.json();
+      }),
       new Promise((_, reject) => {
         timeoutId = setTimeout(
           () => {
@@ -90,16 +121,7 @@ export async function getLatestAppUpdate({
         );
       })
     ]);
-    if (!response?.ok) {
-      const error = new Error(`GitHub release check failed: HTTP ${response?.status || 0}`);
-      error.status = Number(response?.status || 0);
-      throw error;
-    }
-    const release = parseLatestRelease(await response.json());
-    if (!release || !isRemoteAppVersionNewer(release.tag, currentVersion)) {
-      return null;
-    }
-    return release;
+    return selectLatestTizenRelease(result, currentVersion);
   } finally {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);

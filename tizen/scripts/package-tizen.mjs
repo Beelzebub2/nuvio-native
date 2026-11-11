@@ -117,6 +117,9 @@ ${serviceFeature}  <icon src="icon.png"/>
   <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
 ${applicationLaunchPrivilege}  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- Seller Office distributes automatic updates to opted-in TV models.
+       A developer-sideloaded WGT still needs an external installer. -->
+  <tizen:metadata key="http://samsung.com/tv/metadata/auto.update" value="true"/>
 ${engineFsService}${pluginService}  <tizen:profile name="tv-samsung"/>
   <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto"/>
 </widget>

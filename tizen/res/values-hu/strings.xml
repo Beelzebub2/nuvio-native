@@ -1960,7 +1960,7 @@
     <string name="layout_selection_subtitle">Válaszd ki a kezdőképernyő elrendezését</string>
     <string name="layout_selection_continue">Folytatás</string>
     <string name="update_title">Alkalmazásfrissítés</string>
-    <string name="update_installer_required">A TV-n lévő alkalmazás frissítéséhez használd a Starlit TV Installert.</string>
+    <string name="update_installer_required">A TV-n lévő alkalmazás frissítéséhez használd a Apps2Samsungt.</string>
     <string name="update_release_notes">Újdonságok</string>
     <string name="update_release_notes_unavailable">Nem érhető el kiadási leírás.</string>
     <string name="update_downloading">Frissítés letöltése</string>

@@ -1141,7 +1141,7 @@
     <string name="layout_selection_subtitle">إختر تنسيق شاشتك الرئيسية</string>
     <string name="layout_selection_continue">متابعة</string>
     <string name="update_title">تحديث التطبيق</string>
-    <string name="update_installer_required">استخدم Starlit TV Installer لتحديث التطبيق على التلفاز.</string>
+    <string name="update_installer_required">استخدم Apps2Samsung لتحديث التطبيق على التلفاز.</string>
     <string name="update_release_notes">ملاحظات الإصدار</string>
     <string name="update_release_notes_unavailable">لا يتوفر وصف للإصدار.</string>
     <string name="update_downloading">جاري تحميل التحديث</string>

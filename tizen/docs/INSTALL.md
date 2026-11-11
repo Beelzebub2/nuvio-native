@@ -27,3 +27,55 @@ may require another profile. The WGT remains unsigned in CI so a developer
 can sign it for an individual TV. Do not commit signing material or expose
 the TV's developer port to the internet. Install success is not a playback
 certification; follow [the physical-device checklist](DEVICE-ACCEPTANCE.md).
+
+## Updates: Samsung Store and developer installations
+
+**Samsung Apps TV (Seller Office).** The WGT declares Samsung's
+`auto.update=true` metadata, so an approved **Store-distributed** version is
+eligible for the TV's scheduled automatic app updates (subject to the TV's
+update setting and Samsung's rollout). This **does not** turn a sideloaded
+developer WGT into a Store app. Seller Office review and the exact-device
+acceptance gate are required before a stable release.
+
+**Apps2Samsung / TV-Store.** Apps2Samsung can use GitHub release packages as
+a custom source. Add `github.com/Beelzebub2/nuvio-native` in Apps2Samsung's
+Sources, install the released `Starlit-Tizen-<version>.wgt` and use
+`On the TV -> Update` when a newer matching WGT is published. Its TV-Store
+integration offers on-TV updates after certificate/source setup. This is a
+**one-click update**, not a promise of silent updates without further setup.
+Keep the same per-TV signing certificate between versions: a certificate
+mismatch can block an in-place update, and uninstall/reinstall deletes TV
+application data.
+
+**Opt-in automatic updates from a trusted Windows PC.** A PC that stays
+available on the TV's LAN can check GitHub's stable releases and install
+newer, checksum-verified WGTs through Apps2Samsung CLI. The helper checks
+the TV's installed version, skips updates while Starlit is running, requires
+the direct SDB developer connection, uses a matching Public certificate,
+and never requests a data-erasing uninstall, developer-mode bypass or app
+launch. It will not open browser windows on the host PC.
+
+From the repository's `tizen/` directory with Node 24 and Apps2Samsung CLI
+configured for that TV:
+
+```powershell
+# Check only (default; does not install anything).
+node scripts/update-sideloaded-tv.mjs --tv TV_LAN_IP --cli "PATH_TO_APPS2SAMSUNG_CLI"
+
+# Opt in to installation of a verified newer WGT, without launching the app.
+node scripts/update-sideloaded-tv.mjs --tv TV_LAN_IP --cli "PATH_TO_APPS2SAMSUNG_CLI" --install
+```
+
+To schedule automatic checks on Windows, set up a **per-user** Task Scheduler
+task with `node.exe` as the program and the full script path plus `--tv`,
+`--cli` and `--install` as arguments, at a time when the TV is normally
+unused. Use a **stable checkout path**, not a disposable development worktree.
+The PC must be awake; the TV must remain reachable with Developer Mode's
+Host PC IP pointing to the PC. If a release lacks an exact matching Tizen WGT
+and `SHA256SUMS-Tizen`, there is no update to install. The helper fails
+closed on checksum, signing, port or identity mismatch, and it does not
+claim the TV is idle merely because Starlit itself is not open.
+
+Only turn on an unattended update schedule **after** validating the same
+certificate/in-place update with the physical TV. Prefer the Samsung Store
+channel for normal end-user unattended updates where available.

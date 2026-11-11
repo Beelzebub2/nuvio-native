@@ -36,7 +36,7 @@ const remoteSubset = runRemoteBootstrap({ supportedNames: ["Back", "Enter", "Med
 if (JSON.stringify(remoteSubset.registered) !== JSON.stringify(["MediaPlayPause", "MediaTrackNext"]) || remoteSubset.completed !== true) throw new Error("Tizen bootstrap registered mandatory or unsupported keys");
 const remotePartialFailure = runRemoteBootstrap({ supportedNames: ["Back", "MediaPlayPause", "MediaTrackNext"], failName: "MediaTrackNext" });
 if (JSON.stringify(remotePartialFailure.registered) !== JSON.stringify(["MediaPlayPause"]) || remotePartialFailure.completed !== false) throw new Error("Tizen bootstrap did not expose failed media-key registration to adapter");
-for (const value of ['id="StarlitTV1.StarlitTV"', 'package="StarlitTV1"', '<name>Starlit TV</name>', 'id="StarlitTV1.EngineFsService"', 'src="services/tizen/enginefs-service.js"', 'required_version="4.0"']) if (!config.includes(value)) throw new Error(`Invalid package identity: ${value}`);
+for (const value of ['id="StarlitTV1.StarlitTV"', 'package="StarlitTV1"', '<name>Starlit TV</name>', 'id="StarlitTV1.EngineFsService"', 'src="services/tizen/enginefs-service.js"', 'required_version="4.0"', '<tizen:metadata key="http://samsung.com/tv/metadata/auto.update" value="true"/>']) if (!config.includes(value)) throw new Error(`Invalid package identity or update eligibility: ${value}`);
 if (zip.file("author-signature.xml") || zip.file("signature1.xml")) throw new Error("Distribution WGT must be unsigned for per-TV signing");
 const runtimeBytes = await zip.file("services/tizen/runtime/media-http.cjs").async("nodebuffer");
 const runtime = runtimeBytes.toString("utf8");

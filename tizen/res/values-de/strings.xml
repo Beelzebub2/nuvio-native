@@ -1469,7 +1469,7 @@
     <string name="layout_selection_subtitle">Wählen Sie Ihr Startbildschirm-Layout aus</string>
     <string name="layout_selection_continue">Weiter</string>
     <string name="update_title">App-Aktualisierung</string>
-    <string name="update_installer_required">Verwende den Starlit TV Installer, um die App auf deinem Fernseher zu aktualisieren.</string>
+    <string name="update_installer_required">Verwende den Apps2Samsung, um die App auf deinem Fernseher zu aktualisieren.</string>
     <string name="update_release_notes">Neuigkeiten</string>
     <string name="update_release_notes_unavailable">Keine Versionsbeschreibung verfügbar.</string>
     <string name="update_downloading">Update wird heruntergeladen</string>
