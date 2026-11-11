@@ -63,6 +63,8 @@ import com.nuvio.app.features.player.localizedLabel
 import com.nuvio.app.features.player.IosTargetPrimaries
 import com.nuvio.app.features.player.IosTargetTransfer
 import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.player.MIN_SEEK_SECONDS
+import com.nuvio.app.features.player.MAX_SEEK_SECONDS
 import com.nuvio.app.features.player.STREAM_AUTO_PLAY_TIMEOUT_VALUES
 import com.nuvio.app.features.player.SubtitleBackgroundColorSwatches
 import com.nuvio.app.features.player.SubtitleColorSwatches
@@ -473,6 +475,43 @@ private fun PlaybackSettingsSection(
                         )
                     }
                 }
+            }
+        }
+
+        SettingsSection(
+            title = stringResource(Res.string.settings_playback_section_seek),
+            isTablet = isTablet,
+        ) {
+            SettingsGroup(isTablet = isTablet) {
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_short),
+                    value = autoPlayPlayerSettings.shortSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.shortSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setShortSeekSeconds,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_medium),
+                    value = autoPlayPlayerSettings.mediumSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.mediumSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setMediumSeekSeconds,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_long),
+                    value = autoPlayPlayerSettings.longSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.longSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setLongSeekSeconds,
+                )
             }
         }
 

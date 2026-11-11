@@ -59,6 +59,10 @@ enum class PlayerControlsAction {
     KeyboardSeekBack,
     SeekForward,
     KeyboardSeekForward,
+    KeyboardMediumSeekBack,
+    KeyboardMediumSeekForward,
+    KeyboardLongSeekBack,
+    KeyboardLongSeekForward,
     KeyboardVolumeDown,
     KeyboardVolumeUp,
     PictureInPicture,
@@ -78,6 +82,9 @@ enum class PlayerControlsAction {
 
 data class PlayerControlsState(
     val title: String = "",
+    val shortSeekSeconds: Int = DEFAULT_SHORT_SEEK_SECONDS,
+    val mediumSeekSeconds: Int = DEFAULT_MEDIUM_SEEK_SECONDS,
+    val longSeekSeconds: Int = DEFAULT_LONG_SEEK_SECONDS,
     val episodeText: String = "",
     val streamTitle: String = "",
     val providerName: String = "",

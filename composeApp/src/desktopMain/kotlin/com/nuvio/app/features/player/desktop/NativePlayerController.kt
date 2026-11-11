@@ -13,6 +13,9 @@ import com.nuvio.app.features.player.PlayerControlSubtitleOptionItem
 import com.nuvio.app.features.player.AudioTrack
 import com.nuvio.app.features.player.ParentalWarning
 import com.nuvio.app.features.player.PlayerControlsAction
+import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.player.PlayerSeekStep
+import com.nuvio.app.features.player.seekOffsetMs
 import com.nuvio.app.features.player.PlayerControlsState
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerPlaybackSnapshot
@@ -700,9 +703,19 @@ internal class NativePlayerController(
                 }
             }
             PlayerControlsAction.SeekBack,
-            PlayerControlsAction.KeyboardSeekBack -> fallbackSeekBy(-10_000L)
+            PlayerControlsAction.KeyboardSeekBack ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.SHORT, forward = false))
             PlayerControlsAction.SeekForward,
-            PlayerControlsAction.KeyboardSeekForward -> fallbackSeekBy(10_000L)
+            PlayerControlsAction.KeyboardSeekForward ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.SHORT, forward = true))
+            PlayerControlsAction.KeyboardMediumSeekBack ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.MEDIUM, forward = false))
+            PlayerControlsAction.KeyboardMediumSeekForward ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.MEDIUM, forward = true))
+            PlayerControlsAction.KeyboardLongSeekBack ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.LONG, forward = false))
+            PlayerControlsAction.KeyboardLongSeekForward ->
+                fallbackSeekBy(PlayerSettingsRepository.uiState.value.seekOffsetMs(PlayerSeekStep.LONG, forward = true))
             PlayerControlsAction.KeyboardVolumeDown -> adjustFallbackVolume(-10f)
             PlayerControlsAction.KeyboardVolumeUp -> adjustFallbackVolume(10f)
             PlayerControlsAction.PictureInPicture -> togglePictureInPictureFromShortcut()
@@ -1369,6 +1382,10 @@ private fun String.toPlayerControlsAction(): PlayerControlsAction? =
         "keyboardSeekBack" -> PlayerControlsAction.KeyboardSeekBack
         "seekForward" -> PlayerControlsAction.SeekForward
         "keyboardSeekForward" -> PlayerControlsAction.KeyboardSeekForward
+        "keyboardMediumSeekBack" -> PlayerControlsAction.KeyboardMediumSeekBack
+        "keyboardMediumSeekForward" -> PlayerControlsAction.KeyboardMediumSeekForward
+        "keyboardLongSeekBack" -> PlayerControlsAction.KeyboardLongSeekBack
+        "keyboardLongSeekForward" -> PlayerControlsAction.KeyboardLongSeekForward
         "keyboardVolumeDown" -> PlayerControlsAction.KeyboardVolumeDown
         "keyboardVolumeUp" -> PlayerControlsAction.KeyboardVolumeUp
         "pictureInPicture", "pip" -> PlayerControlsAction.PictureInPicture
@@ -1405,6 +1422,12 @@ private fun PlayerControlsState.toControlsJson(
     buildString {
         append('{')
         appendJsonField("title", title)
+        append(',')
+        appendJsonField("shortSeekSeconds", shortSeekSeconds)
+        append(',')
+        appendJsonField("mediumSeekSeconds", mediumSeekSeconds)
+        append(',')
+        appendJsonField("longSeekSeconds", longSeekSeconds)
         append(',')
         appendJsonField("episodeText", episodeText)
         append(',')

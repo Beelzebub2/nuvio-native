@@ -29,6 +29,9 @@ actual object PlayerSettingsStorage {
     private const val resizeModeKey = "resize_mode"
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
+    private const val shortSeekSecondsKey = "short_seek_seconds"
+    private const val mediumSeekSecondsKey = "medium_seek_seconds"
+    private const val longSeekSecondsKey = "long_seek_seconds"
     private const val touchGesturesEnabledKey = "touch_gestures_enabled"
     private const val externalPlayerEnabledKey = "external_player_enabled"
     private const val externalPlayerForwardSubtitlesKey = "external_player_forward_subtitles"
@@ -106,6 +109,9 @@ actual object PlayerSettingsStorage {
         resizeModeKey,
         holdToSpeedEnabledKey,
         holdToSpeedValueKey,
+        shortSeekSecondsKey,
+        mediumSeekSecondsKey,
+        longSeekSecondsKey,
         nvidiaRtxSuperResolutionEnabledKey,
 
         touchGesturesEnabledKey,
@@ -319,6 +325,23 @@ actual object PlayerSettingsStorage {
             ?.putFloat(ProfileScopedKey.of(holdToSpeedValueKey), speed)
             ?.apply()
     }
+
+    private fun loadSeekSeconds(keyBase: String): Int? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(keyBase)
+            if (sharedPreferences.contains(key)) sharedPreferences.getInt(key, DEFAULT_SHORT_SEEK_SECONDS) else null
+        }
+
+    private fun saveSeekSeconds(keyBase: String, seconds: Int) {
+        preferences?.edit()?.putInt(ProfileScopedKey.of(keyBase), seconds)?.apply()
+    }
+
+    actual fun loadShortSeekSeconds(): Int? = loadSeekSeconds(shortSeekSecondsKey)
+    actual fun saveShortSeekSeconds(seconds: Int) = saveSeekSeconds(shortSeekSecondsKey, seconds)
+    actual fun loadMediumSeekSeconds(): Int? = loadSeekSeconds(mediumSeekSecondsKey)
+    actual fun saveMediumSeekSeconds(seconds: Int) = saveSeekSeconds(mediumSeekSecondsKey, seconds)
+    actual fun loadLongSeekSeconds(): Int? = loadSeekSeconds(longSeekSecondsKey)
+    actual fun saveLongSeekSeconds(seconds: Int) = saveSeekSeconds(longSeekSecondsKey, seconds)
 
     actual fun loadTouchGesturesEnabled(): Boolean? =
         preferences?.let { sharedPreferences ->
@@ -1255,6 +1278,9 @@ actual object PlayerSettingsStorage {
         loadResizeMode()?.let { put(resizeModeKey, encodeSyncString(it)) }
         loadHoldToSpeedEnabled()?.let { put(holdToSpeedEnabledKey, encodeSyncBoolean(it)) }
         loadHoldToSpeedValue()?.let { put(holdToSpeedValueKey, encodeSyncFloat(it)) }
+        loadShortSeekSeconds()?.let { put(shortSeekSecondsKey, encodeSyncInt(it)) }
+        loadMediumSeekSeconds()?.let { put(mediumSeekSecondsKey, encodeSyncInt(it)) }
+        loadLongSeekSeconds()?.let { put(longSeekSecondsKey, encodeSyncInt(it)) }
         loadTouchGesturesEnabled()?.let { put(touchGesturesEnabledKey, encodeSyncBoolean(it)) }
         loadExternalPlayerEnabled()?.let { put(externalPlayerEnabledKey, encodeSyncBoolean(it)) }
         loadExternalPlayerForwardSubtitles()?.let { put(externalPlayerForwardSubtitlesKey, encodeSyncBoolean(it)) }
@@ -1338,6 +1364,9 @@ actual object PlayerSettingsStorage {
         payload.decodeSyncString(resizeModeKey)?.let(::saveResizeMode)
         payload.decodeSyncBoolean(holdToSpeedEnabledKey)?.let(::saveHoldToSpeedEnabled)
         payload.decodeSyncFloat(holdToSpeedValueKey)?.let(::saveHoldToSpeedValue)
+        payload.decodeSyncInt(shortSeekSecondsKey)?.let { saveShortSeekSeconds(normalizedSeekSeconds(it)) }
+        payload.decodeSyncInt(mediumSeekSecondsKey)?.let { saveMediumSeekSeconds(normalizedSeekSeconds(it)) }
+        payload.decodeSyncInt(longSeekSecondsKey)?.let { saveLongSeekSeconds(normalizedSeekSeconds(it)) }
         payload.decodeSyncBoolean(touchGesturesEnabledKey)?.let(::saveTouchGesturesEnabled)
         payload.decodeSyncBoolean(externalPlayerEnabledKey)?.let(::saveExternalPlayerEnabled)
         payload.decodeSyncBoolean(externalPlayerForwardSubtitlesKey)?.let(::saveExternalPlayerForwardSubtitles)
