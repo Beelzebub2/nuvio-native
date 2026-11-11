@@ -4,6 +4,7 @@ import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.WatchProgressSource
+import com.nuvio.app.features.watching.sync.WatchedDeltaEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -154,6 +155,48 @@ class WatchedRepositoryTest {
 
         assertEquals(mapOf(pendingKey to pendingLocalItem), merged.items)
         assertEquals(setOf(pendingKey), merged.dirtyKeys)
+    }
+
+    @Test
+    fun snapshot_doesNotResurrectPendingRemovalThroughContentTypeAlias() {
+        val removed = watchedItem(id = "pending-removal", markedAtEpochMs = 1_000L)
+        val remoteAlias = removed.copy(type = "film", markedAtEpochMs = 2_000L)
+        val kept = watchedItem(id = "kept", markedAtEpochMs = 3_000L)
+        val pendingDeletes = pendingWatchedDeleteKeys(listOf(removed.toNuvioDeleteIntent()))
+
+        val merged = mergeWatchedSnapshot(
+            serverItems = listOf(remoteAlias, kept),
+            localItems = listOf(removed),
+            dirtyKeys = emptySet(),
+            pendingDeleteKeys = pendingDeletes,
+        )
+
+        assertEquals(mapOf(watchedItemKey(kept.type, kept.id) to kept), merged.items)
+        assertTrue(merged.dirtyKeys.isEmpty())
+    }
+
+    @Test
+    fun delta_doesNotRestorePendingRemovedEpisodeOrSuppressAnotherEpisode() {
+        val removed = WatchedItem(
+            id = "show", type = "series", name = "Removed", season = 1, episode = 2,
+            markedAtEpochMs = 1_000L,
+        )
+        val pendingDeleteKeys = pendingWatchedDeleteKeys(listOf(removed.toNuvioDeleteIntent()))
+        val target = mutableMapOf<String, WatchedItem>()
+        val dirty = mutableSetOf<String>()
+
+        WatchedRepository.applyWatchedDeltaEvents(
+            targetItems = target,
+            dirtyKeys = dirty,
+            events = listOf(
+                WatchedDeltaEvent(1L, "upsert", "show", "tv", "Removed", 1, 2, 1_000L),
+                WatchedDeltaEvent(2L, "upsert", "show", "series", "Kept", 1, 3, 2_000L),
+            ),
+            pendingDeleteKeys = pendingDeleteKeys,
+        )
+
+        assertFalse(watchedItemKey("tv", "show", 1, 2) in target)
+        assertEquals("Kept", target[watchedItemKey("series", "show", 1, 3)]?.name)
     }
 
     @Test
