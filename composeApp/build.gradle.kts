@@ -974,6 +974,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_dialogue_policy.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions.h"))
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)

@@ -1779,4 +1779,6 @@
     <string name="watch_order_chronology_unverified">Uma ordem cronológica ainda não foi verificada para esta franquia. Tente a ordem recomendada.</string>
     <string name="watch_order_explanation">Apenas títulos identificados com segurança aparecem como assistidos. Selecione outro título para buscar nos seus add-ons; a reprodução nunca começa automaticamente.</string>
     <string name="watch_order_dismiss">Agora não</string>
+    <string name="settings_advanced_discord_dialogue">Diálogos no compartilhamento de tela do Discord (experimental)</string>
+    <string name="settings_advanced_discord_dialogue_description">Adiciona apenas o canal central dos diálogos 5.1/7.1 a uma saída Steam Streaming Speakers não utilizada ao compartilhar a tela inteira. O som surround original não muda. Desativado por padrão e disponível apenas com a saída separada no Windows.</string>
 </resources>

@@ -48,6 +48,10 @@ internal object NativePlayerBridge {
 
     external fun dispose(handle: Long)
     external fun updateControls(handle: Long, controlsJson: String)
+    /** Windows only. Requires an active, non-default Steam Streaming Speakers endpoint. */
+    external fun isDiscordDialogueEndpointAvailable(): Boolean
+    /** Windows only. The independent centre-channel renderer never reconfigures the main player. */
+    external fun setDiscordDialogueEnabled(handle: Long, enabled: Boolean)
 
     /** Desktop shell now playing: macOS Control Center or Windows SMTC (title/episode line). */
     external fun setNowPlayingMetadata(handle: Long, title: String, subtitle: String, artworkUrl: String)

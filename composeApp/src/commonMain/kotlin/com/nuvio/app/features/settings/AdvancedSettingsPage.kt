@@ -34,6 +34,8 @@ import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_don
 import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_subtitle
 import nuvio.composeapp.generated.resources.settings_advanced_discord_rich_presence
 import nuvio.composeapp.generated.resources.settings_advanced_discord_rich_presence_description
+import nuvio.composeapp.generated.resources.settings_advanced_discord_dialogue
+import nuvio.composeapp.generated.resources.settings_advanced_discord_dialogue_description
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_description
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_external_description
@@ -176,7 +178,7 @@ internal fun LazyListScope.advancedSettingsContent(
                 )
             }
     }
-    if (DiscordRichPresenceRepository.isSupported) {
+    if (DiscordRichPresenceRepository.isSupported || WindowsDiscordDialogueRepository.isSupported) {
         item {
             val discordEnabledFlow = remember {
                 DiscordRichPresenceRepository.ensureLoaded()
@@ -189,13 +191,28 @@ internal fun LazyListScope.advancedSettingsContent(
                 isTablet = isTablet,
             ) {
                 SettingsGroup(isTablet = isTablet) {
-                    SettingsSwitchRow(
-                        title = stringResource(Res.string.settings_advanced_discord_rich_presence),
-                        description = stringResource(Res.string.settings_advanced_discord_rich_presence_description),
-                        checked = discordEnabled,
-                        isTablet = isTablet,
-                        onCheckedChange = DiscordRichPresenceRepository::setEnabled,
-                    )
+                    if (DiscordRichPresenceRepository.isSupported) {
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_advanced_discord_rich_presence),
+                            description = stringResource(Res.string.settings_advanced_discord_rich_presence_description),
+                            checked = discordEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = DiscordRichPresenceRepository::setEnabled,
+                        )
+                    }
+                    if (WindowsDiscordDialogueRepository.isSupported) {
+                        val dialogueEnabled by remember {
+                            WindowsDiscordDialogueRepository.ensureLoaded()
+                            WindowsDiscordDialogueRepository.enabled
+                        }.collectAsStateWithLifecycle()
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_advanced_discord_dialogue),
+                            description = stringResource(Res.string.settings_advanced_discord_dialogue_description),
+                            checked = dialogueEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = WindowsDiscordDialogueRepository::setEnabled,
+                        )
+                    }
                 }
             }
         }

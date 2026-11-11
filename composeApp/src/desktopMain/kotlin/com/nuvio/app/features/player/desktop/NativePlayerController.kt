@@ -29,6 +29,13 @@ import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.desktop.hls.HlsHeaderProxy
 import com.nuvio.app.features.player.desktop.hls.isDefaultAllowedHlsTarget
 import com.nuvio.app.features.player.toStorageHexString
+import com.nuvio.app.features.settings.WindowsDiscordDialogueRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -111,6 +118,8 @@ internal class NativePlayerController(
     private var rtxComparisonAvailable = false
     private var rtxShowingOriginal = false
     private var rtxComparisonFailed = false
+    private var discordDialogueAvailable = false
+    private val discordDialogueScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     @Volatile
     private var currentVolumeLevel = rememberedVolumeLevel.coerceDesktopPlayerVolumeLevel()
     private var pendingSubtitleDelayMs: Int? = null
@@ -125,6 +134,31 @@ internal class NativePlayerController(
         SwingUtilities.invokeLater {
             handlePlayerEvent(type, value)
         }
+    }
+
+    init {
+        if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+            WindowsDiscordDialogueRepository.ensureLoaded()
+            discordDialogueScope.launch {
+                WindowsDiscordDialogueRepository.enabled.collect { enabled ->
+                    SwingUtilities.invokeLater {
+                        if (!releaseRequested) applyDiscordDialoguePreference(enabled)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun applyDiscordDialoguePreference(enabled: Boolean) {
+        val current = handle.takeIf { it != 0L } ?: return
+        if (!discordDialogueAvailable) return
+        runCatching { NativePlayerBridge.setDiscordDialogueEnabled(current, enabled) }
+            .onFailure { error ->
+                log.w(error) { "Windows dialogue companion failed to update" }
+                discordDialogueAvailable = false
+            }
+        lastSentControlsStructureKey = null
+        updateControls(controlsState)
     }
 
     fun attach(
@@ -370,6 +404,20 @@ internal class NativePlayerController(
                             DesktopHostOs.current == DesktopHostOs.WINDOWS && pending.nvidiaRtxSuperResolutionEnabled
                         rtxShowingOriginal = false
                         rtxComparisonFailed = false
+                        discordDialogueAvailable =
+                            DesktopHostOs.current == DesktopHostOs.WINDOWS &&
+                            runCatching { NativePlayerBridge.isDiscordDialogueEndpointAvailable() }
+                                .getOrDefault(false)
+                        if (discordDialogueAvailable) {
+                            runCatching {
+                                NativePlayerBridge.setDiscordDialogueEnabled(
+                                    created, WindowsDiscordDialogueRepository.enabled.value
+                                )
+                            }.onFailure { error ->
+                                log.w(error) { "Windows dialogue companion unavailable" }
+                                discordDialogueAvailable = false
+                            }
+                        }
                         lastSentControlsStructureKey = null
                         applyRememberedVolume()
                         updateControls(controlsState)
@@ -473,6 +521,9 @@ internal class NativePlayerController(
             rtxComparisonAvailable = rtxComparisonAvailable,
             rtxShowingOriginal = rtxShowingOriginal,
             rtxComparisonFailed = rtxComparisonFailed,
+            discordDialogueAvailable = discordDialogueAvailable,
+            discordDialogueEnabled = discordDialogueAvailable &&
+                WindowsDiscordDialogueRepository.enabled.value,
         )
         if (structureKey == lastSentControlsStructureKey) return
         lastSentControlsStructureKey = structureKey
@@ -489,6 +540,9 @@ internal class NativePlayerController(
                 rtxComparisonAvailable = rtxComparisonAvailable,
                 rtxShowingOriginal = rtxShowingOriginal,
                 rtxComparisonFailed = rtxComparisonFailed,
+                discordDialogueAvailable = discordDialogueAvailable,
+                discordDialogueEnabled = discordDialogueAvailable &&
+                    WindowsDiscordDialogueRepository.enabled.value,
             ),
         )
     }
@@ -604,6 +658,11 @@ internal class NativePlayerController(
                 }
             }
             "dragWindow" -> NativePlayerBridge.beginWindowDrag(handle)
+            "discordDialogue" -> {
+                if (discordDialogueAvailable) {
+                    WindowsDiscordDialogueRepository.setEnabled(value >= 0.5)
+                }
+            }
             "volumeChange" -> setFallbackVolume(value.toFloat())
             "volumeChangeTemporary" -> setTemporaryVolume(value.toFloat())
             "setPlaybackSpeed" -> {
@@ -898,6 +957,7 @@ internal class NativePlayerController(
 
     private fun invalidateForRelease() {
         cancelPendingAttachment()
+        discordDialogueScope.cancel()
         host.onCursorActivity = null
         onAction = { false }
         onEvent = { _, _ -> false }
@@ -1341,6 +1401,8 @@ private data class NativeControlsStructureKey(
     val rtxComparisonAvailable: Boolean,
     val rtxShowingOriginal: Boolean,
     val rtxComparisonFailed: Boolean,
+    val discordDialogueAvailable: Boolean,
+    val discordDialogueEnabled: Boolean,
 )
 
 private fun PlayerControlsState.toControlsJson(
@@ -1348,6 +1410,8 @@ private fun PlayerControlsState.toControlsJson(
     rtxComparisonAvailable: Boolean,
     rtxShowingOriginal: Boolean,
     rtxComparisonFailed: Boolean,
+    discordDialogueAvailable: Boolean,
+    discordDialogueEnabled: Boolean,
 ): String =
     buildString {
         append('{')
@@ -1382,6 +1446,10 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("rtxShowingOriginal", rtxShowingOriginal)
         append(',')
         appendJsonField("rtxComparisonFailed", rtxComparisonFailed)
+        append(',')
+        appendJsonField("discordDialogueAvailable", discordDialogueAvailable)
+        append(',')
+        appendJsonField("discordDialogueEnabled", discordDialogueEnabled)
         append(',')
         appendJsonField("volumeLevel", volumeLevel)
         append(',')

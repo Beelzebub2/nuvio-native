@@ -39,6 +39,8 @@ const resizeLabel = document.getElementById("resizeLabel");
 const speedLabel = document.getElementById("speedLabel");
 const subtitlesLabel = document.getElementById("subtitlesLabel");
 const audioLabel = document.getElementById("audioLabel");
+const discordDialogueButton = document.getElementById("discordDialogueButton");
+const discordDialogueLabel = document.getElementById("discordDialogueLabel");
 const sourcesLabel = document.getElementById("sourcesLabel");
 const episodesLabel = document.getElementById("episodesLabel");
 const submitIntroButton = document.getElementById("submitIntroButton");
@@ -212,6 +214,8 @@ let state = {
   volumeLevel: null,
   subtitlesLabel: "Subs",
   audioLabel: "Audio",
+  discordDialogueAvailable: false,
+  discordDialogueEnabled: false,
   sourcesLabel: "Sources",
   episodesLabel: "Episodes",
   externalPlayerLabel: "External",
@@ -2535,6 +2539,17 @@ const renderChrome = () => {
   setActionButtonLabel("speed", state.playbackSpeedLabel || "1x");
   setActionButtonLabel("subtitles", state.subtitlesLabel || "Subs");
   setActionButtonLabel("audio", state.audioLabel || "Audio");
+  const showDiscordDialogue = Boolean(state.discordDialogueAvailable && !showError && !showOpening);
+  setVisible(discordDialogueButton, showDiscordDialogue);
+  if (discordDialogueButton) {
+    const active = Boolean(state.discordDialogueEnabled);
+    const label = active ? "Discord dialogue on" : "Discord dialogue off";
+    discordDialogueButton.setAttribute("aria-pressed", active ? "true" : "false");
+    discordDialogueButton.setAttribute("aria-label", label);
+    discordDialogueButton.setAttribute("title", `${label} · Sends only the 5.1/7.1 centre channel to Steam Streaming Speakers`);
+    discordDialogueButton.classList.toggle("active", active);
+    if (discordDialogueLabel) discordDialogueLabel.textContent = "Discord";
+  }
   setActionButtonLabel("sources", state.sourcesLabel || "Sources");
   setActionButtonLabel("episodes", state.episodesLabel || "Episodes");
   const showRtxCompare = Boolean(state.rtxComparisonAvailable && !showError && !showOpening);
@@ -2943,6 +2958,15 @@ document.querySelectorAll("[data-command]").forEach(button => {
     }
     if (command === "audio") {
       openPlayerModal("audio");
+      return;
+    }
+    if (command === "discordDialogue") {
+      if (!state.discordDialogueAvailable) return;
+      const enabled = !Boolean(state.discordDialogueEnabled);
+      state.discordDialogueEnabled = enabled;
+      renderChrome();
+      send("discordDialogue", enabled ? 1 : 0);
+      showPlayerToast(`Discord dialogue: ${enabled ? "on" : "off"}`, { icon: "icon-audio" });
       return;
     }
     if (command === "subtitles") {

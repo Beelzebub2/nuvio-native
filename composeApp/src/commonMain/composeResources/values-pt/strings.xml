@@ -2299,4 +2299,6 @@
     <string name="watch_order_chronology_unverified">Ainda não foi verificada uma ordem cronológica para esta franquia. Experimenta a ordem recomendada.</string>
     <string name="watch_order_explanation">Só os títulos identificados com segurança aparecem como vistos. Seleciona outro título para procurar nos teus add-ons; a reprodução não começa automaticamente.</string>
     <string name="watch_order_dismiss">Agora não</string>
+    <string name="settings_advanced_discord_dialogue">Diálogos na partilha do ecrã no Discord (experimental)</string>
+    <string name="settings_advanced_discord_dialogue_description">Adiciona apenas o canal central de diálogos 5.1/7.1 à saída Steam Streaming Speakers não utilizada durante a partilha de todo o ecrã. O áudio surround original mantém-se. Desativado por predefinição e disponível apenas com a saída separada no Windows.</string>
 </resources>

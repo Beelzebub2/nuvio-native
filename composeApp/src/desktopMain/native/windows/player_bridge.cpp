@@ -7,8 +7,11 @@
 #include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
+#include <mmdeviceapi.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <jni.h>
 #include "windows_media_session.h"
+#include "discord_dialogue_policy.h"
 
 #include <algorithm>
 #include <atomic>
@@ -184,6 +187,73 @@ std::string toUtf8(const std::wstring &value) {
     std::string result((size_t)size, '\0');
     WideCharToMultiByte(CP_UTF8, 0, value.data(), (int)value.size(), result.data(), size, nullptr, nullptr);
     return result;
+}
+
+// A second renderer is safe only when the virtual Steam output is active and is
+// not ANY default Windows render device. Never fall back to the user's speakers.
+// The returned identifier is a concrete WASAPI device, not an "auto" target.
+std::string unusedSteamStreamingSpeakersDevice() {
+    const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return {};
+    struct ApartmentGuard {
+        bool undo;
+        ~ApartmentGuard() { if (undo) CoUninitialize(); }
+    } guard{SUCCEEDED(apartment)};
+
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    if (FAILED(CoCreateInstance(
+        __uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(enumerator.GetAddressOf())
+    ))) return {};
+
+    auto defaultId = [&](ERole role) -> std::wstring {
+        ComPtr<IMMDevice> output;
+        if (FAILED(enumerator->GetDefaultAudioEndpoint(eRender, role, output.GetAddressOf()))) return {};
+        LPWSTR id = nullptr;
+        if (FAILED(output->GetId(&id)) || !id) return {};
+        std::wstring result(id);
+        CoTaskMemFree(id);
+        return result;
+    };
+    const std::wstring console = defaultId(eConsole);
+    const std::wstring multimedia = defaultId(eMultimedia);
+    const std::wstring communications = defaultId(eCommunications);
+    // If Windows cannot tell us the regular playback endpoint, fail closed.
+    if (console.empty() || multimedia.empty() || communications.empty()) return {};
+
+    ComPtr<IMMDeviceCollection> outputs;
+    if (FAILED(enumerator->EnumAudioEndpoints(
+        eRender, DEVICE_STATE_ACTIVE, outputs.GetAddressOf()
+    ))) return {};
+    UINT count = 0;
+    if (FAILED(outputs->GetCount(&count))) return {};
+    std::wstring candidate;
+    for (UINT index = 0; index < count; ++index) {
+        ComPtr<IMMDevice> device;
+        if (FAILED(outputs->Item(index, device.GetAddressOf()))) continue;
+        ComPtr<IPropertyStore> properties;
+        if (FAILED(device->OpenPropertyStore(STGM_READ, properties.GetAddressOf()))) continue;
+        PROPVARIANT name;
+        PropVariantInit(&name);
+        const HRESULT nameResult = properties->GetValue(PKEY_Device_FriendlyName, &name);
+        const std::wstring friendlyName =
+            SUCCEEDED(nameResult) && name.vt == VT_LPWSTR && name.pwszVal
+                ? std::wstring(name.pwszVal) : std::wstring();
+        PropVariantClear(&name);
+        if (!starlit::discord_dialogue::isSteamStreamingSpeakers(friendlyName)) continue;
+
+        LPWSTR id = nullptr;
+        if (FAILED(device->GetId(&id)) || !id) continue;
+        const std::wstring current(id);
+        CoTaskMemFree(id);
+        if (!starlit::discord_dialogue::isUnusedRenderEndpoint(
+            current, console, multimedia, communications
+        )) return {};
+        // Ambiguous duplicate "Steam Streaming Speakers" endpoints: never guess.
+        if (!candidate.empty()) return {};
+        candidate = current;
+    }
+    return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }
 
 std::string jstringToUtf8(JNIEnv *env, jstring value) {
@@ -945,6 +1015,7 @@ public:
         joinOrDetach(eventThread);
         {
             std::lock_guard<std::mutex> lock(mpvMutex);
+            stopDiscordDialogueLocked();
             if (mpv) {
                 mpvApi().terminateDestroy(mpv);
                 mpv = nullptr;
@@ -984,6 +1055,7 @@ public:
         if (shuttingDown.load()) return;
         layoutNativeSubviews();
         syncSystemMediaSession();
+        syncDiscordDialogue();
         syncControls();
     }
 
@@ -1123,6 +1195,16 @@ public:
         if (!mpv) return;
         int flag = paused ? 1 : 0;
         mpvApi().setProperty(mpv, "pause", MPV_FORMAT_FLAG, &flag);
+    }
+
+    void setDiscordDialogueEnabled(bool enabled) {
+        std::lock_guard<std::mutex> lock(mpvMutex);
+        dialogueRequested = enabled && !stopping.load() && !shuttingDown.load();
+        if (!dialogueRequested) {
+            stopDiscordDialogueLocked();
+        } else {
+            dialogueStartFailed = false;
+        }
     }
 
     // Compare the actual frame path, without changing the saved playback preference
@@ -1420,6 +1502,15 @@ private:
 
     std::mutex mpvMutex;
     mpv_handle *mpv = nullptr;
+    // Independent, audio-only mpv instance. All operations are protected by
+    // mpvMutex and can never change the primary player's audio device/filter.
+    mpv_handle *dialogueMpv = nullptr;
+    bool dialogueRequested = false;
+    bool dialogueStartFailed = false;
+    std::string mainSourceUrl;
+    std::vector<std::string> mainSourceHeaders;
+    std::string dialogueDeviceId;
+    std::chrono::steady_clock::time_point nextDialogueDeviceCheck{};
     bool rtxVideoConfigured = false;
     std::thread eventThread;
     std::atomic_bool stopping = false;
@@ -1441,6 +1532,216 @@ private:
     jobject eventSink = nullptr;
     jmethodID eventMethod = nullptr;
     starlit::WindowsMediaSession systemMediaSession;
+
+    void stopDiscordDialogueLocked() {
+        if (!dialogueMpv) return;
+        mpv_handle *old = dialogueMpv;
+        dialogueMpv = nullptr;
+        mpvApi().terminateDestroy(old);
+        dialogueDeviceId.clear();
+    }
+
+    bool centreAudioTrackLocked(std::int64_t &audioTrackId) {
+        MpvApi &api = mpvApi();
+        if (!mpv) return false;
+        std::int64_t count = 0;
+        if (api.getProperty(mpv, "track-list/count", MPV_FORMAT_INT64, &count) >= 0) {
+            for (std::int64_t index = 0; index < count && index < 64; ++index) {
+                const std::string prefix = "track-list/" + std::to_string(index);
+                char *type = nullptr;
+                api.getProperty(mpv, (prefix + "/type").c_str(), MPV_FORMAT_STRING, &type);
+                const bool audio = type && std::string(type) == "audio";
+                if (type) api.freeValue(type);
+                if (!audio) continue;
+                int selected = 0;
+                if (api.getProperty(mpv, (prefix + "/selected").c_str(), MPV_FORMAT_FLAG, &selected) < 0 ||
+                    !selected) continue;
+
+                char *layoutValue = nullptr;
+                api.getProperty(mpv, (prefix + "/demux-channels").c_str(), MPV_FORMAT_STRING, &layoutValue);
+                const std::string layout = layoutValue ? std::string(layoutValue) : std::string();
+                if (layoutValue) api.freeValue(layoutValue);
+                std::int64_t channels = 0;
+                api.getProperty(mpv, (prefix + "/demux-channel-count").c_str(), MPV_FORMAT_INT64, &channels);
+                if (channels != 0 && !layout.empty()) {
+                    if (!starlit::discord_dialogue::hasFrontCentre(layout, channels)) return false;
+                    return api.getProperty(mpv, (prefix + "/id").c_str(), MPV_FORMAT_INT64, &audioTrackId) >= 0
+                        && audioTrackId > 0;
+                }
+                break;
+            }
+        }
+        // Some demuxers lack track-level channel metadata. Accept only a
+        // decoder-confirmed 5.1/7.1 layout, never a stereo guess.
+        char *layoutValue = nullptr;
+        api.getProperty(mpv, "audio-params/channels", MPV_FORMAT_STRING, &layoutValue);
+        const std::string layout = layoutValue ? std::string(layoutValue) : std::string();
+        if (layoutValue) api.freeValue(layoutValue);
+        std::int64_t channels = 0;
+        api.getProperty(mpv, "audio-params/channel-count", MPV_FORMAT_INT64, &channels);
+        if (!starlit::discord_dialogue::hasFrontCentre(layout, channels)) return false;
+        return api.getProperty(mpv, "aid", MPV_FORMAT_INT64, &audioTrackId) >= 0 && audioTrackId > 0;
+    }
+
+    void startDiscordDialogueLocked(
+        const std::string &wasapiDevice,
+        std::int64_t selectedAudioTrack
+    ) {
+        if (wasapiDevice.empty() || mainSourceUrl.empty() || !mpv || dialogueMpv) return;
+        MpvApi &api = mpvApi();
+        mpv_handle *candidate = api.create();
+        if (!candidate) { dialogueStartFailed = true; return; }
+        auto option = [&](const char *name, const char *value) {
+            return api.setOptionString(candidate, name, value) >= 0;
+        };
+        // The FC-only filter must be accepted BEFORE any output opens. Start
+        // muted so an unverified chain never emits full-range surround audio.
+        const bool configured =
+            option("config", "no") &&
+            option("osc", "no") &&
+            option("vid", "no") &&
+            option("sid", "no") &&
+            option("pause", "yes") &&
+            option("volume-max", "200") &&
+            option("volume", "0") &&
+            option("audio-device", wasapiDevice.c_str()) &&
+            option("af", "lavfi=[pan=stereo|c0=FC|c1=FC]") &&
+            option("cache-secs", "5") &&
+            option("demuxer-max-bytes", "16MiB") &&
+            option("demuxer-max-back-bytes", "4MiB") &&
+            option("hr-seek", "no");
+        if (!configured) {
+            api.terminateDestroy(candidate);
+            dialogueStartFailed = true;
+            return;
+        }
+        if (!mainSourceHeaders.empty()) {
+            std::string headers;
+            for (const std::string &header : mainSourceHeaders) {
+                if (!headers.empty()) headers.push_back(',');
+                for (char c : header) {
+                    if (c == '\\' || c == ',') headers.push_back('\\');
+                    headers.push_back(c);
+                }
+            }
+            if (!option("http-header-fields", headers.c_str())) {
+                api.terminateDestroy(candidate);
+                dialogueStartFailed = true;
+                return;
+            }
+        }
+        if (api.initialize(candidate) < 0) {
+            api.terminateDestroy(candidate);
+            dialogueStartFailed = true;
+            return;
+        }
+
+        api.setProperty(candidate, "aid", MPV_FORMAT_INT64, &selectedAudioTrack);
+        double start = 0.0;
+        api.getProperty(mpv, "time-pos", MPV_FORMAT_DOUBLE, &start);
+        std::string startOption;
+        if (std::isfinite(start) && start > 0.0) startOption = "start=" + std::to_string(start);
+        const char *loadAtPosition[] = {
+            "loadfile", mainSourceUrl.c_str(), "replace", "-1", startOption.c_str(), nullptr
+        };
+        const char *loadFromStart[] = {"loadfile", mainSourceUrl.c_str(), nullptr};
+        const int result = api.command(
+            candidate, startOption.empty() ? loadFromStart : loadAtPosition
+        );
+        if (result < 0) {
+            api.terminateDestroy(candidate);
+            dialogueStartFailed = true;
+            return;
+        }
+        dialogueMpv = candidate;
+        dialogueDeviceId = wasapiDevice;
+        nextDialogueDeviceCheck = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    }
+
+    void syncDiscordDialogue() {
+        std::lock_guard<std::mutex> lock(mpvMutex);
+        if (!dialogueRequested || !mpv || stopping.load() || shuttingDown.load()) return;
+        std::int64_t mainAudioId = -1;
+        if (!centreAudioTrackLocked(mainAudioId)) {
+            stopDiscordDialogueLocked(); // No FC channel: never send a stereo mix.
+            return;
+        }
+        if (dialogueStartFailed) return;
+        if (dialogueMpv) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= nextDialogueDeviceCheck) {
+                nextDialogueDeviceCheck = now + std::chrono::seconds(2);
+                if (unusedSteamStreamingSpeakersDevice() != dialogueDeviceId) {
+                    stopDiscordDialogueLocked();
+                    dialogueStartFailed = true;
+                    return;
+                }
+            }
+        }
+        if (!dialogueMpv) {
+            const std::string outputDevice = unusedSteamStreamingSpeakersDevice();
+            if (outputDevice.empty()) { dialogueStartFailed = true; return; }
+            startDiscordDialogueLocked(outputDevice, mainAudioId);
+        }
+        if (!dialogueMpv) return;
+        MpvApi &api = mpvApi();
+        // Drain the sidecar's event queue without stealing events from the main
+        // playback handle or allocating a second, persistent event thread.
+        for (int drained = 0; drained < 12; ++drained) {
+            mpv_event *event = api.waitEvent(dialogueMpv, 0.0);
+            if (!event || event->event_id == MPV_EVENT_NONE) break;
+            if (event->event_id == MPV_EVENT_SHUTDOWN) {
+                stopDiscordDialogueLocked();
+                dialogueStartFailed = true;
+                return;
+            }
+        }
+
+        std::int64_t helperAudioId = -1;
+        api.getProperty(dialogueMpv, "aid", MPV_FORMAT_INT64, &helperAudioId);
+        if (helperAudioId != mainAudioId) {
+            api.setProperty(dialogueMpv, "aid", MPV_FORMAT_INT64, &mainAudioId);
+        }
+        std::int64_t outputChannels = 0;
+        api.getProperty(
+            dialogueMpv, "audio-out-params/channel-count", MPV_FORMAT_INT64, &outputChannels
+        );
+        char *filterText = nullptr;
+        api.getProperty(dialogueMpv, "af", MPV_FORMAT_STRING, &filterText);
+        const bool filterConfigured = filterText &&
+            std::string(filterText).find("pan=stereo|c0=FC|c1=FC") != std::string::npos;
+        if (filterText) api.freeValue(filterText);
+
+        double volume = 0.0;
+        api.getProperty(mpv, "volume", MPV_FORMAT_DOUBLE, &volume);
+        int muted = 0, paused = 1;
+        api.getProperty(mpv, "mute", MPV_FORMAT_FLAG, &muted);
+        api.getProperty(mpv, "pause", MPV_FORMAT_FLAG, &paused);
+        // Unfiltered, not-yet-initialized or wrong-track audio must remain mute.
+        const bool safe = filterConfigured && outputChannels == 2 && helperAudioId == mainAudioId;
+        double outputVolume = safe && !muted && std::isfinite(volume)
+            ? std::clamp(volume, 0.0, kMaxVolumePercent) : 0.0;
+        api.setProperty(dialogueMpv, "volume", MPV_FORMAT_DOUBLE, &outputVolume);
+
+        double speed = 1.0;
+        api.getProperty(mpv, "speed", MPV_FORMAT_DOUBLE, &speed);
+        if (std::isfinite(speed) && speed >= 0.25 && speed <= 4.0) {
+            api.setProperty(dialogueMpv, "speed", MPV_FORMAT_DOUBLE, &speed);
+        }
+        api.setProperty(dialogueMpv, "pause", MPV_FORMAT_FLAG, &paused);
+        if (paused) return;
+        double mainPosition = 0.0, helperPosition = 0.0;
+        if (api.getProperty(mpv, "time-pos", MPV_FORMAT_DOUBLE, &mainPosition) < 0 ||
+            api.getProperty(dialogueMpv, "time-pos", MPV_FORMAT_DOUBLE, &helperPosition) < 0 ||
+            !std::isfinite(mainPosition) || !std::isfinite(helperPosition) ||
+            std::fabs(mainPosition - helperPosition) <= 1.5) return;
+        int seeking = 0;
+        api.getProperty(dialogueMpv, "seeking", MPV_FORMAT_FLAG, &seeking);
+        if (seeking) return;
+        const std::string position = std::to_string(std::max(mainPosition, 0.0));
+        const char *seekCommand[] = {"seek", position.c_str(), "absolute+keyframes", nullptr};
+        api.commandAsync(dialogueMpv, 0, seekCommand);
+    }
 
     void syncSystemMediaSession() {
         if (shuttingDown.load()) return;
@@ -1775,6 +2076,8 @@ private:
             if (!mpv) {
                 throw std::runtime_error("mpv_create failed.");
             }
+            mainSourceUrl = sourceUrl;
+            mainSourceHeaders = headerLines;
             initialStartSeconds = initialPositionMs > 0 ? (double)initialPositionMs / 1000.0 : 0.0;
 
             setMpvOptionStringLocked("config", "no");
@@ -2567,6 +2870,19 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_updateControls(JNI
     auto player = playerFromHandle(handle);
     std::string controlsJsonText = jstringToUtf8(env, controlsJson);
     if (player) player->updateControlsJson(controlsJsonText);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_isDiscordDialogueEndpointAvailable(JNIEnv *, jobject) {
+    return !unusedSteamStreamingSpeakersDevice().empty() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setDiscordDialogueEnabled(
+    JNIEnv *, jobject, jlong handle, jboolean enabled
+) {
+    auto player = playerFromHandle(handle);
+    if (player) player->setDiscordDialogueEnabled(enabled == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL

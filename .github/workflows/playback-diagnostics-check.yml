@@ -35,11 +35,15 @@ jobs:
         with:
           node-version: '22'
       - name: Test sanitized reports, opt-in and lifecycle
-        run: node --test tests/native-player-diagnostics.test.cjs
+        run: node --test tests/native-player-diagnostics.test.cjs tests/native-discord-dialogue-ui.test.cjs
       - name: Test native missing values and disabled sampling
         run: |
           c++ -std=c++17 tests/native-playback-metrics.test.cpp -o "$RUNNER_TEMP/playback-metrics-test"
           "$RUNNER_TEMP/playback-metrics-test"
+      - name: Test centre-channel and unused-output policy
+        run: |
+          c++ -std=c++17 tests/native-discord-dialogue-policy.test.cpp -o "$RUNNER_TEMP/discord-dialogue-policy-test"
+          "$RUNNER_TEMP/discord-dialogue-policy-test"
       - name: Install Linux native build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libmpv-dev libwebkit2gtk-4.1-dev libgtk-3-dev libx11-dev libxcomposite-dev libxext-dev

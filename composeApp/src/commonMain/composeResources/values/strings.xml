@@ -645,6 +645,8 @@
     <string name="diagnostics_consent_not_now">No thanks</string>
     <string name="diagnostics_consent_save">Save choices</string>
     <string name="settings_advanced_section_discord">DISCORD</string>
+    <string name="settings_advanced_discord_dialogue">Discord screen-share dialogue (experimental)</string>
+    <string name="settings_advanced_discord_dialogue_description">Add only the 5.1/7.1 centre dialogue channel to an unused Steam Streaming Speakers output for Entire Screen sharing. Your normal surround audio stays unchanged. Off by default and available only when the separate Windows audio endpoint is present.</string>
     <string name="settings_advanced_section_cache">CACHE</string>
     <string name="settings_advanced_remember_last_profile">Remember Last Profile</string>
     <string name="settings_advanced_remember_last_profile_description">Remember last selected profile at startup</string>
