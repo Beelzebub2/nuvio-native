@@ -69,15 +69,17 @@ internal fun StreamCard(
     currentLabel: String? = null,
     compact: Boolean = false,
     inlineMetadata: Boolean = false,
+    /** Single-line preview for height-constrained desktop source panels. */
+    dense: Boolean = false,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
     val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
-    val hasBadges = badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null)
+    val hasBadges = !dense && (badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null))
     var cardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 68.dp)
+            .heightIn(min = if (dense) 44.dp else 68.dp)
             .shadow(
                 elevation = 2.dp,
                 shape = cardShape,
@@ -124,7 +126,7 @@ internal fun StreamCard(
                     null
                 },
             )
-            .padding(if (compact) 10.dp else 14.dp),
+            .padding(if (dense) 7.dp else if (compact) 10.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -150,7 +152,7 @@ internal fun StreamCard(
             }
 
             val subtitle = stream.streamSubtitle
-            if (!subtitle.isNullOrBlank()) {
+            if (!dense && !subtitle.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (compact || inlineMetadata) subtitle.lineSequence().joinToString(" · ") { it.trim() } else subtitle,
@@ -174,7 +176,7 @@ internal fun StreamCard(
             }
         }
 
-        if (showAddonLogo) {
+        if (showAddonLogo && !dense) {
             Spacer(modifier = Modifier.width(12.dp))
             Column(
                 modifier = if (compact || inlineMetadata) Modifier.widthIn(max = 96.dp) else Modifier,

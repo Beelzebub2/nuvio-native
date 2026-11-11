@@ -25,6 +25,9 @@ import com.nuvio.app.features.player.SubtitleStyleState
 import com.nuvio.app.features.player.SubtitleTrack
 import com.nuvio.app.features.player.findPreferredAudioTrackIndex
 import com.nuvio.app.features.player.inferForcedSubtitleTrack
+import com.nuvio.app.features.player.sanitizePlaybackHeaders
+import com.nuvio.app.features.player.desktop.hls.HlsHeaderProxy
+import com.nuvio.app.features.player.desktop.hls.isDefaultAllowedHlsTarget
 import com.nuvio.app.features.player.toStorageHexString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -101,6 +104,9 @@ internal class NativePlayerController(
     private var releaseInFlight: Thread? = null
     private var releaseTimedOut: Boolean = false
     private var terminalReleaseFailure: String? = null
+    // Accessed under lifecycleLock: a proxy belongs to exactly one accepted handle.
+    private var headerProxy: HlsHeaderProxy? = null
+    private var headerProxyHandle = 0L
     private var controlsState = PlayerControlsState()
     private var rtxComparisonAvailable = false
     private var rtxShowingOriginal = false
@@ -300,11 +306,17 @@ internal class NativePlayerController(
         // the app stops responding and Windows closes it as "stopped interacting" (Hang 1002).
         // Create off the EDT and come back to it for the parts that touch Swing state.
         val createWorker = Thread({
+            var candidateProxy: HlsHeaderProxy? = null
             try {
                 runCatching {
+                    val (playbackSource, proxy) = proxySourceIfNeeded(
+                        resolvedSource,
+                        pending.headerLines.toHeaderMap(),
+                    )
+                    candidateProxy = proxy
                     nativeCreate(
                         hostViewPtr,
-                        resolvedSource,
+                        playbackSource,
                         pending.headerLines.toTypedArray(),
                         pending.playWhenReady,
                         pending.initialPositionMs,
@@ -314,14 +326,20 @@ internal class NativePlayerController(
                         eventSink,
                     ).also { if (it == 0L) error("Native player did not return a handle.") }
                 }.onSuccess { created ->
+                    var replacedProxy: HlsHeaderProxy? = null
                     val accepted = synchronized(lifecycleLock) {
                         if (!releaseRequested && terminalReleaseFailure == null && pendingSource === pending) {
+                            replacedProxy = headerProxy
+                            headerProxy = candidateProxy
+                            headerProxyHandle = if (candidateProxy != null) created else 0L
+                            candidateProxy = null
                             handle = created
                             true
                         } else {
                             false
                         }
                     }
+                    replacedProxy?.close()
                     if (!accepted) {
                         runCatching { nativeDispose(created) }
                             .onFailure { error -> recordTerminalDisposeFailure(error, "superseded create", created) }
@@ -340,7 +358,10 @@ internal class NativePlayerController(
                                 else -> true
                             }
                         }
-                        if (!shouldConfigure) return@invokeLater
+                        if (!shouldConfigure) {
+                            releaseHeaderProxy(expectedHandle = created)
+                            return@invokeLater
+                        }
                         log.d {
                             "attach created handle=$created source=${resolvedSource.toPlaybackLogKey()} " +
                                 "initialPositionMs=${pending.initialPositionMs}"
@@ -365,6 +386,7 @@ internal class NativePlayerController(
                     }
                 }
             } finally {
+                candidateProxy?.close()
                 synchronized(lifecycleLock) {
                     createsInFlight.remove(Thread.currentThread())
                 }
@@ -506,7 +528,7 @@ internal class NativePlayerController(
     }
 
     fun setNowPlayingMetadata(title: String?, subtitle: String?, artworkUrl: String?) {
-        if (DesktopHostOs.current != DesktopHostOs.MACOS) return
+        if (DesktopHostOs.current != DesktopHostOs.MACOS && DesktopHostOs.current != DesktopHostOs.WINDOWS) return
         currentNowPlayingTitle = title.orEmpty()
         currentNowPlayingSubtitle = subtitle.orEmpty()
         currentArtworkUrl = artworkUrl.orEmpty()
@@ -749,6 +771,7 @@ internal class NativePlayerController(
         }
         host.resetCursorVisibility()
         invalidateForRelease()
+        releaseHeaderProxy()
         val callback = ReleaseCallback(onReleased, onReleaseFailed)
         var shouldStart = false
         var immediateFailure: String? = null
@@ -958,7 +981,7 @@ internal class NativePlayerController(
     }
 
     private fun disposePlayerHandle() {
-        synchronized(lifecycleLock) {
+        val disposed = synchronized(lifecycleLock) {
             if (releaseRequested) return
             val current = handle
             if (current == 0L) return
@@ -967,7 +990,45 @@ internal class NativePlayerController(
             // Register and start teardown atomically so terminal release cannot sample an empty
             // worker slot between detaching the handle and starting native disposal.
             startTrackedDisposeLocked(current)
+            current
         }
+        releaseHeaderProxy(expectedHandle = disposed)
+    }
+
+    /**
+     * FFmpeg does not forward mpv's parent request headers to HLS child requests.
+     * Keep the original URL for header-free or local sources; otherwise install a
+     * single playback-owned loopback proxy for segments, keys and playlists.
+     */
+    private fun proxySourceIfNeeded(
+        sourceUrl: String,
+        untrustedHeaders: Map<String, String>,
+    ): Pair<String, HlsHeaderProxy?> {
+        val headers = sanitizePlaybackHeaders(untrustedHeaders)
+        if (headers.isEmpty() || !HlsHeaderProxy.isEnabled()) return sourceUrl to null
+        val uri = runCatching { java.net.URI(sourceUrl) }.getOrNull() ?: return sourceUrl to null
+        if (uri.scheme !in listOf("http", "https") || !isDefaultAllowedHlsTarget(uri)) {
+            return sourceUrl to null
+        }
+        val proxy = runCatching { HlsHeaderProxy(headers, sourceUrl = uri).start() }.getOrElse { error ->
+            log.w { "HLS playback header proxy unavailable (${error::class.simpleName}); using direct playback" }
+            return sourceUrl to null
+        }
+        return proxy.localUrlFor(sourceUrl) to proxy
+    }
+
+    private fun releaseHeaderProxy(expectedHandle: Long? = null) {
+        val ownedProxy = synchronized(lifecycleLock) {
+            if (expectedHandle != null && headerProxyHandle != expectedHandle) {
+                null
+            } else {
+                headerProxy.also {
+                    headerProxy = null
+                    headerProxyHandle = 0L
+                }
+            }
+        }
+        ownedProxy?.close()
     }
 
     override fun play() {

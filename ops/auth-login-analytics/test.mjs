@@ -141,7 +141,7 @@ test('success exporter persists cursor only after full upstream acknowledgement'
   const db = {
     async query(sql, values) {
       calls.push({ sql, values });
-      if (sql.includes('SELECT cursor_time')) return { rows: [state] };
+      if (sql.includes('FROM starlit_analytics.export_cursor')) return { rows: [state] };
       if (sql.includes('login_successes')) return { rows: [{
         event_id: eventId, login_at: at, login_method: 'email', ip_address: '8.8.8.8',
       }] };
@@ -157,6 +157,40 @@ test('success exporter persists cursor only after full upstream acknowledgement'
     assert.equal(records[0].outcome, 'success');
   } }, () => null, now);
   assert.equal(calls.filter(c => c.sql.includes('UPDATE ')).length, 1);
+});
+
+test('success exporter preserves sub-millisecond cursor precision', async () => {
+  const preciseLoginAt = '2026-11-07T00:59:50.470725Z';
+  const preciseCursorAt = '2026-11-07T00:58:50.112345Z';
+  const calls = [];
+  const db = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes('FROM starlit_analytics.export_cursor')) {
+        return { rows: [{ cursor_time: preciseCursorAt, cursor_id: eventId }] };
+      }
+      if (sql.includes('login_successes')) {
+        return { rows: [{
+          event_id: eventId, login_at: preciseLoginAt,
+          login_method: 'email', ip_address: null,
+        }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  };
+  const sent = [];
+  assert.equal(await exportSuccessfulLogins(db, {
+    async send(records) { sent.push(...records); },
+  }, () => null, now), 1);
+  const select = calls.find(call => call.sql.includes('login_successes'));
+  assert.match(select.sql, /to_char\(login_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS\.US"Z"'\)/);
+  assert.match(calls[0].sql, /to_char\(cursor_time AT TIME ZONE 'UTC',/);
+  assert.match(calls[0].sql, /HH24:MI:SS\.US"Z"'/);
+  assert.equal(select.values[0], preciseCursorAt);
+  const update = calls.find(call => call.sql.includes('UPDATE '));
+  assert.equal(update.values[0], preciseLoginAt);
+  assert.equal(update.values[1], eventId);
+  assert.equal(sent[0]._timestamp, Date.parse(preciseLoginAt) * 1000);
 });
 
 test('failure exporter handles incomplete lines, rejects bad records and resumes from saved offset', async () => {

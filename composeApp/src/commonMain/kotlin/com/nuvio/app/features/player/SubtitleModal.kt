@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -29,9 +30,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.addon_title
 import nuvio.composeapp.generated.resources.compose_player_built_in
@@ -55,9 +59,14 @@ import nuvio.composeapp.generated.resources.compose_player_languages
 import nuvio.composeapp.generated.resources.compose_player_none
 import nuvio.composeapp.generated.resources.compose_player_style
 import nuvio.composeapp.generated.resources.compose_player_subtitles
+import nuvio.composeapp.generated.resources.player_local_subtitle_choose
+import nuvio.composeapp.generated.resources.player_local_subtitle_label
+import nuvio.composeapp.generated.resources.player_local_subtitle_remove
 import nuvio.composeapp.generated.resources.settings_playback_option_forced
 import nuvio.composeapp.generated.resources.subtitle_language_unknown
 import org.jetbrains.compose.resources.stringResource
+
+private const val LocalSubtitleLanguageKey = "__local_subtitle_file__"
 
 @Composable
 fun SubtitleModal(
@@ -74,8 +83,12 @@ fun SubtitleModal(
     subtitleDelayMs: Int,
     selectedAddonSubtitle: AddonSubtitle?,
     subtitleAutoSyncState: SubtitleAutoSyncUiState,
+    localSubtitleName: String? = null,
+    canChooseLocalSubtitle: Boolean = false,
     onBuiltInTrackSelected: (Int) -> Unit,
     onAddonSubtitleSelected: (AddonSubtitle) -> Unit,
+    onChooseLocalSubtitle: () -> Unit = {},
+    onRemoveLocalSubtitle: () -> Unit = {},
     onFetchAddonSubtitles: () -> Unit,
     onStyleChanged: (SubtitleStyleState) -> Unit,
     onSubtitleDelayChanged: (Int) -> Unit,
@@ -88,13 +101,13 @@ fun SubtitleModal(
 ) {
     val effectiveSelectedAddonSubtitle = selectedAddonSubtitle
         ?: addonSubtitles.findSelectedAddon(selectedAddonSubtitleId)
-    val playbackLanguageKey = selectedSubtitleLanguageKey(
+    val playbackLanguageKey = if (localSubtitleName != null) LocalSubtitleLanguageKey else selectedSubtitleLanguageKey(
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = effectiveSelectedAddonSubtitle,
         isExplicitlyDisabled = isSubtitleOffSelected,
     )
-    val playbackOptionId = selectedSubtitleOptionId(
+    val playbackOptionId = if (localSubtitleName != null) null else selectedSubtitleOptionId(
         subtitleTracks = subtitleTracks,
         selectedSubtitleIndex = selectedSubtitleIndex,
         selectedAddonSubtitle = effectiveSelectedAddonSubtitle,
@@ -102,7 +115,7 @@ fun SubtitleModal(
     )
     val subtitleStructureKey = subtitleTracksStructureKey(subtitleTracks)
     val addonStructureKey = addonSubtitlesStructureKey(addonSubtitles)
-    val languageItems = remember(
+    val availableLanguageItems = remember(
         subtitleStructureKey,
         addonStructureKey,
         preferredSubtitleLanguage,
@@ -119,6 +132,11 @@ fun SubtitleModal(
             selectedLanguageKey = playbackLanguageKey,
         )
     }
+    val languageItems = remember(availableLanguageItems, localSubtitleName) {
+        if (localSubtitleName == null) availableLanguageItems
+        else availableLanguageItems.take(1) + SubtitleLanguageItem(LocalSubtitleLanguageKey, 1) +
+            availableLanguageItems.drop(1)
+    }
     var activeLanguageKey by remember(visible) {
         mutableStateOf(
             playbackLanguageKey.takeIf { key -> languageItems.any { it.key == key } }
@@ -134,8 +152,10 @@ fun SubtitleModal(
     val selectedOptionId = pendingOptionId ?: playbackOptionId
     val languageListState = rememberLazyListState()
     val optionsListState = rememberLazyListState()
-    val styleVisible = activeLanguageKey != SubtitleOffLanguageKey &&
-        selectedOptionId != null && options.any { it.id == selectedOptionId }
+    val styleVisible = localSubtitleName != null || (
+        activeLanguageKey != SubtitleOffLanguageKey &&
+            selectedOptionId != null && options.any { it.id == selectedOptionId }
+        )
 
     LaunchedEffect(visible) {
         if (!visible) return@LaunchedEffect
@@ -185,6 +205,29 @@ fun SubtitleModal(
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
 
+                if (isDesktop) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(onClick = onChooseLocalSubtitle, enabled = canChooseLocalSubtitle) {
+                            Icon(
+                                imageVector = Icons.Rounded.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(7.dp))
+                            Text(stringResource(Res.string.player_local_subtitle_choose))
+                        }
+                        if (localSubtitleName != null) {
+                            TextButton(onClick = onRemoveLocalSubtitle) {
+                                Text(stringResource(Res.string.player_local_subtitle_remove))
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.Top,
@@ -227,6 +270,9 @@ fun SubtitleModal(
                         width = 300.dp,
                     ) {
                         when {
+                            activeLanguageKey == LocalSubtitleLanguageKey && localSubtitleName != null -> {
+                                LocalSubtitleSelectedRow(localSubtitleName)
+                            }
                             options.isEmpty() -> {
                                 when (
                                     subtitleOptionsRailEmptyContent(
@@ -354,6 +400,7 @@ private fun SubtitleLanguageRow(
     val tokens = MaterialTheme.nuvio
     val label = when (item.key) {
         SubtitleOffLanguageKey -> stringResource(Res.string.compose_player_none)
+        LocalSubtitleLanguageKey -> stringResource(Res.string.player_local_subtitle_label)
         SubtitleUnknownLanguageKey -> stringResource(Res.string.subtitle_language_unknown)
         else -> languageLabelForCode(item.key)
     }
@@ -391,6 +438,36 @@ private fun SubtitleLanguageRow(
                 style = MaterialTheme.typography.labelSmall,
             )
         }
+    }
+}
+
+@Composable
+private fun LocalSubtitleSelectedRow(displayName: String) {
+    val tokens = MaterialTheme.nuvio
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(tokens.colors.accent)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SubtitleSourceChip(label = stringResource(Res.string.player_local_subtitle_label), selected = true)
+            Text(
+                text = displayName,
+                color = tokens.colors.onAccent,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = null,
+            tint = tokens.colors.onAccent,
+            modifier = Modifier.padding(start = 8.dp).size(20.dp),
+        )
     }
 }
 

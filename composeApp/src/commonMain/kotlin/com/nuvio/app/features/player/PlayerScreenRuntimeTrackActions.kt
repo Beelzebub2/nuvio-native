@@ -39,6 +39,41 @@ internal val PlayerScreenRuntime.isSubtitleOffSelected: Boolean
     get() = preferredSubtitleSelectionApplied &&
         selectedSubtitleIndex < 0 && selectedAddonSubtitleId == null && !useCustomSubtitles
 
+internal val PlayerScreenRuntime.selectedLocalSubtitleName: String?
+    get() = localSubtitleSelection.visibleNameFor(
+        playbackKey = activePlaybackKey,
+        useCustomSubtitles = useCustomSubtitles,
+        selectedAddonSubtitleId = selectedAddonSubtitleId,
+    )
+
+/**
+ * Local subtitle files are bound to this playback only. In particular, do not
+ * persist their URI in PlayerTrackPreferenceStorage or account synchronization.
+ */
+internal fun PlayerScreenRuntime.selectUserLocalSubtitleFile(file: LocalSubtitleFileResult.Selected): Boolean {
+    val controller = playerController ?: return false
+    isUserExplicitSubtitleSelection = true
+    preferredSubtitleSelectionApplied = true
+    selectedSubtitleIndex = -1
+    selectedAddonSubtitleId = null
+    useCustomSubtitles = true
+    localSubtitleSelection = SessionLocalSubtitleSelection(activePlaybackKey, file.displayName)
+    controller.setSubtitleUri(file.uri)
+    return true
+}
+
+/** Removing a session-only file must not overwrite the saved per-title preference. */
+internal fun PlayerScreenRuntime.removeUserLocalSubtitleFile() {
+    if (selectedLocalSubtitleName == null) return
+    localSubtitleSelection = null
+    isUserExplicitSubtitleSelection = true
+    preferredSubtitleSelectionApplied = true
+    selectedSubtitleIndex = -1
+    selectedAddonSubtitleId = null
+    useCustomSubtitles = false
+    playerController?.clearExternalSubtitleAndSelect(-1)
+}
+
 internal fun PlayerScreenRuntime.updateTrackPreference(
     update: (PersistedPlayerTrackPreference) -> PersistedPlayerTrackPreference,
 ) {
@@ -57,6 +92,16 @@ internal fun PlayerScreenRuntime.persistAudioPreference(track: AudioTrack?) {
             audioTrackId = track?.id,
         )
     }
+}
+
+/** Shared by player controls and the authenticated phone remote; never select an unlisted track. */
+internal fun PlayerScreenRuntime.selectUserAudioTrack(index: Int): Boolean {
+    val track = audioTracks.firstOrNull { it.index == index } ?: return false
+    val controller = playerController ?: return false
+    selectedAudioIndex = track.index
+    persistAudioPreference(track)
+    controller.selectAudioTrack(track.index)
+    return true
 }
 
 internal fun PlayerScreenRuntime.persistInternalSubtitlePreference(track: SubtitleTrack?) {
@@ -85,6 +130,7 @@ internal fun PlayerScreenRuntime.selectUserSubtitleTrack(index: Int) {
     preferredSubtitleSelectionApplied = true
     selectedSubtitleIndex = index
     selectedAddonSubtitleId = null
+    localSubtitleSelection = null
     useCustomSubtitles = false
     persistInternalSubtitlePreference(subtitleTracks.firstOrNull { it.index == index })
     if (wasCustom) {
@@ -98,6 +144,7 @@ internal fun PlayerScreenRuntime.selectUserAddonSubtitle(subtitle: AddonSubtitle
     isUserExplicitSubtitleSelection = true
     preferredSubtitleSelectionApplied = true
     selectedAddonSubtitleId = subtitle.selectionKey
+    localSubtitleSelection = null
     selectedSubtitleIndex = -1
     useCustomSubtitles = true
     persistAddonSubtitlePreference(subtitle)

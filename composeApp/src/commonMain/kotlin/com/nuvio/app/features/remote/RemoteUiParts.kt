@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +42,8 @@ import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.SourceResultsFilterControls
 import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -457,6 +461,11 @@ internal fun RemoteSourcePickerDialog(
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
     var noResponse by remember(requestId) { mutableStateOf(false) }
+    var sourceFilters by remember(requestId) { mutableStateOf(SourceResultsFilters()) }
+    val filterAvailability = remember(state.sources) { remoteSourceFilterAvailability(state.sources) }
+    val filteredSources = remember(state.sources, sourceFilters) {
+        filterRemoteSourceChoices(state.sources, sourceFilters)
+    }
     LaunchedEffect(requestId, matches, connected) {
         if (matches) {
             noResponse = false
@@ -506,18 +515,75 @@ internal fun RemoteSourcePickerDialog(
                 DialogHint(state.message)
             }
             if (matches && state.sources.isNotEmpty() && state.phase in setOf("searching", "ready")) {
+                SourceResultsFilterControls(
+                    filters = sourceFilters,
+                    availability = filterAvailability,
+                    onFiltersChange = { sourceFilters = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (filteredSources.isEmpty()) {
+                    DialogHint(stringResource(Res.string.source_filter_no_matches))
+                    Text(
+                        stringResource(Res.string.source_filter_adjust),
+                        color = tokens.colors.textSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                val recommended = filteredSources.firstOrNull { it.recommended }
                 Column(
                     Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())
                         .testTag("remote-initial-sources"),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    state.sources.forEach { source ->
-                        DialogOption(
-                            text = source.label,
-                            selected = false,
+                    if (recommended != null) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                stringResource(Res.string.streams_best_match),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = tokens.colors.accent,
+                            )
+                            val reason = when (recommended.recommendationReason) {
+                                "AutoPlayRules" -> Res.string.streams_best_match_auto_play
+                                "ReadyToPlay" -> Res.string.streams_best_match_ready
+                                "HighestQuality" -> Res.string.streams_best_match_highest_quality
+                                else -> null
+                            }
+                            if (reason != null) {
+                                Text(
+                                    stringResource(reason),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = tokens.colors.textSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        RemoteSourceOption(
+                            source = recommended,
+                            isRecommended = true,
+                            onClick = { DesktopRemote.selectPhoneSource(recommended.id) },
+                        )
+                    }
+                    filteredSources.filterNot { it.recommended }.forEach { source ->
+                        RemoteSourceOption(
+                            source = source,
+                            isRecommended = false,
                             onClick = { DesktopRemote.selectPhoneSource(source.id) },
                         )
                     }
+                    if (filteredSources.any { it.qualityStars != null }) {
+                        Text(
+                            stringResource(Res.string.remote_source_quality_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tokens.colors.textMuted,
+                        )
+                    }
+                }
                 }
             }
         }
@@ -529,6 +595,110 @@ internal fun RemoteSourcePickerDialog(
                     onClick = onOpenController,
                     style = DialogButtonStyle.Primary,
                 )
+            }
+        }
+    }
+}
+
+/** One touch target per PC-resolved stream; all additional fields are optional for older peers. */
+@Composable
+private fun RemoteSourceOption(
+    source: RemoteChoice,
+    isRecommended: Boolean,
+    onClick: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(shape)
+            .background(if (isRecommended) tokens.colors.accent.copy(alpha = 0.12f) else tokens.colors.surface)
+            .border(
+                tokens.borders.thin,
+                if (isRecommended) tokens.colors.accent.copy(alpha = 0.65f) else tokens.colors.borderSubtle,
+                shape,
+            )
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag("remote-source-option")
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                source.label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isRecommended) FontWeight.SemiBold else FontWeight.Medium,
+                color = tokens.colors.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = if (isRecommended) tokens.colors.accent else tokens.colors.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        if (source.quality != null || source.qualityStars != null) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                source.quality?.let { quality ->
+                    Text(
+                        quality,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tokens.colors.textSecondary,
+                    )
+                }
+                source.qualityStars?.takeIf { it in 1..5 }?.let { stars ->
+                    val description = stringResource(Res.string.remote_source_quality_stars, stars)
+                    Row(
+                        Modifier.semantics(mergeDescendants = true) { contentDescription = description },
+                        horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    ) {
+                        repeat(5) { index ->
+                            Icon(
+                                if (index < stars) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (index < stars) tokens.colors.accent else tokens.colors.textMuted,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (source.seeders != null || source.peers != null || source.cached) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                source.seeders?.let { count ->
+                    Text(
+                        stringResource(Res.string.remote_source_seeders, count),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tokens.colors.textSecondary,
+                    )
+                }
+                source.peers?.let { count ->
+                    Text(
+                        stringResource(Res.string.remote_source_peers, count),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tokens.colors.textSecondary,
+                    )
+                }
+                if (source.cached) {
+                    Text(
+                        stringResource(Res.string.remote_source_cached),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tokens.colors.accent,
+                    )
+                }
             }
         }
     }

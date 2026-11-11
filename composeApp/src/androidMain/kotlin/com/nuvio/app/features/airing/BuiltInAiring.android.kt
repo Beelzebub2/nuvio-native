@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +98,8 @@ import nuvio.composeapp.generated.resources.airing_settings_window
 import nuvio.composeapp.generated.resources.airing_settings_source
 import nuvio.composeapp.generated.resources.airing_settings_intro
 import nuvio.composeapp.generated.resources.airing_hidden_title
+import nuvio.composeapp.generated.resources.airing_hidden_search
+import nuvio.composeapp.generated.resources.airing_hidden_no_matches
 import nuvio.composeapp.generated.resources.airing_days_unit
 import org.jetbrains.compose.resources.stringResource
 import java.time.Instant
@@ -253,9 +256,12 @@ private fun MobileAiringBrowser(
     }
     if (editing) MobileAiringSettingsDialog(
         state.settings, onDismiss = { editing = false },
-        onSave = { choice ->
+        onSave = { choice, restoredIds ->
             editing = false
-            scope.launch { repository.updateSettings(choice) }
+            scope.launch {
+                repository.updateSettings(choice)
+                restoredIds.forEach { repository.showAgain(it) }
+            }
         },
     )
 }
@@ -352,9 +358,13 @@ private fun MobileAiringPoster(
 private fun MobileAiringSettingsDialog(
     original: AiringSettings,
     onDismiss: () -> Unit,
-    onSave: (AiringSettings) -> Unit,
+    onSave: (AiringSettings, List<Int>) -> Unit,
 ) {
     var edited by remember(original) { mutableStateOf(original) }
+    var hiddenQuery by rememberSaveable { mutableStateOf("") }
+    val matchingHidden = remember(edited.hidden, hiddenQuery) {
+        filterAndSortHiddenAiringTitles(edited.hidden, hiddenQuery) { it.name }
+    }
     val validZone = remember(edited.zone) { runCatching { ZoneId.of(edited.zone.trim()) }.isSuccess }
     DialogSurface(
         onDismissRequest = onDismiss,
@@ -422,7 +432,20 @@ private fun MobileAiringSettingsDialog(
                             onClick = { edited = edited.copy(hidden = emptyList()) },
                         )
                     }
-                    edited.hidden.forEach { hidden ->
+                    DialogTextField(
+                        value = hiddenQuery,
+                        onValueChange = { hiddenQuery = it },
+                        label = stringResource(Res.string.airing_hidden_search),
+                        modifier = Modifier.testTag("airing-hidden-search"),
+                    )
+                    if (matchingHidden.isEmpty()) {
+                        Text(
+                            stringResource(Res.string.airing_hidden_no_matches),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.nuvio.colors.textMuted,
+                        )
+                    }
+                    matchingHidden.forEach { hidden ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -457,7 +480,12 @@ private fun MobileAiringSettingsDialog(
             DialogButton(text = stringResource(Res.string.action_cancel), onClick = onDismiss)
             DialogButton(
                 text = stringResource(Res.string.action_save),
-                onClick = { onSave(edited.copy(zone = edited.zone.trim())) },
+                onClick = {
+                    onSave(
+                        edited.copy(zone = edited.zone.trim()),
+                        hiddenAiringIdsToRestore(original.hidden, edited.hidden) { it.mediaId },
+                    )
+                },
                 style = DialogButtonStyle.Primary,
                 enabled = validZone,
             )

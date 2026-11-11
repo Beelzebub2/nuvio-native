@@ -255,15 +255,6 @@ internal fun MainAppContent(
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
         var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
-        LaunchedEffect(selectedTab) {
-            val event = when (selectedTab) {
-                AppScreenTab.Home -> UsageEvent.Home
-                AppScreenTab.Search -> UsageEvent.Search
-                AppScreenTab.Library, AppScreenTab.WatchLater, AppScreenTab.MyAnimeList -> UsageEvent.Library
-                AppScreenTab.Settings -> UsageEvent.Settings
-            }
-            UsageDiagnostics.track(event)
-        }
         var searchFocusRequestCount by remember { mutableStateOf(0) }
         val homeScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val searchScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -276,11 +267,6 @@ internal fun MainAppContent(
             warmProfileBoundRepositories()
         }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
-        LaunchedEffect(currentRoute) {
-            if (currentRoute is PlayerRoute) {
-                UsageDiagnostics.track(UsageEvent.PlaybackOpened)
-            }
-        }
         LaunchedEffect(ownsAppRuntime) {
             if (!ownsAppRuntime) return@LaunchedEffect
             var previous: Map<String, DownloadStatus>? = null
@@ -290,7 +276,6 @@ internal fun MainAppContent(
                     for (item in state.items) {
                         val old = before[item.id]
                         val event = when {
-                            old == null && item.status == DownloadStatus.Downloading -> UsageEvent.DownloadQueued
                             old != null && old != DownloadStatus.Completed && item.status == DownloadStatus.Completed -> UsageEvent.DownloadCompleted
                             old != null && old != DownloadStatus.Failed && item.status == DownloadStatus.Failed -> UsageEvent.DownloadFailed
                             else -> null
@@ -746,6 +731,7 @@ internal fun MainAppContent(
         }
     }
     var resumePromptItem by remember { mutableStateOf<ContinueWatchingItem?>(null) }
+    var pendingExternalAddonUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var lastExternalPlayerLaunch by remember { mutableStateOf<PlayerLaunch?>(null) }
     val activePlaybackProfileId = profileState.activeProfile?.profileIndex ?: ProfileRepository.activeProfileId
     val launchExternalPlayer = rememberExternalPlayerLauncher { result ->
@@ -802,23 +788,9 @@ internal fun MainAppContent(
                     }
 
                     is AppDeepLink.AddonInstall -> {
-                        activateTab(AppScreenTab.Settings)
-                        navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) {
-                            launchSingleTop = true
-                        }
-                        NuvioToastController.show(getString(Res.string.addons_modal_checking_title))
-                        AddonRepository.initialize()
-                        when (val result = AddonRepository.addAddon(deepLink.manifestUrl)) {
-                            is AddAddonResult.Success -> {
-                                NuvioToastController.show(
-                                    getString(Res.string.addons_modal_success_message, result.manifest.name),
-                                )
-                            }
-
-                            is AddAddonResult.Error -> {
-                                NuvioToastController.show(result.message)
-                            }
-                        }
+                        // An OS/deep link is an untrusted request, not permission to
+                        // enable and sync a third-party addon. The user must opt in.
+                        pendingExternalAddonUrl = deepLink.manifestUrl
                         AppDeepLinkRepository.markConsumed(deepLink)
                     }
 
@@ -1601,8 +1573,34 @@ internal fun MainAppContent(
                         navController = navController,
                         onPlay = onPlay,
                         onPlayManually = onPlayManually,
+                        onFindAnimeTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            // Always reveal the root Search tab, even when the
+                            // current details came from another details route.
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                    )
+                }
+                entry<com.nuvio.app.navigation.WatchOrderRoute> { route ->
+                    com.nuvio.app.features.watchorder.WatchOrderScreen(
+                        route = route,
+                        onBack = rememberGuardedPopBackStack(navController, route),
+                        onFindTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                     )
                 }
                 entry<PersonDetailRoute> { route ->
@@ -1668,6 +1666,15 @@ internal fun MainAppContent(
                         onExternalPlayerLaunch = { launch -> lastExternalPlayerLaunch = launch },
                         launchExternalPlayer = launchExternalPlayer,
                         openExternalStreamUrl = ::openExternalStreamUrl,
+                        onFindNextTitle = { title ->
+                            com.nuvio.app.features.search.SearchPrefill.request(title)
+                            navController.navigate(TabsRoute) {
+                                popUpTo<TabsRoute>()
+                                launchSingleTop = true
+                            }
+                            if (selectedTab != AppScreenTab.Search) activateTab(AppScreenTab.Search)
+                            searchFocusRequestCount++
+                        },
                         onSystemBackHandlerChanged = { playerRoute, handler ->
                             if (handler == null) {
                                 if (registeredPlayerSystemBack?.first == playerRoute) {
@@ -2136,6 +2143,36 @@ internal fun MainAppContent(
             TrackingMembershipRemovalConfirmationHost(
                 pending = pendingTrackingRemoval,
                 onPendingChange = { pendingTrackingRemoval = it },
+            )
+
+            NuvioStatusModal(
+                title = stringResource(Res.string.addons_link_confirmation_title),
+                message = stringResource(
+                    Res.string.addons_link_confirmation_message,
+                    pendingExternalAddonUrl?.let { if (it.length > 300) it.take(300) + "…" else it }.orEmpty(),
+                ),
+                isVisible = pendingExternalAddonUrl != null,
+                confirmText = stringResource(Res.string.addons_install_button),
+                dismissText = stringResource(Res.string.action_cancel),
+                onConfirm = {
+                    val approvedUrl = pendingExternalAddonUrl ?: return@NuvioStatusModal
+                    pendingExternalAddonUrl = null
+                    coroutineScope.launch {
+                        activateTab(AppScreenTab.Settings)
+                        navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) {
+                            launchSingleTop = true
+                        }
+                        NuvioToastController.show(getString(Res.string.addons_modal_checking_title))
+                        AddonRepository.initialize()
+                        when (val result = AddonRepository.addAddon(approvedUrl)) {
+                            is AddAddonResult.Success -> NuvioToastController.show(
+                                getString(Res.string.addons_modal_success_message, result.manifest.name),
+                            )
+                            is AddAddonResult.Error -> NuvioToastController.show(result.message)
+                        }
+                    }
+                },
+                onDismiss = { pendingExternalAddonUrl = null },
             )
 
             NuvioStatusModal(

@@ -9,9 +9,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -48,7 +50,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.FullscreenActionButton
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.isFullscreenActionSupported
 import com.nuvio.app.core.ui.nuvioTypeScale
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_player_close
@@ -115,18 +119,32 @@ internal fun OpeningOverlay(
             )
         }
 
-        NuvioBackButton(
-            onClick = onBack,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
                 .padding(top = 20.dp, start = horizontalSafePadding, end = horizontalSafePadding + 20.dp),
-            containerColor = Color.Black.copy(alpha = 0.3f),
-            contentColor = Color.White,
-            buttonSize = 44.dp,
-            iconSize = 24.dp,
-            contentDescription = stringResource(Res.string.compose_player_close),
-        )
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isFullscreenActionSupported) {
+                FullscreenActionButton(
+                    buttonSize = 44.dp,
+                    iconSize = 24.dp,
+                    containerColor = Color.Black.copy(alpha = 0.3f),
+                    contentColor = Color.White,
+                )
+            }
+            NuvioBackButton(
+                onClick = onBack,
+                containerColor = Color.Black.copy(alpha = 0.3f),
+                showContainerOnDesktop = true,
+                contentColor = Color.White,
+                buttonSize = 44.dp,
+                iconSize = 24.dp,
+                contentDescription = stringResource(Res.string.compose_player_close),
+            )
+        }
 
         val targetProgress = progress?.coerceIn(0f, 1f)
         val animatedProgress by animateFloatAsState(

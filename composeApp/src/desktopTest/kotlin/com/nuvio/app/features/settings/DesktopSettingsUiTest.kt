@@ -105,7 +105,7 @@ class DesktopSettingsUiTest {
         onNodeWithText("Import add-ons").assertIsDisplayed()
         capture("04-addons-transfer")
         open("Advanced")
-        onNodeWithText("Usage statistics").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Anonymous diagnostics").performScrollTo().assertIsDisplayed()
         capture("05-advanced")
     }
 

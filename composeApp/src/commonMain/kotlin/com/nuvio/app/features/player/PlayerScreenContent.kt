@@ -6,9 +6,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.isBackPressed
 import androidx.compose.ui.input.pointer.isForwardPressed
@@ -23,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.isDesktop
+import com.nuvio.app.LocalTelevisionUi
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
@@ -81,11 +91,49 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
 
     val runtime = remember { PlayerScreenRuntime(args) }
     runtime.args = args
+    val isTelevision = LocalTelevisionUi.current
+    val tvPlayerFocus = remember { FocusRequester() }
+    LaunchedEffect(isTelevision) {
+        if (isTelevision) tvPlayerFocus.requestFocus()
+    }
 
     BoxWithConstraints(
         modifier = args.modifier
             .fillMaxSize()
             .background(Color.Black)
+            .then(
+                if (!isTelevision) Modifier else Modifier
+                    .focusRequester(tvPlayerFocus)
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when (event.key) {
+                            Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+                                runtime.togglePlayback()
+                                true
+                            }
+                            Key.DirectionLeft -> {
+                                if (runtime.controlsVisible) false else {
+                                    runtime.seekBy(-10_000L)
+                                    true
+                                }
+                            }
+                            Key.DirectionRight -> {
+                                if (runtime.controlsVisible) false else {
+                                    runtime.seekBy(10_000L)
+                                    true
+                                }
+                            }
+                            Key.DirectionUp, Key.DirectionDown -> {
+                                if (runtime.controlsVisible) false else {
+                                    runtime.controlsVisible = true
+                                    true
+                                }
+                            }
+                            else -> false
+                        }
+                    }
+                    .focusable(),
+            )
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     var backWasPressed = false

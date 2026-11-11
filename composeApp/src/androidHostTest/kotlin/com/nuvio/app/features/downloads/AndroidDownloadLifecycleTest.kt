@@ -42,6 +42,20 @@ class AndroidDownloadLifecycleTest {
     }
 
     @Test
+    fun backgroundFallbackIsAPersistedNetworkJobWithoutForegroundStartRequirements() {
+        val context = RuntimeEnvironment.getApplication()
+        val scheduler = AndroidDownloadScheduler(context)
+        val transfer = AndroidDownloadStore(temporary.newFolder()).begin(downloadItem())
+
+        val job = scheduler.buildJob(transfer, userInitiated = false)
+
+        assertFalse(job.isUserInitiated)
+        assertTrue(job.isPersisted)
+        assertNotNull(job.requiredNetwork)
+        assertEquals(transfer.generation, job.extras.getString(AndroidDownloadScheduler.GENERATION))
+    }
+
+    @Test
     fun transferStateAndCredentialsSurviveProcessRecreation() {
         val directory = temporary.newFolder()
         val store = AndroidDownloadStore(directory)

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer as createHttpServer } from 'node:http';
 import { after, before, test } from 'node:test';
 import { createGatewayServer } from './server.mjs';
-import { OpenObserveTelemetry, validateTelemetryEvent } from './openobserve-telemetry.mjs';
+import { OpenObserveTelemetry, TELEMETRY_SIGNALS, validateTelemetryEvent } from './openobserve-telemetry.mjs';
 
 const ingestUrl = 'http://127.0.0.1:5080/api/default/starlit_usage/_json';
 const authorization = 'Basic dGVzdDp0ZXN0LW9ubHktc2VjcmV0';
@@ -43,13 +43,17 @@ test('accepts only fixed event codes, versions and platform fields', () => {
   assert.equal(validateTelemetryEvent(validEvent), true);
   assert.equal(validateTelemetryEvent({ ...validEvent, title: 'Private title' }), false);
   assert.equal(validateTelemetryEvent({ ...validEvent, event: 'search_terms' }), false);
+  assert.equal(validateTelemetryEvent({ ...validEvent, event: 'error_custom_text' }), false);
+  for (const event of Object.keys(TELEMETRY_SIGNALS)) {
+    assert.equal(validateTelemetryEvent({ ...validEvent, event }), true, event);
+  }
   assert.equal(validateTelemetryEvent({ ...validEvent, installationId: 'user@example.com' }), false);
   assert.equal(validateTelemetryEvent({ ...validEvent, version: '../../../config' }), false);
 });
 
-test('forwards one pseudonymous record to OpenObserve using only server credentials', async () => {
+test('forwards categorical health signals without storing device or session identifiers', async () => {
   assert.equal((await send()).status, 202);
-  assert.equal((await send({ ...validEvent, event: 'screen_search' })).status, 202);
+  assert.equal((await send({ ...validEvent, event: 'playback_ready' })).status, 202);
   assert.equal(deliveries.length, 2);
   const [first, second] = deliveries;
   assert.equal(first.url, ingestUrl);
@@ -59,17 +63,42 @@ test('forwards one pseudonymous record to OpenObserve using only server credenti
   assert.equal(records.length, 1);
   const record = records[0];
   assert.deepEqual(Object.keys(record).sort(), [
-    'app', 'event', 'installation_hash', 'platform', 'schema_version', 'version',
+    'app', 'component', 'event', 'platform', 'schema_version', 'severity', 'version',
   ]);
   assert.equal(record.app, 'starlit');
-  assert.equal(record.schema_version, 1);
+  assert.equal(record.schema_version, 2);
   assert.equal(record.event, 'app_open');
+  assert.equal(record.severity, 'info');
+  assert.equal(record.component, 'app');
   assert.equal(record.platform, 'android');
   assert.equal(record.version, '1.9.2');
-  assert.match(record.installation_hash, /^[0-9a-f]{64}$/);
-  assert.equal(record.installation_hash, JSON.parse(second.options.body)[0].installation_hash);
   assert.ok(!first.options.body.includes(installationId), 'raw installation ID must never reach OpenObserve');
+  assert.ok(!first.options.body.includes('installation_hash'), 'not even a stable hash should be stored');
   assert.ok(!first.options.body.includes(authorization));
+  assert.ok(!second.options.body.includes('installation'), 'stored events cannot be joined by device');
+});
+
+test('derives severity and component for warnings and errors on the server', async () => {
+  const count = deliveries.length;
+  assert.equal((await send({ ...validEvent, event: 'torrent_engine_failed' })).status, 202);
+  assert.equal((await send({ ...validEvent, event: 'download_retry_warning' })).status, 202);
+  const [failed, warning] = deliveries.slice(count).map(item => JSON.parse(item.options.body)[0]);
+  assert.equal(failed.severity, 'error');
+  assert.equal(failed.component, 'torrent');
+  assert.equal(warning.severity, 'warning');
+  assert.equal(warning.component, 'downloads');
+  assert.equal((await send({ ...validEvent, severity: 'critical' })).status, 400);
+});
+
+test('silently discards legacy screen and queue events even for old installed clients', async () => {
+  const count = deliveries.length;
+  for (const event of [
+    'screen_home', 'screen_search', 'screen_library', 'screen_settings',
+    'playback_opened', 'download_queued',
+  ]) {
+    assert.equal((await send({ ...validEvent, event })).status, 202, event);
+  }
+  assert.equal(deliveries.length, count, 'no legacy activity events must reach OpenObserve');
 });
 
 test('invalid fields, excessive bodies, methods and legacy admin summaries are blocked', async () => {
@@ -123,12 +152,15 @@ test('accepts the older documented OpenObserve success response only for one rec
   assert.equal((await instance.record(validEvent)).status, 202);
 });
 
-test('per-installation rate limit and daily capacity block bursts', async () => {
+test('per-session rate limit and daily capacity block bursts', async () => {
   const instance = new OpenObserveTelemetry({ ...config, clock: () => clock, fetcher: async () => accepted() });
   for (let n = 0; n < 30; n++) assert.equal((await instance.record(validEvent)).status, 202);
+  assert.equal(instance.rate.size, 1, 'only the current minute is tracked in memory');
   assert.equal((await instance.record(validEvent)).status, 429);
   clock += 60_000;
-  assert.equal((await instance.record(validEvent)).status, 202);
+  const nextSession = { ...validEvent, installationId: 'ffffffffffffffffffffffffffffffff' };
+  assert.equal((await instance.record(nextSession)).status, 202);
+  assert.equal(instance.rate.size, 1, 'previous minute hashes must be discarded');
   instance.dailyCount = 100_000;
   assert.equal((await instance.record(validEvent)).status, 503);
 });

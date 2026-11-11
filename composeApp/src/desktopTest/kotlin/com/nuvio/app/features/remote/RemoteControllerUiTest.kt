@@ -67,6 +67,45 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun phoneSourcePickerHighlightsPcBestMatchAndExposesQualityAndSeeds() =
+        runDesktopComposeUiTest(width = 412, height = 900) {
+            val requestId = "4d6f2801-16ee-493c-bcc9-0bfa5efad34b"
+            val state = RemoteSourcePicker(
+                requestId = requestId,
+                title = "Test film",
+                phase = "ready",
+                sources = listOf(
+                    RemoteChoice("regular", "1080p stream", quality = "1080p", qualityStars = 4, seeders = 8),
+                    RemoteChoice(
+                        "recommended", "4K stream", quality = "4K", qualityStars = 5,
+                        seeders = 75, peers = 7, cached = true, recommended = true,
+                        recommendationReason = "ReadyToPlay",
+                    ),
+                ),
+            )
+            setContent {
+                NuvioTheme {
+                    RemoteSourcePickerDialog(
+                        requestId = requestId,
+                        state = state,
+                        connected = true,
+                        pcName = "Test PC",
+                        onDismiss = {},
+                        onOpenController = {},
+                    )
+                }
+            }
+            onNodeWithTag("remote-initial-sources").assertIsDisplayed()
+            onAllNodesWithTag("remote-source-option").assertCountEquals(2)
+            onNodeWithText("4K stream").assertIsDisplayed()
+            onNodeWithText("1080p stream").assertIsDisplayed()
+            onNodeWithText("Seeds: 75").assertIsDisplayed()
+            onNodeWithText("Peers: 7").assertIsDisplayed()
+            onNodeWithText("Seeds: 8").assertIsDisplayed()
+            onNodeWithText("Cached").assertIsDisplayed()
+        }
+
+    @Test
     fun phoneControllerIsAFullPageWithConnectOptions() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.status.value = "Connect to a desktop on the same Wi-Fi or Ethernet network."
         DesktopRemote.desktops.value = listOf(RemoteDesktop("192.168.1.50", REMOTE_LAN_PORT, "Living room PC"))
@@ -141,6 +180,34 @@ class RemoteControllerUiTest {
             1f,
             slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].range.endInclusive,
         )
+    }
+
+    @Test
+    fun phoneControllerShowsSelectedPcAudioTrackAndOpensAudioChoices() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(
+            playbackId = "track-session",
+            title = "Playback",
+            audioTracks = listOf(
+                RemoteChoice(remoteAudioTrackId(0, "2"), "English stereo", selected = true),
+                RemoteChoice(remoteAudioTrackId(1, "4"), "Japanese surround"),
+            ),
+        )
+        show(desktopLayout = false)
+        onNodeWithTag("remote-audio-tracks").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        onNodeWithText("English stereo").assertIsDisplayed()
+        capture("pc-controller-audio-tracks")
+        onNodeWithTag("remote-audio-tracks").performClick()
+        onNodeWithText("Japanese surround").assertIsDisplayed()
+    }
+
+    @Test
+    fun legacyPcDoesNotDisplayUnsupportedAudioSelector() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(playbackId = "legacy-session", title = "Playback")
+        show(desktopLayout = false)
+        onNodeWithTag("remote-audio-tracks").assertDoesNotExist()
+        capture("pc-controller-no-audio-tracks")
     }
 
     @Test

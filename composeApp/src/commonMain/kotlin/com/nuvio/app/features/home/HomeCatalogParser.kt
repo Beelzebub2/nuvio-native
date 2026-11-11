@@ -55,6 +55,9 @@ internal object HomeCatalogParser {
                     releaseInfo = meta.string("releaseInfo"),
                     rawReleaseDate = meta.string("released"),
                     imdbRating = meta.string("imdbRating"),
+                    dateAdded = meta.string("dateAdded")
+                        ?: meta.string("addedAt")
+                        ?: meta.string("added"),
                     genres = meta.array("genres").mapNotNull { genre ->
                         genre.jsonPrimitive.contentOrNull?.takeIf { it.isNotBlank() }
                     },

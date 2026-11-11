@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.automirrored.rounded.BluetoothSearching
 import androidx.compose.material.icons.rounded.ClosedCaption
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.Download
@@ -718,9 +719,11 @@ private fun VolumeRow(playback: RemotePlayback) {
 
 @Composable
 private fun PlaybackOptions(playback: RemotePlayback) {
-    var openList by remember { mutableStateOf<String?>(null) }
+    // Dismiss choices from a previous movie/episode when playback changes.
+    var openList by remember(playback.playbackId) { mutableStateOf<String?>(null) }
     val episodesTitle = stringResource(Res.string.remote_playback_episodes)
     val subtitlesTitle = stringResource(Res.string.remote_playback_subtitles)
+    val audioTracksTitle = stringResource(Res.string.compose_player_audio_tracks)
     val sourcesTitle = stringResource(Res.string.remote_playback_sources)
     val tiles = buildList<@Composable (Modifier) -> Unit> {
         if (playback.skip) add { modifier ->
@@ -741,6 +744,10 @@ private fun PlaybackOptions(playback: RemotePlayback) {
             RemoteActionTile(Icons.Rounded.ClosedCaption, subtitlesTitle, playback.subtitles.firstOrNull { it.selected }?.label,
                 modifier = modifier, onClick = { openList = "subtitle" })
         }
+        if (playback.audioTracks.isNotEmpty()) add { modifier ->
+            RemoteActionTile(Icons.Rounded.GraphicEq, audioTracksTitle, playback.audioTracks.firstOrNull { it.selected }?.label,
+                modifier = modifier.testTag("remote-audio-tracks"), onClick = { openList = "audioTrack" })
+        }
         add { modifier ->
             RemoteActionTile(Icons.Rounded.Subtitles, stringResource(Res.string.remote_playback_find_subtitles), null,
                 modifier = modifier, onClick = { DesktopRemote.command("fetchSubtitles") })
@@ -757,6 +764,7 @@ private fun PlaybackOptions(playback: RemotePlayback) {
     when (openList) {
         "episode" -> RemoteChoiceList(episodesTitle, playback.episodes, "episode") { openList = null }
         "subtitle" -> RemoteChoiceList(subtitlesTitle, playback.subtitles, "subtitle") { openList = null }
+        "audioTrack" -> RemoteChoiceList(audioTracksTitle, playback.audioTracks, "audioTrack") { openList = null }
         "source" -> RemoteChoiceList(sourcesTitle, playback.sources, "source") { openList = null }
     }
 }

@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Properties
+import java.util.UUID
 import javax.inject.Inject
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -923,6 +924,8 @@ val windowsPlayerBridgeCommand = if (missingWindowsPlayerBridgeInputs.isNotEmpty
         "Gdi32.lib",
         "Dwmapi.lib",
         "Shell32.lib",
+        "WindowsApp.lib",
+        "RuntimeObject.lib",
     ).joinToString(" ")
     val powershellCompileCommand = compileCommand.replace("\"", "__DQ__")
     val powershellCommand = """
@@ -970,6 +973,8 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     inputs.file(windowsPlayerBridgeSource)
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions.h"))
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)
     }
@@ -980,6 +985,24 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     outputs.file(windowsPlayerBridgeImportLib)
     outputs.file(windowsPlayerBridgePdb)
     commandLine(windowsPlayerBridgeCommand)
+}
+
+val windowsMediaSessionTestScript =
+    layout.projectDirectory.file("src/desktopMain/native/windows/test_media_session_actions.ps1")
+val windowsMediaSessionTest = tasks.register<Exec>("testWindowsMediaSessionActions") {
+    notCompatibleWithConfigurationCache("Compiles and runs the Windows native media-session test using MSVC.")
+    enabled = isWindowsHost
+    inputs.file(windowsMediaSessionTestScript)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session_actions_test.cpp"))
+    outputs.upToDateWhen { false }
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+        windowsMediaSessionTestScript.asFile.absolutePath, "-VcvarsPath", windowsVcvarsPath.orEmpty(),
+    )
+}
+tasks.matching { it.name == "desktopTest" }.configureEach {
+    dependsOn(windowsMediaSessionTest)
 }
 
 // Windows RFCOMM host runs in a small isolated native helper. Unlike the
@@ -1345,6 +1368,11 @@ kotlin {
                 }
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation("net.java.dev.jna:jna:5.19.1")
+                // Linux MPRIS media controls over the user session D-Bus (Java 21 Unix sockets).
+                implementation("com.github.hypfvieh:dbus-java-core:5.2.0")
+                if (isLinuxHost) {
+                    runtimeOnly("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.2.0")
+                }
                 implementation(libs.ktor.client.cio)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.quickjs.kt)
@@ -1440,7 +1468,17 @@ tasks.matching {
 tasks.withType<Test>().configureEach {
     // Robolectric runtime JAR downloads from repo1.maven.org are rate-limited on hosted CI.
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
-    systemProperty("nuvio.dataDir", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
+    // Desktop tests mutate account/download preferences. A fixed test-data
+    // directory leaks fixtures into later runs and makes repeat executions fail.
+    // Allocate a fresh task-owned directory before launching each test worker;
+    // never point account-cleanup tests at the normal user profile.
+    doFirst {
+        val isolatedDataDir = temporaryDir.resolve("app-data-${UUID.randomUUID()}")
+        check(isolatedDataDir.mkdirs() || isolatedDataDir.isDirectory) {
+            "Unable to create isolated desktop test storage"
+        }
+        systemProperty("nuvio.dataDir", isolatedDataDir.absolutePath)
+    }
     systemProperty("nuvio.airingSmoke", providers.gradleProperty("nuvio.airingSmoke").orElse("false").get())
     systemProperty("nuvio.updateSmoke", providers.gradleProperty("nuvio.updateSmoke").orElse("false").get())
 }
@@ -1527,7 +1565,7 @@ compose.desktop {
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon-transparent.png"))
-                debMaintainer = "contact@nuvio.tv"
+                debMaintainer = "65181309+Beelzebub2@users.noreply.github.com"
                 shortcut = true
                 menuGroup = desktopPackageName
                 appCategory = "AudioVideo"
@@ -1821,16 +1859,22 @@ if (isLinuxHost) {
             doLast {
                 val effectiveLinuxPackageName = linuxPackageName.orNull ?: packageName.get().lowercase()
                 val effectiveLinuxAppRelease = linuxAppRelease.orNull ?: "1"
-                val artifactPrefix =
-                    "${effectiveLinuxPackageName}_${packageVersion.get()}-${effectiveLinuxAppRelease}_"
+                // jpackage emits <name>_<version>_<arch>.deb on Ubuntu,
+                // but some toolchains insert the Linux package release suffix.
+                // Match only the exact requested version in either layout.
+                val artifactPrefixes = listOf(
+                    "${effectiveLinuxPackageName}_${packageVersion.get()}_",
+                    "${effectiveLinuxPackageName}_${packageVersion.get()}-${effectiveLinuxAppRelease}_",
+                )
                 val debs = destinationDir.get().asFile
                     .listFiles { file ->
-                        file.isFile && file.name.startsWith(artifactPrefix) && file.extension == "deb"
+                        file.isFile && file.extension == "deb" &&
+                            artifactPrefixes.any { file.name.startsWith(it) }
                     }
                     ?.sortedBy { it.name }
                     .orEmpty()
                 require(debs.size == 1) {
-                    "Expected exactly one current Linux DEB matching $artifactPrefix in " +
+                    "Expected one current Linux DEB matching $artifactPrefixes in " +
                         "${destinationDir.get().asFile.absolutePath}, found ${debs.size}."
                 }
                 val deb = debs.single()

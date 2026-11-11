@@ -21,6 +21,13 @@ import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
  */
 class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
+    override fun onCreate() {
+        super.onCreate()
+        // Cold starts triggered by notifications have no Activity yet. Detect the
+        // standalone TV package before shared app/notification policy is accessed.
+        AndroidTelevisionRuntime.initialize(packageName)
+    }
+
     override fun newImageLoader(context: android.content.Context): ImageLoader {
         return ImageLoader.Builder(context)
             .crossfade(true)

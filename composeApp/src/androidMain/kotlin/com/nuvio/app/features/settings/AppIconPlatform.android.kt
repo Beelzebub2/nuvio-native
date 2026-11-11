@@ -4,9 +4,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import com.nuvio.app.AndroidTelevisionRuntime
 
 internal actual object AppIconPlatform {
-    actual val isSupported: Boolean = true
+    actual val isSupported: Boolean get() = !AndroidTelevisionRuntime.active
     actual val requiresCloseConfirmation: Boolean = true
 
     private const val launcherPackage = "com.nuvio.app.launcher"
@@ -19,7 +20,7 @@ internal actual object AppIconPlatform {
     fun initialize(context: Context) {
         val appContext = context.applicationContext
         this.context = appContext
-        restoreDefaultIfNeeded(appContext)
+        if (!AndroidTelevisionRuntime.active) restoreDefaultIfNeeded(appContext)
     }
 
     actual fun currentIconName(): String? {
@@ -41,12 +42,19 @@ internal actual object AppIconPlatform {
     }
 
     fun currentLauncherComponent(context: Context): ComponentName {
+        if (AndroidTelevisionRuntime.active) {
+            // TV has a Leanback launcher Activity, not the phone's icon aliases.
+            return context.packageManager.getLeanbackLaunchIntentForPackage(context.packageName)
+                ?.component
+                ?: component(context, "com.starlit.tv.TelevisionActivity")
+        }
         val currentName = currentIconName(context)
         val className = launcherComponents.first { it.first == currentName }.second
         return component(context, className)
     }
 
     private fun currentIconName(context: Context): String? {
+        if (AndroidTelevisionRuntime.active) return null
         val packageManager = context.packageManager
         val explicitlyEnabled = launcherComponents.firstOrNull { (_, className) ->
             packageManager.getComponentEnabledSetting(component(context, className)) ==
@@ -78,6 +86,7 @@ internal actual object AppIconPlatform {
     }
 
     actual suspend fun activateIcon(name: String?): Boolean {
+        if (AndroidTelevisionRuntime.active) return false
         val appContext = context ?: return false
         val selectedClass = launcherComponents.firstOrNull { it.first == name }?.second ?: return false
         val packageManager = appContext.packageManager

@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'androidApp/**'
+      - 'tvApp/**'
+      - '.github/scripts/tv-emulator-smoke.sh'
       - 'composeApp/**'
       - 'gradle/**'
       - '*.gradle.kts'
@@ -11,6 +13,7 @@ on:
       - 'gradlew*'
       - 'iosApp/Configuration/Version.xcconfig'
       - '.github/workflows/android-check.yml'
+      - '.github/workflows/windows-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -59,3 +62,120 @@ jobs:
             androidApp/build/outputs/apk/${{ matrix.distribution }}/debug/*.apk
             composeApp/build/reports/tests/
           if-no-files-found: warn
+
+  tv-debug:
+    # Keep the large debug APK packaging isolated from release R8/ZIP packaging.
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Android compilation SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Build Starlit TV debug APK
+        run: >-
+          ./gradlew :tvApp:assembleDebug
+          -Pnuvio.android.distribution=full
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --max-workers=2 --no-configuration-cache --no-daemon --console=plain
+      - name: Verify debug TV launcher and feature declarations
+        run: |
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          APK="tvApp/build/outputs/apk/debug/tvApp-debug.apk"
+          test -s "$APK"
+          "$AAPT" dump badging "$APK" > tv-debug-badging.txt
+          grep -q "package: name='com.starlit.tv.debug'" tv-debug-badging.txt
+          grep -q 'android.software.leanback' tv-debug-badging.txt
+          grep -q 'leanback-launchable-activity' tv-debug-badging.txt
+          grep -q "application-label:'Starlit TV'" tv-debug-badging.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: starlit-tv-android-debug
+          path: tvApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  tv:
+    # This gate mirrors production's optimized TV build, on a fresh runner.
+    # A combined debug+release build intermittently stalled in packageRelease
+    # until the shared 40-minute timeout and skipped the TV emulator check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Android compilation SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Build the optimized Starlit TV release APK
+        run: >-
+          ./gradlew :tvApp:assembleRelease
+          -Pnuvio.android.distribution=full
+          '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          '-Pkotlin.daemon.jvmargs=-Xmx3072m'
+          --max-workers=1 --no-configuration-cache --no-daemon --console=plain
+      - name: Verify release TV launcher and feature declarations
+        run: |
+          APK="tvApp/build/outputs/apk/release/tvApp-release-unsigned.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > tv-release-badging.txt
+          grep -q "package: name='com.starlit.tv'" tv-release-badging.txt
+          grep -q 'android.software.leanback' tv-release-badging.txt
+          grep -q 'leanback-launchable-activity' tv-release-badging.txt
+          grep -q "application-label:'Starlit TV'" tv-release-badging.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: starlit-tv-android-release-unsigned
+          path: tvApp/build/outputs/apk/release/tvApp-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  tv-emulator:
+    # TV-specific runtime smoke test, not just APK compilation.
+    needs: tv
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v8
+        with:
+          name: starlit-tv-android-release-unsigned
+          path: tv-apk
+      - name: Enable hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Sign a test-only release APK, launch and navigate on Android TV
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2 (2026-07-05)
+        with:
+          api-level: 36
+          target: android-tv
+          arch: x86_64
+          profile: tv_1080p
+          ram-size: 2048M
+          enable-hw-keyboard: true
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash .github/scripts/tv-emulator-smoke.sh
+      - name: Attach TV smoke screenshot on failure
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: starlit-tv-smoke-failure
+          path: tv-smoke.png
+          if-no-files-found: ignore

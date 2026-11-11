@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.nuvio.app.core.auth.AuthStorage
@@ -20,6 +21,7 @@ import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import com.nuvio.app.core.sync.SyncClientIdentityStorage
 import com.nuvio.app.features.addons.AddonHttpClientProvider
 import com.nuvio.app.features.addons.AddonStorage
+import com.nuvio.app.features.catalog.CatalogSortSettingsStorage
 import com.nuvio.app.features.collection.CollectionMobileSettingsStorage
 import com.nuvio.app.features.collection.CollectionStorage
 import com.nuvio.app.features.debrid.DebridSettingsStorage
@@ -75,9 +77,12 @@ import com.nuvio.app.features.watchprogress.ResumePromptStorage
 import com.nuvio.app.features.watchprogress.WatchProgressStorage
 
 open class MainActivity : AppCompatActivity() {
+    /** TV builds keep the same application/session bootstrap but use 10-foot navigation. */
+    protected open val televisionExperience: Boolean = false
     private var pipRemoteActionReceiver: PipRemoteActionReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        AndroidTelevisionRuntime.active = televisionExperience
         installSplashScreen()
         enableEdgeToEdge(
             // The UI is always dark, so keep light status icons even when the phone uses light mode.
@@ -133,6 +138,7 @@ open class MainActivity : AppCompatActivity() {
         SimklAuthStorage.initialize(applicationContext)
         SimklSyncStorage.initialize(applicationContext)
         LibraryDisplaySettingsStorage.initialize(applicationContext)
+        CatalogSortSettingsStorage.initialize(applicationContext)
         ContinueWatchingPreferencesStorage.initialize(applicationContext)
         ResumePromptStorage.initialize(applicationContext)
         ContinueWatchingEnrichmentStorage.initialize(applicationContext)
@@ -154,7 +160,9 @@ open class MainActivity : AppCompatActivity() {
         handleIncomingAppIntent(intent)
 
         setContent {
-            App()
+            CompositionLocalProvider(LocalTelevisionUi provides televisionExperience) {
+                App()
+            }
         }
     }
 

@@ -24,6 +24,12 @@ private data class StoredContinueWatchingPreferences(
     val showResumePromptOnLaunch: Boolean = true,
     @SerialName("sort_mode")
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,
+    @SerialName("separate_rows_by_type")
+    val separateRowsByType: Boolean = false,
+    @SerialName("hide_live_content")
+    val hideLiveContent: Boolean = false,
+    @SerialName("rail_priority")
+    val railPriority: ContinueWatchingRailPriority = ContinueWatchingRailPriority.MOVIES,
 )
 
 object ContinueWatchingPreferencesRepository {
@@ -100,6 +106,9 @@ object ContinueWatchingPreferencesRepository {
                 dismissedNextUpKeys = stored.dismissedNextUpKeys,
                 showResumePromptOnLaunch = stored.showResumePromptOnLaunch,
                 sortMode = stored.sortMode,
+                separateRowsByType = stored.separateRowsByType,
+                hideLiveContent = stored.hideLiveContent,
+                railPriority = stored.railPriority,
             )
         } else {
             ContinueWatchingPreferencesUiState()
@@ -165,6 +174,27 @@ object ContinueWatchingPreferencesRepository {
         persist()
     }
 
+    fun setSeparateRowsByType(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.separateRowsByType == enabled) return
+        _uiState.value = _uiState.value.copy(separateRowsByType = enabled)
+        persist()
+    }
+
+    fun setHideLiveContent(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.hideLiveContent == enabled) return
+        _uiState.value = _uiState.value.copy(hideLiveContent = enabled)
+        persist()
+    }
+
+    fun setRailPriority(priority: ContinueWatchingRailPriority) {
+        ensureLoaded()
+        if (_uiState.value.railPriority == priority) return
+        _uiState.value = _uiState.value.copy(railPriority = priority)
+        persist()
+    }
+
     fun removeDismissedNextUpKeysForContent(contentId: String) {
         ensureLoaded()
         val normalizedContentId = contentId.trim()
@@ -189,6 +219,9 @@ object ContinueWatchingPreferencesRepository {
                     dismissedNextUpKeys = _uiState.value.dismissedNextUpKeys,
                     showResumePromptOnLaunch = _uiState.value.showResumePromptOnLaunch,
                     sortMode = _uiState.value.sortMode,
+                    separateRowsByType = _uiState.value.separateRowsByType,
+                    hideLiveContent = _uiState.value.hideLiveContent,
+                    railPriority = _uiState.value.railPriority,
                 ),
             ),
         )

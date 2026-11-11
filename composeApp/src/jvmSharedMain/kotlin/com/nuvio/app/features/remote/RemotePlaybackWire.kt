@@ -16,6 +16,7 @@ internal fun RemotePlayback.toRemoteWireJson(): String {
         snapshot = snapshot.copy(
             episodes = snapshot.episodes.take(snapshot.episodes.size / 2),
             subtitles = snapshot.subtitles.take(snapshot.subtitles.size / 2),
+            audioTracks = snapshot.audioTracks.take(snapshot.audioTracks.size / 2),
             sources = snapshot.sources.take(snapshot.sources.size / 2),
             downloads = snapshot.downloads.take(snapshot.downloads.size / 2),
             sourcePicker = snapshot.sourcePicker.copy(

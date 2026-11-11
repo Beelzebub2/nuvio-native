@@ -45,9 +45,7 @@ fi
 
 # Ensure a launcher is present for desktop integration. Some jpackage/deb
 # combinations may omit it; in that case, synthesize a minimal entry.
-if ! nuvio_linux_desktop_entry_exists "$work_dir"; then
-    nuvio_linux_write_desktop_entry "$work_dir"
-fi
+nuvio_linux_write_desktop_entry "$work_dir"
 nuvio_linux_ensure_startup_wm_class "$work_dir"
 nuvio_linux_ensure_uri_handler "$work_dir"
 

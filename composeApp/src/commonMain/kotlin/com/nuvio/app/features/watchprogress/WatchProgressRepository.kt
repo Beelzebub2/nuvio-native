@@ -1002,6 +1002,7 @@ object WatchProgressRepository {
             lastSourceUrl = cached?.lastSourceUrl,
             isCompleted = isWatchProgressComplete(position, duration, false),
             progressKey = resolvedProgressKey(),
+            mediaCategory = cached?.mediaCategory,
         )
 
     private fun ProgressDeltaEvent.toProgressSyncRecord(): ProgressSyncRecord =
@@ -1341,6 +1342,18 @@ object WatchProgressRepository {
         persist: Boolean,
         syncRemote: Boolean,
     ) {
+        // A live channel has no stable duration or resume point. Keep local and remote history
+        // unchanged when this profile opts to hide live playback from Continue Watching.
+        if (session.parentMetaType.isExplicitLiveMetaType()) {
+            ContinueWatchingPreferencesRepository.ensureLoaded()
+            if (shouldSkipLivePlaybackProgress(
+                    metaType = session.parentMetaType,
+                    sessionProfileId = session.profileId,
+                    activeProfileId = ProfileRepository.activeProfileId,
+                    hideLiveContent = ContinueWatchingPreferencesRepository.uiState.value.hideLiveContent,
+                )
+            ) return
+        }
         val targetProfileId = session.profileId
         val positionMs = snapshot.positionMs.coerceAtLeast(0L)
         val durationMs = snapshot.durationMs.coerceAtLeast(0L)

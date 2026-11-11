@@ -29,6 +29,38 @@ the preceding Cloudflare version/source for rollback. The separate approval emai
 Worker remains in use. New releases use the VPS URL directly; `NUVIO_AIRING_GATEWAY`
 still overrides the URL for development.
 
+## Anime viewing order (read-only, opt-in UI)
+
+The VPS metadata gateway also offers
+GET /watch-order?malId=30831&mode=recommended. The recognized modes are
+recommended (default), release, and chronological. It resolves a positive MAL
+anime ID using the Junban franchise directory, then uses Jikan-compatible
+MAL sequel/prequel relations from the Tenrai service when safe. Only the
+version-controlled Starlit override for KonoSuba's main progression is marked
+"verified"; other inferred results are identified as inferred or partial.
+Unknown chronology fails closed rather than fabricating viewing order.
+Movie MAL IDs also resolve when the movie has an explicit Tenrai Prequel
+link to one matching Junban TV series; unrelated franchise entries or
+ambiguous prequels are not joined. Unknown movie dates are kept adjacent
+to their source installment in release mode instead of moved to the end.
+
+Junban's API and database are independent projects with their own terms.
+Attribution: Junban (https://junban.moe), database ODbL 1.0. Its franchise
+membership should not be confused with verified viewing order. Verify
+provider licensing, attribution and any share-alike obligations before
+production deployment. Tenrai is an independently hosted, Jikan-compatible
+beta service, **not** the retired api.jikan.moe public endpoint.
+
+The gateway has fixed upstream hosts, positive-ID validation, bounded provider
+responses, 4.5-second provider request timeouts, shared six-hour cache, seven
+days of stale data, concurrent-request coalescing and host-specific cooldowns
+for 429/5xx. It sends no account credentials, watched history, media sources,
+or tokens. An upstream outage doesn't block other metadata routes or change
+existing episode autoplay. The app UI opens normal Starlit search for the next
+title instead of making an unverified playback-ID guess.
+
+Run node --test watch-order.test.mjs for fixture, error and cache tests.
+
 ## Episode artwork
 
 Native Airing retains AniZip episode images first. Missing artwork is filled from
@@ -98,8 +130,8 @@ values. The deployment currently uses `network_mode: host`, so
 `http://127.0.0.1:5080/api/default/starlit_usage/_json` reaches OpenObserve
 without exposing its ingest port publicly.
 
-OpenObserve errors or a four-second timeout return 502; the app treats analytics
-as best-effort. A four-request concurrency budget, per-installation minute cap,
+OpenObserve errors or a four-second timeout return 502; the app treats diagnostics
+as best-effort. A four-request concurrency budget, per-session minute cap,
 and 100,000-event daily process cap keep telemetry from starving provider
 requests. Configure edge IP rate limits too, because client installation IDs are
 unauthenticated. Existing GET routes and the old `workers.dev` compatibility
@@ -108,22 +140,29 @@ shim are unchanged; the shim does not forward telemetry POST requests.
 **Retention:** Set the `starlit_usage` stream's data retention to **30 days** in
 OpenObserve. The collector no longer writes JSONL files and does not expose an
 operator summary endpoint. Restrict stream access to authorized operators.
+Health signals (schema 2) contain only event, severity, component, app version
+and platform. Requests use a random per-session token, hashed only in memory for
+abuse protection. Neither the token nor its hash is stored in OpenObserve.
+Old clients' screen-visit, playback-open and queue-snapshot events are
+acknowledged but discarded by the gateway. No titles, URLs, searches,
+free-form errors or account identifiers are accepted.
+
 In the OpenObserve Logs or Dashboard interface, select `starlit_usage` and query:
 
 ```sql
-SELECT version, platform,
-       COUNT(DISTINCT installation_hash) AS active_installations,
-       COUNT(*) AS app_opens
+SELECT version, platform, COUNT(*) AS app_opens
 FROM "starlit_usage"
 WHERE event = 'app_open'
 GROUP BY version, platform
-ORDER BY active_installations DESC;
+ORDER BY app_opens DESC;
 ```
 
-For feature usage, query `SELECT event, COUNT(*) AS events FROM "starlit_usage"
-GROUP BY event ORDER BY events DESC`. Choose the 1–30 day time window in the
-OpenObserve UI. These are *consenting active installations*, not all users or
-unique real people.
+For diagnostic failures, query `SELECT version, platform, component, severity,
+event, COUNT(*) AS occurrences FROM "starlit_usage" WHERE schema_version = 2
+AND severity IN ('warning', 'error') GROUP BY version, platform, component,
+severity, event ORDER BY occurrences DESC`. Choose a 1–30 day time window.
+App opens are consenting launches, **not** unique users or devices. Historical
+schema-1 records may contain installation hashes until their retention expires.
 
 **Deployment:** Nginx must forward `/gateway/telemetry/` to the metadata Node
 service after stripping `/gateway/`. Ensure the metadata container can reach

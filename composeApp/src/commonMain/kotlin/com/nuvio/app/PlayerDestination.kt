@@ -26,6 +26,7 @@ internal fun PlayerDestination(
     onExternalPlayerLaunch: (PlayerLaunch) -> Unit,
     launchExternalPlayer: (ExternalPlayerIntentResult.Success) -> Boolean,
     openExternalStreamUrl: (String) -> Boolean,
+    onFindNextTitle: (String) -> Unit,
     onSystemBackHandlerChanged: (PlayerRoute, (() -> Unit)?) -> Unit,
 ) {
     val popBack = rememberGuardedPopBackStack(
@@ -148,6 +149,7 @@ internal fun PlayerDestination(
         onOpenExternalUrl = { url ->
             openExternalStreamUrl(url)
         },
+        onFindNextTitle = onFindNextTitle,
         modifier = Modifier.fillMaxSize(),
     )
 }

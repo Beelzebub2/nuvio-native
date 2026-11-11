@@ -10,6 +10,8 @@ class RemoteCommandPolicyTest {
             volumeMax = REMOTE_MAX_VOLUME_LEVEL,
             episodes = listOf(RemoteChoice("episode-3", "Episode 3")),
             subtitles = listOf(RemoteChoice("off", "Off"), RemoteChoice("english", "English")),
+            audioTracks = listOf(RemoteChoice(remoteAudioTrackId(0, "1"), "English"),
+                RemoteChoice(remoteAudioTrackId(1, "2"), "Japanese", selected = true)),
             sources = listOf(RemoteChoice("episode-3-source-0", "Source")))
         fun allowed(type: String, value: Double = 0.0, id: String = "", session: String = "session-2") =
             RemoteCommand(type, value, id, session).isAllowedFor(state)
@@ -27,10 +29,14 @@ class RemoteCommandPolicyTest {
         assertTrue(allowed("episode", id = "episode-3"))
         assertTrue(allowed("subtitle", id = "english"))
         assertTrue(allowed("subtitle", id = "off"))
+        assertTrue(allowed("audioTrack", id = remoteAudioTrackId(1, "2")))
         assertTrue(allowed("source", id = "episode-3-source-0"))
         assertFalse(allowed("pause", session = "session-1"))
         assertFalse(allowed("episode", id = "episode-from-previous-show"))
         assertFalse(allowed("subtitle", id = "unknown-track"))
+        assertFalse(allowed("audioTrack", id = remoteAudioTrackId(1, "old-track")))
+        assertFalse(allowed("audioTrack", value = 1.0, id = remoteAudioTrackId(1, "2")))
+        assertFalse(allowed("audioTrack", session = "previous-playback", id = remoteAudioTrackId(1, "2")))
         assertFalse(allowed("source", id = "other-episode-source-0"))
         assertFalse(allowed("seek", Double.NaN))
         assertFalse(allowed("seek", 100_001.0))
@@ -54,8 +60,17 @@ class RemoteCommandPolicyTest {
             .isAllowedFor(state.copy(skipIntro = false)))
         assertFalse(RemoteCommand(type = "skipIntro", playbackId = state.playbackId)
             .isAllowedFor(state.copy(skip = false)))
+        assertFalse(RemoteCommand(type = "audioTrack", id = remoteAudioTrackId(1, "2"), playbackId = state.playbackId)
+            .isAllowedFor(state.copy(audioTracks = emptyList())))
         assertFalse(allowed("enableP2pForPlayerControls"))
         assertFalse(allowed("submitIntroCommit"))
+    }
+
+    @Test
+    fun remoteAudioTrackIdsKeepDistinctLogicalIndicesAndBoundMetadata() {
+        assertEquals("0:2", remoteAudioTrackId(0, "2"))
+        assertEquals("1:2", remoteAudioTrackId(1, "2"))
+        assertEquals(67, remoteAudioTrackId(12, "x".repeat(200)).length)
     }
 
     @Test

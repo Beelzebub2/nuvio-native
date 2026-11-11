@@ -279,18 +279,29 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
 internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
     if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return
     val progressPercent = currentPlaybackProgressPercent()
-    if (!shouldSendStopScrobble(hasRequestedScrobbleStartForCurrentItem, progressPercent)) {
+    if (!playbackSnapshot.isEnded && !shouldSendStopScrobble(hasRequestedScrobbleStartForCurrentItem, progressPercent)) {
         return
     }
-    if (progressPercent < 80f) {
-        emitTrackingScrobbleStop(progressPercent)
-        return
-    }
+    val stopPercent = resolveStopScrobblePercent(
+        reportedProgressPercent = progressPercent,
+        isEnded = playbackSnapshot.isEnded,
+        hasSentCompletionScrobble = hasSentCompletionScrobbleForCurrentItem,
+    ) ?: return
+    if (stopPercent >= 80f) hasSentCompletionScrobbleForCurrentItem = true
+    emitTrackingScrobbleStop(stopPercent)
+}
 
-    if (progressPercent >= 80f && !hasSentCompletionScrobbleForCurrentItem) {
-        hasSentCompletionScrobbleForCurrentItem = true
-        emitTrackingScrobbleStop(progressPercent)
-    }
+/**
+ * mpv may report EOF before its final time position catches up. Mark actual EOF
+ * as finished and never send a later partial STOP for an already completed item.
+ */
+internal fun resolveStopScrobblePercent(
+    reportedProgressPercent: Float,
+    isEnded: Boolean,
+    hasSentCompletionScrobble: Boolean,
+): Float? {
+    if (hasSentCompletionScrobble) return null
+    return if (isEnded) 100f else reportedProgressPercent.coerceIn(0f, 100f)
 }
 
 internal fun shouldSendStopScrobble(

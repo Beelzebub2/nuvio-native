@@ -16,7 +16,8 @@ import java.awt.Desktop
 internal data class MalConnectionState(val profileId: Int = -1, val connected: Boolean = false,
     val username: String = "", val clientId: String = "", val busy: Boolean = false,
     val connecting: Boolean = false, val revision: Long = 0, val error: String? = null,
-    val showTab: Boolean = false)
+    val showTab: Boolean = false,
+    val playbackUpdateThresholdPercent: Int = DefaultMalPlaybackUpdateThresholdPercent)
 
 internal object MyAnimeListRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -40,7 +41,11 @@ internal object MyAnimeListRepository {
         val expected = generation
         mutableState.value = MalConnectionState(profileId = profile, revision = expected,
             clientId = store.getString("client_$profile").orEmpty(), busy = true,
-            showTab = store.getString("show_tab_$profile") == "true")
+            showTab = store.getString("show_tab_$profile") == "true",
+            playbackUpdateThresholdPercent = normalizeMalPlaybackUpdateThresholdPercent(
+                store.getString("playback_update_threshold_$profile")?.toIntOrNull()
+                    ?: DefaultMalPlaybackUpdateThresholdPercent,
+            ))
         loadJob = scope.launch {
             try {
                 val payload = store.getString("tokens_$profile")
@@ -80,6 +85,20 @@ internal object MyAnimeListRepository {
         if (visible) check(mutableState.value.connected) { "Connect MyAnimeList before showing its tab." }
         store.putString("show_tab_$profile", visible.toString())
         mutableState.value = mutableState.value.copy(showTab = visible)
+    }
+
+    @Synchronized fun playbackUpdateThresholdPercent(): Int {
+        ensureLoaded()
+        return mutableState.value.playbackUpdateThresholdPercent
+    }
+
+    @Synchronized fun setPlaybackUpdateThresholdPercent(percent: Int) {
+        ensureLoaded()
+        val normalized = normalizeMalPlaybackUpdateThresholdPercent(percent)
+        if (normalized == mutableState.value.playbackUpdateThresholdPercent) return
+        val profile = ProfileRepository.activeProfileId
+        store.putString("playback_update_threshold_$profile", normalized.toString())
+        mutableState.value = mutableState.value.copy(playbackUpdateThresholdPercent = normalized)
     }
 
     @Synchronized fun connect(clientId: String, clientSecret: String = "") {
@@ -189,7 +208,13 @@ internal object MyAnimeListRepository {
     suspend fun search(name: String) = authorized { client.search(name, it) }
 
     /** Idempotent. Only a genuinely playing title already completed on MAL is changed. */
-    suspend fun markRewatchingIfCompleted(meta: MetaDetails, playbackProfileId: Int) {
+    suspend fun markRewatchingIfCompleted(
+        meta: MetaDetails,
+        playbackProfileId: Int,
+        positionMs: Long,
+        durationMs: Long,
+    ) {
+        if (!shouldUpdateMalAfterPlayback(positionMs, durationMs, true, false, playbackUpdateThresholdPercent())) return
         if (ProfileRepository.activeProfileId != playbackProfileId) return
         ensureLoaded()
         synchronized(this) { loadJob }?.join()

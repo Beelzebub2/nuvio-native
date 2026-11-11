@@ -19,6 +19,8 @@ import androidx.compose.runtime.setValue
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.myanimelist.isLikelyMyAnimeListAnime
 import com.nuvio.app.features.myanimelist.markMyAnimeListRewatchOnPlayback
+import com.nuvio.app.features.myanimelist.myAnimeListPlaybackUpdateThresholdPercent
+import com.nuvio.app.features.myanimelist.shouldUpdateMalAfterPlayback
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.p2p.P2pStreamingState
@@ -51,6 +53,7 @@ import org.jetbrains.compose.resources.getString
 internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     var playbackReadyReported by remember(activePlaybackKey) { mutableStateOf(false) }
     var playbackFailedReported by remember(activePlaybackKey) { mutableStateOf(false) }
+    var torrentEngineFailureReported by remember(activePlaybackKey) { mutableStateOf(false) }
     LaunchedEffect(activePlaybackKey, playbackSnapshot.isPlaying) {
         if (playbackSnapshot.isPlaying && !playbackReadyReported) {
             playbackReadyReported = true
@@ -61,6 +64,14 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         if (errorMessage != null && !playbackFailedReported) {
             playbackFailedReported = true
             UsageDiagnostics.track(UsageEvent.PlaybackFailed)
+        }
+    }
+    // Fixed slow-start warning, no URL, title, tracker, source or playback position.
+    LaunchedEffect(activePlaybackKey, activeSourceUrl, activeTorrentInfoHash) {
+        if (activeSourceUrl == null && activeTorrentInfoHash == null) return@LaunchedEffect
+        delay(30_000)
+        if (!playbackReadyReported && !playbackFailedReported && errorMessage == null) {
+            UsageDiagnostics.track(UsageEvent.PlaybackStartupSlow)
         }
     }
     val currentFeedback = liveGestureFeedback ?: gestureFeedback
@@ -89,20 +100,35 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         }
     }
 
-    // Opening details, choosing a source, or preloading a video must never alter the MAL list.
-    // Run only after playback has actually started; per-playback dedup avoids requests on resume.
+    // A brief playback, preloading, or changing a source must not alter the MAL list.
+    // Key the coroutine by threshold eligibility, not the changing playback position:
+    // otherwise Compose cancels the in-flight MAL request on every playback tick.
     val malRewatchAttempted = remember { mutableSetOf<String>() }
+    val eligibleForMalUpdate = isDesktop &&
+        playbackSnapshotKey == activePlaybackKey &&
+        shouldUpdateMalAfterPlayback(
+            positionMs = playbackSnapshot.positionMs,
+            durationMs = playbackSnapshot.durationMs,
+            isPlaying = playbackSnapshot.isPlaying,
+            isLoading = playbackSnapshot.isLoading,
+            thresholdPercent = myAnimeListPlaybackUpdateThresholdPercent(),
+        )
     LaunchedEffect(
         profileId, parentMetaType, parentMetaId, activePlaybackKey,
-        playerMeta, playbackSnapshot.isPlaying, playbackSnapshot.isLoading,
+        playerMeta, eligibleForMalUpdate,
     ) {
         val meta = playerMeta
-        if (!isDesktop || !playbackSnapshot.isPlaying || playbackSnapshot.isLoading ||
+        if (!eligibleForMalUpdate ||
             meta == null || !isLikelyMyAnimeListAnime(meta)) return@LaunchedEffect
         val key = "$profileId:$parentMetaType:$parentMetaId:$activePlaybackKey"
         if (key in malRewatchAttempted) return@LaunchedEffect
         try {
-            markMyAnimeListRewatchOnPlayback(meta, profileId)
+            markMyAnimeListRewatchOnPlayback(
+                meta = meta,
+                playbackProfileId = profileId,
+                positionMs = playbackSnapshot.positionMs,
+                durationMs = playbackSnapshot.durationMs,
+            )
             malRewatchAttempted += key
         } catch (e: CancellationException) {
             throw e
@@ -198,6 +224,10 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            if (!torrentEngineFailureReported) {
+                torrentEngineFailureReported = true
+                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+            }
             errorMessage = getString(
                 Res.string.player_error_failed_start_torrent,
                 error.message ?: genericUnknownLabel,
@@ -211,6 +241,10 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         val state = p2pStreamingState
         applyP2pRecoveryState(state)
         if (activeTorrentInfoHash != null && state is P2pStreamingState.Error) {
+            if (!torrentEngineFailureReported) {
+                torrentEngineFailureReported = true
+                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+            }
             p2pRecoveryInProgress = false
             p2pResolvedSourceUrl = null
             playerController = null

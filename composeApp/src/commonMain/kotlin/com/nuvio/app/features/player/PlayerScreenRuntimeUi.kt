@@ -26,6 +26,7 @@ import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
 import com.nuvio.app.features.remote.RemotePlaybackHandoff
 import com.nuvio.app.features.remote.newRemotePlaybackId
+import com.nuvio.app.features.remote.remoteAudioTrackId
 import com.nuvio.app.features.remote.isAllowedFor
 import com.nuvio.app.features.remote.REMOTE_MAX_VOLUME_LEVEL
 import androidx.compose.ui.graphics.Color
@@ -54,6 +55,8 @@ import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.isSelectableForPlayback
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import com.nuvio.app.features.watchorder.PlayerWatchOrderSuggestion
+import com.nuvio.app.features.watchorder.shouldOfferFranchiseContinuation
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.isDesktop
 import com.nuvio.app.features.player.skip.internalSkipAction
@@ -634,6 +637,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
         RenderPlaybackOverlays(
             runtime = runtime,
+            isInPictureInPicture = isInPip,
             displayedPositionMs = displayedPositionMs,
             currentGestureFeedback = currentGestureFeedback,
             p2pInitialLoadingMessage = p2pInitialLoadingMessage,
@@ -897,7 +901,7 @@ internal fun releaseRetainedPlayerBeforeNavigation(
     }
 }
 
-private fun PlayerScreenRuntime.requestBack() {
+private fun PlayerScreenRuntime.requestBack(afterExit: (() -> Unit)? = null) {
     flushWatchProgress()
     val exitingController = playerLifecycleController
     args.onBack { afterRelease, releaseFailed ->
@@ -916,6 +920,9 @@ private fun PlayerScreenRuntime.requestBack() {
                         playerController = null
                     }
                     afterRelease()
+                    // The player must be released and the guarded pop completed
+                    // before activating search; never navigate over an active stream.
+                    afterExit?.invoke()
                 },
                 onReleaseFailed = { message ->
                     if (!playerReleaseSurfaceRetention.finish(releaseAttemptId)) {
@@ -965,6 +972,15 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         subtitles = listOf(RemoteChoice("off", "Off", isSubtitleOffSelected)) + state.subtitleOptionItems.take(500).map {
             RemoteChoice(it.id, "${it.title} • ${it.sourceLabel}".take(150), it.isSelected)
         },
+        audioTracks = audioTracks.take(128).map { track ->
+            RemoteChoice(
+                id = remoteAudioTrackId(track.index, track.id),
+                label = track.label.ifBlank {
+                    track.language?.takeIf { it.isNotBlank() } ?: "${state.audioLabel} ${track.index + 1}"
+                }.take(150),
+                selected = if (selectedAudioIndex >= 0) track.index == selectedAudioIndex else track.isSelected,
+            )
+        },
         sources = episodeSources.take(500).map { RemoteChoice(sourceId(it), "${it.addonName} • ${it.label}".take(180)) },
         message = when {
             state.showP2pConsent -> "Confirm P2P streaming on the desktop before continuing."
@@ -979,6 +995,7 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
         DesktopRemote.dispatch = dispatch@ { command ->
             if (!command.isAllowedFor(remoteState)) return@dispatch
             val controller = playerController ?: return@dispatch
+            var audioTrackSelected = false
             when (command.type) {
                 "play" -> { shouldPlay = true; controller.play() }
                 "pause" -> { shouldPlay = false; controller.pause() }
@@ -1007,6 +1024,9 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
                         handlePlayerControlsEvent(if (it.kind == "addon") "selectAddonSubtitle" else "selectBuiltInSubtitleTrack", it.index.toDouble())
                     }
                 }
+                "audioTrack" -> audioTracks.firstOrNull {
+                    remoteAudioTrackId(it.index, it.id) == command.id
+                }?.let { audioTrackSelected = selectUserAudioTrack(it.index) }
                 "fetchSubtitles" -> { refreshTracks(); fetchAddonSubtitlesForActiveItem() }
                 "source" -> episodeSources.firstOrNull { sourceId(it) == command.id }?.let {
                     handlePlayerControlsEvent("selectEpisodeStream", it.index.toDouble())
@@ -1016,6 +1036,10 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
             // the next Compose frame; echo the *applied* PC level, not the prior snapshot.
             if (command.type == "volume" || command.type == "mute") {
                 DesktopRemote.playback = DesktopRemote.playback.copy(volume = controller.getRemoteVolume())
+            } else if (audioTrackSelected) {
+                DesktopRemote.playback = DesktopRemote.playback.copy(
+                    audioTracks = DesktopRemote.playback.audioTracks.map { it.copy(selected = it.id == command.id) },
+                )
             }
         }
     }
@@ -1231,13 +1255,11 @@ internal fun PlayerScreenRuntime.handlePlayerControlsEvent(type: String, value: 
             val requestedId = value.toInt()
             val index = audioTracks.firstOrNull { it.id == requestedId.toString() }?.index
                 ?: audioTracks.firstOrNull { it.index == requestedId }?.index
-                ?: requestedId
+                ?: return true
             playerControlsLog.d {
                 "selectAudioTrack id=$requestedId index=$index tracks=${audioTracks.size} ${playerControlLogContext()}"
             }
-            selectedAudioIndex = index
-            persistAudioPreference(audioTracks.firstOrNull { it.index == index })
-            playerController?.selectAudioTrack(index)
+            selectUserAudioTrack(index)
         }
         "fetchAddonSubtitles" -> fetchAddonSubtitlesForActiveItem()
         "selectAddonSubtitle" -> {
@@ -1858,6 +1880,7 @@ private fun MetaVideo.playerControlsEpisodeCode(): String =
 @Composable
 private fun BoxScope.RenderPlaybackOverlays(
     runtime: PlayerScreenRuntime,
+    isInPictureInPicture: Boolean,
     displayedPositionMs: Long,
     currentGestureFeedback: GestureFeedbackState?,
     p2pInitialLoadingMessage: String?,
@@ -1934,11 +1957,44 @@ private fun BoxScope.RenderPlaybackOverlays(
             errorMessage = errorMessage,
             onDismissError = { requestBack() },
         )
+        if (!playerControlsLocked && !isInPictureInPicture && args.onFindNextTitle != null) {
+            val matchingMeta = playerMeta?.takeIf { it.id == parentMetaId }
+                ?: metaUiState.meta?.takeIf { it.id == parentMetaId }
+            PlayerWatchOrderSuggestion(
+                meta = matchingMeta,
+                eligible = shouldOfferFranchiseContinuation(
+                    hasEnded = playbackSnapshot.isEnded && !playerReleaseSurfaceRetention.inFlight,
+                    hasPlaybackError = errorMessage != null,
+                    hasNextEpisode = nextEpisodeInfo != null,
+                    isSeries = isSeries,
+                    currentEpisodeInMetadata = playerMetaVideos.any {
+                        it.season == activeSeasonNumber &&
+                            it.episode == activeEpisodeNumber &&
+                            activeSeasonNumber != null && activeEpisodeNumber != null
+                    },
+                ),
+                profileId = profileId,
+                watchedItems = watchedUiState.items,
+                bottomPadding = overlayBottomPadding,
+                endPadding = sliderEdgePadding,
+                onFindTitle = { title ->
+                    // Existing player release/guard stays authoritative. Search
+                    // activation runs only after release and guarded pop.
+                    requestBack(afterExit = { args.onFindNextTitle?.invoke(title) })
+                },
+            )
+        }
     }
 }
 
 @Composable
 private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
+    val localSubtitlePickerTitle = stringResource(Res.string.player_local_subtitle_choose)
+    val unsupportedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unsupported)
+    val unreadableLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unreadable)
+    val oversizedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_oversized)
+    val failedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_failed)
+    val playerNotReadyMessage = stringResource(Res.string.player_local_subtitle_player_not_ready)
     PlayerScreenModalHosts(
         pendingP2pSwitch = pendingP2pSwitch,
         onPendingP2pSwitchChanged = { pendingP2pSwitch = it },
@@ -1953,9 +2009,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         audioTracks = audioTracks,
         selectedAudioIndex = selectedAudioIndex,
         onAudioTrackSelected = { index ->
-            selectedAudioIndex = index
-            persistAudioPreference(audioTracks.firstOrNull { it.index == index })
-            playerController?.selectAudioTrack(index)
+            selectUserAudioTrack(index)
             scope.launch {
                 kotlinx.coroutines.delay(200)
                 showAudioModal = false
@@ -1973,12 +2027,47 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         subtitleDelayMs = subtitleDelayMs,
         selectedAddonSubtitle = selectedAddonSubtitle,
         subtitleAutoSyncState = subtitleAutoSyncState,
+        localSubtitleName = selectedLocalSubtitleName,
+        canChooseLocalSubtitle = playerController != null && !isChoosingLocalSubtitle,
         onBuiltInSubtitleTrackSelected = { index ->
             selectUserSubtitleTrack(index)
         },
         onAddonSubtitleSelected = { addon ->
             selectUserAddonSubtitle(addon)
         },
+        onChooseLocalSubtitle = {
+            if (!isChoosingLocalSubtitle) {
+                val requestedPlaybackKey = activePlaybackKey
+                isChoosingLocalSubtitle = true
+                scope.launch {
+                    try {
+                        val result = chooseLocalSubtitleFile(localSubtitlePickerTitle)
+                        // A file chooser can outlive the stream or episode that opened it.
+                        if (activePlaybackKey != requestedPlaybackKey) return@launch
+                        when (result) {
+                            is LocalSubtitleFileResult.Selected -> {
+                                if (!selectUserLocalSubtitleFile(result)) {
+                                    NuvioToastController.show(playerNotReadyMessage)
+                                }
+                            }
+                            is LocalSubtitleFileResult.Rejected -> {
+                                val message = when (result.reason) {
+                                    LocalSubtitleFileError.UNSUPPORTED_FORMAT -> unsupportedLocalSubtitleMessage
+                                    LocalSubtitleFileError.UNREADABLE -> unreadableLocalSubtitleMessage
+                                    LocalSubtitleFileError.TOO_LARGE -> oversizedLocalSubtitleMessage
+                                    LocalSubtitleFileError.PICKER_FAILED -> failedLocalSubtitleMessage
+                                }
+                                NuvioToastController.show(message)
+                            }
+                            LocalSubtitleFileResult.Cancelled -> Unit
+                        }
+                    } finally {
+                        isChoosingLocalSubtitle = false
+                    }
+                }
+            }
+        },
+        onRemoveLocalSubtitle = { removeUserLocalSubtitleFile() },
         onFetchAddonSubtitles = { fetchAddonSubtitlesForActiveItem() },
         onSubtitleStyleChanged = PlayerSettingsRepository::setSubtitleStyle,
         onSubtitleDelayChanged = { delayMs -> setSubtitleDelay(delayMs) },

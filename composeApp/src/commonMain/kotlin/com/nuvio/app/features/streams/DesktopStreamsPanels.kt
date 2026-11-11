@@ -157,6 +157,7 @@ internal fun DesktopSourcesHeader(
     best: BestMatch?,
     onPlay: (StreamItem) -> Unit,
     onStreamSecondaryClick: (StreamItem, androidx.compose.ui.geometry.Offset) -> Unit,
+    compactHeight: Boolean = false,
 ) {
     val colors = MaterialTheme.nuvio.colors
     val streams = uiState.allStreams
@@ -167,7 +168,7 @@ internal fun DesktopSourcesHeader(
     }.collectAsStateWithLifecycle()
     Column(
         modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+        verticalArrangement = Arrangement.spacedBy(if (compactHeight) NuvioTokens.Space.s4 else NuvioTokens.Space.s8),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -195,7 +196,7 @@ internal fun DesktopSourcesHeader(
                     .fillMaxWidth()
                     .background(colors.surface.copy(alpha = 0.6f), RoundedCornerShape(NuvioTokens.Radius.xl))
                     .border(NuvioTokens.Border.thin, colors.accent.copy(alpha = 0.7f), RoundedCornerShape(NuvioTokens.Radius.xl))
-                    .padding(8.dp),
+                    .padding(if (compactHeight) 4.dp else 8.dp),
                 verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
             ) {
                 Row(
@@ -231,6 +232,7 @@ internal fun DesktopSourcesHeader(
                     showAddonLogo = badgeSettings.showAddonLogo,
                     badgePlacement = badgeSettings.badgePlacement,
                     compact = true,
+                    dense = compactHeight,
                     onClick = { onPlay(match.stream) },
                     onSecondaryClick = { position -> onStreamSecondaryClick(match.stream, position) },
                 )

@@ -8,7 +8,13 @@ import com.nuvio.app.features.details.MetaDetails
 @Composable internal expect fun MyAnimeListSettingsCard()
 @Composable internal expect fun MyAnimeListTabVisible(): Boolean
 @Composable internal expect fun MyAnimeListTabContent(topChromePadding: Dp? = null)
-internal expect suspend fun markMyAnimeListRewatchOnPlayback(meta: MetaDetails, playbackProfileId: Int)
+internal expect fun myAnimeListPlaybackUpdateThresholdPercent(): Int
+internal expect suspend fun markMyAnimeListRewatchOnPlayback(
+    meta: MetaDetails,
+    playbackProfileId: Int,
+    positionMs: Long,
+    durationMs: Long,
+)
 internal expect fun clearMyAnimeListState()
 
 internal fun isLikelyMyAnimeListAnime(meta: MetaDetails): Boolean =

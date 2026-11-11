@@ -40,6 +40,19 @@ data class DetailRoute(
     override val title: String? = null,
 ) : AppRoute
 
+/** Read-only franchise view. Never exposes a direct playback URL or mutates history. */
+@Serializable
+data class WatchOrderRoute(
+    val malId: Int,
+    val sourceMetaId: String,
+    val sourceMetaType: String,
+    val sourceTitle: String,
+    val currentTitleCompleted: Boolean,
+    val screenTitle: String,
+) : AppRoute {
+    override val title: String get() = screenTitle
+}
+
 @Serializable
 data class PersonDetailRoute(
     val personId: Int,

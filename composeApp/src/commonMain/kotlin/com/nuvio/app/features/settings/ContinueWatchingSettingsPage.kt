@@ -33,6 +33,7 @@ import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
 import com.nuvio.app.features.home.components.ContinueWatchingStylePreview
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
+import com.nuvio.app.features.watchprogress.ContinueWatchingRailPriority
 import com.nuvio.app.features.watchprogress.ContinueWatchingSectionStyle
 import com.nuvio.app.features.watchprogress.ContinueWatchingSortMode
 import nuvio.composeapp.generated.resources.Res
@@ -49,6 +50,14 @@ import nuvio.composeapp.generated.resources.settings_continue_watching_section_u
 import nuvio.composeapp.generated.resources.settings_continue_watching_section_visibility
 import nuvio.composeapp.generated.resources.settings_continue_watching_show_description
 import nuvio.composeapp.generated.resources.settings_continue_watching_show_title
+import nuvio.composeapp.generated.resources.settings_continue_watching_separate_rows_title
+import nuvio.composeapp.generated.resources.settings_continue_watching_separate_rows_description
+import nuvio.composeapp.generated.resources.settings_continue_watching_hide_live_title
+import nuvio.composeapp.generated.resources.settings_continue_watching_hide_live_description
+import nuvio.composeapp.generated.resources.settings_continue_watching_rail_priority_title
+import nuvio.composeapp.generated.resources.settings_continue_watching_rail_priority_movies
+import nuvio.composeapp.generated.resources.settings_continue_watching_rail_priority_series
+import nuvio.composeapp.generated.resources.settings_continue_watching_rail_priority_anime
 import nuvio.composeapp.generated.resources.settings_continue_watching_sort_mode_default
 import nuvio.composeapp.generated.resources.settings_continue_watching_sort_mode_default_desc
 import nuvio.composeapp.generated.resources.settings_continue_watching_sort_mode_streaming
@@ -79,6 +88,9 @@ internal fun LazyListScope.continueWatchingSettingsContent(
     blurNextUp: Boolean,
     showResumePromptOnLaunch: Boolean,
     sortMode: ContinueWatchingSortMode,
+    separateRowsByType: Boolean,
+    hideLiveContent: Boolean,
+    railPriority: ContinueWatchingRailPriority,
 ) {
     item {
         SettingsSection(
@@ -92,6 +104,22 @@ internal fun LazyListScope.continueWatchingSettingsContent(
                     checked = isVisible,
                     isTablet = isTablet,
                     onCheckedChange = ContinueWatchingPreferencesRepository::setVisible,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_continue_watching_separate_rows_title),
+                    description = stringResource(Res.string.settings_continue_watching_separate_rows_description),
+                    checked = separateRowsByType,
+                    isTablet = isTablet,
+                    onCheckedChange = ContinueWatchingPreferencesRepository::setSeparateRowsByType,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_continue_watching_hide_live_title),
+                    description = stringResource(Res.string.settings_continue_watching_hide_live_description),
+                    checked = hideLiveContent,
+                    isTablet = isTablet,
+                    onCheckedChange = ContinueWatchingPreferencesRepository::setHideLiveContent,
                 )
             }
         }
@@ -200,6 +228,54 @@ internal fun LazyListScope.continueWatchingSettingsContent(
                 },
                 onDismiss = { showSortModeSheet = false },
             )
+        }
+    }
+    if (separateRowsByType) {
+        item {
+            var showRailPrioritySheet by remember { mutableStateOf(false) }
+            SettingsSection(
+                title = stringResource(Res.string.settings_continue_watching_rail_priority_title),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.settings_continue_watching_rail_priority_title),
+                        description = stringResource(
+                            when (railPriority) {
+                                ContinueWatchingRailPriority.MOVIES -> Res.string.settings_continue_watching_rail_priority_movies
+                                ContinueWatchingRailPriority.SERIES -> Res.string.settings_continue_watching_rail_priority_series
+                                ContinueWatchingRailPriority.ANIME -> Res.string.settings_continue_watching_rail_priority_anime
+                            },
+                        ),
+                        isTablet = isTablet,
+                        onClick = { showRailPrioritySheet = true },
+                    )
+                }
+            }
+            if (showRailPrioritySheet) {
+                DialogSurface(
+                    title = stringResource(Res.string.settings_continue_watching_rail_priority_title),
+                    onDismissRequest = { showRailPrioritySheet = false },
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ContinueWatchingRailPriority.entries.forEach { choice ->
+                            val label = when (choice) {
+                                ContinueWatchingRailPriority.MOVIES -> Res.string.settings_continue_watching_rail_priority_movies
+                                ContinueWatchingRailPriority.SERIES -> Res.string.settings_continue_watching_rail_priority_series
+                                ContinueWatchingRailPriority.ANIME -> Res.string.settings_continue_watching_rail_priority_anime
+                            }
+                            DialogOption(
+                                text = stringResource(label),
+                                selected = choice == railPriority,
+                                onClick = {
+                                    ContinueWatchingPreferencesRepository.setRailPriority(choice)
+                                    showRailPrioritySheet = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

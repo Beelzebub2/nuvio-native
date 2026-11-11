@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -31,6 +33,13 @@ import kotlin.time.TimeSource
 
 private const val MemberAvatarBucket = "membership-profile-avatars"
 private val AvatarCatalogRefreshInterval = 15.minutes
+
+internal fun normalizeMemberAvatarStoragePath(path: String): String? =
+    path.trim().trimStart('/').takeIf { normalized ->
+        normalized.isNotBlank() && normalized.length <= 1024 &&
+            normalized.split('/').none { segment -> segment == "." || segment == ".." } &&
+            normalized.none { char -> char.code < 0x20 || char.code == 0x7f }
+    }
 
 @Serializable
 private data class StoredAvatarCatalogPayload(
@@ -184,9 +193,10 @@ object AvatarRepository {
             memberCatalogMetadata = remote
             saveCachedCatalog()
             memberCatalog = coroutineScope {
+                val downloadSlots = Semaphore(6)
                 remote.map { item ->
-                    async { loadMemberAvatar(item) }
-                }.awaitAll().filterNotNull()
+                    async { downloadSlots.withPermit { loadMemberAvatar(item) } }
+                }.awaitAll()
             }.sortedWith(compareBy({ it.category }, { it.sortOrder }))
             publishCatalog()
         } catch (error: CancellationException) {
@@ -198,20 +208,22 @@ object AvatarRepository {
         }
     }
 
-    private suspend fun loadMemberAvatar(item: MemberAvatarCatalogItem): AvatarCatalogItem? {
+    private suspend fun loadMemberAvatar(item: MemberAvatarCatalogItem): AvatarCatalogItem {
         return try {
+            val safePath = normalizeMemberAvatarStoragePath(item.storagePath)
+                ?: return item.toAvatarCatalogItem(null)
             val cacheKey = memberAvatarCacheKey(item)
             val localImageUrl = MemberAssetStorage.loadProfileAvatar(cacheKey)
                 ?: SupabaseProvider.client.storage[MemberAvatarBucket]
-                    .downloadAuthenticated(item.storagePath)
+                    .downloadAuthenticated(safePath)
                     .let { bytes -> MemberAssetStorage.saveProfileAvatar(cacheKey, bytes) }
-                ?: return null
+                ?: return item.toAvatarCatalogItem(null)
             item.toAvatarCatalogItem(localImageUrl)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             log.w(error) { "Unable to load supporter avatar ${item.id}" }
-            null
+            item.toAvatarCatalogItem(null)
         }
     }
 
@@ -227,7 +239,7 @@ object AvatarRepository {
         return "${item.id}-v${item.assetVersion}.$extension"
     }
 
-    private fun MemberAvatarCatalogItem.toAvatarCatalogItem(localImageUrl: String): AvatarCatalogItem =
+    private fun MemberAvatarCatalogItem.toAvatarCatalogItem(localImageUrl: String?): AvatarCatalogItem =
         AvatarCatalogItem(
             id = id,
             displayName = displayName,

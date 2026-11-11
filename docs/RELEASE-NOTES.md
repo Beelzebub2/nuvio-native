@@ -1,3 +1,92 @@
+## Starlit 1.19.0
+
+### Linux desktop
+
+- **Starlit for Linux x86_64:** Download a Debian/Ubuntu `.deb`, Fedora/RPM `.rpm`, portable `.AppImage` or sandboxed `.flatpak` from the same release page as Windows, Android phones and Android TV.
+- **Native desktop integration:** Linux packages use the Starlit launcher and desktop entry, with a separate Flatpak application ID to avoid replacing a Nuvio installation. The desktop player uses system libmpv and X11/XWayland embedding; TorrentServer integration is included for compatible desktop streaming and downloads.
+- **Verified package distribution:** All Linux formats now build through required automated release jobs. Package metadata, dependencies and SHA-256 checksums are validated before any release can publish. AppImage releases also contain `.zsync` update metadata. Flatpak bundles from GitHub require manual updates unless installed from a configured Flatpak repository.
+
+### Compatibility and limitations
+
+- Linux installers currently target **x86_64** and are distributed as GitHub Release downloads, not through configured APT/DNF repositories or Flathub. X11 or a working XWayland session is required for the embedded native player. DEB, RPM and AppImage installations depend on compatible system media/graphics libraries; Flatpak downloads its GNOME runtime separately.
+- All four Linux packaging/checksum jobs passed the pre-release pull-request checks, alongside desktop authentication, Android phone and TV builds, TV emulator, iOS Kotlin, release policy and source-security checks. Full Linux installation, audio/video presentation, desktop environments and sustained playback still need field validation on representative distributions.
+- Existing Windows and Android install packages and account data remain unchanged by the Linux packaging integration. This release does not add a public iOS App Store build.
+
+## Starlit 1.18.0
+
+### Android TV and Google TV
+
+- **Starlit on your television:** A dedicated Android TV / Google TV application provides a Leanback launcher and large-screen Home, Search, Library and quick Settings, with D-pad focus and basic remote playback controls. The TV installation shares Starlit's existing catalog, account, profiles, source picker, watch progress and streaming implementations.
+- **Separate signed TV installation:** Download the new universal `Starlit-TV-1.18.0.apk`, which installs independently of phone APKs. The television build includes native playback and torrent-engine libraries for the major Android TV architectures.
+- **Safer TV integration:** Notification actions target the TV launcher instead of phone icon aliases; television update policy never offers a phone APK. The TV build is now required in future tagged Starlit releases, including launcher checks, release signing and SHA256 verification.
+
+### Cross-device reliability
+
+- **More efficient large watch-progress synchronization:** Account progress snapshots are fetched in bounded pages with compatibility fallback for older servers, reducing the amount of data handled at once on large libraries.
+
+### Verification and limitations
+
+- Android Full and Play Store builds, optimized TV and debug APKs, iOS Kotlin, desktop diagnostics, native Unix checks and security checks passed on the merged feature. Android TV emulator tests confirmed startup and basic D-pad/Back navigation on the optimized release package; release signing and packaging remain enforced by the release workflow.
+- **First Android TV release:** Real-TV sign-in, full remote-only navigation through detailed settings and source selection, sustained streaming, P2P behavior, subtitles and audio-track switching have not yet been verified on physical devices. Some detailed screens retain phone-first layouts. Install TV updates manually from the matching signed TV release APK; automatic TV updates are not available yet.
+- Samsung Tizen and LG webOS require separate applications; Fire TV support is not confirmed. Windows and Android phone packages continue to be included, while iOS is not published through the App Store by this release.
+
+## Starlit 1.17.1
+
+### Private reliability diagnostics
+
+- **Useful errors and warnings, only with consent:** The optional Usage Statistics setting now covers fixed, anonymous technical signals for slow playback startup, torrent-engine errors, download retries, storage-quota pauses, playback failures and download failures. Successful playback and downloads can also be counted to evaluate reliability.
+- **No browsing or viewing history in usage diagnostics:** Starlit stops reporting screen visits, player openings and download-list refreshes. Technical health events contain no media titles, searches, stream URLs, account details, free-form error messages or permanent installation identifiers.
+- **Temporary abuse protection:** An opt-in diagnostic session uses a random token for brief request-rate limiting rather than keeping a persistent tracking ID. Older locally stored diagnostic identifiers are cleared after updating.
+- **Crash reports stay a separate choice:** Optional crash diagnostics retain sanitized stack traces and limited technical platform information, without navigation or network-request breadcrumbs, screenshots or replay.
+
+### Compatibility and limitations
+
+- This version replaces an earlier tagged release candidate that did not publish after a desktop Settings UI test expected the previous diagnostics label. The assertion now matches the current UI; diagnostic behavior is unchanged from the validated privacy update.
+- The upgraded server collector accepts fixed technical signals from compatible older versions but no longer stores obsolete activity-only events. Historical records expire under the server's configured retention period.
+- Aggregate account counts and error summaries are available to the service operator; event totals are not unique-user or unique-installation counts.
+- Desktop and Android builds are included. Physical-device confirmation of the new warnings and crash-report consent remains outstanding; iOS is not released through the App Store in this version.
+
+## Starlit 1.16.1
+
+### Phone-to-PC playback
+
+- **Compare recommended sources on your phone:** The paired-PC source picker places the desktop's best match first, explains its ranking, and shows resolution-tier stars, reported seed/peer availability and cached status on alternatives. Stars describe quality tiers rather than viewer ratings; unavailable metrics are not invented.
+- **Choose the PC's audio track remotely:** The phone controller can show and select tracks offered by the playing desktop session. Track changes are authorized for the active playback session and older remote peers keep their previous controls.
+
+### Playback and MyAnimeList
+
+- **Fullscreen during stream preparation:** The desktop startup overlay now exposes fullscreen entry and exit before the player is ready, without hiding its close control or changing the torrent engine.
+- **Prevent premature automatic rewatches:** Automatic desktop MyAnimeList Rewatching updates require at least 55% of the episode by default; set a 55–95% threshold per local profile in Tracking settings. Loading, paused, unknown-duration and stale playback states do not trigger early updates. Manual MyAnimeList edits are unchanged.
+
+### Validation and limitations
+
+- Related pull requests #185–#188 passed their applicable Android Full/Play Store, iOS Kotlin, desktop and source-security CI checks. Regression tests cover fullscreen state, source ranking, remote audio commands and playback thresholds.
+- Hardware pairing and track switching, provider-dependent seed/peer data and mixed-version remote operation still need device testing. The release provides Windows and Android builds, not an iOS App Store package.
+
+## Starlit 1.15.0
+
+### Anime franchise watch orders
+
+- **Follow the story across seasons and films:** Anime detail pages can show a compact viewing-order preview and a full franchise list. Reviewed sequences place essential movies and related seasons in their intended progression, while optional side stories remain clearly distinguished.
+- **Choose how to browse:** Switch between recommended, release and verified chronological ordering, include or hide optional entries, and see which installments are current or completed. Incomplete or uncertain source data is labelled as inferred or partial rather than presented as a definitive order.
+- **Find the next installment easily:** Select a title from the watch-order list to search through the existing Starlit add-ons and source picker. At the end of the final available episode or a movie, a dismissible suggestion can point to the next eligible title; ordinary next-episode autoplay still takes precedence, and playback never starts across titles without a new selection.
+- **Clear recovery and attribution:** Missing mappings, unavailable orders and connection failures have retry or fallback states. Franchise data is attributed to Junban under the Open Database License (ODbL 1.0), with read-only relationship metadata provided through a compatible third-party API.
+
+### Phone-to-PC connectivity
+
+- **Pair with wired computers over local Wi-Fi:** Restore reliable discovery, pairing and control when the phone is on Wi-Fi but the paired Windows PC uses Ethernet. LAN and firewall checks handle the different network interfaces more accurately while keeping the existing authenticated device trust and firewall protections.
+- **More reliable compatibility checks:** Improve Windows firewall rule detection and recovery without creating unnecessary public-network allowances. The iOS Kotlin build also uses checksum-verified dependency downloads.
+
+### Service reliability
+
+- **Avoid repeated failed analytics submissions:** The independent account-security analytics exporter handles stale ingestion failures without rapid retry loops. This server-side change does not enable additional client analytics or collect watch-order history.
+
+### Validation and limitations
+
+- The anime watch-order change passed Android Full/Play Store, iOS Kotlin, desktop, gateway, Unix-native and repository-security pull-request checks. Focused gateway tests passed 47/47 and targeted watch-order tests passed 8/8; phone-sized and desktop-sized layouts were visually checked. The read-only watch-order API was deployed and checked over HTTPS before this release.
+- Watch-order availability depends on reliable third-party franchise metadata and the user's installed add-ons; some franchises have no verified order or playable title. Chronological ordering is only shown where reviewed. Watch progress, third-party list statuses, and existing media sources are not automatically modified.
+- Real-world phone-to-PC pairing, specific streaming providers, and physical Android/iOS playback still require hardware testing. This release packages Windows and Android builds, not an iOS App Store release.
+
 ## Starlit 1.14.1
 
 ### More reliable phone-to-PC control

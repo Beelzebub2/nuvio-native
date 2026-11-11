@@ -625,18 +625,18 @@
     <string name="settings_advanced_section_windows_graphics">WINDOWS 图形</string>
     <string name="settings_advanced_section_diagnostics">诊断</string>
     <string name="settings_root_privacy_section">隐私与诊断</string>
-    <string name="settings_advanced_usage_analytics">使用统计</string>
-    <string name="settings_advanced_usage_analytics_subtitle">可选版本、平台和功能使用随机安装 ID 进行计数。关闭直至启用。</string>
+    <string name="settings_advanced_usage_analytics">匿名诊断</string>
+    <string name="settings_advanced_usage_analytics_subtitle">仅在同意后按版本和平台统计错误、警告及可靠性。不记录使用轨迹或永久设备标识。</string>
     <string name="diagnostics_consent_title">可选诊断
 无论您选择哪个，</string>
     <string name="diagnostics_consent_description">Starlit 的工作原理都是相同的。除非您将其打开，否则这两个选项均处于关闭状态。可以随时在 %1$s 的 %2$s 下更改它们。
 无论您选择哪个，</string>
     <string name="diagnostics_consent_description_single">Starlit 的工作原理都是相同的。除非您将其打开，否则此选项将处于关闭状态。可以随时在 %1$s 的 %2$s 下进行更改。</string>
-    <string name="diagnostics_consent_usage">使用统计</string>
-    <string name="diagnostics_consent_usage_detail">应用程序版本、平台以及屏幕、播放和下载的使用频率。使用随机安装 ID 进行计数，当您选择退出时该 ID 会重置。</string>
+    <string name="diagnostics_consent_usage">匿名诊断</string>
+    <string name="diagnostics_consent_usage_detail">应用启动；按应用版本和平台统计技术错误、警告、播放及下载结果。不记录页面访问或永久设备标识。</string>
     <string name="diagnostics_consent_crashes">崩溃报告 (Sentry)</string>
     <string name="diagnostics_consent_crashes_detail">当 Starlit 崩溃时，错误详细信息、应用程序版本和设备信息将发送到 Sentry 以帮助解决问题。</string>
-    <string name="diagnostics_consent_privacy">不包括媒体标题、搜索、帐户 ID 或流地址。使用数据最多保留 30 天。</string>
+    <string name="diagnostics_consent_privacy">不收集片名、搜索词、账号、网址或原始日志。临时令牌仅用于防滥用；数据最多保留30天。</string>
     <string name="diagnostics_consent_not_now">不用了，谢谢</string>
     <string name="diagnostics_consent_save">保存选择</string>
     <string name="settings_advanced_section_discord">不和谐</string>
@@ -661,8 +661,8 @@
     <string name="sentry_help_body">报告按应用程序版本、设备型号、Android 版本和堆栈跟踪进行分组，因此可以首先修复最常见的实际崩溃。</string>
     <string name="sentry_help_body_desktop">报告按应用程序版本、操作系统、体系结构和堆栈跟踪进行分组，因此可以首先修复最常见的实际崩溃。</string>
     <string name="sentry_sent_title">已发送</string>
-    <string name="sentry_sent_body">崩溃、当前 ANR、堆栈跟踪、应用程序版本、构建类型、风味、设备和操作系统元数据，以及包含方法、主机、路径、状态、持续时间和异常类型的安全网络面包屑。</string>
-    <string name="sentry_sent_body_desktop">未处理的应用程序错误、堆栈跟踪、应用程序版本、操作系统、体系结构、Java 运行时元数据和安全诊断面包屑。</string>
+    <string name="sentry_sent_body">经同意后发送崩溃和无响应报告、堆栈、版本及设备系统技术信息。不含网址或浏览轨迹。</string>
+    <string name="sentry_sent_body_desktop">经同意后发送未处理错误、堆栈、版本及系统运行环境信息。不含浏览轨迹。</string>
     <string name="sentry_not_sent_title">未发送</string>
     <string name="sentry_not_sent_body">密码、访问令牌、刷新令牌、请求正文、响应正文、标头、cookie、屏幕截图、视图层次结构、会话重播、原始诊断以及流 URL 查询或片段值。</string>
     <string name="sentry_keep_enabled">继续</string>

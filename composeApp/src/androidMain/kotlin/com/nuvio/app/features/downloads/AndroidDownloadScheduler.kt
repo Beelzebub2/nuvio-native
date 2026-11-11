@@ -54,8 +54,16 @@ internal class AndroidDownloadScheduler(val context: Context) {
         if (existing && Build.VERSION.SDK_INT >= 34) return transfer
         try {
             if (Build.VERSION.SDK_INT >= 34) {
-                check(jobScheduler().schedule(buildJob(transfer)) == JobScheduler.RESULT_SUCCESS) {
-                    "Android could not start the download. Open the app and try again."
+                val jobs = jobScheduler()
+                // Source discovery may finish after the app is backgrounded. Android
+                // refuses user-initiated jobs then; a normal persisted job can still
+                // be scheduled and retried when system constraints permit.
+                val userInitiatedResult = jobs.schedule(buildJob(transfer))
+                if (userInitiatedResult != JobScheduler.RESULT_SUCCESS) {
+                    check(jobs.schedule(buildJob(transfer, userInitiated = false)) ==
+                        JobScheduler.RESULT_SUCCESS) {
+                        "Android could not schedule the download. Open the app and try again."
+                    }
                 }
             } else {
                 val work = OneTimeWorkRequestBuilder<DownloadsTransferWorker>()
@@ -82,9 +90,9 @@ internal class AndroidDownloadScheduler(val context: Context) {
     }
 
     @RequiresApi(34)
-    internal fun buildJob(transfer: AndroidDownloadTransfer): JobInfo =
+    internal fun buildJob(transfer: AndroidDownloadTransfer, userInitiated: Boolean = true): JobInfo =
         JobInfo.Builder(transfer.jobId, ComponentName(context, DownloadsTransferJobService::class.java))
-            .setUserInitiated(true)
+            .setUserInitiated(userInitiated)
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .setPersisted(true)
             .setEstimatedNetworkBytes(transfer.item.totalBytes ?: JobInfo.NETWORK_BYTES_UNKNOWN.toLong(), 0L)

@@ -26,10 +26,13 @@ import com.nuvio.app.features.streams.StreamCard
 import com.nuvio.app.features.streams.StreamCardSkeleton
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
+import com.nuvio.app.features.streams.SourceResultsFilters
+import com.nuvio.app.features.streams.sourceFilterMetadata
 import com.nuvio.app.features.streams.isSelectableForPlayback
 import com.nuvio.app.features.streams.rememberStreamSizeLabelFormat
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_player_no_streams_found
+import nuvio.composeapp.generated.resources.source_filter_no_matches
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -46,6 +49,7 @@ internal fun PlayerStreamList(
     currentStreamUrl: String? = null,
     currentStreamName: String? = null,
     currentLabel: String? = null,
+    sourceFilters: SourceResultsFilters = SourceResultsFilters(),
 ) {
     val debridSettings by remember {
         DebridSettingsRepository.ensureLoaded()
@@ -55,11 +59,15 @@ internal fun PlayerStreamList(
         StreamBadgeSettingsRepository.ensureLoaded()
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val streams = streamsUiState.allStreams
+    val allStreams = streamsUiState.allStreams
+    val streams = remember(allStreams, sourceFilters) {
+        if (!sourceFilters.isActive) allStreams
+        else allStreams.filter { it.sourceFilterMetadata().matches(sourceFilters) }
+    }
     val visibleGroups = streamsUiState.filteredGroups
 
     when {
-        streams.isEmpty() && streamsUiState.isAnyLoading -> {
+        allStreams.isEmpty() && streamsUiState.isAnyLoading -> {
             Column(
                 modifier = modifier.padding(contentPadding),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -79,7 +87,11 @@ internal fun PlayerStreamList(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
-                    text = error ?: stringResource(Res.string.compose_player_no_streams_found),
+                    text = if (allStreams.isNotEmpty() && sourceFilters.isActive) {
+                        stringResource(Res.string.source_filter_no_matches)
+                    } else {
+                        error ?: stringResource(Res.string.compose_player_no_streams_found)
+                    },
                     color = Color.White.copy(alpha = if (error == null) 0.7f else 0.85f),
                     style = MaterialTheme.typography.bodyLarge,
                 )
