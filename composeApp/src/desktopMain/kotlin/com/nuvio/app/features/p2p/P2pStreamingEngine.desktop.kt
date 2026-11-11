@@ -141,6 +141,7 @@ internal class DesktopP2pSession(
     suspend fun startStream(request: P2pStreamRequest): String = coroutineScope {
         val job = currentCoroutineContext().job
         val currentIntent = synchronized(intentLock) {
+            if (closing) throw CancellationException("Torrent engine has been shut down")
             intent += 1
             startJob?.cancel()
             monitorJob?.cancel()
@@ -198,7 +199,7 @@ internal class DesktopP2pSession(
                 // A delayed stop must never kill the process belonging to a newer source.
                 if (isCurrent(stopIntent)) {
                     cancelWarmRetention()
-                    if (closeEngine || !settings().p2pEnabled) {
+                    if (closeEngine || closing || !settings().p2pEnabled) {
                         readinessMonitorJob?.cancel()
                         backend.stop()
                         activeHash = null

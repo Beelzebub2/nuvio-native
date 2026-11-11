@@ -13,6 +13,7 @@ import com.nuvio.app.features.streams.AddonStreamGroup
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -333,6 +334,33 @@ class DesktopP2pSessionTest {
         assertEquals(listOf(request.infoHash), backend.dropped)
         engine.shutdown().join()
         assertFalse(backend.running)
+    }
+
+    @Test fun lateStartCannotInvalidateQueuedShutdownCleanup() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        assertTrue(backend.running)
+        val shutdown = engine.shutdown()
+        val lateStart = async(start = CoroutineStart.UNDISPATCHED) { engine.startStream(request) }
+        lateStart.join()
+        shutdown.join()
+        assertTrue(lateStart.isCancelled)
+        assertFalse(backend.running, "Rejected starts must not supersede the terminal stop")
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+        assertEquals(1, backend.starts)
+    }
+
+    @Test fun ordinaryStopAfterShutdownStillClosesThePreparedBackend() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        val shutdown = engine.shutdown()
+        val lateStop = engine.stopStream()
+        lateStop.join()
+        shutdown.join()
+        assertFalse(backend.running, "Every stop after shutdown must honor terminal cleanup")
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
     }
 
     @Test fun repeatedEpisodeUsesWarmTorrentAndInactiveTorrentIsEventuallyDropped() = runTest {
