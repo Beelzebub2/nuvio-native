@@ -136,6 +136,50 @@ class HomeScreenTest {
     }
 
     @Test
+    fun `cached alias keeps date-only next up unaired through its local release day`() {
+        val nextUp = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seasonNumber = 4,
+            episodeNumber = 6,
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(
+            released = "2026-04-02",
+            nextUpSourceSeedSeasonNumber = 2,
+            nextUpSourceSeedEpisodeNumber = 7,
+        )
+        val cached = buildHomeNextUpCacheSnapshot(
+            nextUpItemsBySeries = mapOf("season-alias" to (2_000L to nextUp)),
+            todayIsoDate = "2026-04-01",
+            seedLastWatchedMap = mapOf("season-alias" to 1_000L),
+        ).single()
+        val restored = Json.decodeFromString<CachedNextUpItem>(
+            Json.encodeToString(cached.copy(hasAired = true)),
+        )
+        val releaseEpochMs = requireNotNull(parseReleaseDateToEpochMs("2026-04-02"))
+
+        assertEquals("season-alias", restored.contentId)
+        assertEquals("canonical", restored.canonicalContentId())
+        assertTrue(cachedNextUpMatchesCurrentSeeds(restored, mapOf("season-alias" to (2 to 7))))
+        assertFalse(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs - 1L,
+            todayIsoDate = "2026-04-01",
+        ))
+        assertFalse(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs + 12L * 60L * 60L * 1000L,
+            todayIsoDate = "2026-04-02",
+        ))
+        assertTrue(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs + 24L * 60L * 60L * 1000L,
+            todayIsoDate = "2026-04-03",
+        ))
+    }
+
+    @Test
     fun `legacy cached series and unchanged source IDs retain existing key semantics`() {
         val legacy = Json.decodeFromString<CachedNextUpItem>(
             """{"contentId":"show","contentType":"series","name":"Show","videoId":"show:1:2","lastWatched":1000,"sortTimestamp":1000,"seedSeason":1,"seedEpisode":1}""",

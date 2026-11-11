@@ -298,6 +298,29 @@ object HomeCatalogSettingsRepository {
         }
     }
 
+    /** Update the displayed add-on catalogs together, leaving collections and their ordering intact. */
+    fun setAllCatalogsEnabled(enabled: Boolean) {
+        val changed = synchronized(loadLock) {
+            ensureLoadedLocked()
+            val catalogKeys = definitions.mapTo(mutableSetOf()) { it.key }
+            if (catalogKeys.isEmpty()) return@synchronized false
+
+            val updated = preferences.mapValues { (key, preference) ->
+                if (key in catalogKeys) preference.copy(enabled = enabled) else preference
+            }
+            if (updated == preferences) return@synchronized false
+
+            preferences = updated
+            publish()
+            persist()
+            true
+        }
+        if (changed) {
+            HomeRepository.applyCurrentSettings()
+            HomeCatalogSettingsSyncService.triggerPush()
+        }
+    }
+
     fun setCustomTitle(key: String, title: String) {
         updatePreference(key) { preference ->
             preference.copy(customTitle = title)
