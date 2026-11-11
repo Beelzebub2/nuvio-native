@@ -1,0 +1,11 @@
+.starlit-addon-manager { max-width: 1480px; margin: 0 auto; padding: 72px 80px; color: #f4f6fc; font-size: 28px; }
+.starlit-addon-manager .theme-brand-wordmark { width: 260px; height: auto; }
+.starlit-addon-manager h1 { margin: 36px 0 20px; font-size: 56px; }
+.starlit-addon-manager p { line-height: 1.5; color: #b7bfce; max-width: 1120px; }
+.starlit-addon-form label { display: block; margin-bottom: 16px; }
+.starlit-addon-manager button, .starlit-addon-manager input { border: 2px solid #525c70; border-radius: 12px; padding: 22px 28px; margin-right: 18px; margin-bottom: 18px; background: #171c2a; color: #f4f6fc; font: inherit; }
+.starlit-addon-manager input { width: 900px; }
+.starlit-addon-manager .focused, .starlit-addon-manager :focus-visible { border-color: #8faeff; outline: 4px solid #8faeff; outline-offset: 4px; }
+.starlit-addon-manager ul { list-style: none; padding: 0; }
+.starlit-addon-manager li { display: flex; align-items: center; padding: 18px 0; border-top: 1px solid #30394b; }
+.starlit-addon-manager li span { flex: 1; overflow-wrap: anywhere; }

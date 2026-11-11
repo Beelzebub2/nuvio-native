@@ -1,0 +1,47 @@
+{
+  "name": "starlit-tizen",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "lint": "eslint \"js/**/*.js\" --quiet --rule \"no-unused-vars: off\"",
+    "test": "node --test tests/starlit*.test.mjs && npm run test:upstream",
+    "test:upstream": "node --test scripts/test-tizen-seek-loading.mjs scripts/test-tizen-avplay-seek-sequencing.mjs scripts/test-tizen-redirect-resolver.mjs scripts/test-tizen-direct-avplay-source.mjs scripts/test-tizen-matroska-audio-metadata.mjs scripts/test-tizen-bitmap-subtitle.mjs scripts/test-dash-mime-hints.mjs scripts/test-profile-scoped-store-cache.mjs scripts/test-plugin-service-lifecycle.mjs js/platform/tvPerformancePolicy.test.mjs js/ui/screens/player/audioTrackDisplay.test.mjs js/ui/screens/player/playbackErrorStatus.test.mjs",
+    "package:tizen": "npm run build:engine && npm run build && node scripts/package-tizen.mjs --outdir artifacts && node scripts/starlit-artifacts.mjs",
+    "verify:package": "node scripts/starlit-artifacts.mjs --verify",
+    "verify:release": "node scripts/starlit-release-gate.mjs",
+    "serve": "node ./scripts/serve.mjs",
+    "build:engine": "node scripts/build-engine-runtime.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs"
+  },
+  "devDependencies": {
+    "@csstools/postcss-global-data": "^4.0.0",
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "1.65.0",
+    "autoprefixer": "^10.6.1",
+    "core-js": "3.50.0",
+    "core-js-compat": "3.50.0",
+    "cssnano": "^7.1.4",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "postcss": "^8.5.28",
+    "prettier": "^3.9.8"
+  },
+  "overrides": {
+    "flatted": "3.4.2"
+  },
+  "dependencies": {
+    "assjs": "0.1.10",
+    "cheerio": "^1.2.0",
+    "crypto-js": "^4.2.0",
+    "dashjs": "5.2.1",
+    "hls.js": "1.7.3",
+    "jszip": "^3.10.2",
+    "libbitsub": "^1.12.1",
+    "quickjs-emscripten": "^0.32.0"
+  }
+}

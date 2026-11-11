@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/NuvioMedia/NuvioTVSmart",
+  "commit": "2ea4303c65c59e087d450426e48e5c1d6ed71f43",
+  "version": "1.3.11",
+  "license": "GPL-3.0-only",
+  "port": "Tizen UI, AVPlay, focus navigation, profile-scoped sync and local EngineFS/Plugin Web Services",
+  "adaptations": "Starlit identity/device authorization, brand/IDs, user-supplied sources, memory-only streaming, package and release acceptance gates"
+}

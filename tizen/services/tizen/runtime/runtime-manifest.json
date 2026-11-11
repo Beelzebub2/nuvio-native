@@ -1,0 +1,462 @@
+{
+  "engine": "torrent-stream@1.2.1",
+  "patches": {
+    "index": "cb35be8dc7f8372aaeff24caf670ced1da4a00455f747388a9e6a764b801fc05",
+    "metadata": "7803a4b8da5ef7aefced509423cbb111dcb13b206e673c3bb3bc4e40617661bc"
+  },
+  "modules": [
+    {
+      "name": "starlit-compat-bitfield",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "bitfield@0.1.0; original source excluded"
+    },
+    {
+      "name": "bittorrent-dht",
+      "version": "6.4.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bencode",
+      "version": "0.7.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE.md"
+      ]
+    },
+    {
+      "name": "bittorrent-tracker",
+      "version": "7.7.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bencode",
+      "version": "0.8.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE.md"
+      ]
+    },
+    {
+      "name": "bn.js",
+      "version": "4.12.5",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "run-parallel",
+      "version": "1.1.10",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bncode",
+      "version": "0.5.3",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "buffer-alloc",
+      "version": "1.2.0",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/buffer-alloc.txt"
+      ]
+    },
+    {
+      "name": "buffer-alloc-unsafe",
+      "version": "1.1.0",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/buffer-alloc-unsafe.txt"
+      ]
+    },
+    {
+      "name": "starlit-compat-buffer-equal",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "buffer-equal@0.0.1; original source excluded"
+    },
+    {
+      "name": "buffer-equals",
+      "version": "1.0.4",
+      "license": "MIT",
+      "files": [
+        "license"
+      ]
+    },
+    {
+      "name": "buffer-fill",
+      "version": "1.0.0",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/buffer-fill.txt"
+      ]
+    },
+    {
+      "name": "buffer-from",
+      "version": "1.1.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "compact2string",
+      "version": "1.4.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "core-util-is",
+      "version": "1.0.3",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "2.6.9",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "end-of-stream",
+      "version": "0.1.5",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/end-of-stream.txt"
+      ]
+    },
+    {
+      "name": "once",
+      "version": "1.3.3",
+      "license": "ISC",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "fifo",
+      "version": "0.1.4",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/fifo.txt"
+      ]
+    },
+    {
+      "name": "starlit-compat-flatten",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "flatten@0.0.1; original source excluded"
+    },
+    {
+      "name": "starlit-compat-hat",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "hat@0.0.3; original source excluded"
+    },
+    {
+      "name": "immediate-chunk-store",
+      "version": "1.0.8",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "inherits",
+      "version": "2.0.4",
+      "license": "ISC",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "ip-set",
+      "version": "1.0.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "ip",
+      "version": "1.1.5",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/ip.txt"
+      ]
+    },
+    {
+      "name": "ipaddr.js",
+      "version": "1.9.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "k-bucket",
+      "version": "0.6.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "k-rpc",
+      "version": "3.7.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "k-rpc-socket",
+      "version": "1.11.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bencode",
+      "version": "0.11.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE.md"
+      ]
+    },
+    {
+      "name": "k-bucket",
+      "version": "2.0.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "lru",
+      "version": "2.0.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "magnet-uri",
+      "version": "4.2.3",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "ms",
+      "version": "2.0.0",
+      "license": "MIT",
+      "files": [
+        "license.md"
+      ]
+    },
+    {
+      "name": "once",
+      "version": "1.4.0",
+      "license": "ISC",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "parse-torrent",
+      "version": "4.1.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "parse-torrent-file",
+      "version": "2.1.4",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bencode",
+      "version": "0.7.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE.md"
+      ]
+    },
+    {
+      "name": "peer-wire-protocol",
+      "version": "0.7.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "bncode",
+      "version": "0.2.3",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "isarray",
+      "version": "0.0.1",
+      "license": "MIT",
+      "files": [
+        "supplemental-licenses/isarray.txt"
+      ]
+    },
+    {
+      "name": "readable-stream",
+      "version": "1.1.14",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "string_decoder",
+      "version": "0.10.31",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "peer-wire-swarm",
+      "version": "0.12.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "randombytes",
+      "version": "2.1.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "re-emitter",
+      "version": "1.1.4",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "starlit-compat-simple-get",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "simple-get@2.0.0; original source excluded"
+    },
+    {
+      "name": "starlit-compat-simple-sha1",
+      "version": "1.0.0",
+      "license": "MIT",
+      "replaces": "simple-sha1@2.1.2; original source excluded"
+    },
+    {
+      "name": "speedometer",
+      "version": "0.1.4",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "thirty-two",
+      "version": "0.0.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE.txt"
+      ]
+    },
+    {
+      "name": "torrent-discovery",
+      "version": "5.4.0",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "run-parallel",
+      "version": "1.1.10",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "torrent-piece",
+      "version": "1.1.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "torrent-stream",
+      "version": "1.2.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "uniq",
+      "version": "1.0.1",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "wrappy",
+      "version": "1.0.2",
+      "license": "ISC",
+      "files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "name": "xtend",
+      "version": "4.0.2",
+      "license": "MIT",
+      "files": [
+        "LICENSE"
+      ]
+    }
+  ],
+  "sha256": "621d9cfbbe2dc33dc570ff04e49e1d8a3cb976e4f70e94146cbda76e74c2d699"
+}
