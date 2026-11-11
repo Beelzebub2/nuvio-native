@@ -24,6 +24,8 @@ node_modules/
 logs/
 analysis/
 Docs
+!tizen/docs/
+!tizen/docs/**
 SUPPORTER_COSMETICS.md
 supabase/migrations/
 keystore/
