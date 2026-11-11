@@ -1,0 +1,50 @@
+{
+  "status": "NOT DEVICE-VERIFIED",
+  "version": "0.1.0",
+  "wgt_sha256": null,
+  "reviewer": null,
+  "reviewed_at": null,
+  "checks": {
+    "remote_navigation": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "signed_install_update": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "direct_mp4_hls_dash": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "torrent_multifile_seek_cleanup": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "account_two_profile_roundtrip": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "mal_tracking": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "low_storage_recovery": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "standby_network_recovery": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "proxy_security": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    },
+    "license_completeness": {
+      "status": "NOT DEVICE-VERIFIED",
+      "evidence": null
+    }
+  },
+  "devices": []
+}

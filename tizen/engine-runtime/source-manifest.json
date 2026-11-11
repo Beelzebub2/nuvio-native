@@ -1,0 +1,21 @@
+{
+  "files": {
+    "build.cjs": "d6fe40a1c2f941bf1bdeff174cd81ba29a43560c60cff94368b6a4356ab80350",
+    "runtime.cjs": "f6f7ee726dda0c320ac8f0179357887efe6c36aefefcfbab1a1999ffaf632af6",
+    "bounded-store.cjs": "4a44d9c927e89e12db544353961f3edd3d5a2121928773fde5cfec3155c65cf4",
+    "tracker-http.cjs": "e7a666c23c97cc5817fb135008d6e8a17a8b7281fbe80f8e194f7e571411bb8f",
+    "network-policy.cjs": "17a4f2e7161c908ac013039ee0746f74634f460295c7ed700de95c00518c90a4",
+    "package.json": "fafe36d151c73d317e8c026cb8e95779e28cc2f9c38323d96077aacf5df851d7",
+    "package-lock.json": "93bd5f7e72688d7cb4338846514cbed630c85fbb4b3e075f6f44a59858456c98",
+    "LICENSE": "0045cdbb69231dc81161e2eca92e70228b4d2050179f10954bf58972f9cff48a",
+    "README.md": "645e69bdb56c8aa9f2465be853dd9184b685811c78fa06fbf1d26cc1c5a820c0",
+    "AUDIT.md": "bc6b5bd4aecfbe05d774593988cbac61932ef327d9bfb4b2be4ea688aea6a0e7",
+    "test-all.cjs": "d5682859091e651ce8971a177d8770a4629519af896020ffe78ec72c5b628f23",
+    "test-runtime.cjs": "1c76c07ca287118f9f122be58f0b264578f2a0b939c6806e4d325834dcc5eed2",
+    "test-network.cjs": "d0ad0e4afab493d08c3df5c37db9a191174e84f0e884de7b56599e64b851dab9",
+    "test-discovery.cjs": "d00adcf412fd25fac3b6fc19e3c32dfff53c5c2cdfd6ad34fa678f38bbf06c4b",
+    "media-http.cjs": "621d9cfbbe2dc33dc570ff04e49e1d8a3cb976e4f70e94146cbda76e74c2d699",
+    "runtime-manifest.json": "fd1068348a968b2a1a47169fe48fd2c3c22d5f34cb5e8416f52203924026bdfe",
+    "THIRD-PARTY-LICENSES.txt": "904ef9d6e7711c9823fb3bdcadbb4dd5ea9075263c2e4e8552041025f0af9d0c"
+  }
+}

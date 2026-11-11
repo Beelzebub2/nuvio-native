@@ -74,7 +74,7 @@ internal object MyAnimeListRepository {
     @Synchronized fun disconnect() {
         val profile = ProfileRepository.activeProfileId
         clearState()
-        store.remove("tokens_$profile"); store.remove("username_$profile")
+        store.remove("tokens_$profile"); store.remove("username_$profile"); store.remove("sync_owner_$profile")
         ensureLoaded()
     }
 
@@ -152,7 +152,7 @@ internal object MyAnimeListRepository {
     private fun isCurrent(profile: Int, expected: Long) =
         generation == expected && ProfileRepository.activeProfileId == profile
 
-    private suspend fun persist(tokens: MalTokens, profile: Int, expected: Long, finishConnect: Boolean = false) {
+    private suspend fun persist(tokens: MalTokens, profile: Int, expected: Long, finishConnect: Boolean = false, syncCloud: Boolean = true) {
         commitProtectedMalCredential(json.encodeToString(tokens), this,
             isCurrent = { isCurrent(profile, expected) },
             save = { encrypted ->
@@ -161,6 +161,24 @@ internal object MyAnimeListRepository {
                 if (finishConnect) mutableState.value = mutableState.value.copy(
                     connected = true, username = tokens.username, busy = false, connecting = false)
             })
+        val syncOwner = store.getString("sync_owner_$profile")
+        if (syncCloud && !syncOwner.isNullOrBlank() && syncOwner == MalAccountSync.owner()) {
+            try { MalAccountSync.push(tokens, profile) { isCurrent(profile, expected) } }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { fail(profile, expected, "MyAnimeList is saved locally. Retry syncing the connection to your TVs.") }
+        }
+    }
+
+    suspend fun syncConnectionToAccount() {
+        ensureLoaded()
+        synchronized(this) { loadJob }?.join()
+        mutex.withLock {
+            val profile = ProfileRepository.activeProfileId
+            val expected = generation
+            val tokens = session ?: error("Connect MyAnimeList first.")
+            val owner = MalAccountSync.push(tokens, profile) { isCurrent(profile, expected) }
+            if (isCurrent(profile, expected)) store.putString("sync_owner_$profile", owner)
+        }
     }
 
     private suspend fun <T> authorized(expectedProfileId: Int? = null, action: suspend (String) -> T): T {
@@ -175,6 +193,16 @@ internal object MyAnimeListRepository {
         loading?.join()
         return mutex.withLock {
             check(isCurrent(profile, expected)) { "Account changed; retry from the current profile." }
+            val cloudOwner = store.getString("sync_owner_$profile")
+            if (!cloudOwner.isNullOrBlank() && cloudOwner == MalAccountSync.owner()) {
+                try {
+                    val remote = MalAccountSync.pull(profile, cloudOwner) { isCurrent(profile, expected) }
+                    if (remote != null && remote.clientId == session?.clientId) {
+                        persist(remote, profile, expected, syncCloud = false)
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { /* Retain the locally protected session while offline. */ }
+            }
             var tokens = session ?: error("Connect MyAnimeList in Settings → Tracking first.")
             if (tokens.expiresAt - System.currentTimeMillis() < 60_000) {
                 tokens = client.refresh(tokens); persist(tokens, profile, expected)
