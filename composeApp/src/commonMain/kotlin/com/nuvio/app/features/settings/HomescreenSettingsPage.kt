@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -60,6 +61,8 @@ import nuvio.composeapp.generated.resources.settings_homescreen_pin_to_move_toas
 import nuvio.composeapp.generated.resources.settings_homescreen_section_catalogs
 import nuvio.composeapp.generated.resources.settings_homescreen_section_catalogs_collections
 import nuvio.composeapp.generated.resources.settings_homescreen_section_collections
+import nuvio.composeapp.generated.resources.settings_homescreen_enable_all_catalogs
+import nuvio.composeapp.generated.resources.settings_homescreen_disable_all_catalogs
 import nuvio.composeapp.generated.resources.settings_homescreen_section_hero
 import nuvio.composeapp.generated.resources.settings_homescreen_section_hero_sources
 import nuvio.composeapp.generated.resources.settings_homescreen_selected_count
@@ -85,12 +88,13 @@ internal fun LazyListScope.homescreenSettingsContent(
     catalogErrorMessage: String?,
 ) {
     val selectedHeroSourceCount = items.count { it.heroSourceEnabled }
-    val enabledCatalogCount = items.count { it.enabled }
+    val catalogItems = items.filterNot { it.isCollection }
+    val enabledCatalogCount = catalogItems.count { it.enabled }
     item {
         HomescreenSummaryCard(
             isTablet = isTablet,
             enabledCatalogCount = enabledCatalogCount,
-            totalCatalogCount = items.size,
+            totalCatalogCount = catalogItems.size,
             selectedHeroSourceCount = selectedHeroSourceCount,
         )
     }
@@ -199,6 +203,28 @@ internal fun LazyListScope.homescreenSettingsContent(
                 val hapticFeedback = LocalHapticFeedback.current
                 val pinToMoveToast = stringResource(Res.string.settings_homescreen_pin_to_move_toast)
 
+                if (catalogCount > 0) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (items.any { !it.isCollection && !it.enabled }) {
+                            NuvioActionLabel(
+                                text = stringResource(Res.string.settings_homescreen_enable_all_catalogs),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                onClick = { HomeCatalogSettingsRepository.setAllCatalogsEnabled(true) },
+                            )
+                        }
+                        if (items.any { !it.isCollection && it.enabled }) {
+                            NuvioActionLabel(
+                                text = stringResource(Res.string.settings_homescreen_disable_all_catalogs),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                onClick = { HomeCatalogSettingsRepository.setAllCatalogsEnabled(false) },
+                            )
+                        }
+                    }
+                }
                 HomescreenCatalogList(
                     isTablet = isTablet,
                     items = items,

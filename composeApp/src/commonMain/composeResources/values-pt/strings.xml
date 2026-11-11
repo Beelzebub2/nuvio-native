@@ -856,6 +856,8 @@
     <string name="settings_homescreen_reorder">Reordenar</string>
     <string name="settings_homescreen_section_catalogs">CATÁLOGOS</string>
     <string name="settings_homescreen_section_catalogs_collections">CATÁLOGOS E COLEÇÕES</string>
+    <string name="settings_homescreen_enable_all_catalogs">Ativar todos os catálogos</string>
+    <string name="settings_homescreen_disable_all_catalogs">Desativar todos os catálogos</string>
     <string name="settings_homescreen_section_collections">COLEÇÕES</string>
     <string name="settings_homescreen_section_hero">ESQUEMA DA PÁGINA INICIAL</string>
     <string name="settings_homescreen_section_hero_sources">CATÁLOGOS EM DESTAQUE</string>

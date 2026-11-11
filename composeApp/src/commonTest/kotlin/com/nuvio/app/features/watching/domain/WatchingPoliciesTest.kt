@@ -1,5 +1,6 @@
 package com.nuvio.app.features.watching.domain
 
+import com.nuvio.app.core.time.parseEpisodeReleaseEpochMs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,21 +31,143 @@ class WatchingPoliciesTest {
     }
 
     @Test
-    fun isReleasedByTreatsDateOnlyValueAsUtcMidnight() {
-        val utcMidnightEpochMs = 1_768_435_200_000L // 2026-01-15T00:00:00Z
+    fun isReleasedByKeepsDateOnlyValueUnairedThroughItsLocalCalendarDay() {
+        val utcMidnightEpochMs = requireNotNull(parseEpisodeReleaseEpochMs("2026-01-15T00:00:00Z"))
 
+        // UTC-5: the provider's day has not started locally, although it has in UTC.
         assertFalse(
             isReleasedBy(
                 todayIsoDate = "2026-01-14",
                 releasedDate = "2026-01-15",
-                nowEpochMs = utcMidnightEpochMs - 1L,
+                nowEpochMs = utcMidnightEpochMs + 1L * 60 * 60 * 1_000,
+            ),
+        )
+        // Date-only metadata has no air time, including after UTC midnight.
+        assertFalse(
+            isReleasedBy(
+                todayIsoDate = "2026-01-15",
+                releasedDate = "2026-01-15",
+                nowEpochMs = utcMidnightEpochMs + 12L * 60 * 60 * 1_000,
+            ),
+        )
+        // UTC+14: local midnight on the following day can precede UTC midnight.
+        assertTrue(
+            isReleasedBy(
+                todayIsoDate = "2026-01-16",
+                releasedDate = "2026-01-15",
+                nowEpochMs = utcMidnightEpochMs + 23L * 60 * 60 * 1_000,
+            ),
+        )
+    }
+
+    @Test
+    fun isReleasedByHonorsExactOffsetTimestampRegardlessOfLocalCalendarDate() {
+        val releasedDate = "2026-07-16T00:30:00+05:30"
+        val releaseEpochMs = requireNotNull(parseEpisodeReleaseEpochMs(releasedDate))
+        assertEquals(parseEpisodeReleaseEpochMs("2026-07-15T19:00:00Z"), releaseEpochMs)
+
+        listOf("2026-07-15", "2026-07-16").forEach { localDate ->
+            assertFalse(isReleasedBy(localDate, releasedDate, nowEpochMs = releaseEpochMs - 1L))
+            assertTrue(isReleasedBy(localDate, releasedDate, nowEpochMs = releaseEpochMs))
+        }
+        assertFalse(isReleasedBy("2026-07-16", releasedDate, available = false, nowEpochMs = releaseEpochMs))
+    }
+
+    @Test
+    fun nextUpRulesKeepDateOnlyEpisodesUnairedForSameSeasonAndSeasonRollover() {
+        val releaseMidnightUtc = requireNotNull(parseEpisodeReleaseEpochMs("2026-10-27T00:00:00Z"))
+        for (candidateSeason in listOf(1, 2)) {
+            for ((localDate, nowEpochMs) in listOf(
+                "2026-10-26" to releaseMidnightUtc + 1L * 60 * 60 * 1_000,
+                "2026-10-27" to releaseMidnightUtc + 12L * 60 * 60 * 1_000,
+            )) {
+                assertFalse(
+                    shouldSurfaceNextEpisode(
+                        watchedSeasonNumber = 1,
+                        candidateSeasonNumber = candidateSeason,
+                        todayIsoDate = localDate,
+                        releasedDate = "2026-10-27",
+                        showUnairedNextUp = false,
+                        nowEpochMs = nowEpochMs,
+                    ),
+                )
+            }
+            assertTrue(
+                shouldSurfaceNextEpisode(
+                    watchedSeasonNumber = 1,
+                    candidateSeasonNumber = candidateSeason,
+                    todayIsoDate = "2026-10-28",
+                    releasedDate = "2026-10-27",
+                    showUnairedNextUp = false,
+                    nowEpochMs = releaseMidnightUtc + 23L * 60 * 60 * 1_000,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun unavailableEpisodeDoesNotBypassReleaseGateWhenUpcomingIsHidden() {
+        assertFalse(
+            shouldSurfaceNextEpisode(
+                watchedSeasonNumber = 1,
+                candidateSeasonNumber = 2,
+                todayIsoDate = "2026-10-27",
+                releasedDate = "2026-10-27",
+                showUnairedNextUp = false,
+                available = false,
             ),
         )
         assertTrue(
-            isReleasedBy(
-                todayIsoDate = "2026-01-14",
-                releasedDate = "2026-01-15",
-                nowEpochMs = utcMidnightEpochMs,
+            shouldSurfaceNextEpisode(
+                watchedSeasonNumber = 1,
+                candidateSeasonNumber = 2,
+                todayIsoDate = "2026-10-27",
+                releasedDate = "2026-10-27",
+                showUnairedNextUp = true,
+                available = false,
+            ),
+        )
+    }
+
+    @Test
+    fun nextUpRolloverWaitsForExactTimedReleaseEvenOnSameLocalDay() {
+        val releasedDate = "2026-07-12T20:00:00Z"
+        val releaseEpochMs = requireNotNull(parseEpisodeReleaseEpochMs(releasedDate))
+        for (available in listOf(true, false)) {
+            assertFalse(
+                shouldSurfaceNextEpisode(
+                    watchedSeasonNumber = 1,
+                    candidateSeasonNumber = 2,
+                    todayIsoDate = "2026-07-12",
+                    releasedDate = releasedDate,
+                    showUnairedNextUp = false,
+                    available = available,
+                    nowEpochMs = releaseEpochMs - 1L,
+                ),
+            )
+            assertTrue(
+                shouldSurfaceNextEpisode(
+                    watchedSeasonNumber = 1,
+                    candidateSeasonNumber = 2,
+                    todayIsoDate = "2026-07-12",
+                    releasedDate = releasedDate,
+                    showUnairedNextUp = false,
+                    available = available,
+                    nowEpochMs = releaseEpochMs,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun unknownSeasonRolloverReleaseDoesNotCountAsAired() {
+        assertFalse(
+            shouldSurfaceNextEpisode(
+                watchedSeasonNumber = 1,
+                candidateSeasonNumber = 2,
+                todayIsoDate = "2026-10-27",
+                releasedDate = "unknown",
+                showUnairedNextUp = false,
             ),
         )
     }

@@ -143,7 +143,11 @@ class TorrServerRecoveryIntegrationTest {
             try { release.await(10, TimeUnit.SECONDS) } finally { exchange.close() }
         }
         server.start()
-        val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
+        val clientExecutor = Executors.newCachedThreadPool { task ->
+            Thread(task, "torrserver-test-client").apply { isDaemon = true }
+        }
+        val client = HttpClient.newBuilder().executor(clientExecutor)
+            .connectTimeout(Duration.ofSeconds(2)).build()
         try {
             val call = async {
                 sendTorrServerRequest(client, HttpRequest.newBuilder(
@@ -157,7 +161,7 @@ class TorrServerRecoveryIntegrationTest {
             release.countDown()
             server.stop(0)
             executor.shutdownNow()
-            client.shutdownNow()
+            clientExecutor.shutdownNow()
         }
     }
 
@@ -172,7 +176,11 @@ class TorrServerRecoveryIntegrationTest {
         val engine = TorrServerBackend(File(dir, "owned"), File(dir, "owned-cache"), binary)
         val other = TorrServerBackend(File(dir, "other"), File(dir, "other-cache"), binary)
         val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
-        val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
+        val clientExecutor = Executors.newCachedThreadPool { task ->
+            Thread(task, "torrserver-test-client").apply { isDaemon = true }
+        }
+        val client = HttpClient.newBuilder().executor(clientExecutor)
+            .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
         try {
             other.restart(settings)
             val otherPid = assertNotNull(other.processId)
@@ -226,7 +234,7 @@ class TorrServerRecoveryIntegrationTest {
         } finally {
             engine.stop()
             other.stop()
-            client.shutdownNow()
+            clientExecutor.shutdownNow()
             assertFalse(engine.isHealthy())
             dir.deleteRecursively()
         }

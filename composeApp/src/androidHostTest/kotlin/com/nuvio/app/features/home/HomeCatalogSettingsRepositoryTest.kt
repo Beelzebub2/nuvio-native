@@ -16,6 +16,7 @@ import com.nuvio.app.features.collection.CollectionMobileSettingsStorage
 import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.collection.CollectionSource
 import com.nuvio.app.features.collection.CollectionStorage
+import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -234,6 +235,74 @@ class HomeCatalogSettingsRepositoryTest {
     }
 
     @Test
+    fun bulkCatalogVisibilityPreservesCollectionsOrderHeroSourcesAndSyncValues(): Unit = runBlocking {
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(addonWithCatalogs("popular", "recent")))
+        HomeCatalogSettingsRepository.syncCollections(listOf(collection()))
+        HomeCatalogSettingsRepository.setCustomTitle("test:movie:popular", "My movies")
+        HomeCatalogSettingsRepository.setHeroSourceEnabled("test:movie:popular", false)
+        HomeCatalogSettingsRepository.setEnabled("collection_favorites", false)
+        HomeCatalogSettingsRepository.moveByIndex(0, 2)
+
+        val before = HomeCatalogSettingsRepository.uiState.value.items
+        val beforeSync = HomeCatalogSettingsRepository.exportToSyncPayload().items
+        val editCount = preferences.editCount
+
+        HomeCatalogSettingsRepository.setAllCatalogsEnabled(false)
+
+        val hidden = HomeCatalogSettingsRepository.uiState.value.items
+        assertTrue(hidden.filterNot { it.isCollection }.all { !it.enabled })
+        assertFalse(hidden.single { it.isCollection }.enabled)
+        assertEquals(before.map { it.key to it.order }, hidden.map { it.key to it.order })
+        assertEquals(before.map { it.key to it.customTitle }, hidden.map { it.key to it.customTitle })
+        assertEquals(before.map { it.key to it.heroSourceEnabled }, hidden.map { it.key to it.heroSourceEnabled })
+        assertEquals(editCount + 1, preferences.editCount)
+
+        val hiddenSync = HomeCatalogSettingsRepository.exportToSyncPayload().items
+        assertEquals(beforeSync.map { it.key to it.order }, hiddenSync.map { it.key to it.order })
+        assertEquals(beforeSync.map { it.key to it.customTitle }, hiddenSync.map { it.key to it.customTitle })
+        assertTrue(hiddenSync.filterNot { it.isCollection }.all { !it.enabled })
+        assertFalse(hiddenSync.single { it.isCollection }.enabled)
+
+        HomeCatalogSettingsRepository.setAllCatalogsEnabled(false)
+        assertEquals(editCount + 1, preferences.editCount)
+        HomeCatalogSettingsRepository.setAllCatalogsEnabled(true)
+        assertEquals(editCount + 2, preferences.editCount)
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.items.filterNot { it.isCollection }.all { it.enabled })
+        assertFalse(HomeCatalogSettingsRepository.uiState.value.items.single { it.isCollection }.enabled)
+    }
+
+    @Test
+    fun bulkCatalogVisibilityReloadsFromCurrentProfileWithoutTouchingAnotherProfile(): Unit = runBlocking {
+        val storage = RuntimeEnvironment.getApplication()
+            .getSharedPreferences("nuvio_home_catalog_settings", Context.MODE_PRIVATE)
+        val otherProfile = if (ProfileRepository.activeProfileId == 2) 3 else 2
+        val otherProfileKey = ProfileScopedKey.of("catalog_settings_payload", otherProfile)
+        storage.edit().putString(otherProfileKey, "other-profile-data").commit()
+
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(addonWithCatalogs("popular", "recent")))
+        HomeCatalogSettingsRepository.setAllCatalogsEnabled(false)
+        val hidden = HomeCatalogSettingsRepository.uiState.value.items.map { it.key to it.enabled }
+
+        HomeCatalogSettingsRepository.onProfileChanged()
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(addonWithCatalogs("popular", "recent")))
+
+        assertEquals(hidden, HomeCatalogSettingsRepository.uiState.value.items.map { it.key to it.enabled })
+        assertEquals("other-profile-data", storage.getString(otherProfileKey, null))
+        assertTrue(HomeCatalogSettingsRepository.exportToSyncPayload().items.all { !it.enabled })
+    }
+
+    @Test
+    fun bulkCatalogVisibilityWithoutCatalogsLeavesCollectionUntouched(): Unit = runBlocking {
+        HomeCatalogSettingsRepository.syncCollections(listOf(collection()))
+        val editCount = preferences.editCount
+
+        HomeCatalogSettingsRepository.setAllCatalogsEnabled(false)
+
+        assertEquals(editCount, preferences.editCount)
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.items.single().enabled)
+    }
+
+    @Test
     fun firstRunAsksAboutAiringNowAndRemembersTheAnswer() {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("nuvio_home_catalog_settings", Context.MODE_PRIVATE)
@@ -303,6 +372,13 @@ class HomeCatalogSettingsRepositoryTest {
             transportUrl = "https://example.com",
         ),
     )
+
+    private fun addonWithCatalogs(vararg ids: String): ManagedAddon {
+        val source = addon()
+        return source.copy(manifest = requireNotNull(source.manifest).copy(
+            catalogs = ids.map { id -> AddonCatalog(type = "movie", id = id, name = id) },
+        ))
+    }
 
     private fun collection() = Collection(
         id = "favorites",
