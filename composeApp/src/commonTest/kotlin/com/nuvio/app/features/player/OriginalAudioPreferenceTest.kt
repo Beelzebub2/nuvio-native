@@ -368,6 +368,155 @@ class OriginalAudioPreferenceTest {
         assertEquals(listOf(1, 0), controller.subtitleSelections)
     }
 
+    @Test
+    fun secondaryLanguageAddonArrivingAfterInitialSelectionTurnsSubtitlesOn() {
+        val controller = RecordingController(audioTracks())
+        val runtime = runtime(controller, contentLanguage = originalLanguage)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+            secondaryPreferredSubtitleLanguage = "es",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        runtime.isLoadingAddonSubtitles = true
+        repeat(2) { runtime.refreshTracks() }
+        assertEquals(-1, runtime.selectedSubtitleIndex)
+        assertTrue(runtime.preferredSubtitleSelectionApplied)
+
+        val subtitle = addonSubtitle(id = "secondary", language = "spa")
+        runtime.addonSubtitles = listOf(subtitle)
+        runtime.isLoadingAddonSubtitles = false
+        runtime.refreshTracks()
+
+        assertEquals(subtitle.selectionKey, runtime.selectedAddonSubtitleId)
+        assertEquals(listOf(subtitle.url), controller.subtitleUrls)
+        repeat(3) { runtime.refreshTracks() }
+        assertEquals(listOf(subtitle.url), controller.subtitleUrls)
+    }
+
+    @Test
+    fun partialAddonBatchesWaitBeforeChoosingTheBestLanguage() {
+        val controller = RecordingController(audioTracks())
+        val runtime = runtime(controller, contentLanguage = originalLanguage)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+            secondaryPreferredSubtitleLanguage = "es",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        runtime.isLoadingAddonSubtitles = true
+        repeat(2) { runtime.refreshTracks() }
+
+        val secondary = addonSubtitle(id = "secondary", language = "spa")
+        val primary = addonSubtitle(id = "primary", language = "nob")
+        runtime.addonSubtitles = listOf(secondary)
+        runtime.refreshTracks()
+        runtime.addonSubtitles = listOf(secondary, primary)
+        runtime.refreshTracks()
+        assertTrue(controller.subtitleUrls.isEmpty())
+
+        runtime.isLoadingAddonSubtitles = false
+        runtime.refreshTracks()
+        repeat(3) { runtime.refreshTracks() }
+        assertEquals(primary.selectionKey, runtime.selectedAddonSubtitleId)
+        assertEquals(listOf(primary.url), controller.subtitleUrls)
+    }
+
+    @Test
+    fun primaryAddonUpgradesSecondaryEmbeddedSubtitleOnlyOnce() {
+        val controller = RecordingController(audioTracks())
+        controller.subtitles = listOf(SubtitleTrack(0, "s1", "Spanish", "spa", isSelected = true))
+        val runtime = runtime(controller, contentLanguage = originalLanguage)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+            secondaryPreferredSubtitleLanguage = "es",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        repeat(2) { runtime.refreshTracks() }
+        assertEquals(0, runtime.selectedSubtitleIndex)
+
+        val subtitle = addonSubtitle(id = "primary", language = "nob")
+        runtime.addonSubtitles = listOf(subtitle)
+        runtime.refreshTracks()
+        repeat(3) { runtime.refreshTracks() }
+
+        assertEquals(subtitle.selectionKey, runtime.selectedAddonSubtitleId)
+        assertEquals(listOf(subtitle.url), controller.subtitleUrls)
+    }
+
+    @Test
+    fun secondaryAddonCannotDisplaceAlreadySelectedPrimaryLanguage() {
+        val controller = RecordingController(audioTracks())
+        controller.subtitles = listOf(SubtitleTrack(0, "s1", "Norwegian", "nno", isSelected = true))
+        val runtime = runtime(controller, contentLanguage = originalLanguage)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+            secondaryPreferredSubtitleLanguage = "es",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        repeat(2) { runtime.refreshTracks() }
+        runtime.addonSubtitles = listOf(addonSubtitle(id = "secondary", language = "es"))
+        repeat(3) { runtime.refreshTracks() }
+
+        assertEquals(0, runtime.selectedSubtitleIndex)
+        assertEquals(null, runtime.selectedAddonSubtitleId)
+        assertTrue(controller.subtitleUrls.isEmpty())
+    }
+
+    @Test
+    fun manualSubtitleOffSurvivesLateAddonResults() {
+        val controller = RecordingController(audioTracks())
+        val runtime = runtime(controller, contentLanguage = originalLanguage)
+        runtime.args = runtime.args.copy(parentMetaId = "")
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        repeat(2) { runtime.refreshTracks() }
+        runtime.selectUserSubtitleTrack(-1)
+        runtime.addonSubtitles = listOf(addonSubtitle(id = "late", language = "nob"))
+        runtime.refreshTracks()
+
+        assertTrue(runtime.isUserExplicitSubtitleSelection)
+        assertEquals(-1, runtime.selectedSubtitleIndex)
+        assertEquals(null, runtime.selectedAddonSubtitleId)
+        assertTrue(controller.subtitleUrls.isEmpty())
+    }
+
+    @Test
+    fun forcedAddonArrivingAfterEmptyTrackScanIsSelected() {
+        val controller = RecordingController(
+            listOf(AudioTrack(0, "a1", "English", "eng", isSelected = true)),
+        )
+        val runtime = runtime(controller)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "en",
+            subtitleStyle = SubtitleStyleState(useForcedSubtitles = true),
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        repeat(2) { runtime.refreshTracks() }
+        assertTrue(runtime.preferredSubtitleSelectionApplied)
+
+        val subtitle = addonSubtitle(id = "forced-en", language = "eng")
+        runtime.addonSubtitles = listOf(subtitle)
+        runtime.refreshTracks()
+
+        assertEquals(subtitle.selectionKey, runtime.selectedAddonSubtitleId)
+        assertEquals(listOf(subtitle.url), controller.subtitleUrls)
+    }
+
+    private fun addonSubtitle(id: String, language: String) = AddonSubtitle(
+        id = id,
+        url = "https://example.com/subtitles/$id.srt",
+        language = language,
+        display = "Subtitle $id",
+        addonName = "Test addon",
+    )
+
     private fun reportRequestedOriginalSelection(runtime: PlayerScreenRuntime, controller: RecordingController) {
         assertEquals(originalLanguage, controller.audioLanguagePreferences.last().first())
         assertEquals(emptyList(), controller.audioSelections)
@@ -463,6 +612,7 @@ class OriginalAudioPreferenceTest {
         val audioSelections = mutableListOf<Int>()
         val audioLanguagePreferences = mutableListOf<List<String>>()
         val subtitleSelections = mutableListOf<Int>()
+        val subtitleUrls = mutableListOf<String>()
         var subtitles = emptyList<SubtitleTrack>()
 
         override fun getAudioTracks() = tracks
@@ -488,7 +638,9 @@ class OriginalAudioPreferenceTest {
         override fun seekBy(offsetMs: Long) = Unit
         override fun retry() = Unit
         override fun setPlaybackSpeed(speed: Float) = Unit
-        override fun setSubtitleUri(url: String) = Unit
+        override fun setSubtitleUri(url: String) {
+            subtitleUrls += url
+        }
         override fun clearExternalSubtitle() = Unit
         override fun clearExternalSubtitleAndSelect(trackIndex: Int) = Unit
     }

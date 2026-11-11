@@ -335,21 +335,6 @@ private fun PlayerScreenRuntime.tryAutoSelectPreferredSubtitleFromAvailableTrack
             deviceLanguages = DeviceLanguagePreferences.preferredLanguageCodes(),
         )
     }
-    val primaryTarget = preferredSubtitleTargets.firstOrNull()
-
-    if (preferredSubtitleSelectionApplied) {
-        val currentSelectedLang = when {
-            selectedAddonSubtitle != null -> selectedAddonSubtitle?.language
-            selectedSubtitleIndex >= 0 -> subtitleTracks.firstOrNull { it.index == selectedSubtitleIndex }?.language
-            else -> null
-        }
-        val isPrimarySatisfied = primaryTarget != null && currentSelectedLang != null &&
-            SubtitleLanguageMatching.matchesLanguageCode(currentSelectedLang, primaryTarget)
-        val hasBetterAddonMatch = !isPrimarySatisfied && primaryTarget != null &&
-            addonSubtitles.any { SubtitleLanguageMatching.matchesLanguageCode(it.language, primaryTarget) }
-        if (!hasBetterAddonMatch) return
-    }
-
     val selectedAudioTrack = audioTracks.firstOrNull { track -> track.index == selectedAudioIndex }
         ?: audioTracks.firstOrNull { it.isSelected }
     val selectionPlan = resolveSubtitleAutoSelectionPlan(
@@ -358,6 +343,45 @@ private fun PlayerScreenRuntime.tryAutoSelectPreferredSubtitleFromAvailableTrack
         preferredSubtitleTargets = preferredSubtitleTargets,
         useForcedSubtitles = subtitleStyle.useForcedSubtitles,
     )
+
+    if (preferredSubtitleSelectionApplied) {
+        // Partial addon batches should not switch between languages while
+        // other providers are still resolving higher-priority matches.
+        if (isLoadingAddonSubtitles) return
+        val selectedTrack = subtitleTracks.firstOrNull { it.index == selectedSubtitleIndex }
+        val currentSelectedLang = when {
+            selectedAddonSubtitle != null -> selectedAddonSubtitle?.language
+            selectedTrack != null &&
+                (selectionPlan?.mode != SubtitleAutoSelectionMode.FORCED_ONLY || selectedTrack.isForced) ->
+                selectedTrack.language
+            else -> null
+        }
+        // Only replace the current automatic selection with a strictly higher
+        // ranked language. This also allows a secondary-language addon to
+        // replace Off, without repeatedly changing tracks as addons arrive.
+        fun targetRank(language: String?): Int {
+            if (language == null) return Int.MAX_VALUE
+            val rank = selectionPlan?.targets?.indexOfFirst { target ->
+                SubtitleLanguageMatching.matchesLanguageCode(language, target)
+            } ?: -1
+            return if (rank >= 0) rank else Int.MAX_VALUE
+        }
+        val currentRank = targetRank(currentSelectedLang)
+        val hasBetterAddonMatch = addonSubtitles.any { subtitle ->
+            val eligible = when (selectionPlan?.mode) {
+                SubtitleAutoSelectionMode.FORCED_ONLY ->
+                    addonSubtitleIsForced(subtitle) &&
+                        selectedAudioTrack != null &&
+                        addonSubtitleMatchesSelectedAudioLanguage(subtitle, selectedAudioTrack)
+                SubtitleAutoSelectionMode.NORMAL_ONLY ->
+                    !subtitleStyle.useForcedSubtitles || !addonSubtitleIsForced(subtitle)
+                null -> false
+            }
+            eligible && targetRank(subtitle.language) < currentRank
+        }
+        if (!hasBetterAddonMatch) return
+    }
+
     if (selectionPlan == null) {
         disableAutomaticSubtitleSelection()
         return
