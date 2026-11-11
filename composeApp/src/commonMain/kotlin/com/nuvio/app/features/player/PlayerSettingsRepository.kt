@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.player.skip.AutoSkipSegmentType
+import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.player.skip.NextEpisodeThresholdMode
 import com.nuvio.app.features.streams.StreamAutoPlayMode
 import com.nuvio.app.features.streams.StreamAutoPlaySource
@@ -750,6 +751,7 @@ object PlayerSettingsRepository {
         skipIntroEnabled = enabled
         publish()
         PlayerSettingsStorage.saveSkipIntroEnabled(enabled)
+        if (enabled) SkipIntroRepository.clearCache()
     }
 
     fun setAutoSkipSegmentTypeEnabled(segmentType: AutoSkipSegmentType, enabled: Boolean) {
@@ -767,6 +769,7 @@ object PlayerSettingsRepository {
         animeSkipEnabled = enabled
         publish()
         PlayerSettingsStorage.saveAnimeSkipEnabled(enabled)
+        SkipIntroRepository.clearCache()
     }
 
     fun setAnimeSkipClientId(clientId: String) {
@@ -775,6 +778,7 @@ object PlayerSettingsRepository {
         animeSkipClientId = clientId
         publish()
         PlayerSettingsStorage.saveAnimeSkipClientId(clientId)
+        SkipIntroRepository.clearCache()
     }
 
     fun setIntroDbApiKey(apiKey: String) {
