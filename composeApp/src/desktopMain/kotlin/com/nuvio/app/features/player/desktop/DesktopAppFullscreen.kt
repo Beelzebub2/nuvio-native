@@ -77,6 +77,7 @@ internal val desktopFullscreenChanges: StateFlow<Int>
 internal class DesktopAppFullscreenController {
     private var restoreWindowPlacement = WindowPlacement.Floating
     private var windowsFullscreenState: WindowsFullscreenState? = null
+    private var waylandRestoreExtendedState: Int? = null
 
     fun toggle(window: Window, windowState: WindowState) {
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
@@ -100,6 +101,14 @@ internal class DesktopAppFullscreenController {
      * applied the change itself.
      */
     private fun enforceLinuxFullscreen(window: Window, windowState: WindowState) {
+        if (isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))) {
+            applyWaylandFullscreenExtendedState(window, windowState.placement == WindowPlacement.Fullscreen)
+            SwingUtilities.invokeLater {
+                window.revalidate()
+                window.repaint()
+            }
+            return
+        }
         fun enforce(stage: String) {
             val device = window.graphicsConfiguration?.device ?: return
             val wantFullscreen = windowState.placement == WindowPlacement.Fullscreen
@@ -111,7 +120,42 @@ internal class DesktopAppFullscreenController {
         Timer(250) { enforce("delayed") }.apply { isRepeats = false }.start()
     }
 
+    /**
+     * XWayland compositors can report phantom window decoration insets for an
+     * exclusive AWT fullscreen window. Keep the compositor's fullscreen state
+     * and maximize the frame instead; restore its prior state on exit.
+     */
+    private fun applyWaylandFullscreenExtendedState(window: Window, entering: Boolean) {
+        val frame = window as? Frame ?: return
+        val apply: () -> Unit = {
+            runCatching {
+                if (entering) {
+                    if (waylandRestoreExtendedState == null) {
+                        waylandRestoreExtendedState = frame.extendedState
+                    }
+                    if (frame.extendedState != Frame.MAXIMIZED_BOTH) {
+                        frame.extendedState = Frame.MAXIMIZED_BOTH
+                    }
+                } else {
+                    waylandRestoreExtendedState?.let { restore ->
+                        waylandRestoreExtendedState = null
+                        if (frame.extendedState != restore) {
+                            frame.extendedState = restore
+                        }
+                    }
+                }
+            }
+            Unit
+        }
+        if (SwingUtilities.isEventDispatchThread()) apply() else SwingUtilities.invokeLater { apply() }
+    }
+
     fun dispose(window: Window) {
+        if (DesktopHostOs.current == DesktopHostOs.LINUX &&
+            isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))
+        ) {
+            applyWaylandFullscreenExtendedState(window, false)
+        }
         exitWindowsFullscreen(window)
     }
 
@@ -131,6 +175,11 @@ internal class DesktopAppFullscreenController {
                 .takeUnless { it == WindowPlacement.Fullscreen }
                 ?: WindowPlacement.Floating
             windowState.placement = WindowPlacement.Fullscreen
+            if (DesktopHostOs.current == DesktopHostOs.LINUX &&
+                isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))
+            ) {
+                applyWaylandFullscreenExtendedState(window, true)
+            }
         }
     }
 
@@ -291,3 +340,6 @@ private fun KeyEvent.isDesktopAppFullscreenShortcut(): Boolean {
             modifiers and KeyEvent.ALT_DOWN_MASK == 0
     return hasMacFullscreenModifiers
 }
+
+internal fun isWaylandDesktopSession(waylandDisplay: String?, sessionType: String?): Boolean =
+    !waylandDisplay.isNullOrBlank() || sessionType?.equals("wayland", ignoreCase = true) == true

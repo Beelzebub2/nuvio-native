@@ -3,8 +3,26 @@ package com.nuvio.app.features.player.desktop
 import androidx.compose.ui.window.WindowPlacement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DesktopAppFullscreenTest {
+    @Test
+    fun `Wayland is detected from either session environment variable`() {
+        assertTrue(isWaylandDesktopSession("wayland-0", null))
+        assertTrue(isWaylandDesktopSession(null, "wayland"))
+        assertTrue(isWaylandDesktopSession(null, "Wayland"))
+        assertTrue(isWaylandDesktopSession("wayland-1", "x11"))
+    }
+
+    @Test
+    fun `X11 and unset session values retain the existing fullscreen path`() {
+        assertFalse(isWaylandDesktopSession(null, "x11"))
+        assertFalse(isWaylandDesktopSession("", "x11"))
+        assertFalse(isWaylandDesktopSession("  ", null))
+        assertFalse(isWaylandDesktopSession(null, null))
+    }
+
     @Test
     fun `native fullscreen exit lets the window listener restore placement`() {
         val updates = mutableListOf<String>()
