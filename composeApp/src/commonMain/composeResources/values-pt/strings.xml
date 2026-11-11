@@ -1653,6 +1653,9 @@
     <string name="updates_message_downloading">A transferir atualização...</string>
     <string name="updates_message_no_updates">Nenhuma atualização encontrada.</string>
     <string name="updates_message_ready">Uma nova versão está pronta para ser instalada.</string>
+    <string name="updates_message_manual_install">Esta instalação precisa de uma atualização externa. Usa o gestor de pacotes ou abre a página da versão.</string>
+    <string name="updates_release_page_failed_title">Não foi possível abrir a página da versão</string>
+    <string name="updates_release_page_failed">Abre esta ligação manualmente para instalar a atualização:</string>
     <string name="updates_not_available">As atualizações na app não estão disponíveis nesta compilação.</string>
     <string name="updates_preparing_download">A preparar transferência</string>
     <string name="updates_release_notes">Notas de lançamento</string>
