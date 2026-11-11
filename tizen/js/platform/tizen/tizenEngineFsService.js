@@ -1,6 +1,7 @@
 import { connectLocalControl } from "./starlitControlBridge.js";
 import { Platform } from "../index.js";
 import { TizenCapabilities } from "./tizenCapabilities.js";
+import { verifyTizenRangeProbe } from "./tizenRangeProbe.js";
 const LOCAL_BASE_URLS = ["http://127.0.0.1:2710", "http://localhost:2710"];
 const START_TIMEOUT_MS = 12000;
 const PROBE_TIMEOUT_MS = 2500;
@@ -215,7 +216,7 @@ async function probeBaseUrl(baseUrl, timeoutMs = PROBE_TIMEOUT_MS) {
     json = null;
   }
   const probe = await fetch(`${baseUrl}/range-probe`, { headers: { Range: "bytes=1-3" }, cache: "no-store" });
-  if (probe.status !== 206 || probe.headers.get("content-range") !== "bytes 1-3/22") throw new Error("Local streaming Range probe failed");
+  await verifyTizenRangeProbe(probe);
   return { baseUrl, settings: json };
 }
 async function findReachableLocalBaseUrl(timeoutMs = PROBE_TIMEOUT_MS) {

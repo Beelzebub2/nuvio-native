@@ -15961,7 +15961,7 @@ function start(options, callback) {
     if ((local !== '127.0.0.1' && local !== '::ffff:127.0.0.1' && local !== '::1') || (host !== '127.0.0.1:' + expectedPort && host !== 'localhost:' + expectedPort)) return json(res, 403, { error: 'Loopback host required' });
     if (origin && origin !== 'http://' + host && !(origin === 'null' && options.allowNullOrigin === true)) return json(res, 403, { error: 'Origin rejected' });
     if (req.headers['sec-fetch-site'] === 'cross-site' && !(origin === 'null' && options.allowNullOrigin === true)) return json(res, 403, { error: 'Cross-site request rejected' });
-    if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
+    if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Length, Content-Range'); res.setHeader('Vary', 'Origin'); }
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Starlit-Local, X-Starlit-Token, Range'); res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     var pathname = url.parse(req.url).pathname;

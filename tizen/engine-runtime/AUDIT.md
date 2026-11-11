@@ -1,6 +1,6 @@
 # Runtime artifact review
 
-The reviewed generated artifact is `media-http.cjs`, 449,891 bytes, SHA-256 `621d9cfbbe2dc33dc570ff04e49e1d8a3cb976e4f70e94146cbda76e74c2d699`. Two consecutive builds from the same integrity-pinned npm lock produced this exact digest. `build.cjs` rejects changed patch markers and rejects non-ES5 output. `runtime-manifest.json` records the engine source-file hashes, generated artifact digest, and 58 bundled package records including repeated transitive versions and newly authored replacements. All bundled third-party license texts are preserved in `THIRD-PARTY-LICENSES.txt`; supplemental license sources are retained separately.
+The reviewed generated artifact is `media-http.cjs`, 450,307 bytes, SHA-256 `1543753a8910ede49a371cf74f6e5cb1b81ad279a44af95a3740d3dac31891f1`. Two consecutive builds from the same integrity-pinned npm lock produced this exact digest. `build.cjs` rejects changed patch markers and rejects non-ES5 output. `runtime-manifest.json` records the engine source-file hashes, generated artifact digest, and 58 bundled package records including repeated transitive versions and newly authored replacements. All bundled third-party license texts are preserved in `THIRD-PARTY-LICENSES.txt`; supplemental license sources are retained separately.
 
 The installed development tree reports **11 npm advisory records: seven high and four low**. This is not an audit-zero dependency tree. The following disposition describes the generated artifact, not a claim that legacy Node 4 or the service has no vulnerabilities:
 

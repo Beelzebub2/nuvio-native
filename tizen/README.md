@@ -2,7 +2,12 @@
 
 Independent TV client in this repository's `tizen/` subtree. Adapted from [NuvioTVSmart](https://github.com/NuvioMedia/NuvioTVSmart) at the exact revision in [UPSTREAM.json](UPSTREAM.json), under GPLv3. Copyright and license notices remain intact. Starlit is independent; upstream does not endorse this adaptation.
 
-**NOT DEVICE-VERIFIED.** This is an implementation candidate. No Samsung TV has passed install, playback, local streaming, standby or signed update acceptance. The release workflow fails closed until the exact WGT passes [the acceptance protocol](docs/DEVICE-ACCEPTANCE.md).
+**NOT FULLY DEVICE-VERIFIED.** A Samsung Tizen 5.0 TV has passed development
+signature acceptance, installation, launch and basic guest/settings navigation.
+Playback, account sync, sustained local streaming, standby recovery, signed
+update preservation and other Tizen generations are not yet verified.
+The release workflow stays blocked until the exact WGT passes
+[the physical-device acceptance protocol](docs/DEVICE-ACCEPTANCE.md).
 
 Build with Node 24:
 
