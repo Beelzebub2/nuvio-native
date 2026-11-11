@@ -373,6 +373,83 @@ class WatchProgressIdentityTest {
     }
 
     @Test
+    fun `offline delete remains absent when an old snapshot is pulled before retry succeeds`() {
+        val pendingDelete = entry(progressKey = "opaque", lastUpdatedEpochMs = 100L).asPendingDelete()
+        val server = listOf(record(contentId = "show", progressKey = "opaque", lastWatched = 100L))
+        val restoredOutbox = WatchProgressCodec.decodePayload(WatchProgressCodec.encodePayload(
+            entries = emptyList(),
+            lastSuccessfulPushEpochMs = 0L,
+            deltaCursorEventId = 0L,
+            deltaInitialized = true,
+            pendingDeletes = listOf(pendingDelete),
+        )).pendingDeletes
+
+        val duringFailedRetry = WatchProgressRepository.mergeWatchProgressEntriesPreservingUnsynced(
+            serverEntries = server,
+            localEntries = emptyList(),
+            dirtyProgressKeys = emptySet(),
+            pendingDeletes = restoredOutbox,
+        )
+        val afterAcknowledgedDeletion = WatchProgressRepository.mergeWatchProgressEntriesPreservingUnsynced(
+            serverEntries = emptyList(),
+            localEntries = emptyList(),
+            dirtyProgressKeys = emptySet(),
+            pendingDeletes = emptyList(),
+        )
+
+        assertTrue(duringFailedRetry.isEmpty())
+        assertTrue(afterAcknowledgedDeletion.isEmpty())
+    }
+
+    @Test
+    fun `offline synthetic delete resolves unique opaque remote key on reconnect`() {
+        val pending = entry(progressKey = null).asPendingDelete()
+        val remote = record(contentId = "show", progressKey = "opaque/server", lastWatched = 100L)
+
+        val reconciled = listOf(pending).reconcileWithProgressSnapshot(listOf(remote))
+        val blocked = WatchProgressRepository.mergeWatchProgressEntriesPreservingUnsynced(
+            serverEntries = listOf(remote),
+            localEntries = emptyList(),
+            dirtyProgressKeys = emptySet(),
+            pendingDeletes = reconciled,
+        )
+
+        assertEquals("show_s1e2", pending.progressKey)
+        assertEquals("opaque/server", reconciled.single().progressKey)
+        assertEquals("opaque/server", reconciled.single().asDeleteEntry().resolvedProgressKey())
+        assertTrue(blocked.isEmpty())
+    }
+
+    @Test
+    fun `ambiguous remote keys do not redirect pending deletion to a guessed key`() {
+        val pending = entry(progressKey = null).asPendingDelete()
+        val remote = listOf(
+            record(contentId = "show", progressKey = "opaque/a", lastWatched = 100L),
+            record(contentId = "show", progressKey = "opaque/b", lastWatched = 200L),
+        )
+
+        assertEquals(listOf(pending), listOf(pending).reconcileWithProgressSnapshot(remote))
+    }
+
+    @Test
+    fun `opaque tombstone filters only its key when multiple records share an identity`() {
+        val deleted = entry(progressKey = "opaque/a").asPendingDelete()
+        val server = listOf(
+            record(contentId = "show", progressKey = "opaque/a", lastWatched = 100L),
+            record(contentId = "show", progressKey = "opaque/b", lastWatched = 200L),
+        )
+
+        val merged = WatchProgressRepository.mergeWatchProgressEntriesPreservingUnsynced(
+            serverEntries = server,
+            localEntries = emptyList(),
+            dirtyProgressKeys = emptySet(),
+            pendingDeletes = listOf(deleted),
+        )
+
+        assertEquals(setOf("opaque/b"), merged.keys)
+    }
+
+    @Test
     fun `delta upsert with equal timestamp and higher position wins`() {
         val current = entry(
             progressKey = "opaque",
@@ -409,6 +486,29 @@ class WatchProgressIdentityTest {
         )
 
         assertEquals(WatchProgressDeltaDecisionType.PRESERVE_LOCAL, decision.type)
+    }
+
+    @Test
+    fun `delta upsert cannot resurrect a queued remote delete`() {
+        val decision = WatchProgressRepository.decideWatchProgressDeltaEvent(
+            current = null,
+            event = deltaEvent(operation = "upsert", progressKey = "opaque", lastWatched = 200L),
+            isLocalDirty = false,
+            isPendingDelete = true,
+        )
+
+        assertEquals(WatchProgressDeltaDecisionType.IGNORE, decision.type)
+        assertEquals(null, decision.updatedEntry)
+    }
+
+    @Test
+    fun `new playback after a delete is not suppressed by the recent write deduplicator`() {
+        val deduplicator = RemoteProgressWriteDeduplicator(windowMs = 5_000L)
+        val played = entry(progressKey = "opaque")
+
+        assertTrue(deduplicator.shouldSend(profileId = 1, entry = played, nowEpochMs = 100L))
+        deduplicator.forget(profileId = 1, progressKeys = listOf("opaque"))
+        assertTrue(deduplicator.shouldSend(profileId = 1, entry = played, nowEpochMs = 200L))
     }
 
     @Test
