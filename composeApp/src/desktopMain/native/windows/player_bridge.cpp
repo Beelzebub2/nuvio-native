@@ -4,11 +4,15 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
+#include <mmdeviceapi.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
 #include <jni.h>
 #include "windows_media_session.h"
+#include "discord_share_protocol.h"
+#include "discord_share_safety.h"
 
 #include <algorithm>
 #include <atomic>
@@ -19,6 +23,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <cwctype>
 #include <deque>
 #include <functional>
@@ -29,6 +34,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using Microsoft::WRL::Callback;
@@ -44,7 +50,29 @@ typedef enum mpv_format {
     MPV_FORMAT_FLAG = 3,
     MPV_FORMAT_INT64 = 4,
     MPV_FORMAT_DOUBLE = 5,
+    MPV_FORMAT_NODE = 6,
+    MPV_FORMAT_NODE_ARRAY = 7,
+    MPV_FORMAT_NODE_MAP = 8,
 } mpv_format;
+
+typedef struct mpv_node_list mpv_node_list;
+typedef struct mpv_node {
+    union {
+        char *string;
+        int flag;
+        int64_t int64;
+        double doubleValue;
+        mpv_node_list *list;
+        void *bytes;
+    } u;
+    mpv_format format;
+} mpv_node;
+
+struct mpv_node_list {
+    int num;
+    mpv_node *values;
+    char **keys;
+};
 
 typedef enum mpv_event_id {
     MPV_EVENT_NONE = 0,
@@ -503,6 +531,7 @@ struct MpvApi {
     using mpv_command_async_fn = int (*)(mpv_handle *, uint64_t, const char **);
     using mpv_error_string_fn = const char *(*)(int);
     using mpv_free_fn = void (*)(void *);
+    using mpv_free_node_contents_fn = void (*)(mpv_node *);
     using mpv_wait_event_fn = mpv_event *(*)(mpv_handle *, double);
     using mpv_wakeup_fn = void (*)(mpv_handle *);
 
@@ -522,6 +551,7 @@ struct MpvApi {
     mpv_command_async_fn commandAsync = nullptr;
     mpv_error_string_fn errorString = nullptr;
     mpv_free_fn freeValue = nullptr;
+    mpv_free_node_contents_fn freeNodeContents = nullptr;
     mpv_wait_event_fn waitEvent = nullptr;
     mpv_wakeup_fn wakeup = nullptr;
 
@@ -582,6 +612,7 @@ struct MpvApi {
         commandAsync = loadSymbol<mpv_command_async_fn>("mpv_command_async");
         errorString = loadSymbol<mpv_error_string_fn>("mpv_error_string");
         freeValue = loadSymbol<mpv_free_fn>("mpv_free");
+        freeNodeContents = loadSymbol<mpv_free_node_contents_fn>("mpv_free_node_contents");
         waitEvent = loadSymbol<mpv_wait_event_fn>("mpv_wait_event");
         wakeup = loadSymbol<mpv_wakeup_fn>("mpv_wakeup");
     }
@@ -603,6 +634,60 @@ MpvApi &mpvApi() {
     static MpvApi api;
     api.ensureLoaded();
     return api;
+}
+
+// A spare virtual render endpoint is required. Never route the companion to
+// the user's default headphones/speakers: that would change what they hear.
+// Windows process-loopback capture can still capture the child on this endpoint.
+std::string discordShareAudioDevice() {
+    const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return {};
+    struct ApartmentGuard {
+        bool uninitialize;
+        ~ApartmentGuard() { if (uninitialize) CoUninitialize(); }
+    } apartmentGuard{SUCCEEDED(apartment)};
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&enumerator)))) return {};
+    std::wstring defaults[3];
+    const ERole roles[] = {eConsole, eMultimedia, eCommunications};
+    for (int index = 0; index < 3; ++index) {
+        ComPtr<IMMDevice> defaultDevice;
+        if (FAILED(enumerator->GetDefaultAudioEndpoint(eRender, roles[index], &defaultDevice))) return {};
+        LPWSTR deviceId = nullptr;
+        if (FAILED(defaultDevice->GetId(&deviceId)) || !deviceId) return {};
+        defaults[index] = deviceId;
+        CoTaskMemFree(deviceId);
+    }
+
+    ComPtr<IMMDeviceCollection> devices;
+    if (FAILED(enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices))) return {};
+    UINT count = 0;
+    if (FAILED(devices->GetCount(&count))) return {};
+    std::vector<discord_share::RenderEndpoint> active;
+    for (UINT index = 0; index < count; ++index) {
+        ComPtr<IMMDevice> device;
+        if (FAILED(devices->Item(index, &device))) return {};
+        DWORD state = 0;
+        if (FAILED(device->GetState(&state))) return {};
+        if (state != DEVICE_STATE_ACTIVE) continue;
+        ComPtr<IPropertyStore> properties;
+        if (FAILED(device->OpenPropertyStore(STGM_READ, &properties))) return {};
+        PROPVARIANT name;
+        PropVariantInit(&name);
+        const HRESULT nameResult = properties->GetValue(PKEY_Device_FriendlyName, &name);
+        std::wstring friendly = SUCCEEDED(nameResult) && name.vt == VT_LPWSTR && name.pwszVal
+            ? std::wstring(name.pwszVal) : std::wstring();
+        PropVariantClear(&name);
+        if (!discord_share::isSteamStreamingSpeakers(friendly)) continue;
+        LPWSTR deviceId = nullptr;
+        if (FAILED(device->GetId(&deviceId)) || !deviceId) return {};
+        active.push_back({deviceId, std::move(friendly)});
+        CoTaskMemFree(deviceId);
+    }
+    const std::wstring candidate = discord_share::uniqueUnusedSteamEndpoint(
+        active, defaults[0], defaults[1], defaults[2]);
+    return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }
 
 class WindowsMpvWebPlayer;
@@ -917,6 +1002,9 @@ public:
             return;
         }
 
+        // Close the companion before destroying the source HWND or mpv handle.
+        setDiscordShareEnabled(false);
+
         // Hide the player's window immediately, asynchronously, before anything below can block.
         // If the UI thread has stopped pumping, the steps after this can stall and the window is
         // then never destroyed, leaving a zombie child sitting over the AWT host that swallows
@@ -985,6 +1073,37 @@ public:
         layoutNativeSubviews();
         syncSystemMediaSession();
         syncControls();
+    }
+
+    bool setDiscordShareEnabled(bool enabled, bool showWindow = false) {
+        std::lock_guard<std::mutex> lifecycleLock(discordShareLifecycleMutex);
+        if (!enabled || (discordShareThread.joinable() && discordShareShowWindow != showWindow)) {
+            discordShareStop.store(true);
+            discordShareWake.notify_all();
+            if (discordShareThread.joinable()) {
+                // This thread may be performing a synchronous anonymous-pipe
+                // write; cancellation must not affect the primary player.
+                CancelSynchronousIo((HANDLE)discordShareThread.native_handle());
+                discordShareThread.join();
+            }
+            if (!enabled) return true;
+        }
+        if (discordShareThread.joinable()) return true;
+        if (shuttingDown.load() || stopping.load() || discordShareUrl.empty() ||
+            discordShareAudioEndpoint.empty() || !discordShareSourceWindow ||
+            discordShareAudioDevice() != discordShareAudioEndpoint) return false;
+
+        std::wstring companion = moduleDirectory() + L"\\discord_share_companion.exe";
+        DWORD attributes = GetFileAttributesW(companion.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) return false;
+
+        discordShareStop.store(false);
+        discordShareShowWindow = showWindow;
+        auto self = shared_from_this();
+        discordShareThread = std::thread([self, companion, showWindow]() {
+            self->runDiscordShareCompanion(companion, showWindow);
+        });
+        return true;
     }
 
     void updateControlsJson(const std::string &controlsJson) {
@@ -1426,6 +1545,19 @@ private:
     std::atomic_bool shuttingDown = false;
     std::atomic_bool hwdecLogged = false;  // one-shot log for hwdec-current
 
+    // Independent process and audio device: the primary mpv output is never
+    // reconfigured or downmixed when Discord sharing is enabled.
+    std::mutex discordShareLifecycleMutex;
+    std::mutex discordShareWaitMutex;
+    std::condition_variable discordShareWake;
+    std::thread discordShareThread;
+    std::atomic_bool discordShareStop = false;
+    bool discordShareShowWindow = false;
+    std::string discordShareUrl;
+    std::vector<std::string> discordShareHeaders;
+    std::string discordShareAudioEndpoint;
+    uint64_t discordShareSourceWindow = 0;
+
     bool hasAppliedSubtitleStyle = false;
     bool appliedSubtitleUseLibass = false;
     std::string appliedSubtitleTextColor;
@@ -1456,6 +1588,127 @@ private:
 
     friend LRESULT CALLBACK messageWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     friend LRESULT CALLBACK containerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+    void runDiscordShareCompanion(const std::wstring &executable, bool showWindow) {
+        const auto failed = [this]() {
+            if (!discordShareStop.load() && !shuttingDown.load()) {
+                sendPlayerEvent("discordShareFailed", 0.0);
+            }
+        };
+        // A device selected at player startup can become the default before
+        // sharing starts. Recheck on this worker and throughout playback.
+        if (discordShareAudioDevice() != discordShareAudioEndpoint) {
+            failed();
+            return;
+        }
+        // Explicit inheritance allowlist: only the companion's stdin and NUL
+        // handles are inherited. Media URLs and headers travel over stdin,
+        // never on the command line, logs, or inherited environment overrides.
+        SECURITY_ATTRIBUTES security = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        HANDLE childInput = nullptr;
+        HANDLE parentOutput = nullptr;
+        if (!CreatePipe(&childInput, &parentOutput, &security, 0)) {
+            failed();
+            return;
+        }
+        if (!SetHandleInformation(parentOutput, HANDLE_FLAG_INHERIT, 0)) {
+            CloseHandle(childInput);
+            CloseHandle(parentOutput);
+            failed();
+            return;
+        }
+        HANDLE nul = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                 &security, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (nul == INVALID_HANDLE_VALUE) {
+            CloseHandle(childInput);
+            CloseHandle(parentOutput);
+            failed();
+            return;
+        }
+
+        SIZE_T attributeBytes = 0;
+        InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
+        std::vector<uint8_t> attributeStorage(attributeBytes);
+        auto *attributes = reinterpret_cast<PPROC_THREAD_ATTRIBUTE_LIST>(attributeStorage.data());
+        bool attributeInitialized =
+            InitializeProcThreadAttributeList(attributes, 1, 0, &attributeBytes) == TRUE;
+        HANDLE allowedHandles[2] = {childInput, nul};
+        bool allowed = attributeInitialized &&
+            UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                allowedHandles, sizeof(allowedHandles), nullptr, nullptr) == TRUE;
+
+        STARTUPINFOEXW startup = {};
+        startup.StartupInfo.cb = sizeof(startup);
+        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        startup.StartupInfo.wShowWindow = showWindow ? SW_SHOWNORMAL : SW_HIDE;
+        startup.StartupInfo.hStdInput = childInput;
+        startup.StartupInfo.hStdOutput = nul;
+        startup.StartupInfo.hStdError = nul;
+        startup.lpAttributeList = attributes;
+        PROCESS_INFORMATION child = {};
+        bool launched = allowed &&
+            CreateProcessW(executable.c_str(), nullptr, nullptr, nullptr, TRUE,
+                EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, &startup.StartupInfo, &child) == TRUE;
+        if (attributeInitialized) DeleteProcThreadAttributeList(attributes);
+        CloseHandle(childInput);
+        CloseHandle(nul);
+        if (!launched) {
+            CloseHandle(parentOutput);
+            failed();
+            return;
+        }
+        CloseHandle(child.hThread);
+
+        auto writeFrame = [&](const std::vector<uint8_t> &frame) -> bool {
+            if (frame.empty() || discordShareStop.load()) return false;
+            DWORD written = 0;
+            size_t total = 0;
+            while (total < frame.size() && !discordShareStop.load()) {
+                if (!WriteFile(parentOutput, frame.data() + total,
+                               (DWORD)(frame.size() - total), &written, nullptr) || !written) return false;
+                total += written;
+            }
+            return total == frame.size();
+        };
+
+        auto configuration = discord_share::initial(discordShareSourceWindow,
+            discordShareUrl, discordShareAudioEndpoint, discordShareHeaders);
+        bool unsafeEndpoint = discordShareAudioDevice() != discordShareAudioEndpoint;
+        if (!unsafeEndpoint && writeFrame(configuration)) {
+            while (!discordShareStop.load() && WaitForSingleObject(child.hProcess, 0) == WAIT_TIMEOUT) {
+                if (discordShareAudioDevice() != discordShareAudioEndpoint) {
+                    unsafeEndpoint = true;
+                    break;
+                }
+                const auto position = (int64_t)positionMs();
+                const bool paused = isPaused() || isLoading();
+                // Fixed independent stream gain. The user's local volume and
+                // muted state must not mute or amplify the Discord audience.
+                auto packet = discord_share::sync(position, speed(), 1.0,
+                    int64Property("aid", -1), paused);
+                if (!writeFrame(packet)) break;
+                std::unique_lock<std::mutex> waitLock(discordShareWaitMutex);
+                discordShareWake.wait_for(waitLock, std::chrono::milliseconds(500), [this] {
+                    return discordShareStop.load();
+                });
+            }
+        }
+        if (unsafeEndpoint) {
+            // Stop output immediately if Steam became a listening/default
+            // device or disappeared; never redirect the primary player's audio.
+            TerminateProcess(child.hProcess, 1);
+        } else if (!discordShareStop.load()) {
+            writeFrame(discord_share::quit());
+        }
+        CloseHandle(parentOutput);
+        if (WaitForSingleObject(child.hProcess, 1500) == WAIT_TIMEOUT) {
+            // Only the private companion is terminated, never Starlit/mpv.
+            TerminateProcess(child.hProcess, 1);
+            WaitForSingleObject(child.hProcess, 500);
+        }
+        CloseHandle(child.hProcess);
+        failed(); // Reached only after an unexpected exit, never on opt-out.
+    }
 
     void runNativeUiThread(
         std::string sourceUrl,
@@ -1863,6 +2116,14 @@ private:
             if (initResult < 0) {
                 throw std::runtime_error(std::string("mpv_initialize failed: ") + api.errorText(initResult));
             }
+
+            // Discover a spare virtual device at startup, while COM is
+            // initialized on this player UI thread. Never choose the user's
+            // default render endpoint as the companion output.
+            discordShareAudioEndpoint = discordShareAudioDevice();
+            discordShareUrl = sourceUrl;
+            discordShareHeaders = headerLines;
+            discordShareSourceWindow = (uint64_t)(uintptr_t)GetAncestor(containerHwnd, GA_ROOT);
 
             std::vector<const char *> loadCommand = {"loadfile", sourceUrl.c_str()};
             std::string loadOptions;
@@ -2460,10 +2721,19 @@ LRESULT CALLBACK containerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPA
     }
 }
 
+// Opaque monotonically increasing IDs prevent a JNI caller from dereferencing
+// a freed holder when player disposal races with a setting or seek operation.
+// A returned shared_ptr keeps the native player alive for the duration of its
+// JNI call, even if a concurrent dispose removes it from this registry.
+std::mutex gWindowsPlayerHandlesMutex;
+std::unordered_map<jlong, std::shared_ptr<WindowsMpvWebPlayer>> gWindowsPlayerHandles;
+std::atomic<jlong> gNextWindowsPlayerHandle{1};
+
 std::shared_ptr<WindowsMpvWebPlayer> playerFromHandle(jlong handle) {
     if (handle == 0) return nullptr;
-    auto *holder = reinterpret_cast<std::shared_ptr<WindowsMpvWebPlayer> *>(handle);
-    return holder ? *holder : nullptr;
+    std::lock_guard<std::mutex> lock(gWindowsPlayerHandlesMutex);
+    auto it = gWindowsPlayerHandles.find(handle);
+    return it == gWindowsPlayerHandles.end() ? nullptr : it->second;
 }
 
 } // namespace
@@ -2532,8 +2802,11 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_create(
         return 0;
     }
 
-    auto *holder = new std::shared_ptr<WindowsMpvWebPlayer>(player);
-    jlong handle = (jlong)(intptr_t)holder;
+    jlong handle = gNextWindowsPlayerHandle.fetch_add(1);
+    {
+        std::lock_guard<std::mutex> lock(gWindowsPlayerHandlesMutex);
+        gWindowsPlayerHandles.emplace(handle, player);
+    }
     return handle;
 }
 
@@ -2556,9 +2829,14 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setWindowsDisplayS
 extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_dispose(JNIEnv *, jobject, jlong handle) {
     if (handle == 0) return;
-    auto *holder = reinterpret_cast<std::shared_ptr<WindowsMpvWebPlayer> *>(handle);
-    std::shared_ptr<WindowsMpvWebPlayer> player = *holder;
-    delete holder;
+    std::shared_ptr<WindowsMpvWebPlayer> player;
+    {
+        std::lock_guard<std::mutex> lock(gWindowsPlayerHandlesMutex);
+        auto it = gWindowsPlayerHandles.find(handle);
+        if (it == gWindowsPlayerHandles.end()) return;
+        player = std::move(it->second);
+        gWindowsPlayerHandles.erase(it);
+    }
     if (player) player->shutdown();
 }
 
@@ -2567,6 +2845,12 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_updateControls(JNI
     auto player = playerFromHandle(handle);
     std::string controlsJsonText = jstringToUtf8(env, controlsJson);
     if (player) player->updateControlsJson(controlsJsonText);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setDiscordShareEnabled(JNIEnv *, jobject, jlong handle, jboolean enabled, jboolean showWindow) {
+    auto player = playerFromHandle(handle);
+    return player && player->setDiscordShareEnabled(enabled == JNI_TRUE, showWindow == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL

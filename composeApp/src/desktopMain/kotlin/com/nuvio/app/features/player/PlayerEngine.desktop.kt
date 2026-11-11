@@ -37,8 +37,11 @@ import com.nuvio.app.features.player.desktop.NativePlayerController
 import com.nuvio.app.features.player.desktop.NativePlayerHost
 import com.nuvio.app.features.player.desktop.LinuxMprisService
 import com.nuvio.app.features.player.desktop.desktopFullscreenChanges
+import com.nuvio.app.features.settings.DiscordShareModeSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.withContext
 
 @Composable
 actual fun PlatformPlayerSurface(
@@ -137,6 +140,8 @@ private fun NativePlayerSurface(
     val playerSettings by PlayerSettingsRepository.uiState.collectAsState()
     val decoderPriority = playerSettings.decoderPriority
     val nvidiaRtxSuperResolutionEnabled = playerSettings.nvidiaRtxSuperResolutionEnabled
+    val discordShareEnabled by DiscordShareModeSettings.enabled.collectAsState()
+    val discordShareShowWindow by DiscordShareModeSettings.showWindow.collectAsState()
 
     SideEffect {
         onControllerReady(controller)
@@ -172,6 +177,16 @@ private fun NativePlayerSurface(
             onScrubChange = { positionMs -> latestOnPlayerControlsScrubChange.value(positionMs) },
             onScrubFinished = { positionMs -> latestOnPlayerControlsScrubFinished.value(positionMs) },
         )
+    }
+
+    LaunchedEffect(controller, discordShareEnabled, discordShareShowWindow) {
+        // Refresh the player button when Advanced Settings or native failure changes the mode.
+        controller.updateControls(latestPlayerControlsState.value)
+        // Stopping the helper can wait for its private process to exit; never
+        // block Compose rendering or the native player's video controls.
+        withContext(Dispatchers.IO) {
+            controller.setDiscordShareEnabled(discordShareEnabled, discordShareShowWindow)
+        }
     }
 
     DisposableEffect(controller, sourceAvailable, sourceUrl, playbackHeaders) {

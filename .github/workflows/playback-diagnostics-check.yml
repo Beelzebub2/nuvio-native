@@ -6,6 +6,8 @@ on:
       - 'composeApp/src/**/features/player/**'
       - 'composeApp/src/desktopMain/native/**'
       - 'composeApp/src/desktopMain/resources/player-ui/**'
+      - 'composeApp/src/desktopTest/js/discord-share-toggle.test.mjs'
+      - 'tests/native-discord-share-safety.test.cpp'
       - 'tests/native-play*.test.*'
       - '.github/workflows/playback-diagnostics-check.yml'
   workflow_dispatch:
@@ -36,6 +38,12 @@ jobs:
           node-version: '22'
       - name: Test sanitized reports, opt-in and lifecycle
         run: node --test tests/native-player-diagnostics.test.cjs
+      - name: Test Discord player toggle states
+        run: node composeApp/src/desktopTest/js/discord-share-toggle.test.mjs
+      - name: Test Discord centre-audio and endpoint safety policy
+        run: |
+          c++ -std=c++17 tests/native-discord-share-safety.test.cpp -o "$RUNNER_TEMP/discord-share-safety-test"
+          "$RUNNER_TEMP/discord-share-safety-test"
       - name: Test native missing values and disabled sampling
         run: |
           c++ -std=c++17 tests/native-playback-metrics.test.cpp -o "$RUNNER_TEMP/playback-metrics-test"

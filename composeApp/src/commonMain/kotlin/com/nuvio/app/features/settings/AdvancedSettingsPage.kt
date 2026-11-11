@@ -34,6 +34,11 @@ import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_don
 import nuvio.composeapp.generated.resources.settings_advanced_clear_cw_cache_subtitle
 import nuvio.composeapp.generated.resources.settings_advanced_discord_rich_presence
 import nuvio.composeapp.generated.resources.settings_advanced_discord_rich_presence_description
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_description
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_unavailable
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_window
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_window_description
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_description
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer_external_description
@@ -196,6 +201,30 @@ internal fun LazyListScope.advancedSettingsContent(
                         isTablet = isTablet,
                         onCheckedChange = DiscordRichPresenceRepository::setEnabled,
                     )
+                    if (DiscordShareModeSettings.isSupported) {
+                        val shareEnabled by DiscordShareModeSettings.enabled.collectAsStateWithLifecycle()
+                        val shareUnavailable by DiscordShareModeSettings.unavailable.collectAsStateWithLifecycle()
+                        SettingsSwitchRow(
+                            title = stringResource(Res.string.settings_advanced_discord_audio_share),
+                            description = stringResource(
+                                if (shareUnavailable) Res.string.settings_advanced_discord_audio_share_unavailable
+                                else Res.string.settings_advanced_discord_audio_share_description,
+                            ),
+                            checked = shareEnabled,
+                            isTablet = isTablet,
+                            onCheckedChange = DiscordShareModeSettings::setEnabled,
+                        )
+                        if (shareEnabled) {
+                            val showWindow by DiscordShareModeSettings.showWindow.collectAsStateWithLifecycle()
+                            SettingsSwitchRow(
+                                title = stringResource(Res.string.settings_advanced_discord_audio_share_window),
+                                description = stringResource(Res.string.settings_advanced_discord_audio_share_window_description),
+                                checked = showWindow,
+                                isTablet = isTablet,
+                                onCheckedChange = DiscordShareModeSettings::setShowWindow,
+                            )
+                        }
+                    }
                 }
             }
         }

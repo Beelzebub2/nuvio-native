@@ -20,6 +20,33 @@ private val failNativeCreate: NativePlayerCreate = { _, _, _, _, _, _, _, _, _ -
 
 class NativePlayerControllerTeardownTest {
     @Test
+    fun hiddenFullscreenAddsOnlyDialogueAndVisibleWindowAddsFullStereo() {
+        if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
+        val calls = mutableListOf<Pair<Boolean, Boolean>>()
+        val controller = NativePlayerController(
+            host = NativePlayerHost(),
+            nativeCreate = failNativeCreate,
+            nativeDispose = {},
+            nativeSetDiscordShareEnabled = { _, enabled, showWindow ->
+                calls += enabled to showWindow
+                true
+            },
+        )
+        controller.setNativeHandleForTest(42L)
+
+        controller.setDiscordShareEnabled(false, showWindow = false)
+        assertEquals(listOf(false to false), calls, "The companion must be off by default")
+
+        controller.setDiscordShareEnabled(true, showWindow = false)
+        assertEquals(listOf(false to false, true to false), calls,
+            "Entire Screen mode starts a hidden centre-channel-only helper")
+
+        controller.setDiscordShareEnabled(true, showWindow = true)
+        assertEquals(listOf(false to false, true to false, true to true), calls,
+            "App-window share switches to the visible stereo child")
+    }
+
+    @Test
     fun completesNavigationOnlyAfterNativeHandleIsDisposed() {
         val events = Collections.synchronizedList(mutableListOf<String>())
         val released = CountDownLatch(1)
