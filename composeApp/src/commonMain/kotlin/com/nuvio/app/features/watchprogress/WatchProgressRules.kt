@@ -8,6 +8,7 @@ import com.nuvio.app.features.watching.domain.isProgressComplete
 import com.nuvio.app.features.watching.domain.isSeriesLikeWatchingContentType
 import com.nuvio.app.features.watching.domain.resumeProgressForSeries
 import com.nuvio.app.features.watching.domain.shouldStoreProgress
+import com.nuvio.app.features.watching.sync.ProgressSyncRecord
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -16,6 +17,99 @@ import kotlinx.serialization.json.Json
 internal const val ContinueWatchingLimit = DefaultContinueWatchingLimit
 private const val WatchProgressSnapshotConflictToleranceMs = 1_000L
 
+/** A deleted row's stable server key and minimal identity, without its playback metadata. */
+@Serializable
+internal data class PendingWatchProgressDelete(
+    val progressKey: String,
+    val contentId: String,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+) {
+    fun matches(progressKey: String, contentId: String, season: Int?, episode: Int?): Boolean =
+        this.progressKey == progressKey ||
+            (this.progressKey == buildWatchProgressKey(this.contentId, seasonNumber, episodeNumber) &&
+                this.contentId.isNotBlank() && this.contentId == contentId &&
+                seasonNumber == season && episodeNumber == episode)
+
+    /** The sync adapter's delete RPC consumes the resolved key only. */
+    fun asDeleteEntry(): WatchProgressEntry = WatchProgressEntry(
+        contentType = "",
+        parentMetaId = contentId,
+        parentMetaType = "",
+        videoId = "",
+        title = "",
+        lastPositionMs = 0L,
+        durationMs = 0L,
+        lastUpdatedEpochMs = 0L,
+        progressKey = progressKey,
+    )
+}
+
+internal fun WatchProgressEntry.asPendingDelete(): PendingWatchProgressDelete = PendingWatchProgressDelete(
+    progressKey = resolvedProgressKey(),
+    contentId = parentMetaId,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
+)
+
+internal fun canQueueRemoteProgressDelete(
+    usesNativeProgress: Boolean,
+    isAuthenticated: Boolean,
+    isAnonymous: Boolean,
+): Boolean = usesNativeProgress && isAuthenticated && !isAnonymous
+
+/** Resuming a deleted row reuses its original opaque server identity. */
+internal fun Collection<PendingWatchProgressDelete>.restoreIdentityForUpsert(
+    entry: WatchProgressEntry,
+): WatchProgressEntry {
+    val syntheticKey = buildWatchProgressKey(entry.parentMetaId, entry.seasonNumber, entry.episodeNumber)
+    if (entry.resolvedProgressKey() != syntheticKey) return entry
+    val pending = filter { delete ->
+        delete.contentId == entry.parentMetaId &&
+            delete.seasonNumber == entry.seasonNumber &&
+            delete.episodeNumber == entry.episodeNumber
+    }.singleOrNull() ?: return entry
+    return entry.copy(progressKey = pending.progressKey)
+}
+
+internal fun Collection<PendingWatchProgressDelete>.normalizedPendingDeletes(
+    entries: Collection<WatchProgressEntry>,
+): List<PendingWatchProgressDelete> {
+    val liveKeys = entries.mapTo(mutableSetOf(), WatchProgressEntry::resolvedProgressKey)
+    return filter { it.progressKey.isNotBlank() && it.progressKey !in liveKeys }
+        .distinctBy(PendingWatchProgressDelete::progressKey)
+}
+
+/** A legacy locally generated key can resolve to an opaque server key on first sync. */
+internal fun Collection<PendingWatchProgressDelete>.reconcileWithProgressSnapshot(
+    serverEntries: Collection<ProgressSyncRecord>,
+): List<PendingWatchProgressDelete> {
+    val serverKeys = serverEntries.mapTo(mutableSetOf(), ProgressSyncRecord::resolvedProgressKey)
+    val uniqueRemoteKeyByIdentity = serverEntries
+        .groupBy { Triple(it.contentId, it.season, it.episode) }
+        .mapNotNull { (identity, rows) ->
+            rows.map(ProgressSyncRecord::resolvedProgressKey)
+                .distinct()
+                .singleOrNull()
+                ?.let { identity to it }
+        }.toMap()
+    return map { pending ->
+        val syntheticKey = buildWatchProgressKey(
+            pending.contentId,
+            pending.seasonNumber,
+            pending.episodeNumber,
+        )
+        if (pending.progressKey in serverKeys || pending.progressKey != syntheticKey) {
+            pending
+        } else {
+            val resolvedKey = uniqueRemoteKeyByIdentity[
+                Triple(pending.contentId, pending.seasonNumber, pending.episodeNumber)
+            ]
+            if (resolvedKey == null) pending else pending.copy(progressKey = resolvedKey)
+        }
+    }.distinctBy(PendingWatchProgressDelete::progressKey)
+}
+
 @Serializable
 internal data class StoredWatchProgressPayload(
     val entries: List<WatchProgressEntry> = emptyList(),
@@ -23,6 +117,7 @@ internal data class StoredWatchProgressPayload(
     val deltaCursorEventId: Long = 0L,
     val deltaInitialized: Boolean = false,
     val dirtyProgressKeys: Set<String> = emptySet(),
+    val pendingDeletes: List<PendingWatchProgressDelete> = emptyList(),
 )
 
 internal object WatchProgressCodec {
@@ -47,6 +142,7 @@ internal object WatchProgressCodec {
                     dirtyProgressKeys = storedPayload.dirtyProgressKeys.intersect(
                         migratedEntries.mapTo(mutableSetOf()) { entry -> entry.resolvedProgressKey() },
                     ),
+                    pendingDeletes = storedPayload.pendingDeletes.normalizedPendingDeletes(migratedEntries),
                 )
             }
         }.getOrDefault(StoredWatchProgressPayload())
@@ -65,6 +161,7 @@ internal object WatchProgressCodec {
         deltaCursorEventId: Long,
         deltaInitialized: Boolean,
         dirtyProgressKeys: Set<String> = emptySet(),
+        pendingDeletes: Collection<PendingWatchProgressDelete> = emptyList(),
     ): String =
         json.encodeToString(
             StoredWatchProgressPayload(
@@ -76,6 +173,7 @@ internal object WatchProgressCodec {
                 deltaCursorEventId = deltaCursorEventId,
                 deltaInitialized = deltaInitialized,
                 dirtyProgressKeys = dirtyProgressKeys,
+                pendingDeletes = pendingDeletes.normalizedPendingDeletes(entries),
             ),
         )
 }
