@@ -27,6 +27,7 @@
 #include <dwmapi.h>
 
 #include "discord_share_protocol.h"
+#include "discord_share_safety.h"
 
 #include <algorithm>
 #include <atomic>
@@ -285,7 +286,7 @@ public:
             option("audio-channels", dialogueOnly_ ? "auto-safe" : "stereo");
             if (dialogueOnly_) {
                 option("ad-lavc-downmix", "no");
-                option("af", "lavfi=[pan=stereo|c0=0.70710678*FC|c1=0.70710678*FC]");
+                option("af", discord_share::kCentrePanFilter);
             }
             option("audio-device", initial.device.c_str());
             option("volume-max", "200");
@@ -324,19 +325,34 @@ public:
     }
 
     bool hasCentreChannel() const {
-        if (!dialogueOnly_) return true;
         if (!mpv_) return false;
-        // Stereo and channel layouts without FC must stay SILENT; otherwise
-        // the helper could repeat full-range music in an Entire Screen share.
+        // Confirm the decoded input layout, not the downmixed output layout.
         char *layout = nullptr;
         const int result = getProperty_(mpv_, "audio-params/channels", kMpvFormatString, &layout);
         if (result < 0 || !layout) return false;
         const std::string channels(layout);
         freeData_(layout);
-        for (const char *prefix : {"3.0", "3.1", "4.1", "5.0", "5.1", "6.1", "7.1"}) {
-            if (channels.rfind(prefix, 0) == 0) return true;
+        int64_t channelCount = 0;
+        return getProperty_(mpv_, "audio-params/channel-count", kMpvFormatInt64, &channelCount) >= 0 &&
+               discord_share::isKnownCentreLayout(channels, channelCount);
+    }
+
+    bool safeToUnmute(int64_t requestedAid) const {
+        // The visible window intentionally carries full stereo. Only the hidden
+        // centre-only supplement must pass these independent audio checks.
+        if (!dialogueOnly_) return true;
+        if (!hasCentreChannel()) return false;
+        int64_t actualAid = -1;
+        int64_t outputChannels = 0;
+        if (getProperty_(mpv_, "aid", kMpvFormatInt64, &actualAid) < 0 ||
+            getProperty_(mpv_, "audio-out-params/channel-count", kMpvFormatInt64, &outputChannels) < 0) {
+            return false;
         }
-        return false;
+        char *filterText = nullptr;
+        const int filterResult = getProperty_(mpv_, "af", kMpvFormatString, &filterText);
+        const std::string filters = filterResult >= 0 && filterText ? filterText : "";
+        if (filterText) freeData_(filterText);
+        return discord_share::centreOutputIsSafe(true, requestedAid, actualAid, outputChannels, filters);
     }
 
     void setPaused(bool paused) {
@@ -721,16 +737,20 @@ private:
             audio_.setSpeed(lastSync_.speed);
             lastSpeed_ = lastSync_.speed;
         }
-        if (lastAid_ != lastSync_.aid && audio_.setAid(lastSync_.aid)) {
-            lastAid_ = lastSync_.aid;
+        if (lastAid_ != lastSync_.aid) {
+            // Never change tracks while the previous track is still audible.
+            audio_.setVolume(0.0);
+            lastVolume_ = 0.0;
+            audio_.setPaused(true);
+            if (audio_.setAid(lastSync_.aid)) lastAid_ = lastSync_.aid;
         }
-        const bool hasCentre = audio_.hasCentreChannel();
-        const double safeVolume = hasCentre ? lastSync_.volume : 0.0;
+        const bool safeAudio = audio_.safeToUnmute(lastSync_.aid);
+        const double safeVolume = safeAudio ? lastSync_.volume : 0.0;
         if (lastVolume_ != safeVolume) {
             audio_.setVolume(safeVolume);
             lastVolume_ = safeVolume;
         }
-        audio_.setPaused(lastSync_.paused || !hasCentre);
+        audio_.setPaused(lastSync_.paused || !safeAudio);
     }
 
     HWND window_ = nullptr;

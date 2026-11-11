@@ -5,12 +5,14 @@
 #include <windowsx.h>
 #include <dwmapi.h>
 #include <mmdeviceapi.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
 #include <jni.h>
 #include "windows_media_session.h"
 #include "discord_share_protocol.h"
+#include "discord_share_safety.h"
 
 #include <algorithm>
 #include <atomic>
@@ -637,60 +639,55 @@ MpvApi &mpvApi() {
 // A spare virtual render endpoint is required. Never route the companion to
 // the user's default headphones/speakers: that would change what they hear.
 // Windows process-loopback capture can still capture the child on this endpoint.
-std::string discordShareAudioDevice(mpv_handle *handle) {
-    if (!handle) return {};
-
+std::string discordShareAudioDevice() {
+    const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return {};
+    struct ApartmentGuard {
+        bool uninitialize;
+        ~ApartmentGuard() { if (uninitialize) CoUninitialize(); }
+    } apartmentGuard{SUCCEEDED(apartment)};
     ComPtr<IMMDeviceEnumerator> enumerator;
     if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&enumerator)))) return {};
-    std::vector<std::string> defaultIds;
-    for (ERole role : {eConsole, eMultimedia, eCommunications}) {
+    std::wstring defaults[3];
+    const ERole roles[] = {eConsole, eMultimedia, eCommunications};
+    for (int index = 0; index < 3; ++index) {
         ComPtr<IMMDevice> defaultDevice;
-        const HRESULT result = enumerator->GetDefaultAudioEndpoint(eRender, role, &defaultDevice);
-        if (result == E_NOTFOUND) continue; // An unset role is not a default output to protect.
-        if (FAILED(result)) return {};
+        if (FAILED(enumerator->GetDefaultAudioEndpoint(eRender, roles[index], &defaultDevice))) return {};
         LPWSTR deviceId = nullptr;
         if (FAILED(defaultDevice->GetId(&deviceId)) || !deviceId) return {};
-        std::wstring defaultId(deviceId);
+        defaults[index] = deviceId;
         CoTaskMemFree(deviceId);
-        std::transform(defaultId.begin(), defaultId.end(), defaultId.begin(), towlower);
-        defaultIds.push_back(toUtf8(defaultId));
     }
 
-    mpv_node available = {};
-    MpvApi &api = mpvApi();
-    if (api.getProperty(handle, "audio-device-list", MPV_FORMAT_NODE, &available) < 0) return {};
-    std::string match;
-    if (available.format == MPV_FORMAT_NODE_ARRAY && available.u.list) {
-        for (int index = 0; index < available.u.list->num; ++index) {
-            const mpv_node &device = available.u.list->values[index];
-            if (device.format != MPV_FORMAT_NODE_MAP || !device.u.list) continue;
-            std::string name;
-            std::string description;
-            for (int field = 0; field < device.u.list->num; ++field) {
-                const char *key = device.u.list->keys ? device.u.list->keys[field] : nullptr;
-                const mpv_node &value = device.u.list->values[field];
-                if (!key || value.format != MPV_FORMAT_STRING || !value.u.string) continue;
-                if (std::strcmp(key, "name") == 0) name = value.u.string;
-                if (std::strcmp(key, "description") == 0) description = value.u.string;
-            }
-            if (description.find("Steam Streaming Speakers") == std::string::npos ||
-                name.rfind("wasapi/", 0) != 0) continue;
-            // Compare the endpoint GUID rather than the display name; the
-            // user's default audio endpoint must never also be the companion.
-            std::string endpoint = name.substr(7);
-            std::transform(endpoint.begin(), endpoint.end(), endpoint.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            bool isDefaultOutput = std::any_of(defaultIds.begin(), defaultIds.end(), [&](const auto &id) {
-                return id.find(endpoint) != std::string::npos;
-            });
-            if (!isDefaultOutput) match = name;
-            break;
-        }
+    ComPtr<IMMDeviceCollection> devices;
+    if (FAILED(enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices))) return {};
+    UINT count = 0;
+    if (FAILED(devices->GetCount(&count))) return {};
+    std::vector<discord_share::RenderEndpoint> active;
+    for (UINT index = 0; index < count; ++index) {
+        ComPtr<IMMDevice> device;
+        if (FAILED(devices->Item(index, &device))) return {};
+        DWORD state = 0;
+        if (FAILED(device->GetState(&state))) return {};
+        if (state != DEVICE_STATE_ACTIVE) continue;
+        ComPtr<IPropertyStore> properties;
+        if (FAILED(device->OpenPropertyStore(STGM_READ, &properties))) return {};
+        PROPVARIANT name;
+        PropVariantInit(&name);
+        const HRESULT nameResult = properties->GetValue(PKEY_Device_FriendlyName, &name);
+        std::wstring friendly = SUCCEEDED(nameResult) && name.vt == VT_LPWSTR && name.pwszVal
+            ? std::wstring(name.pwszVal) : std::wstring();
+        PropVariantClear(&name);
+        if (!discord_share::isSteamStreamingSpeakers(friendly)) continue;
+        LPWSTR deviceId = nullptr;
+        if (FAILED(device->GetId(&deviceId)) || !deviceId) return {};
+        active.push_back({deviceId, std::move(friendly)});
+        CoTaskMemFree(deviceId);
     }
-    api.freeNodeContents(&available);
-    return match;
+    const std::wstring candidate = discord_share::uniqueUnusedSteamEndpoint(
+        active, defaults[0], defaults[1], defaults[2]);
+    return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }
 
 class WindowsMpvWebPlayer;
@@ -1093,7 +1090,8 @@ public:
         }
         if (discordShareThread.joinable()) return true;
         if (shuttingDown.load() || stopping.load() || discordShareUrl.empty() ||
-            discordShareAudioEndpoint.empty() || !discordShareSourceWindow) return false;
+            discordShareAudioEndpoint.empty() || !discordShareSourceWindow ||
+            discordShareAudioDevice() != discordShareAudioEndpoint) return false;
 
         std::wstring companion = moduleDirectory() + L"\\discord_share_companion.exe";
         DWORD attributes = GetFileAttributesW(companion.c_str());
@@ -1597,6 +1595,12 @@ private:
                 sendPlayerEvent("discordShareFailed", 0.0);
             }
         };
+        // A device selected at player startup can become the default before
+        // sharing starts. Recheck on this worker and throughout playback.
+        if (discordShareAudioDevice() != discordShareAudioEndpoint) {
+            failed();
+            return;
+        }
         // Explicit inheritance allowlist: only the companion's stdin and NUL
         // handles are inherited. Media URLs and headers travel over stdin,
         // never on the command line, logs, or inherited environment overrides.
@@ -1669,8 +1673,13 @@ private:
 
         auto configuration = discord_share::initial(discordShareSourceWindow,
             discordShareUrl, discordShareAudioEndpoint, discordShareHeaders);
-        if (writeFrame(configuration)) {
+        bool unsafeEndpoint = discordShareAudioDevice() != discordShareAudioEndpoint;
+        if (!unsafeEndpoint && writeFrame(configuration)) {
             while (!discordShareStop.load() && WaitForSingleObject(child.hProcess, 0) == WAIT_TIMEOUT) {
+                if (discordShareAudioDevice() != discordShareAudioEndpoint) {
+                    unsafeEndpoint = true;
+                    break;
+                }
                 const auto position = (int64_t)positionMs();
                 const bool paused = isPaused() || isLoading();
                 // Fixed independent stream gain. The user's local volume and
@@ -1684,7 +1693,13 @@ private:
                 });
             }
         }
-        if (!discordShareStop.load()) writeFrame(discord_share::quit());
+        if (unsafeEndpoint) {
+            // Stop output immediately if Steam became a listening/default
+            // device or disappeared; never redirect the primary player's audio.
+            TerminateProcess(child.hProcess, 1);
+        } else if (!discordShareStop.load()) {
+            writeFrame(discord_share::quit());
+        }
         CloseHandle(parentOutput);
         if (WaitForSingleObject(child.hProcess, 1500) == WAIT_TIMEOUT) {
             // Only the private companion is terminated, never Starlit/mpv.
@@ -2105,7 +2120,7 @@ private:
             // Discover a spare virtual device at startup, while COM is
             // initialized on this player UI thread. Never choose the user's
             // default render endpoint as the companion output.
-            discordShareAudioEndpoint = discordShareAudioDevice(mpv);
+            discordShareAudioEndpoint = discordShareAudioDevice();
             discordShareUrl = sourceUrl;
             discordShareHeaders = headerLines;
             discordShareSourceWindow = (uint64_t)(uintptr_t)GetAncestor(containerHwnd, GA_ROOT);

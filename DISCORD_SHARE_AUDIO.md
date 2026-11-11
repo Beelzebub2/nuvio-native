@@ -23,10 +23,11 @@ mix for **application-window-only** sharing instead.
   FFmpeg `pan` to send only the `FC` channel into left and right of a
   two-channel virtual output at roughly −3 dB. The decoder retains its
   multichannel layout until `pan`.
-- The hidden companion checks the decoder's channel layout before unmuting.
-  For stereo audio or unsupported layouts without a recognized centre, the
-  helper stays **silent**, leaving Discord's capture of the original player
-  intact and preventing full-range music duplication.
+- Before unmuting, the hidden companion checks a recognized 5.1/7.1 decoder
+  layout, the *effective* audio-track ID against the main player, the intended
+  centre-only pan filter and stereo output format. If any check fails or the
+  parent has not yet selected a track, it remains **silent** rather than
+  risking another full-range soundtrack. Track switches are muted first.
 - For standalone **application-window** sharing with a complete stereo mix,
   turn **Show a separate full-stereo sharing window** ON and select only the
   **Starlit - Discord Share** window in Discord (with audio). This mode sends
@@ -47,10 +48,12 @@ mix for **application-window-only** sharing instead.
   Older full-stereo whole-screen preferences are not inherited; the helper
   is not re-enabled automatically in hidden mode after restarting Starlit.
 - Currently requires an **unused Steam Streaming Speakers** virtual audio
-  endpoint. Starlit refuses to use that endpoint if it is also the Windows
-  default multimedia device, rather than risking additional local audio.
-  The feature does **not** install a virtual driver or change global Windows
-  audio settings. Wider endpoint support is not implemented.
+  endpoint. It must be active, uniquely identified and different from the
+  Windows console, multimedia and communications defaults. Starlit rechecks
+  eligibility when sharing starts and periodically while playing; a device
+  change that makes it unsafe stops only the auxiliary process. The feature
+  does **not** install a virtual driver or change global Windows audio settings.
+  Wider endpoint support is not implemented.
 - When using the **stereo window**, do not minimize the original
   Starlit window: DWM thumbnails may stop refreshing while it is minimized.
 - The second audio decoder uses additional CPU/network resources and can take
@@ -62,8 +65,9 @@ mix for **application-window-only** sharing instead.
   louder or echo. It is not guaranteed for all media or Discord versions.
 - A full-stereo companion can cause duplicated music when the display is
   captured. The hidden centre-only mode avoids duplicating the main left/right
-  mix. A Discord Entire Screen listener check confirmed that audio was heard;
-  sustained real 5.1/7.1 playback still needs the checks below.
+  mix. A listener previously heard the **visible stereo companion** during
+  an Entire Screen share; this is not a real-media listener verification of
+  the newer hidden centre-only mode, which still needs the checks below.
 
 ## Acceptance checklist
 
@@ -103,6 +107,10 @@ mix for **application-window-only** sharing instead.
   changes; the isolated Windows package includes the updated WebView controls,
   the native companion and 24/24 controller + 1/1 settings tests.
 - [x] The in-player Discord button was tested in the Windows portable build.
+- [x] Focused native policy regressions exercise accepted 5.1/7.1 layouts,
+  mismatched tracks, missing/incorrect pan filters, non-stereo output and
+  absent/default/ambiguous Steam endpoints. These are synthetic policy checks,
+  not physical endpoint switching or Discord listener tests.
 - [ ] With the new build, select Discord **Entire Screen**, play a real 5.1
   film, verify one copy of the music and audible dialogue with a listener.
 - [x] With synthetic stereo source material, the hidden helper output is
@@ -117,6 +125,9 @@ mix for **application-window-only** sharing instead.
   system or an enabled spatial-audio headphone configuration while sharing.
 - [ ] Verify volume/mute isolation and failure behaviour if the virtual
   endpoint is disconnected mid-stream.
+- [ ] During a real share, change the Windows default audio role to or from
+  Steam Streaming Speakers and confirm the auxiliary audio stops safely,
+  without changing the original player's output.
 
 Until the unchecked items pass, treat the option as a local experimental
 feature; normal playback remains the supported default.

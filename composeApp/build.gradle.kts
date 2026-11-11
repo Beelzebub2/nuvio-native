@@ -972,6 +972,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     enabled = isWindowsHost
     inputs.file(windowsPlayerBridgeSource)
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_protocol.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_safety.h"))
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
@@ -1082,6 +1083,7 @@ val buildWindowsDiscordShareCompanion = tasks.register<Exec>("buildWindowsDiscor
     enabled = isWindowsHost && windowsPlayerBridgeArch == "x64"
     inputs.file(windowsDiscordShareSource)
     inputs.file(windowsDiscordShareHeader)
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_safety.h"))
     outputs.file(windowsDiscordShareOutput)
     outputs.file(windowsDiscordShareObject)
     val template = windowsDiscordShareCompile.replace("\"", "__DQ__")
