@@ -5,6 +5,7 @@ import com.nuvio.app.core.time.daysUntilEpisodeRelease
 import com.nuvio.app.core.time.isEpisodeReleaseAired
 import com.nuvio.app.core.time.isoEpochDay as coreIsoEpochDay
 import com.nuvio.app.core.time.parseEpisodeReleaseLocalDate
+import com.nuvio.app.core.time.parseIsoCalendarDate
 
 private const val CompletionThresholdFraction = 0.90
 private const val ProgressStoreThresholdMs = 1_000L
@@ -56,6 +57,11 @@ fun isReleasedBy(
     nowEpochMs: Long = EpisodeReleaseDatePlatform.nowEpochMs(),
 ): Boolean {
     if (!available) return false
+    // A calendar date supplies no broadcast hour. Keep it unaired throughout that
+    // local day; providers with an actual timestamp are compared by exact instant.
+    val releaseDay = parseIsoCalendarDate(releasedDate)
+    val localToday = parseIsoCalendarDate(todayIsoDate)
+    if (releaseDay != null && localToday != null) return localToday > releaseDay
     return isEpisodeReleaseAired(releasedDate, nowEpochMs) ?: true
 }
 
@@ -70,12 +76,12 @@ internal fun shouldSurfaceNextEpisode(
 ): Boolean {
     val isSeasonRollover = normalizeSeasonNumber(candidateSeasonNumber) != normalizeSeasonNumber(watchedSeasonNumber)
     if (!available) {
+        if (isExplicitlyReleasedBy(todayIsoDate, releasedDate, nowEpochMs)) return true
+        if (!showUnairedNextUp) return false
         val daysUntilRelease = daysUntilExplicitRelease(
             todayIsoDate = todayIsoDate,
             releasedDate = releasedDate,
         ) ?: return false
-        if (daysUntilRelease <= 0) return true
-        if (!showUnairedNextUp) return false
         return !isSeasonRollover || daysUntilRelease <= UpcomingNextSeasonWindowDays
     }
     if (!isSeasonRollover) {
@@ -87,7 +93,7 @@ internal fun shouldSurfaceNextEpisode(
         )
     }
 
-    if (isExplicitlyReleasedBy(releasedDate = releasedDate, nowEpochMs = nowEpochMs)) {
+    if (isExplicitlyReleasedBy(todayIsoDate = todayIsoDate, releasedDate = releasedDate, nowEpochMs = nowEpochMs)) {
         return true
     }
     if (!showUnairedNextUp) {
@@ -102,9 +108,14 @@ internal fun shouldSurfaceNextEpisode(
 }
 
 private fun isExplicitlyReleasedBy(
+    todayIsoDate: String,
     releasedDate: String?,
     nowEpochMs: Long,
 ): Boolean {
+    if (parseIsoCalendarDate(releasedDate) != null) {
+        return isReleasedBy(todayIsoDate, releasedDate, nowEpochMs = nowEpochMs)
+    }
+    // Unknown metadata is not affirmative evidence of a season premiere.
     return isEpisodeReleaseAired(releasedDate, nowEpochMs) ?: false
 }
 

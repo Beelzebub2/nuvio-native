@@ -61,6 +61,30 @@ class CachedNextUpReleaseTest {
     }
 
     @Test
+    fun cachedNextUpReevaluatesDateOnlyReleaseAgainstLocalDay() {
+        val released = "2026-09-15"
+        val epoch = requireNotNull(parseReleaseDateToEpochMs(released))
+        val staleAiredCache = item(released).copy(hasAired = true)
+        val staleUnairedCache = item(released).copy(hasAired = false)
+
+        assertFalse(cachedNextUpHasAired(staleAiredCache, epoch + 1L * 60 * 60 * 1_000, epoch, "2026-09-14"))
+        assertFalse(cachedNextUpHasAired(staleAiredCache, epoch + 12L * 60 * 60 * 1_000, epoch, "2026-09-15"))
+        assertTrue(cachedNextUpHasAired(staleUnairedCache, epoch + 23L * 60 * 60 * 1_000, epoch, "2026-09-16"))
+    }
+
+    @Test
+    fun cachedNextUpPreservesExactZonedReleaseInstantAcrossLocalDates() {
+        val released = "2026-09-16T01:00:00+05:30"
+        val epoch = requireNotNull(parseReleaseDateToEpochMs(released))
+        assertEquals(parseReleaseDateToEpochMs("2026-09-15T19:30:00Z"), epoch)
+
+        listOf("2026-09-15", "2026-09-16").forEach { localDate ->
+            assertFalse(cachedNextUpHasAired(item(released).copy(hasAired = true), epoch - 1L, epoch, localDate))
+            assertTrue(cachedNextUpHasAired(item(released).copy(hasAired = false), epoch, epoch, localDate))
+        }
+    }
+
+    @Test
     fun malformedReleaseKeepsAiredFallbackWithoutCreatingAnAlert() {
         listOf(true, false).forEach { hasAired ->
             val item = item("unknown").copy(hasAired = hasAired)
