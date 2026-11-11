@@ -13,12 +13,24 @@
 
 - **Find hidden titles quickly:** Search titles hidden from Recently released and browse them alphabetically on Android and desktop. Restoring items from settings preserves the saved list's synchronization order.
 
+### Home, browsing and playback controls
+
+- **Continue Watching organization:** Optionally group Continue Watching shelves by content type, with per-profile preferences and safeguards against stale resume updates.
+- **Catalogue sorting:** Choose and persist browse sort order while keeping paged loading tied to forward scrolling.
+- **Stream filtering:** Search and filter already loaded source results without changing add-on discovery or provider behavior.
+- **Desktop media controls:** Control playback through Windows system media integration and Linux MPRIS-compatible desktop controls.
+
+### Download reliability
+
+- **Android offline jobs:** Restore mobile torrent batch downloads and background download scheduling.
+- **Bounded retries:** Stop repeated truncated download responses from causing unbounded retry loops.
+
 ### Verification and limitations
 
 - The merged player reliability change passed 2,104 Windows desktop tests with no failures, plus 16 cross-platform/security CI checks. The hidden-title search change passed eight CI checks and has focused search, ordering and restore tests.
 - The local subtitle file-picker integration passed 2,115 Windows desktop tests with no failures and 11 of 11 cross-platform/security PR checks, including the Android TV emulator.
 - The Linux sleep-inhibitor change passed 11 of 11 cross-platform/security CI checks. A Linux systemd/logind smoke test confirmed the active inhibitor disappears within two seconds of the monitored process exiting.
-- Real provider playback with header-protected HLS, Windows remote subtitle latency, Linux X11/Wayland focus and desktop-environment sleep behavior, local subtitle chooser/rendering on Windows/Linux/macOS and cross-device Airing Now settings require physical-system validation. These checks are not implied by automated test results.
+- Real provider playback with header-protected HLS, Windows remote subtitle latency, Linux X11/Wayland focus and desktop-environment sleep behavior, local subtitle chooser/rendering on Windows/Linux/macOS, desktop system media controls, Android background downloads and cross-device Airing Now settings require physical-system validation. These checks are not implied by automated test results.
 
 ## Starlit 1.19.0
 
