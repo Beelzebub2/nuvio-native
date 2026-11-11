@@ -2074,8 +2074,11 @@ private:
                 sourceUrl.rfind("http://127.0.0.1:", 0) == 0 ||
                 sourceUrl.rfind("http://localhost:", 0) == 0 ||
                 sourceUrl.rfind("http://[::1]:", 0) == 0;
-            setMpvOptionStringLocked("demuxer-max-bytes", isLoopbackReader ? "512MiB" : "150MiB");
-            setMpvOptionStringLocked("demuxer-max-back-bytes", isLoopbackReader ? "256MiB" : "50MiB");
+            // Bound high-bitrate loopback playback to 320 MiB of demuxer cache;
+            // previously it could reserve up to 768 MiB, in addition to the
+            // separate torrent engine cache. Keep a backward seek cushion.
+            setMpvOptionStringLocked("demuxer-max-bytes", isLoopbackReader ? "256MiB" : "150MiB");
+            setMpvOptionStringLocked("demuxer-max-back-bytes", isLoopbackReader ? "64MiB" : "50MiB");
             setMpvOptionStringLocked("demuxer-seekable-cache", "yes");
             // Preserve Starlit's prior prefetch time horizon for every source.
             // The reduced byte caps above already bound memory for regular HTTP;
