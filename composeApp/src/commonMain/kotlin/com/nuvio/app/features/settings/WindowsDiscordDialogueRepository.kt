@@ -17,14 +17,12 @@ internal object WindowsDiscordDialogueRepository {
 
     private var loaded = false
 
-    @Synchronized
     fun ensureLoaded() {
         if (loaded) return
         loaded = true
         _enabled.value = if (isSupported) WindowsDiscordDialoguePlatform.loadEnabled() ?: false else false
     }
 
-    @Synchronized
     fun setEnabled(enabled: Boolean) {
         ensureLoaded()
         val accepted = enabled && isSupported
