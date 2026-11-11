@@ -1,3 +1,17 @@
+## Starlit 1.20.1
+
+### Torrent playback and downloads
+
+- **Faster desktop torrent startup:** Apply the final cache, connection and upload settings before starting the bundled engine, avoiding redundant reconfiguration. Start-up metadata now exposes peer counts and transfer rates earlier.
+- **More reliable tracker connections:** Streaming and offline downloads use bounded UDP, HTTP and HTTPS fallback trackers alongside provider trackers without waiting on an unbounded remote tracker-list request.
+- **Safer playback cancellation:** Android and iOS Full cancel superseded torrent starts before waiting on native engine work. Desktop shutdown rejects late start requests without interrupting the final cleanup of active resources.
+- **More predictable engine requests:** Repeated desktop configuration is idempotent, and local torrent HTTP requests use HTTP/1.1 for compatibility.
+
+### Verification and limitations
+
+- The P2P changes passed all 10 pull-request checks, including Windows P2P integration, Android Full, Play Store and TV builds/emulator, iOS Kotlin compilation, storage safety and public source security. Windows CI ran 121 tests with zero failures; focused local desktop session regressions passed 36 tests.
+- Extended playback on physical phones and TVs, NAT/VPN transitions, long-running streams under memory pressure, and internet-swarm throughput still require real-device validation. The iOS App Store variant remains P2P-disabled, and no iOS App Store release is included.
+
 ## Starlit 1.20.0
 
 ### Playback and desktop reliability
