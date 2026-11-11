@@ -45,21 +45,6 @@ data class AppUpdaterUiState(
     val isDebugTest: Boolean = false,
 )
 
-internal class UpdateDownloadProgressGate {
-    private var lastReportedPercent: Int? = null
-
-    fun shouldReport(downloadedBytes: Long, totalBytes: Long?): Boolean {
-        val percent = if (totalBytes != null && totalBytes > 0L) {
-            ((downloadedBytes.toDouble() / totalBytes.toDouble()) * 100).toInt().coerceIn(0, 100)
-        } else {
-            -1
-        }
-        if (lastReportedPercent == percent) return false
-        lastReportedPercent = percent
-        return true
-    }
-}
-
 class AppUpdaterController internal constructor(
     private val scope: CoroutineScope,
     private val preferences: UpdatePreferences = UpdatePreferences.shared,
@@ -227,7 +212,6 @@ class AppUpdaterController internal constructor(
         downloadJob = scope.launch {
             previousDownload?.join()
             val downloadContext = currentCoroutineContext()
-            val progressGate = UpdateDownloadProgressGate()
             _uiState.update { state ->
                 state.copy(
                     isDownloading = true,
@@ -242,19 +226,13 @@ class AppUpdaterController internal constructor(
                 expectedSha256 = update.sha256,
             ) { downloadedBytes, totalBytes ->
                 downloadContext.ensureActive()
-                if (progressGate.shouldReport(downloadedBytes, totalBytes)) {
-                    val progress = if (totalBytes != null && totalBytes > 0L) {
-                        (downloadedBytes.toDouble() / totalBytes.toDouble()).toFloat().coerceIn(0f, 1f)
-                    } else {
-                        null
-                    }
-                    _uiState.update { state ->
-                        if (state.updateChannel == channel && state.downloadProgress != progress) {
-                            state.copy(downloadProgress = progress)
-                        } else {
-                            state
-                        }
-                    }
+                val progress = if (totalBytes != null && totalBytes > 0L) {
+                    (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    null
+                }
+                _uiState.update { state ->
+                    if (state.updateChannel == channel) state.copy(downloadProgress = progress) else state
                 }
             }
             currentCoroutineContext().ensureActive()
