@@ -20,6 +20,11 @@
 - **Stream filtering:** Search and filter already loaded source results without changing add-on discovery or provider behavior.
 - **Desktop media controls:** Control playback through Windows system media integration and Linux MPRIS-compatible desktop controls.
 
+### Windows screen-share audio (experimental)
+
+- **Discord dialogue support:** Windows desktop can opt in to an auxiliary front-centre-channel-only output for Entire Screen capture while keeping normal surround playback on the original player. The in-player toggle and Advanced settings share the same off-by-default preference.
+- **Optional window-only sharing:** An independent visible stereo companion supports application-window capture. The hidden mode requires an available, unused Steam Streaming Speakers virtual endpoint; Starlit does not install drivers or change global output settings.
+
 ### Download reliability
 
 - **Android offline jobs:** Restore mobile torrent batch downloads and background download scheduling.
@@ -27,6 +32,7 @@
 
 ### Verification and limitations
 
+- Discord audio support passed synthetic 5.1/7.1 centre-channel isolation and Windows companion lifecycle/build smoke checks. Real-media Discord listener validation, sustained track/seek synchronization, endpoint disconnect recovery and surround-output acceptance remain unverified.
 - The merged player reliability change passed 2,104 Windows desktop tests with no failures, plus 16 cross-platform/security CI checks. The hidden-title search change passed eight CI checks and has focused search, ordering and restore tests.
 - The local subtitle file-picker integration passed 2,115 Windows desktop tests with no failures and 11 of 11 cross-platform/security PR checks, including the Android TV emulator.
 - The Linux sleep-inhibitor change passed 11 of 11 cross-platform/security CI checks. A Linux systemd/logind smoke test confirmed the active inhibitor disappears within two seconds of the monitored process exiting.
