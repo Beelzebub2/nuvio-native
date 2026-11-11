@@ -41,6 +41,48 @@ class DesktopTorrentSettingsTest {
         }
     }
 
+    @Test fun settingsStayIdempotentForBundledAndNewerEngines() {
+        assertTrue(DESKTOP_TORRENT_TRACKERS.any { it.startsWith("udp:") })
+        assertTrue(DESKTOP_TORRENT_TRACKERS.any { it.startsWith("http:") })
+        assertTrue(DESKTOP_TORRENT_TRACKERS.any { it.startsWith("https:") })
+        val magnet = buildP2pMagnetUri("a".repeat(40), DESKTOP_TORRENT_TRACKERS + DESKTOP_TORRENT_TRACKERS.first())
+        assertEquals(DESKTOP_TORRENT_TRACKERS.size, "&tr=".toRegex().findAll(magnet).count())
+        val configured = desktopTorrentSettings(defaults, P2pSettingsUiState(), "C:/cache")
+        assertFalse(configured.containsKey("EnableBonjour"), "Bundled engine ignores unsupported keys")
+        assertEquals(0, configured.getValue("RetrackersMode").jsonPrimitive.int)
+        assertEquals(configured, desktopTorrentSettings(configured, P2pSettingsUiState(), "C:/cache"))
+        val newer = Json.parseToJsonElement("""{"EnableBonjour":true,"Future":42}""").jsonObject
+        assertFalse(desktopTorrentSettings(newer, P2pSettingsUiState(), "C:/cache")
+            .getValue("EnableBonjour").jsonPrimitive.boolean)
+    }
+
+    @Test fun firstLaunchSeedsFinalProfileAndUpstreamDiscoveryDefaults() {
+        val directory = Files.createTempDirectory("nuvio-seeded-settings-test").toFile()
+        try {
+            val settings = P2pSettingsUiState(cacheSize = P2pCacheSize.NONE, enableUpload = false)
+            prepareTorrServerSettingsFile(directory, File(directory, "cache"), settings)
+            val file = File(directory, "settings.json")
+            val seeded = Json.parseToJsonElement(file.readText()).jsonObject.getValue("BitTorr").jsonObject
+            assertEquals(256L * 1024 * 1024, seeded.getValue("CacheSize").jsonPrimitive.long)
+            assertTrue(seeded.getValue("StoreSettingsInJson").jsonPrimitive.boolean)
+            assertTrue(seeded.getValue("EnableLPD").jsonPrimitive.boolean)
+            assertTrue(seeded.getValue("ShowFSActiveTorr").jsonPrimitive.boolean)
+            assertEquals(seeded, desktopTorrentSettings(seeded, settings, File(directory, "cache").absolutePath))
+            val before = file.readText()
+            prepareTorrServerSettingsFile(directory, File(directory, "cache"), settings)
+            assertEquals(before, file.readText())
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun existingDatabaseIsNotSupersededByNewJsonSettings() {
+        val directory = Files.createTempDirectory("nuvio-database-settings-test").toFile()
+        try {
+            File(directory, "config.db").writeText("existing settings")
+            prepareTorrServerSettingsFile(directory, File(directory, "cache"), P2pSettingsUiState())
+            assertFalse(File(directory, "settings.json").exists())
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun playbackPreloadIsSizedForLargeEpisodesWithoutScalingLinearlyWithDiskCache() {
         val expectedDisk = mapOf(
             P2pCacheSize.GB_2 to 6,

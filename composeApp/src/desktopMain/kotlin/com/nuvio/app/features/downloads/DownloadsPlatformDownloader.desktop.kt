@@ -717,7 +717,7 @@ internal suspend fun downloadTorrentFile(item: DownloadItem, engines: DownloadTo
     settings: () -> P2pSettingsUiState, onSelected: (TorrServerFile) -> Unit = {},
     copy: suspend (String, TorrServerFile, suspend () -> Unit) -> File): File {
     val hash = canonicalDownloadTorrentHash(checkNotNull(item.torrentHash) { "No downloadable media source" })
-    val magnet = buildP2pMagnetUri(hash, item.torrentTrackers)
+    val magnet = buildP2pMagnetUri(hash, DESKTOP_TORRENT_TRACKERS + item.torrentTrackers)
     val selectedSettings = settings()
     check(selectedSettings.p2pEnabled) { "Enable P2P in Settings before downloading torrents, or choose Direct files." }
     return engines.use(hash, selectedSettings) { backend ->

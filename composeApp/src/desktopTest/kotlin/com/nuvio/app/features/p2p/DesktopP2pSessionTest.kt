@@ -13,6 +13,7 @@ import com.nuvio.app.features.streams.AddonStreamGroup
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -136,7 +137,7 @@ class DesktopP2pSessionTest {
         val engine = engine(backend)
         try {
             assertTrue(engine.startStream(request).endsWith("index=1"))
-            assertTrue(testScheduler.currentTime >= 2_000L, "Incomplete file metadata must be polled before playback")
+            assertEquals(500L, testScheduler.currentTime, "Ready metadata should not wait for one-second polling ticks")
             assertEquals(1, backend.starts, "Waiting for metadata must not restart a healthy engine")
         } finally {
             engine.shutdown().join()
@@ -333,6 +334,33 @@ class DesktopP2pSessionTest {
         assertEquals(listOf(request.infoHash), backend.dropped)
         engine.shutdown().join()
         assertFalse(backend.running)
+    }
+
+    @Test fun lateStartCannotInvalidateQueuedShutdownCleanup() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        assertTrue(backend.running)
+        val shutdown = engine.shutdown()
+        val lateStart = async(start = CoroutineStart.UNDISPATCHED) { engine.startStream(request) }
+        lateStart.join()
+        shutdown.join()
+        assertTrue(lateStart.isCancelled)
+        assertFalse(backend.running, "Rejected starts must not supersede the terminal stop")
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
+        assertEquals(1, backend.starts)
+    }
+
+    @Test fun ordinaryStopAfterShutdownStillClosesThePreparedBackend() = runTest {
+        val backend = Backend()
+        val engine = engine(backend)
+        engine.prepare().join()
+        val shutdown = engine.shutdown()
+        val lateStop = engine.stopStream()
+        lateStop.join()
+        shutdown.join()
+        assertFalse(backend.running, "Every stop after shutdown must honor terminal cleanup")
+        assertIs<P2pStreamingState.Idle>(engine.state.value)
     }
 
     @Test fun repeatedEpisodeUsesWarmTorrentAndInactiveTorrentIsEventuallyDropped() = runTest {
@@ -623,6 +651,36 @@ class DesktopP2pSessionTest {
         start.join()
         assertFalse(backend.running)
         assertIs<P2pStreamingState.Idle>(engine.state.value)
+    }
+
+    @Test fun replacingMetadataStartupKeepsThePreparedProcessAndPeers() = runTest {
+        val backend = Backend().apply { metadata = false }
+        val engine = engine(backend)
+        try {
+            val first = async { engine.startStream(request) }
+            runCurrent()
+            backend.metadata = true
+            val latest = async { engine.startStream(request) }
+            assertTrue(latest.await().endsWith("index=1"))
+            first.join()
+            assertTrue(first.isCancelled)
+            assertEquals(1, backend.starts, "Replacing an obsolete metadata wait must not rebuild the swarm")
+            assertTrue(backend.dropped.isEmpty())
+        } finally { engine.shutdown().join() }
+    }
+
+    @Test fun metadataWaitPublishesSwarmProgressBeforeThePlayerIsReady() = runTest {
+        val backend = Backend().apply { metadata = false; peers = 7; downloadSpeed = 8192L }
+        val engine = engine(backend)
+        val start = async { engine.startStream(request) }
+        runCurrent()
+        val connecting = assertIs<P2pStreamingState.Connecting>(engine.state.value)
+        assertEquals(7, connecting.peers)
+        assertEquals(8192L, connecting.downloadSpeed)
+        assertEquals(request, connecting.request)
+        start.cancel()
+        start.join()
+        engine.shutdown().join()
     }
 
     @Test fun aWakeUpDuringMetadataLoadingRebuildsBeforeContinuing() = runTest {

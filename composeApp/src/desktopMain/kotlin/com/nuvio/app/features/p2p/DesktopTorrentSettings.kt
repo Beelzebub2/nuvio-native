@@ -23,14 +23,25 @@ private const val SETTINGS_STORAGE_ERROR =
 /** Five independent download processes share one download cache/connection allowance. */
 internal const val MAX_DOWNLOAD_TORRENT_ENGINES = 5
 
+internal val DESKTOP_TORRENT_TRACKERS = listOf(
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.openbittorrent.com:6969/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "http://tracker.dler.org:6969/announce",
+    "https://open.ftorrent.com:443/announce",
+)
+
 internal data class DownloadTorrentResourceBudget(val cacheBytes: Long, val connectionLimit: Int)
 
 private const val PLAYBACK_PRELOAD_TARGET_BYTES = 128L * 1024L * 1024L
 
 /**
  * TorrServer's PreloadCache is a percentage of CacheSize, not a percentage of the media file.
- * Size the startup buffer for a high-bitrate episode without making a 10 GiB disk cache
- * require multiple gigabytes before the player can begin. Keep a maximum of 25%
+ * Bound explicit preload requests without making a 10 GiB disk cache require
+ * multiple gigabytes. The app's &play route itself remains demand-driven.
+ * Keep a maximum of 25%
  * for small disk caches and 50% for memory-only caches so reading can continue.
  */
 internal fun playbackTorrentPreloadPercent(cacheBytes: Long, useDisk: Boolean): Int {
@@ -68,16 +79,25 @@ internal fun prepareTorrServerSettingsFile(directory: File, cache: File, setting
         val text = try {
             Files.readString(file.toPath())
         } catch (_: NoSuchFileException) {
-            return // First launch keeps upstream defaults, then applies the profile through the API.
+            null
         } catch (_: CharacterCodingException) {
             quarantineTorrServerSettings(file, "invalid UTF-8")
             return
         }
-        val root = try {
-            Json.parseToJsonElement(text) as? JsonObject
-        } catch (_: SerializationException) {
-            quarantineTorrServerSettings(file, "invalid JSON")
-            return
+        val root = if (text == null) {
+            // Never supersede an existing BBolt configuration. New app-owned sessions
+            // can start with their final profile instead of rebuilding the swarm via
+            // /settings after launch (which closes sockets and waits at least 2 seconds).
+            if (File(directory, "config.db").exists()) return
+            Files.createDirectories(directory.toPath())
+            buildJsonObject { put("BitTorr", newTorrServerDefaults()) }
+        } else {
+            try {
+                Json.parseToJsonElement(text) as? JsonObject
+            } catch (_: SerializationException) {
+                quarantineTorrServerSettings(file, "invalid JSON")
+                return
+            }
         }
         if (root == null || (root.containsKey("BitTorr") && root["BitTorr"] !is JsonObject)) {
             quarantineTorrServerSettings(file, "invalid settings object")
@@ -112,6 +132,21 @@ internal fun prepareTorrServerSettingsFile(directory: File, cache: File, setting
     }
 }
 
+/** Nonzero defaults from the bundled MatriX.142 settings/btsets.go SetDefaultConfig. */
+private fun newTorrServerDefaults(): JsonObject = buildJsonObject {
+    put("CacheSize", 64L * 1024L * 1024L)
+    put("PreloadCache", 50)
+    put("ConnectionsLimit", 25)
+    put("RetrackersMode", 1)
+    put("TorrentDisconnectTimeout", 30)
+    put("ReaderReadAHead", 95)
+    put("ResponsiveMode", true)
+    put("ShowFSActiveTorr", true)
+    put("StoreSettingsInJson", true)
+    put("EnableLPD", true)
+    // The loader supplies TMDB defaults; all remaining upstream fields default to zero.
+}
+
 private fun quarantineTorrServerSettings(file: File, reason: String) {
     val backup = file.toPath().resolveSibling("settings-corrupt-${UUID.randomUUID()}.json")
     // No replacement: a failed backup must leave the original in place and abort startup.
@@ -138,8 +173,8 @@ internal fun desktopTorrentSettings(
     put("UseDisk", diskCache)
     put("TorrentsSavePath", if (diskCache) cachePath else "")
     put("RemoveCacheOnDrop", true)
-    // A downloaded file can wait for its HTTP reader; interactive playback needs a larger
-    // contiguous startup cushion. Keep the small preload for background download processes.
+    // Keep explicit-preload budgets bounded. The normal &play route serves reader
+    // demand directly; this percentage alone does not preload a contiguous buffer.
     put("PreloadCache", if (downloadBudget != null) {
         if (diskCache) 1 else 10
     } else {
@@ -154,6 +189,11 @@ internal fun desktopTorrentSettings(
     })
     put("TorrentDisconnectTimeout", 120)
     put("ResponsiveMode", true)
+    // The app supplies default + provider trackers in its magnet. The bundled
+    // engine's fallback list fetch is synchronous and has no HTTP timeout.
+    put("RetrackersMode", 0)
     put("EnableDLNA", false)
-    put("EnableBonjour", false)
+    // MatriX.142 silently drops unknown fields; sending one on every comparison
+    // would make an unchanged profile look different and rebuild the client.
+    if (current.containsKey("EnableBonjour")) put("EnableBonjour", false)
 }

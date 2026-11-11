@@ -8,7 +8,8 @@ engine_checksum=ed35576d962930d3207b2725fa737f71ef080e35dbfa2f0bf6f21ab1719b7029
 engine_root="${NUVIO_ENGINE_ROOT:-${repository_root}/../nuvio-engine}"
 engine_framework="${engine_root}/platform/apple/NuvioEngine.xcframework"
 
-if [[ ! -f "${repository_root}/MPVKit/Package.swift" ]]; then
+# Kotlin-only CI needs the engine headers/library, not the MPVKit app submodule.
+if [[ "${1:-}" != "--engine-only" && ! -f "${repository_root}/MPVKit/Package.swift" ]]; then
     git -C "${repository_root}" submodule update --init --depth 1 MPVKit
 fi
 

@@ -855,7 +855,7 @@ class DesktopDownloadsTest {
                     File(root, "output-$index").apply { writeBytes(media) }
                 }
                 assertContentEquals(media, output.readBytes())
-                assertEquals(buildP2pMagnetUri(canonicalDownloadTorrentHash(hash), listOf(tracker)), magnetCalls.last())
+                assertEquals(buildP2pMagnetUri(canonicalDownloadTorrentHash(hash), DESKTOP_TORRENT_TRACKERS + tracker), magnetCalls.last())
             }
             assertTrue(magnetCalls[0].contains("xt=urn:btih:"))
             assertTrue(magnetCalls[1].contains("xt=urn:btmh:1220"))
