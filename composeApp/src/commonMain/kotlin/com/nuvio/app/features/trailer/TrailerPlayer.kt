@@ -23,10 +23,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.features.player.EnterImmersivePlayerMode
+import com.nuvio.app.features.player.AudioTrack
+import com.nuvio.app.features.player.DeviceLanguagePreferences
 import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerPlaybackSnapshot
 import com.nuvio.app.features.player.PlayerResizeMode
+import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.player.resolvePreferredAudioLanguageTargets
+import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.trailer_unable_to_play
@@ -99,6 +104,26 @@ private fun TrailerPlaybackSurface(
     var restoringPosition by remember { mutableStateOf(resumePositionMs > 0L) }
     var controller by remember { mutableStateOf<PlayerEngineController?>(null) }
     var snapshot by remember { mutableStateOf(PlayerPlaybackSnapshot()) }
+    // A manual audio selection wins even when the player discovers new tracks later.
+    var audioPreferenceApplied by remember(source.videoUrl, source.audioUrl, presentationId) {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(controller, snapshot.isLoading, presentationId) {
+        val player = controller ?: return@LaunchedEffect
+        if (audioPreferenceApplied || snapshot.isLoading || presentationId != state.presentationId) return@LaunchedEffect
+        // Some platforms report audio tracks after the first ready snapshot.
+        repeat(20) {
+            if (audioPreferenceApplied || presentationId != state.presentationId) return@LaunchedEffect
+            if (player.getAudioTracks().size > 1) {
+                val languages = preferredTrailerAudioLanguages()
+                if (languages.isNotEmpty()) player.applyAudioLanguagePreferences(languages)
+                audioPreferenceApplied = true
+                return@LaunchedEffect
+            }
+            delay(250)
+        }
+    }
 
     LaunchedEffect(controller, snapshot.isLoading, snapshot.durationMs, restoringPosition) {
         val player = controller
@@ -123,6 +148,20 @@ private fun TrailerPlaybackSurface(
             presentationId == state.presentationId,
         resizeMode = resizeMode,
         useNativeController = false,
+        onPlayerControlsEvent = { type, value ->
+            if (type == "selectAudioTrack") {
+                controller?.let { player ->
+                    val index = player.getAudioTracks().audioTrackIndexForControlsValue(value)
+                    if (index != null) {
+                        audioPreferenceApplied = true
+                        player.selectAudioTrack(index)
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        },
         onControllerReady = {
             controller = it
             if (presentationId == state.presentationId) state.controller = it
@@ -136,4 +175,23 @@ private fun TrailerPlaybackSurface(
     if (restoringPosition) {
         Box(Modifier.fillMaxSize().background(Color.Black))
     }
+}
+
+private fun preferredTrailerAudioLanguages(): List<String> {
+    PlayerSettingsRepository.ensureLoaded()
+    val settings = PlayerSettingsRepository.uiState.value
+    return resolvePreferredAudioLanguageTargets(
+        preferredAudioLanguage = settings.preferredAudioLanguage,
+        secondaryPreferredAudioLanguage = settings.secondaryPreferredAudioLanguage,
+        deviceLanguages = DeviceLanguagePreferences.preferredLanguageCodes(),
+    )
+}
+
+/** Player-control values may identify the track by mpv ID or by its index. */
+internal fun List<AudioTrack>.audioTrackIndexForControlsValue(value: Double): Int? {
+    if (!value.isFinite() || value < Int.MIN_VALUE || value > Int.MAX_VALUE) return null
+    val requested = value.toInt()
+    if (value != requested.toDouble()) return null
+    return firstOrNull { it.id == requested.toString() }?.index
+        ?: firstOrNull { it.index == requested }?.index
 }
