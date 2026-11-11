@@ -1062,6 +1062,8 @@
     <string name="settings_homescreen_reorder">Reorder</string>
     <string name="settings_homescreen_section_catalogs">CATALOGS</string>
     <string name="settings_homescreen_section_catalogs_collections">CATALOGS &amp; COLLECTIONS</string>
+    <string name="settings_homescreen_enable_all_catalogs">Enable all catalogs</string>
+    <string name="settings_homescreen_disable_all_catalogs">Disable all catalogs</string>
     <string name="settings_homescreen_section_collections">COLLECTIONS</string>
     <string name="settings_homescreen_section_hero">HOME LAYOUT</string>
     <string name="settings_homescreen_section_hero_sources">HERO CATALOGS</string>
