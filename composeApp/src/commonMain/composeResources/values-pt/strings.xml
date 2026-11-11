@@ -452,6 +452,7 @@
     <string name="compose_player_none">Nenhum</string>
     <string name="compose_player_outline">Contorno</string>
     <string name="compose_player_outline_color">Cor do contorno</string>
+    <string name="compose_player_outline_thickness">Espessura do contorno</string>
     <string name="compose_player_panel_episodes">Episódios</string>
     <string name="compose_player_panel_sources">Fontes</string>
     <string name="compose_player_panel_streams">Streams</string>
