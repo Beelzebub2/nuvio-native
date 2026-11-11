@@ -16,6 +16,9 @@ import com.nuvio.app.features.streams.StreamLinkCacheRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import kotlinx.coroutines.launch
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.player_private_external_unavailable
+import org.jetbrains.compose.resources.getString
 
 internal fun PlayerScreenRuntime.resolveDebridForPlayer(
     stream: StreamItem,
@@ -52,6 +55,12 @@ internal fun PlayerScreenRuntime.isP2pStream(stream: StreamItem): Boolean =
 
 internal fun PlayerScreenRuntime.openExternalSourceUrl(stream: StreamItem): Boolean {
     if (!stream.shouldOpenExternally) return false
+    if (privatePlayback) {
+        scope.launch {
+            NuvioToastController.show(getString(Res.string.player_private_external_unavailable))
+        }
+        return true
+    }
     val url = stream.externalOpenUrl ?: return false
     val openExternalUrl = args.onOpenExternalUrl ?: return false
     openExternalUrl(url)
@@ -133,7 +142,7 @@ internal fun PlayerScreenRuntime.saveP2pStreamForReuse(
     season: Int?,
     episode: Int?,
 ) {
-    if (!playerSettingsUiState.streamReuseLastLinkEnabled || videoId == null) return
+    if (privatePlayback || !playerSettingsUiState.streamReuseLastLinkEnabled || videoId == null) return
     val infoHash = stream.p2pInfoHash ?: return
     val cacheKey = StreamLinkCacheRepository.contentKey(
         type = contentType ?: parentMetaType,
@@ -270,7 +279,7 @@ internal fun PlayerScreenRuntime.switchToSource(stream: StreamItem) {
     flushWatchProgress()
     stopActiveP2pStream()
     val currentVideoId = activeVideoId
-    if (playerSettingsUiState.streamReuseLastLinkEnabled && currentVideoId != null) {
+    if (!privatePlayback && playerSettingsUiState.streamReuseLastLinkEnabled && currentVideoId != null) {
         saveDirectStreamForReuse(stream, url, currentVideoId, activeSeasonNumber, activeEpisodeNumber)
     }
     externalSubtitles = stream.externalSubtitles
@@ -522,6 +531,7 @@ private fun PlayerScreenRuntime.saveDirectStreamForReuse(
     season: Int?,
     episode: Int?,
 ) {
+    if (privatePlayback) return
     val cacheKey = StreamLinkCacheRepository.contentKey(
         type = contentType ?: parentMetaType,
         videoId = videoId,

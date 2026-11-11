@@ -773,7 +773,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
             onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
-            onOpenInExternalPlayer = args.onOpenInExternalPlayer?.let { openExternal ->
+            onOpenInExternalPlayer = args.onOpenInExternalPlayer?.takeIf { !privatePlayback }?.let { openExternal ->
                 {
                     val loadedSubtitles = addonSubtitles
                         .takeIf { it.isNotEmpty() }
@@ -814,7 +814,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
-            onHandoffClick = if (!isDesktop && !isIos && remoteConnected &&
+            onHandoffClick = if (!privatePlayback && !isDesktop && !isIos && remoteConnected &&
                 !activeVideoId.isNullOrBlank() && contentType in setOf("movie", "series")) {
                 {
                     val request = RemotePlaybackHandoff(

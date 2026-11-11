@@ -67,6 +67,7 @@ private data class PendingP2pStreamOpen(
     val forceExternal: Boolean,
     val forceInternal: Boolean,
     val isAutoPlay: Boolean,
+    val privatePlayback: Boolean = false,
 )
 
 @Composable
@@ -171,10 +172,11 @@ internal fun StreamDestination(
         resolvedResumePositionMs: Long?,
         resolvedResumeProgressFraction: Float?,
         replaceStreamRoute: Boolean,
+        privatePlayback: Boolean = false,
     ) {
         val infoHash = stream.p2pInfoHash ?: return
         val sentinelUrl = p2pSentinelUrl(infoHash, stream.p2pFileIdx)
-        if (playerSettings.streamReuseLastLinkEnabled) {
+        if (!privatePlayback && playerSettings.streamReuseLastLinkEnabled) {
             val cacheKey = StreamLinkCacheRepository.contentKey(
                 type = launch.type,
                 videoId = effectiveVideoId,
@@ -230,6 +232,7 @@ internal fun StreamDestination(
             initialPositionMs = resolvedResumePositionMs ?: 0L,
             initialProgressFraction = resolvedResumeProgressFraction,
             contentLanguage = resolveLaunchContentLanguage(),
+            privatePlayback = privatePlayback,
         )
 
         autoPlayNavigationStarted = replaceStreamRoute
@@ -249,6 +252,7 @@ internal fun StreamDestination(
         forceExternal: Boolean,
         forceInternal: Boolean,
         isAutoPlay: Boolean,
+        privatePlayback: Boolean = false,
     ) {
         if (stream.p2pInfoHash == null) {
             if (isAutoPlay) StreamsRepository.skipAutoPlayStream(stream)
@@ -266,6 +270,7 @@ internal fun StreamDestination(
                 forceExternal = forceExternal,
                 forceInternal = forceInternal,
                 isAutoPlay = isAutoPlay,
+                privatePlayback = privatePlayback,
             )
             return
         }
@@ -274,6 +279,7 @@ internal fun StreamDestination(
             resolvedResumePositionMs = resolvedResumePositionMs,
             resolvedResumeProgressFraction = resolvedResumeProgressFraction,
             replaceStreamRoute = isAutoPlay,
+            privatePlayback = privatePlayback,
         )
     }
 
@@ -557,6 +563,7 @@ internal fun StreamDestination(
         resolvedResumeProgressFraction: Float?,
         forceExternal: Boolean,
         forceInternal: Boolean,
+        privatePlayback: Boolean = false,
     ) {
         if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
             if (resolvingDebridStream) return
@@ -583,6 +590,7 @@ internal fun StreamDestination(
                         resolvedResumeProgressFraction = resolvedResumeProgressFraction,
                         forceExternal = forceExternal,
                         forceInternal = forceInternal,
+                        privatePlayback = privatePlayback,
                     )
                     else -> {
                         resolved.toastMessage()?.let { NuvioToastController.show(it) }
@@ -610,10 +618,18 @@ internal fun StreamDestination(
                 forceExternal = forceExternal,
                 forceInternal = forceInternal,
                 isAutoPlay = false,
+                privatePlayback = privatePlayback,
             )
             return
         }
         if (stream.shouldOpenExternally) {
+            // An external URL cannot guarantee privacy; fail closed without opening it.
+            if (privatePlayback) {
+                streamRouteScope.launch {
+                    NuvioToastController.show(getString(Res.string.player_private_external_unavailable))
+                }
+                return
+            }
             val opened = stream.externalOpenUrl?.let { url -> openExternalStreamUrl(url) } == true
             if (opened) {
                 StreamsRepository.cancelLoading()
@@ -624,7 +640,7 @@ internal fun StreamDestination(
             reportRemoteSourceFailure("Source is unavailable. Choose another.")
             return
         }
-        if (playerSettings.streamReuseLastLinkEnabled) {
+        if (!privatePlayback && playerSettings.streamReuseLastLinkEnabled) {
             val cacheKey = StreamLinkCacheRepository.contentKey(
                 type = launch.type,
                 videoId = effectiveVideoId,
@@ -675,9 +691,10 @@ internal fun StreamDestination(
             initialPositionMs = resolvedResumePositionMs ?: 0L,
             initialProgressFraction = resolvedResumeProgressFraction,
             contentLanguage = resolveLaunchContentLanguage(),
+            privatePlayback = privatePlayback,
         )
 
-        if (!forceInternal && externalPlayerSupported && (forceExternal || playerSettings.externalPlayerEnabled)) {
+        if (!privatePlayback && !forceInternal && externalPlayerSupported && (forceExternal || playerSettings.externalPlayerEnabled)) {
             streamRouteScope.launch {
                 openExternalPlayback(playerLaunch)
                 StreamsRepository.cancelLoading()
@@ -805,13 +822,14 @@ internal fun StreamDestination(
                     forceInternal = false,
                 )
             },
-            onStreamActionOpen = { stream, openExternally, resolvedResumePositionMs, resolvedResumeProgressFraction ->
+            onStreamActionOpen = { stream, openExternally, resolvedResumePositionMs, resolvedResumeProgressFraction, privatePlayback ->
                 openSelectedStream(
                     stream = stream,
                     resolvedResumePositionMs = resolvedResumePositionMs,
                     resolvedResumeProgressFraction = resolvedResumeProgressFraction,
-                    forceExternal = openExternally,
-                    forceInternal = !openExternally,
+                    forceExternal = openExternally && !privatePlayback,
+                    forceInternal = !openExternally || privatePlayback,
+                    privatePlayback = privatePlayback,
                 )
             },
             onBack = onBack,
@@ -827,6 +845,7 @@ internal fun StreamDestination(
                         resolvedResumePositionMs = pending.resumePositionMs,
                         resolvedResumeProgressFraction = pending.resumeProgressFraction,
                         replaceStreamRoute = pending.isAutoPlay,
+                        privatePlayback = pending.privatePlayback,
                     )
                 },
                 onDismiss = {

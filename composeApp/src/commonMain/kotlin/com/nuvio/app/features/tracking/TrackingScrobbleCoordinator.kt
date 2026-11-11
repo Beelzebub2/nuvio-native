@@ -19,7 +19,9 @@ object TrackingScrobbleCoordinator {
         profileId: Int,
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
+        privatePlayback: Boolean = false,
     ): List<TrackingScrobbleFailure> {
+        if (privatePlayback) return emptyList()
         if (profileId != ProfileRepository.activeProfileId) return emptyList()
         TrackingProviderRegistry.ensureLoaded()
         val failures = dispatchTrackingScrobble(
@@ -40,7 +42,9 @@ object TrackingScrobbleCoordinator {
         profileId: Int,
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
+        privatePlayback: Boolean = false,
     ): List<TrackingScrobbleFailure> {
+        if (privatePlayback) return emptyList()
         if (profileId != ProfileRepository.activeProfileId) return emptyList()
         TrackingProviderRegistry.ensureLoaded()
         val failures = dispatchTrackingSeekScrobble(

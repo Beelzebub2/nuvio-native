@@ -1201,6 +1201,7 @@ object WatchProgressRepository {
         snapshot: PlayerPlaybackSnapshot,
         syncRemote: Boolean = true,
     ) {
+        if (session.privatePlayback) return
         ensureLoaded()
         upsert(session = session, snapshot = snapshot, persist = true, syncRemote = syncRemote)
     }
@@ -1210,6 +1211,7 @@ object WatchProgressRepository {
         snapshot: PlayerPlaybackSnapshot,
         syncRemote: Boolean = true,
     ) {
+        if (session.privatePlayback) return
         ensureLoaded()
         upsert(session = session, snapshot = snapshot, persist = true, syncRemote = syncRemote)
     }
@@ -1342,6 +1344,8 @@ object WatchProgressRepository {
         persist: Boolean,
         syncRemote: Boolean,
     ) {
+        // Fail closed before touching Watch Later, Continue Watching, history or remote sync.
+        if (session.privatePlayback) return
         // A live channel has no stable duration or resume point. Keep local and remote history
         // unchanged when this profile opts to hide live playback from Continue Watching.
         if (session.parentMetaType.isExplicitLiveMetaType()) {

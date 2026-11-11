@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -140,7 +141,8 @@ fun StreamsScreen(
         openExternally: Boolean,
         resumePositionMs: Long?,
         resumeProgressFraction: Float?,
-    ) -> Unit = { _, _, _, _ -> },
+        privatePlayback: Boolean,
+    ) -> Unit = { _, _, _, _, _ -> },
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -437,12 +439,13 @@ fun StreamsScreen(
                     NuvioToastController.show(result.toastMessage())
                 }
             },
-            onOpen = { stream, openExternally ->
+            onOpen = { stream, openExternally, privatePlayback ->
                 onStreamActionOpen(
                     stream,
                     openExternally,
                     effectiveResumePositionMs,
                     effectiveResumeProgressFraction,
+                    privatePlayback,
                 )
             },
         )
@@ -1060,12 +1063,12 @@ private fun LazyListScope.streamSection(
                     }
                 },
                 onLongClick = {
-                    if (stream.playableDirectUrl != null || stream.shouldOpenExternally || stream.isAddonDebridCandidate) {
+                    if (isSelectable || stream.shouldOpenExternally || stream.isAddonDebridCandidate) {
                         onStreamLongPress(stream)
                     }
                 },
                 onSecondaryClick = { position ->
-                    if (stream.playableDirectUrl != null || stream.shouldOpenExternally || stream.isAddonDebridCandidate) {
+                    if (isSelectable || stream.shouldOpenExternally || stream.isAddonDebridCandidate) {
                         onStreamSecondaryClick(stream, position)
                     }
                 },
@@ -1182,7 +1185,7 @@ private fun StreamActionsHost(
     onDismiss: () -> Unit,
     onCopyLink: (StreamItem) -> Unit,
     onDownload: (StreamItem) -> Unit,
-    onOpen: (StreamItem, openExternally: Boolean) -> Unit,
+    onOpen: (StreamItem, openExternally: Boolean, privatePlayback: Boolean) -> Unit,
 ) {
     if (target == null) return
 
@@ -1229,7 +1232,7 @@ private fun DesktopStreamActionsMenu(
     onDismiss: () -> Unit,
     onCopyLink: (StreamItem) -> Unit,
     onDownload: (StreamItem) -> Unit,
-    onOpen: (StreamItem, openExternally: Boolean) -> Unit,
+    onOpen: (StreamItem, openExternally: Boolean, privatePlayback: Boolean) -> Unit,
 ) {
     val density = LocalDensity.current
     val edgeMarginPx = with(density) { 8.dp.roundToPx() }
@@ -1253,7 +1256,16 @@ private fun DesktopStreamActionsMenu(
                             Res.string.streams_open_external_player
                         },
                     ),
-                    onClick = { onOpen(stream, !externalPlayerEnabled) },
+                    onClick = { onOpen(stream, !externalPlayerEnabled, false) },
+                ),
+            )
+        }
+        if (!stream.shouldOpenExternally) {
+            add(
+                DesktopStreamAction(
+                    icon = Icons.Rounded.VisibilityOff,
+                    title = stringResource(Res.string.streams_play_privately),
+                    onClick = { onOpen(stream, false, true) },
                 ),
             )
         }
@@ -1389,7 +1401,7 @@ private fun StreamActionsSheet(
     onDismiss: () -> Unit,
     onCopyLink: (StreamItem) -> Unit,
     onDownload: (StreamItem) -> Unit,
-    onOpen: (StreamItem, openExternally: Boolean) -> Unit,
+    onOpen: (StreamItem, openExternally: Boolean, privatePlayback: Boolean) -> Unit,
 ) {
     if (stream == null) return
 
@@ -1458,7 +1470,19 @@ private fun StreamActionsSheet(
                         },
                     ),
                     onClick = {
-                        onOpen(stream, !externalPlayerEnabled)
+                        onOpen(stream, !externalPlayerEnabled, false)
+                        coroutineScope.launch {
+                            dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
+                        }
+                    },
+                )
+            }
+            if (!stream.shouldOpenExternally) {
+                NuvioBottomSheetActionRow(
+                    icon = Icons.Rounded.VisibilityOff,
+                    title = stringResource(Res.string.streams_play_privately),
+                    onClick = {
+                        onOpen(stream, false, true)
                         coroutineScope.launch {
                             dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
                         }

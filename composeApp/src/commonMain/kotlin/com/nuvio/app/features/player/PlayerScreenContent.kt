@@ -10,6 +10,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
@@ -56,6 +61,7 @@ import nuvio.composeapp.generated.resources.parental_severity_moderate
 import nuvio.composeapp.generated.resources.parental_severity_severe
 import nuvio.composeapp.generated.resources.parental_violence
 import nuvio.composeapp.generated.resources.compose_player_tba
+import nuvio.composeapp.generated.resources.player_private_mode_active
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -228,5 +234,17 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         )
         runtime.BindPlayerRuntimeEffects()
         runtime.RenderPlayerRuntimeUi()
+        if (args.privatePlayback) {
+            Text(
+                text = stringResource(Res.string.player_private_mode_active),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 72.dp, end = 16.dp)
+                    .background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
     }
 }

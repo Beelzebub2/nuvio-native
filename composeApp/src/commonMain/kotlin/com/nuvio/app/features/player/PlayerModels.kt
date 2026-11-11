@@ -46,6 +46,8 @@ data class PlayerLaunch(
     val initialPositionMs: Long = 0L,
     val initialProgressFraction: Float? = null,
     val contentLanguage: String? = null,
+    /** Explicitly opted-in for this launch only. Never persisted as a player setting. */
+    val privatePlayback: Boolean = false,
 )
 
 object PlayerLaunchStore {

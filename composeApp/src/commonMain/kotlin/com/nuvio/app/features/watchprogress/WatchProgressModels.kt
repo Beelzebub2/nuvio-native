@@ -203,6 +203,8 @@ data class WatchProgressPlaybackSession(
     val lastStreamSubtitle: String? = null,
     val pauseDescription: String? = null,
     val lastSourceUrl: String? = null,
+    /** Disables playback-origin history, completion, and synchronization writes for this session. */
+    val privatePlayback: Boolean = false,
 )
 
 data class ContinueWatchingItem(
