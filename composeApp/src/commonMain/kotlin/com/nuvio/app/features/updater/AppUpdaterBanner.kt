@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -85,6 +86,8 @@ import nuvio.composeapp.generated.resources.updates_download_size
 import nuvio.composeapp.generated.resources.updates_downloading_progress
 import nuvio.composeapp.generated.resources.updates_message_allow_installs
 import nuvio.composeapp.generated.resources.updates_message_manual_install
+import nuvio.composeapp.generated.resources.updates_release_page_failed
+import nuvio.composeapp.generated.resources.updates_release_page_failed_title
 import nuvio.composeapp.generated.resources.updates_message_ready
 import nuvio.composeapp.generated.resources.updates_preparing_download
 import nuvio.composeapp.generated.resources.updates_release_notes
@@ -114,6 +117,7 @@ fun AppUpdaterHost(
 
     val state by controller.uiState.collectAsStateWithLifecycle()
     var showReleaseNotes by rememberSaveable { mutableStateOf(false) }
+    var failedReleasePageUrl by rememberSaveable { mutableStateOf<String?>(null) }
     val uriHandler = LocalUriHandler.current
 
     LaunchedEffect(controller) {
@@ -131,7 +135,7 @@ fun AppUpdaterHost(
         val url = update?.releaseUrl
             ?.takeIf { it.startsWith("https://github.com/", ignoreCase = true) }
             ?: "https://github.com/${source.owner}/${source.repo}/releases"
-        runCatching { uriHandler.openUri(url) }
+        failedReleasePageUrl = failedReleaseLink(url, uriHandler::openUri)
         Unit
     }
     val primaryAction = primaryUpdateAction(
@@ -204,6 +208,34 @@ fun AppUpdaterHost(
             onContinue = controller::resumeInstallation,
             onDismiss = controller::dismissDialog,
         )
+    }
+
+    failedReleasePageUrl?.let { url ->
+        ManualUpdateLinkDialog(url = url, onDismiss = { failedReleasePageUrl = null })
+    }
+}
+
+/** Keep the release URL available when a desktop environment has no working browser handler. */
+internal fun failedReleaseLink(url: String, openUri: (String) -> Unit): String? =
+    runCatching { openUri(url) }.fold(onSuccess = { null }, onFailure = { url })
+
+@Composable
+private fun ManualUpdateLinkDialog(url: String, onDismiss: () -> Unit) {
+    DialogSurface(
+        onDismissRequest = onDismiss,
+        title = stringResource(Res.string.updates_release_page_failed_title),
+    ) {
+        Text(
+            text = stringResource(Res.string.updates_release_page_failed),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        SelectionContainer {
+            Text(url, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
+        }
+        DialogButtons {
+            DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
+        }
     }
 }
 

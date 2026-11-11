@@ -27,9 +27,19 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 @OptIn(ExperimentalTestApi::class)
 class UpdateBannerUiTest {
+    @Test
+    fun `manual update link is retained only when browser launch fails`() {
+        val url = "https://github.com/example/app/releases/tag/v1"
+        var openedUrl: String? = null
+        assertNull(failedReleaseLink(url) { openedUrl = it })
+        assertEquals(url, openedUrl)
+        assertEquals(url, failedReleaseLink(url) { throw IllegalStateException("No URL handler") })
+    }
+
     private val update = AppUpdate(
         tag = "v1.0.26",
         title = "Starlit 1.0.26",
