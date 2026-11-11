@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,13 +22,21 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -47,6 +56,7 @@ import nuvio.composeapp.generated.resources.compose_player_loading_lines
 import nuvio.composeapp.generated.resources.compose_player_no_subtitle_lines_found
 import nuvio.composeapp.generated.resources.compose_player_outline
 import nuvio.composeapp.generated.resources.compose_player_outline_color
+import nuvio.composeapp.generated.resources.compose_player_outline_thickness
 import nuvio.composeapp.generated.resources.compose_player_reload
 import nuvio.composeapp.generated.resources.compose_player_reset
 import nuvio.composeapp.generated.resources.compose_player_reset_defaults
@@ -100,6 +110,33 @@ fun SubtitleStylePanel(
                         (subtitleDelayMs + SUBTITLE_DELAY_STEP_MS).coerceAtMost(SUBTITLE_DELAY_MAX_MS),
                     )
                 },
+            )
+            var delayInput by remember { mutableStateOf(subtitleDelayMs.toString()) }
+            var editingDelay by remember { mutableStateOf(false) }
+            LaunchedEffect(subtitleDelayMs, editingDelay) {
+                if (!editingDelay) delayInput = subtitleDelayMs.toString()
+            }
+            OutlinedTextField(
+                value = delayInput,
+                onValueChange = { next ->
+                    if (next.length <= 7 && next.all { it.isDigit() || it == '-' } &&
+                        next.count { it == '-' } <= 1 && next.indexOf('-') <= 0
+                    ) {
+                        delayInput = next
+                        parseSubtitleDelayInput(next)?.let(onSubtitleDelayChanged)
+                    }
+                },
+                modifier = Modifier.widthIn(min = 112.dp, max = 164.dp).onFocusChanged { focus ->
+                    if (editingDelay && !focus.isFocused && parseSubtitleDelayInput(delayInput) == null) {
+                        delayInput = subtitleDelayMs.toString()
+                    }
+                    editingDelay = focus.isFocused
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                suffix = { Text("ms") },
+                label = { Text(stringResource(Res.string.compose_player_subtitle_delay)) },
+                isError = delayInput.isNotEmpty() && delayInput != "-" && parseSubtitleDelayInput(delayInput) == null,
             )
             SubtitleTextAction(
                 label = stringResource(Res.string.compose_player_reset),
@@ -156,6 +193,18 @@ fun SubtitleStylePanel(
                 enabled = style.outlineEnabled,
                 onClick = { onStyleChanged(style.copy(outlineEnabled = !style.outlineEnabled)) },
             )
+            if (style.outlineEnabled) {
+                Text(
+                    text = stringResource(Res.string.compose_player_outline_thickness),
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                SubtitleStyleStepper(
+                    value = "${style.outlineWidth} px",
+                    onDecrease = { onStyleChanged(style.copy(outlineWidth = (style.outlineWidth - 1).coerceAtLeast(0))) },
+                    onIncrease = { onStyleChanged(style.copy(outlineWidth = (style.outlineWidth + 1).coerceAtMost(10))) },
+                )
+            }
             Text(
                 text = stringResource(Res.string.compose_player_outline_color),
                 color = Color.White.copy(alpha = 0.72f),
@@ -197,6 +246,10 @@ fun SubtitleStylePanel(
         )
     }
 }
+
+/** Only apply complete signed millisecond values within the native delay range. */
+internal fun parseSubtitleDelayInput(value: String): Int? = value.trim().toIntOrNull()
+    ?.takeIf { it in SUBTITLE_DELAY_MIN_MS..SUBTITLE_DELAY_MAX_MS }
 
 @Composable
 private fun SubtitleStyleSection(
