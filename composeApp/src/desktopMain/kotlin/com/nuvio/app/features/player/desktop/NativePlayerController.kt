@@ -32,6 +32,7 @@ import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.desktop.hls.HlsHeaderProxy
 import com.nuvio.app.features.player.desktop.hls.isDefaultAllowedHlsTarget
 import com.nuvio.app.features.settings.DiscordShareModeSettings
+import com.nuvio.app.features.settings.SurroundUpmixSettings
 import com.nuvio.app.features.player.toStorageHexString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -67,6 +68,7 @@ internal class NativePlayerController(
     private val onCreateWaitCompleted: () -> Unit = {},
     private val nativeSetRtxCompareOriginal: (Long, Boolean) -> Boolean = NativePlayerBridge::setRtxCompareOriginal,
     private val nativeSetDiscordShareEnabled: (Long, Boolean, Boolean) -> Boolean = NativePlayerBridge::setDiscordShareEnabled,
+    private val nativeSetSurroundUpmixEnabled: (Long, Boolean) -> Boolean = NativePlayerBridge::setSurroundUpmixEnabled,
 ) : PlayerEngineController {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
@@ -100,6 +102,29 @@ internal class NativePlayerController(
 
     @Volatile
     private var discordShareShowWindow: Boolean = false
+
+    @Volatile
+    private var surroundUpmixEnabled: Boolean = false
+    @Volatile
+    private var surroundUpmixStatus: Int = 0
+
+    fun setSurroundUpmixEnabled(enabled: Boolean) {
+        if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
+        surroundUpmixEnabled = enabled
+        val current = synchronized(lifecycleLock) { handle }
+        if (current != 0L) {
+            val accepted = runCatching { nativeSetSurroundUpmixEnabled(current, enabled) }
+                .onFailure { log.w(it) { "Surround upmix request failed" } }
+                .getOrDefault(false)
+            if (!accepted && enabled) surroundUpmixStatus = -1
+        }
+        val refreshControls = {
+            lastSentControlsStructureKey = null
+            updateControls(controlsState)
+        }
+        if (SwingUtilities.isEventDispatchThread()) refreshControls()
+        else SwingUtilities.invokeLater(refreshControls)
+    }
 
     fun setDiscordShareEnabled(enabled: Boolean, showWindow: Boolean = false) {
         // Hidden companion outputs only the centre dialogue channel, never a
@@ -382,6 +407,14 @@ internal class NativePlayerController(
                             .getOrDefault(false)
                         if (!accepted) DiscordShareModeSettings.markUnavailable()
                     }
+                    surroundUpmixStatus = 0
+                    if (surroundUpmixEnabled && DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+                        val accepted = runCatching {
+                            nativeSetSurroundUpmixEnabled(created, true)
+                        }.onFailure { log.w(it) { "Surround upmix startup failed" } }
+                            .getOrDefault(false)
+                        if (!accepted) surroundUpmixStatus = -1
+                    }
                     SwingUtilities.invokeLater {
                         val shouldConfigure = synchronized(lifecycleLock) {
                             when {
@@ -505,6 +538,7 @@ internal class NativePlayerController(
         val isFullscreen = isDesktopAppFullscreen(SwingUtilities.getWindowAncestor(host))
         val showDiscordShare = DiscordShareModeSettings.isSupported
         val isDiscordShareEnabled = showDiscordShare && DiscordShareModeSettings.enabled.value
+        val showSurroundUpmix = DesktopHostOs.current == DesktopHostOs.WINDOWS
         val structureKey = NativeControlsStructureKey(
             state = stateWithVolume.nativeControlsStructureKey(),
             isFullscreen = isFullscreen,
@@ -513,6 +547,8 @@ internal class NativePlayerController(
             rtxShowingOriginal = rtxShowingOriginal,
             rtxComparisonFailed = rtxComparisonFailed,
             discordShareEnabled = isDiscordShareEnabled,
+            surroundUpmixEnabled = surroundUpmixEnabled,
+            surroundUpmixStatus = surroundUpmixStatus,
         )
         if (structureKey == lastSentControlsStructureKey) return
         lastSentControlsStructureKey = structureKey
@@ -531,6 +567,9 @@ internal class NativePlayerController(
                 rtxComparisonFailed = rtxComparisonFailed,
                 showDiscordShare = showDiscordShare,
                 discordShareEnabled = isDiscordShareEnabled,
+                showSurroundUpmix = showSurroundUpmix,
+                surroundUpmixEnabled = surroundUpmixEnabled,
+                surroundUpmixStatus = surroundUpmixStatus,
             ),
         )
     }
@@ -604,6 +643,21 @@ internal class NativePlayerController(
             log.d { "event received handle=$handle type=$type value=$value" }
         }
         when (type) {
+            "setSurroundUpmixEnabled" -> {
+                if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+                    val enabled = value >= 0.5
+                    SurroundUpmixSettings.setEnabled(enabled)
+                    setSurroundUpmixEnabled(enabled)
+                }
+            }
+            "surroundUpmixStatus" -> {
+                val status = value.toInt().coerceIn(-1, 2)
+                if (surroundUpmixStatus != status) {
+                    surroundUpmixStatus = status
+                    lastSentControlsStructureKey = null
+                    updateControls(controlsState)
+                }
+            }
             "setDiscordShareEnabled" -> {
                 if (handle != 0L && DiscordShareModeSettings.isSupported) {
                     DiscordShareModeSettings.setEnabled(value >= 0.5)
@@ -1409,6 +1463,8 @@ private data class NativeControlsStructureKey(
     val rtxShowingOriginal: Boolean,
     val rtxComparisonFailed: Boolean,
     val discordShareEnabled: Boolean,
+    val surroundUpmixEnabled: Boolean,
+    val surroundUpmixStatus: Int,
 )
 
 private fun PlayerControlsState.toControlsJson(
@@ -1418,6 +1474,9 @@ private fun PlayerControlsState.toControlsJson(
     rtxComparisonFailed: Boolean,
     showDiscordShare: Boolean,
     discordShareEnabled: Boolean,
+    showSurroundUpmix: Boolean,
+    surroundUpmixEnabled: Boolean,
+    surroundUpmixStatus: Int,
 ): String =
     buildString {
         append('{')
@@ -1737,6 +1796,12 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("showDiscordShare", showDiscordShare)
         append(',')
         appendJsonField("discordShareEnabled", discordShareEnabled)
+        append(',')
+        appendJsonField("showSurroundUpmix", showSurroundUpmix)
+        append(',')
+        appendJsonField("surroundUpmixEnabled", surroundUpmixEnabled)
+        append(',')
+        appendJsonField("surroundUpmixStatus", surroundUpmixStatus)
         append(',')
         appendJsonField("showSubmitIntro", showSubmitIntro)
         append(',')

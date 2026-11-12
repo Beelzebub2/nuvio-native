@@ -1032,6 +1032,24 @@ private fun PlaybackSettingsSection(
             }
         }
 
+        if (SurroundUpmixSettings.isSupported) {
+            val surroundEnabled by SurroundUpmixSettings.enabled.collectAsStateWithLifecycle()
+            SettingsSection(
+                title = stringResource(Res.string.settings_playback_surround_section),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_surround_upmix),
+                        description = stringResource(Res.string.settings_playback_surround_upmix_description),
+                        checked = surroundEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = SurroundUpmixSettings::setEnabled,
+                    )
+                }
+            }
+        }
+
         if (isWindows) {
             var rtxEnvironment by remember { mutableStateOf<NvidiaRtxVideoEnvironment?>(null) }
             var rtxAppOpenFailed by remember { mutableStateOf(false) }
