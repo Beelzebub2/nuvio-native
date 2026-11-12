@@ -50,7 +50,7 @@ jobs:
           if ($null -eq $tool) {
             $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
             if (-not (Test-Path -LiteralPath $vswhere)) { throw 'MSVC Build Tools not installed.' }
-            $vcvars = & $vswhere -latest -products '*' -find 'VC/Auxiliary/Build/vcvars64.bat'
+            $vcvars = @(& $vswhere -latest -products '*' -find 'VC/Auxiliary/Build/vcvars64.bat')
             if (-not $vcvars) { throw 'MSVC environment setup not found.' }
             $c = 'call "' + $vcvars[0] + '" >NUL && cl.exe /nologo /std:c++17 /EHsc /W4 tests/native-discord-share-safety.test.cpp /Fe:' + '"' + "$env:RUNNER_TEMP\discord-share-safety.exe" + '" && "' + "$env:RUNNER_TEMP\discord-share-safety.exe" + '"'
             cmd.exe /d /s /c $c
