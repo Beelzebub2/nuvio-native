@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+import os from "node:os";
 import {
   hasTraktClientId,
   traktDeviceTokenRequest,
   traktRefreshTokenRequest,
   traktRevokeTokenRequest
 } from "../js/data/repository/traktPublicOAuthRequests.js";
-import { normalizeEnvProperties, buildRuntimeEnvScript } from "../scripts/envProperties.mjs";
+import { normalizeEnvProperties, buildRuntimeEnvScript, readEnvProperties } from "../scripts/envProperties.mjs";
 
 test("TV Trakt login needs only the registered public client ID", () => {
   assert.equal(hasTraktClientId("public-id"), true);
@@ -44,4 +46,19 @@ test("TV generated runtime env omits any supplied Trakt client secret", () => {
   const script = buildRuntimeEnvScript(env);
   assert.equal(script.includes("accidental-private-value"), false);
   assert.equal(script.includes("TRAKT_CLIENT_SECRET"), false);
+});
+
+test("TV package uses the public CI Client ID even without a local properties file", async () => {
+  const previous = process.env.TRAKT_CLIENT_ID;
+  process.env.TRAKT_CLIENT_ID = "ci-public-id";
+  try {
+    const rootDir = path.join(os.tmpdir(), "starlit-trakt-unconfigured-" + process.pid);
+    const result = await readEnvProperties({ rootDir });
+    assert.equal(result.sourcePath, "");
+    assert.equal(result.env.TRAKT_CLIENT_ID, "ci-public-id");
+    assert.equal(Object.hasOwn(result.env, "TRAKT_CLIENT_SECRET"), false);
+  } finally {
+    if (previous === undefined) delete process.env.TRAKT_CLIENT_ID;
+    else process.env.TRAKT_CLIENT_ID = previous;
+  }
 });

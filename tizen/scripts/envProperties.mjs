@@ -118,7 +118,9 @@ export async function readEnvProperties({ rootDir, sourcePath = "" } = {}) {
   if (!resolvedSourcePath) {
     return {
       sourcePath: "",
-      env: normalizeEnvProperties({})
+      env: normalizeEnvProperties({
+        TRAKT_CLIENT_ID: process.env.TRAKT_CLIENT_ID?.trim() || ""
+      })
     };
   }
   if (/\.js$/i.test(resolvedSourcePath)) {
@@ -129,6 +131,7 @@ export async function readEnvProperties({ rootDir, sourcePath = "" } = {}) {
   const properties = parseProperties(await readFile(resolvedSourcePath, "utf8"));
   properties.NUVIO_SUPABASE_URL = process.env.STARLIT_OFFICIAL_SUPABASE_URL || properties.NUVIO_SUPABASE_URL || "";
   properties.NUVIO_SUPABASE_ANON_KEY = process.env.STARLIT_OFFICIAL_SUPABASE_ANON_KEY || properties.NUVIO_SUPABASE_ANON_KEY || "";
+  properties.TRAKT_CLIENT_ID = process.env.TRAKT_CLIENT_ID?.trim() || properties.TRAKT_CLIENT_ID || "";
   return {
     sourcePath: resolvedSourcePath,
     env: normalizeEnvProperties(properties)
