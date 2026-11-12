@@ -6,12 +6,16 @@ import { createDeviceAuthorizationClient, validateDeviceEndpoints } from "./star
 import { withRequestTimeout } from "../network/requestTimeout.js";
 let client = null;
 let generation = -1;
+let attempt = 0;
 let lastError = null;
 export const QrLoginService = {
   getLastError() { return lastError; },
   async start() {
+    const currentAttempt = ++attempt;
+    const sessionGeneration = AuthManager.sessionGeneration;
+    const isCurrent = () => currentAttempt === attempt && sessionGeneration === AuthManager.sessionGeneration;
     lastError = null; client?.cancel(); client = null;
-    generation = AuthManager.sessionGeneration;
+    generation = sessionGeneration;
     try {
       const config = ServerConfigurationStore.getActive();
       const discovery = new URL(config.discoveryUrl || `${config.backendUrl}/.well-known/nuvio`);
@@ -23,12 +27,14 @@ export const QrLoginService = {
         if (text.length > 65536) throw new Error("Invalid account discovery");
         return JSON.parse(text);
       }, 15000, AuthManager.getSessionSignal());
+      if (!isCurrent()) return null;
       const endpoints = validateDeviceEndpoints(document, config.backendUrl);
-      client = createDeviceAuthorizationClient({ endpoints, fetchImpl: (url, options) => withRequestTimeout(signal => fetch(url, { ...options, signal }), 15000, options.signal) });
-      const result = await client.start("Starlit Samsung TV", AuthManager.getSessionSignal());
-      if (generation !== AuthManager.sessionGeneration) { client.cancel(); return null; }
+      const startedClient = createDeviceAuthorizationClient({ endpoints, fetchImpl: (url, options) => withRequestTimeout(signal => fetch(url, { ...options, signal }), 15000, options.signal) });
+      client = startedClient;
+      const result = await startedClient.start("Starlit Samsung TV", AuthManager.getSessionSignal());
+      if (!isCurrent() || client !== startedClient) { startedClient.cancel(); return null; }
       return result;
-    } catch (_) { lastError = "TV authorization unavailable. Check the Starlit account server or continue as guest."; return null; }
+    } catch (_) { if (isCurrent()) lastError = "TV authorization unavailable. Check the Starlit account server or continue as guest."; return null; }
   },
   async poll(code) {
     if (!client || generation !== AuthManager.sessionGeneration) return { status: "cancelled" };
