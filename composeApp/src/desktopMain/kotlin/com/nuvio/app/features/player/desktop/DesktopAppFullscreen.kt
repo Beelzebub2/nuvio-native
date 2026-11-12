@@ -9,6 +9,7 @@ import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
 import java.awt.Window
 import java.awt.event.KeyEvent
+import java.util.IdentityHashMap
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +78,7 @@ internal val desktopFullscreenChanges: StateFlow<Int>
 internal class DesktopAppFullscreenController {
     private var restoreWindowPlacement = WindowPlacement.Floating
     private var windowsFullscreenState: WindowsFullscreenState? = null
+    private val waylandFrameStates = WaylandFullscreenFrameStates()
 
     fun toggle(window: Window, windowState: WindowState) {
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
@@ -100,6 +102,14 @@ internal class DesktopAppFullscreenController {
      * applied the change itself.
      */
     private fun enforceLinuxFullscreen(window: Window, windowState: WindowState) {
+        if (usesNiriWaylandFullscreenWorkaround()) {
+            applyWaylandFullscreenExtendedState(window, windowState.placement == WindowPlacement.Fullscreen)
+            SwingUtilities.invokeLater {
+                window.revalidate()
+                window.repaint()
+            }
+            return
+        }
         fun enforce(stage: String) {
             val device = window.graphicsConfiguration?.device ?: return
             val wantFullscreen = windowState.placement == WindowPlacement.Fullscreen
@@ -111,7 +121,32 @@ internal class DesktopAppFullscreenController {
         Timer(250) { enforce("delayed") }.apply { isRepeats = false }.start()
     }
 
+    /**
+     * Niri via XWayland can report phantom window decoration insets for an
+     * exclusive AWT fullscreen window. Temporarily maximize the frame to
+     * compensate, restoring the prior state on exit. Other compositors retain
+     * the original enforcement path: mutter needs it to exit fullscreen.
+     */
+    private fun applyWaylandFullscreenExtendedState(window: Window, entering: Boolean) {
+        val frame = window as? Frame ?: return
+        val apply: () -> Unit = {
+            runCatching {
+                val nextState = waylandFrameStates.nextExtendedState(frame, frame.extendedState, entering)
+                if (nextState != null) {
+                    frame.extendedState = nextState
+                }
+            }
+            Unit
+        }
+        if (SwingUtilities.isEventDispatchThread()) apply() else SwingUtilities.invokeLater { apply() }
+    }
+
     fun dispose(window: Window) {
+        if (DesktopHostOs.current == DesktopHostOs.LINUX &&
+            usesNiriWaylandFullscreenWorkaround()
+        ) {
+            applyWaylandFullscreenExtendedState(window, false)
+        }
         exitWindowsFullscreen(window)
     }
 
@@ -131,6 +166,11 @@ internal class DesktopAppFullscreenController {
                 .takeUnless { it == WindowPlacement.Fullscreen }
                 ?: WindowPlacement.Floating
             windowState.placement = WindowPlacement.Fullscreen
+            if (DesktopHostOs.current == DesktopHostOs.LINUX &&
+                usesNiriWaylandFullscreenWorkaround()
+            ) {
+                applyWaylandFullscreenExtendedState(window, true)
+            }
         }
     }
 
@@ -246,6 +286,21 @@ internal class DesktopAppFullscreenController {
     )
 }
 
+/** Tracks the pre-fullscreen state per frame, not per controller invocation. */
+internal class WaylandFullscreenFrameStates {
+    private val restoreStates = IdentityHashMap<Any, Int>()
+
+    fun nextExtendedState(frame: Any, currentState: Int, entering: Boolean): Int? {
+        if (entering) {
+            if (!restoreStates.containsKey(frame)) {
+                restoreStates[frame] = currentState
+            }
+            return Frame.MAXIMIZED_BOTH.takeUnless { it == currentState }
+        }
+        return restoreStates.remove(frame)?.takeUnless { it == currentState }
+    }
+}
+
 /**
  * ComposeWindow does not clear its fullscreen flag when placement is changed directly from
  * Fullscreen to Maximized on macOS. Let AppKit complete its asynchronous fullscreen exit and let
@@ -291,3 +346,26 @@ private fun KeyEvent.isDesktopAppFullscreenShortcut(): Boolean {
             modifiers and KeyEvent.ALT_DOWN_MASK == 0
     return hasMacFullscreenModifiers
 }
+
+internal fun isWaylandDesktopSession(waylandDisplay: String?, sessionType: String?): Boolean =
+    !waylandDisplay.isNullOrBlank() || sessionType?.equals("wayland", ignoreCase = true) == true
+
+private fun usesNiriWaylandFullscreenWorkaround(): Boolean =
+    isNiriWaylandFullscreenSession(
+        waylandDisplay = System.getenv("WAYLAND_DISPLAY"),
+        sessionType = System.getenv("XDG_SESSION_TYPE"),
+        currentDesktop = System.getenv("XDG_CURRENT_DESKTOP"),
+        sessionDesktop = System.getenv("XDG_SESSION_DESKTOP"),
+    )
+
+/** Keep mutter/KWin and unknown compositors on the existing AWT exit-enforcement path. */
+internal fun isNiriWaylandFullscreenSession(
+    waylandDisplay: String?,
+    sessionType: String?,
+    currentDesktop: String?,
+    sessionDesktop: String?,
+): Boolean =
+    isWaylandDesktopSession(waylandDisplay, sessionType) &&
+        listOfNotNull(currentDesktop, sessionDesktop)
+            .flatMap { it.split(':') }
+            .any { it.trim().equals("niri", ignoreCase = true) }
