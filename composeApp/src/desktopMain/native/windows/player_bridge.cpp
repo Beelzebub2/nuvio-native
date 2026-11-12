@@ -681,13 +681,14 @@ std::string discordShareAudioDevice() {
         std::wstring friendly = SUCCEEDED(nameResult) && name.vt == VT_LPWSTR && name.pwszVal
             ? std::wstring(name.pwszVal) : std::wstring();
         PropVariantClear(&name);
-        if (!discord_share::isSteamStreamingSpeakers(friendly)) continue;
+        if (!discord_share::isStarlitVirtualAudio(friendly) &&
+            !discord_share::isSteamStreamingSpeakers(friendly)) continue;
         LPWSTR deviceId = nullptr;
         if (FAILED(device->GetId(&deviceId)) || !deviceId) return {};
         active.push_back({deviceId, std::move(friendly)});
         CoTaskMemFree(deviceId);
     }
-    const std::wstring candidate = discord_share::uniqueUnusedSteamEndpoint(
+    const std::wstring candidate = discord_share::uniqueUnusedDiscordEndpoint(
         active, defaults[0], defaults[1], defaults[2]);
     return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }
@@ -1866,8 +1867,8 @@ private:
             }
         }
         if (unsafeEndpoint) {
-            // Stop output immediately if Steam became a listening/default
-            // device or disappeared; never redirect the primary player's audio.
+            // Stop output immediately if the selected virtual endpoint becomes
+            // a default device or disappears; never reroute the main player.
             TerminateProcess(child.hProcess, 1);
         } else if (!discordShareStop.load()) {
             writeFrame(discord_share::quit());
