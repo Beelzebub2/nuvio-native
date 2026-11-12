@@ -33,12 +33,14 @@ object PlayerNextEpisodeRules {
         thresholdPercent: Float,
         thresholdMinutesBeforeEnd: Float,
     ): Boolean {
-        if (isShortPlaceholderDuration(durationMs)) return false
-        val outroSegments = skipIntervals.filter { it.type in OUTRO_SEGMENT_TYPES }
+        if (durationMs <= 0L || positionMs < 0L || isShortPlaceholderDuration(durationMs)) return false
+        val outroSegments = validOutros(skipIntervals, durationMs)
+
+        if (thresholdMode == NextEpisodeThresholdMode.SMART) {
+            return positionMs >= smartTriggerPositionMs(durationMs, skipIntervals, outroSegments)
+        }
 
         if (outroSegments.isNotEmpty()) {
-            if (durationMs <= 0L) return false
-
             // Only explicit scene metadata can postpone this prompt. Trailing padding,
             // previews or imprecise ED bounds must not postpone it until the file ends.
             val latestOutro = outroSegments.maxByOrNull { it.endTime }
@@ -58,8 +60,9 @@ object PlayerNextEpisodeRules {
 
             // Calculate the user's configured threshold as milliseconds from end.
             val userThresholdMs = when (thresholdMode) {
+                NextEpisodeThresholdMode.SMART -> 0L // Handled before the manual modes.
                 NextEpisodeThresholdMode.PERCENTAGE -> {
-                    val clampedPercent = thresholdPercent.coerceIn(97f, 100f)
+                    val clampedPercent = thresholdPercent.coerceIn(85f, 100f)
                     ((1.0 - clampedPercent / 100.0) * durationMs).toLong()
                 }
                 NextEpisodeThresholdMode.MINUTES_BEFORE_END -> {
@@ -70,8 +73,9 @@ object PlayerNextEpisodeRules {
 
             return if (postOutroGapMs > userThresholdMs) {
                 when (thresholdMode) {
+                    NextEpisodeThresholdMode.SMART -> false // Handled above.
                     NextEpisodeThresholdMode.PERCENTAGE -> {
-                        val clampedPercent = thresholdPercent.coerceIn(97f, 100f)
+                        val clampedPercent = thresholdPercent.coerceIn(85f, 100f)
                         (positionMs.toDouble() / durationMs.toDouble()) >= (clampedPercent / 100.0)
                     }
                     NextEpisodeThresholdMode.MINUTES_BEFORE_END -> {
@@ -87,10 +91,10 @@ object PlayerNextEpisodeRules {
         }
 
         // Fallback to the settings threshold when no outro data exists.
-        if (durationMs <= 0L) return false
         return when (thresholdMode) {
+            NextEpisodeThresholdMode.SMART -> false // Handled above.
             NextEpisodeThresholdMode.PERCENTAGE -> {
-                val clampedPercent = thresholdPercent.coerceIn(97f, 100f)
+                val clampedPercent = thresholdPercent.coerceIn(85f, 100f)
                 (positionMs.toDouble() / durationMs.toDouble()) >= (clampedPercent / 100.0)
             }
             NextEpisodeThresholdMode.MINUTES_BEFORE_END -> {
@@ -100,6 +104,78 @@ object PlayerNextEpisodeRules {
             }
         }
     }
+
+    /** Smart mode offers the card early, but never starts the next episode over the credits. */
+    fun shouldAutomaticallyPlayNextEpisode(
+        positionMs: Long,
+        durationMs: Long,
+        skipIntervals: List<SkipInterval>,
+        thresholdMode: NextEpisodeThresholdMode,
+        thresholdPercent: Float,
+        thresholdMinutesBeforeEnd: Float,
+    ): Boolean {
+        if (!shouldShowNextEpisodeCard(
+                positionMs, durationMs, skipIntervals,
+                thresholdMode, thresholdPercent, thresholdMinutesBeforeEnd,
+            )
+        ) return false
+        return when (thresholdMode) {
+            NextEpisodeThresholdMode.SMART ->
+                positionMs >= durationMs - SMART_AUTO_PLAY_LEAD_MS
+            // Early manual suggestions must not auto-switch before the current
+            // episode has safely passed the watched-progress threshold.
+            NextEpisodeThresholdMode.PERCENTAGE ->
+                positionMs >= (durationMs * MANUAL_AUTO_PLAY_MIN_PROGRESS).toLong()
+            // An explicit time-based selection keeps its previous semantics.
+            NextEpisodeThresholdMode.MINUTES_BEFORE_END -> true
+        }
+    }
+
+    private fun validOutros(intervals: List<SkipInterval>, durationMs: Long): List<SkipInterval> =
+        intervals.filter {
+            it.type.trim().lowercase() in OUTRO_SEGMENT_TYPES &&
+                it.startTime.isFinite() && it.endTime.isFinite() &&
+                it.startTime >= 0.0 && it.endTime > it.startTime &&
+                it.startTime * 1_000.0 < durationMs &&
+                it.endTime * 1_000.0 <= durationMs + 10_000.0
+        }
+
+    private fun smartTriggerPositionMs(
+        durationMs: Long,
+        skipIntervals: List<SkipInterval>,
+        outroSegments: List<SkipInterval>,
+    ): Long {
+        // A short show should never get a multi-minute popup. Longer episodes
+        // get enough time to choose the next one, even without community markers.
+        val fallbackLeadMs = (durationMs * 0.05).toLong()
+            .coerceIn(SMART_MIN_FALLBACK_LEAD_MS, SMART_MAX_FALLBACK_LEAD_MS)
+        val fallbackPositionMs = (durationMs - fallbackLeadMs).coerceAtLeast(0L)
+
+        // Ignore suspicious markers hours/episodes before the end. A genuine
+        // ending marker near the tail can show the button before the fallback.
+        val earliestTrustedMarkerMs = maxOf(
+            (durationMs * 0.75).toLong(),
+            durationMs - SMART_MAX_OUTRO_LEAD_MS,
+        )
+        val markerPositionMs = outroSegments
+            .map { (it.startTime * 1_000.0).toLong() }
+            .filter { it in earliestTrustedMarkerMs until durationMs }
+            .minOrNull()
+        val showPositionMs = minOf(fallbackPositionMs, markerPositionMs ?: fallbackPositionMs)
+
+        // An explicitly tagged post-credits scene must be allowed to finish.
+        val sceneEndMs = outroSegments
+            .mapNotNull { it.findFollowingPostCreditsScene(skipIntervals, durationMs) }
+            .maxOfOrNull { (it.endTime * 1_000.0).toLong().coerceAtMost(durationMs) }
+            ?: 0L
+        return maxOf(showPositionMs, sceneEndMs)
+    }
+
+    private const val SMART_MIN_FALLBACK_LEAD_MS = 45_000L
+    private const val SMART_MAX_FALLBACK_LEAD_MS = 90_000L
+    private const val SMART_MAX_OUTRO_LEAD_MS = 180_000L
+    private const val SMART_AUTO_PLAY_LEAD_MS = 10_000L
+    private const val MANUAL_AUTO_PLAY_MIN_PROGRESS = 0.95
 
     fun hasEpisodeAired(raw: String?): Boolean {
         val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return true
@@ -133,7 +209,7 @@ object PlayerNextEpisodeRules {
         intervals: List<SkipInterval>,
         durationMs: Long,
     ): SkipInterval? {
-        if (type !in OUTRO_SEGMENT_TYPES) return null
+        if (type.trim().lowercase() !in OUTRO_SEGMENT_TYPES) return null
         val explicit = intervals.filter {
             it.type.trim().lowercase() == "post-credits" &&
                 it.startTime.isFinite() && it.endTime.isFinite() &&
@@ -149,8 +225,9 @@ object PlayerNextEpisodeRules {
         thresholdPercent: Float,
         thresholdMinutesBeforeEnd: Float,
     ): Long = when (thresholdMode) {
+        NextEpisodeThresholdMode.SMART -> smartTriggerPositionMs(durationMs, emptyList(), emptyList())
         NextEpisodeThresholdMode.PERCENTAGE -> {
-            val clampedPercent = thresholdPercent.coerceIn(97f, 100f)
+            val clampedPercent = thresholdPercent.coerceIn(85f, 100f)
             kotlin.math.ceil(durationMs * (clampedPercent / 100.0)).toLong()
         }
         NextEpisodeThresholdMode.MINUTES_BEFORE_END -> {
