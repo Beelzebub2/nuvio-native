@@ -75,15 +75,15 @@ jobs:
       - name: Materialize pinned native Windows audio runtime
         shell: pwsh
         run: |
-          # The DLL is tracked through LFS and a regular checkout only contains
-          # the 134-byte pointer. Use the same pinned source as Windows releases.
-          git fetch --no-tags --depth=1 https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned native runtime commit fetch failed.' }
-          git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll' --exclude=''
+          # Use the same repository-owned LFS object and pinned checksum as the
+          # Windows release workflow; an upstream account's quota is unrelated.
+          git lfs fetch origin HEAD --include='composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll' --exclude=''
           if ($LASTEXITCODE -ne 0) { throw 'Pinned libmpv LFS fetch failed.' }
           git lfs checkout
-          if ((Get-Item 'composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll').Length -lt 1000000) {
-            throw 'libmpv is still an LFS pointer.'
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned libmpv LFS checkout failed.' }
+          $mpv = Get-Item 'composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll'
+          if ($mpv.Length -ne 115320296 -or (Get-FileHash $mpv.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne '07c68bb211f23a218ded0a36eb12207dc3aeb44e5318ffca6ce9dcc7c3173906') {
+            throw 'Pinned libmpv checksum or size mismatch.'
           }
       - uses: actions/setup-java@v5
         with:
