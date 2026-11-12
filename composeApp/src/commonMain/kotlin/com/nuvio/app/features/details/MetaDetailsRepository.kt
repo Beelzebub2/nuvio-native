@@ -13,6 +13,8 @@ import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.filterReleasedItems
 import com.nuvio.app.features.mdblist.MdbListMetadataService
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
+import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.alternateContentIdsFor
 import com.nuvio.app.features.tmdb.TmdbMetadataService
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
@@ -164,6 +166,21 @@ object MetaDetailsRepository {
                     return@launch
                 }
 
+                val alternate = withContext(Dispatchers.Default) {
+                    tryFetchMetaByAlternateId(type = type, id = metaLookupId)
+                }
+                if (alternate != null) {
+                    publishLoadedMeta(
+                        requestKey = requestKey,
+                        meta = alternate.meta,
+                        fallbackItemId = alternate.id,
+                        fallbackItemType = type,
+                        mdbListSettings = mdbListSettings,
+                        metaScreenSettingsFingerprint = metaScreenSettingsFingerprint,
+                    )
+                    return@launch
+                }
+
                 log.w { "No addon provides meta for type=$type id=$id" }
                 _uiState.value = MetaDetailsUiState(
                     errorMessage = getString(Res.string.details_no_addon_meta),
@@ -195,6 +212,21 @@ object MetaDetailsRepository {
                     requestKey = requestKey,
                     meta = tmdbMeta,
                     fallbackItemId = id,
+                    fallbackItemType = type,
+                    mdbListSettings = mdbListSettings,
+                    metaScreenSettingsFingerprint = metaScreenSettingsFingerprint,
+                )
+                return@launch
+            }
+
+            val alternate = withContext(Dispatchers.Default) {
+                tryFetchMetaByAlternateId(type = type, id = metaLookupId)
+            }
+            if (alternate != null) {
+                publishLoadedMeta(
+                    requestKey = requestKey,
+                    meta = alternate.meta,
+                    fallbackItemId = alternate.id,
                     fallbackItemType = type,
                     mdbListSettings = mdbListSettings,
                     metaScreenSettingsFingerprint = metaScreenSettingsFingerprint,
@@ -256,10 +288,15 @@ object MetaDetailsRepository {
             }
         }
 
-        return tryFetchTmdbFallbackMeta(type = type, id = id)?.also { result ->
+        tryFetchTmdbFallbackMeta(type = type, id = id)?.let { result ->
             if (cacheResult) {
                 cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = result)
             }
+            return result
+        }
+
+        return tryFetchMetaByAlternateId(type = type, id = metaLookupId)?.meta?.also { result ->
+            if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = result)
         }
     }
 
@@ -318,6 +355,26 @@ object MetaDetailsRepository {
             null
         }
     }
+
+    private data class AlternateMeta(val id: String, val meta: MetaDetails)
+
+    /** Resolve known tracking aliases as a last resort, with bounded requests. */
+    private suspend fun tryFetchMetaByAlternateId(type: String, id: String): AlternateMeta? =
+        withTimeoutOrNull(20_000L) fallback@{
+            val alternates = SimklSyncRepository.state.value.snapshot.alternateContentIdsFor(id)
+            for (alternateId in alternates) {
+                for (manifest in findMetaManifests(AddonRepository.uiState.value, type, alternateId).take(3)) {
+                    val result = withTimeoutOrNull(FETCH_TIMEOUT_MS) {
+                        tryFetchMeta(manifest, type, alternateId, includeMdbList = false)
+                    }
+                    if (result != null) {
+                        log.i { "Metadata resolved through an alternate content ID" }
+                        return@fallback AlternateMeta(alternateId, result)
+                    }
+                }
+            }
+            null
+        }
 
     private suspend fun findReadyMetaManifests(type: String, id: String): List<AddonManifest> {
         AddonRepository.initialize()

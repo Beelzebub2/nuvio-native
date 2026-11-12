@@ -7,6 +7,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.time.Duration
+import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.runBlocking
@@ -30,7 +31,11 @@ class TorrServerIntegrationTest {
         ).firstOrNull { it.isFile && it.length() > 1_000_000 } ?: error("Bundled engine missing")
         val dir = Files.createTempDirectory("nuvio-owned-engine-test").toFile()
         val backend = TorrServerBackend(dir, File(dir, "cache"), binary)
-        val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
+        val clientExecutor = Executors.newCachedThreadPool { task ->
+            Thread(task, "torrserver-test-http").apply { isDaemon = true }
+        }
+        val client = HttpClient.newBuilder().executor(clientExecutor)
+            .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
         try {
             val started = System.nanoTime()
             backend.restart(P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE,
@@ -55,7 +60,7 @@ class TorrServerIntegrationTest {
             ), File(dir, "cache").absolutePath), "The running profile must not require a second client rebuild")
         } finally {
             backend.stop()
-            client.shutdownNow()
+            clientExecutor.shutdownNow()
             dir.deleteRecursively()
         }
     }
@@ -72,7 +77,11 @@ class TorrServerIntegrationTest {
         val seed = LocalTorrentSeed(payload)
         val dir = Files.createTempDirectory("nuvio-local-torrent-fixture").toFile()
         val backend = TorrServerBackend(File(dir, "config"), File(dir, "cache"), binary)
-        val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
+        val clientExecutor = Executors.newCachedThreadPool { task ->
+            Thread(task, "torrserver-test-http").apply { isDaemon = true }
+        }
+        val client = HttpClient.newBuilder().executor(clientExecutor)
+            .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(2)).build()
         try {
             val settings = P2pSettingsUiState(enableUpload = false, cacheSize = P2pCacheSize.NONE)
             prepareTorrServerSettingsFile(File(dir, "config"), File(dir, "cache"), settings)
@@ -108,7 +117,7 @@ class TorrServerIntegrationTest {
             assertEquals(hash, backend.addTorrent("magnet:?xt=urn:btih:$hash"), "Re-adding must retain the existing torrent")
         } finally {
             backend.stop()
-            client.shutdownNow()
+            clientExecutor.shutdownNow()
             seed.close()
             dir.deleteRecursively()
         }

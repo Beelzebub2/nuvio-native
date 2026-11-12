@@ -1,0 +1,314 @@
+.legacy-tizen .player-subtitle-modal,
+.legacy-tizen .player-audio-modal {
+  left: 96px;
+  bottom: 72px;
+  width: calc(100vw - 192px);
+  max-height: calc(100vh - 144px);
+}
+
+.legacy-tizen .player-subtitle-modal {
+  height: calc(100vh - 144px);
+}
+
+.legacy-tizen .player-subtitle-overlay-grid {
+  height: 0;
+  min-height: 0;
+}
+
+.legacy-tizen .series-detail-shell:not(.detail-trailer-active) .detail-hero-body {
+  max-height: none;
+  overflow: visible;
+}
+
+.legacy-tizen .series-detail-vignette {
+  /* Keep the old-engine fallback on the same Android TV left gradient. */
+  background: linear-gradient(
+    90deg,
+    rgb(var(--bg-color-rgb) / 1) 0%,
+    rgb(var(--bg-color-rgb) / 0.95) 7.8%,
+    rgb(var(--bg-color-rgb) / 0.84) 17.16%,
+    rgb(var(--bg-color-rgb) / 0.7) 28.08%,
+    rgb(var(--bg-color-rgb) / 0.52) 40.56%,
+    rgb(var(--bg-color-rgb) / 0.34) 51.48%,
+    rgb(var(--bg-color-rgb) / 0.18) 60.84%,
+    rgb(var(--bg-color-rgb) / 0.07) 70.2%,
+    rgb(var(--bg-color-rgb) / 0) 78%,
+    rgb(var(--bg-color-rgb) / 0) 100%
+  );
+}
+
+.series-detail-shell.detail-rtl .series-detail-vignette {
+  /* Android TV mirrors the detail gradient for RTL locales. */
+  background: linear-gradient(
+    270deg,
+    rgb(var(--bg-color-rgb) / 1) 0%,
+    rgb(var(--bg-color-rgb) / 0.95) 7.8%,
+    rgb(var(--bg-color-rgb) / 0.84) 17.16%,
+    rgb(var(--bg-color-rgb) / 0.7) 28.08%,
+    rgb(var(--bg-color-rgb) / 0.52) 40.56%,
+    rgb(var(--bg-color-rgb) / 0.34) 51.48%,
+    rgb(var(--bg-color-rgb) / 0.18) 60.84%,
+    rgb(var(--bg-color-rgb) / 0.07) 70.2%,
+    rgb(var(--bg-color-rgb) / 0) 78%,
+    rgb(var(--bg-color-rgb) / 0) 100%
+  );
+}
+
+.legacy-tizen .series-detail-description {
+  display: block;
+  max-height: 150px;
+  -webkit-line-clamp: initial;
+  line-clamp: initial;
+  -webkit-box-orient: initial;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.legacy-webos .stream-route-backdrop {
+  transform: none !important;
+}
+
+.legacy-webos .stream-route-card,
+.legacy-webos .stream-route-card.focused {
+  transform: none !important;
+}
+
+/* webOS 6 and older can mis-bound nested flex/vh layouts on LG TVs. Keep the
+   stream picker on absolute coordinates so the results list has a real
+   viewport, but use the same 40/60 columns, Android TV insets and typography
+   as the shared layout. Only positioning and scroll handling differ. */
+
+.legacy-webos .stream-route-shell {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+}
+
+.legacy-webos .stream-route-content {
+  display: block;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0;
+}
+
+.legacy-webos .stream-route-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 768px;
+  padding: 0 48px 0 96px;
+  padding-inline: 96px 48px;
+}
+
+.legacy-webos .stream-route-right {
+  position: absolute;
+  left: 768px;
+  top: 96px;
+  right: 96px;
+  bottom: 96px;
+  width: auto;
+  max-width: none;
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+.legacy-webos .stream-route-panel-shell {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  overflow: hidden;
+}
+
+.legacy-webos .stream-route-panel {
+  position: relative;
+  height: auto;
+  overflow: hidden;
+}
+
+.legacy-webos .stream-route-list {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  height: auto;
+  max-height: none;
+  -webkit-overflow-scrolling: auto;
+  transform: none !important;
+  will-change: auto;
+}
+
+.legacy-webos .stream-route-list.manual-scroll {
+  overflow: hidden;
+}
+
+.legacy-webos .stream-route-list.manual-scroll > * {
+  transform: translateY(var(--stream-route-manual-scroll, 0));
+}
+
+.legacy-tizen .stream-route-shell {
+  width: 1920px;
+  height: 1080px;
+}
+
+.legacy-tizen .stream-route-backdrop {
+  transform: none !important;
+}
+
+/* Chromium 56 in Tizen 4 has no CSS grid, so keep the flex fallback but with
+   the same 40/60 split and 96px panel insets as the Android TV layout. The
+   previous fixed 560/1232 columns still assumed the old chips-outside-panel
+   geometry and, combined with the new .stream-route-right padding, shrank the
+   panel. */
+.legacy-tizen .stream-route-content {
+  display: -webkit-box;
+  display: flex;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0;
+}
+
+.legacy-tizen .stream-route-left {
+  width: 40%;
+  flex: 0 0 40%;
+  padding: 0 48px 0 96px;
+  padding-inline: 96px 48px;
+}
+
+.legacy-tizen .stream-route-right {
+  width: 60%;
+  flex: 0 0 60%;
+  max-width: 60%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.legacy-tizen .stream-route-panel-shell {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
+.legacy-tizen .stream-route-list {
+  -webkit-overflow-scrolling: auto;
+  transform: none !important;
+  will-change: auto;
+}
+
+.legacy-tizen .stream-route-card,
+.legacy-tizen .stream-route-card.focused {
+  transform: none !important;
+}
+
+.stream-route-card.focused {
+  transform: none;
+  border-color: var(--secondary-color);
+  background: var(--bg-elevated);
+  /* Android TV draws the focus ring inside the card. */
+  box-shadow: inset 0 0 0 4px var(--secondary-color);
+}
+
+/* webOS 4 parses CSS variables but not rgb(var(...) / alpha). Without this
+   final override, that invalid computed value turns stream cards transparent. */
+
+.legacy-webos .stream-route-card,
+.legacy-webos .stream-route-card.focused {
+  background: #222222 !important;
+  background: var(--card-bg) !important;
+}
+
+.stream-route-card.skeleton {
+  pointer-events: none;
+}
+
+.stream-route-card-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.stream-route-card-heading {
+  font-size: 32px;
+  line-height: 48px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-color);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.stream-route-card-quality {
+  margin-top: 10px;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 500;
+  color: var(--secondary-color);
+}
+
+.stream-route-card-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 8px;
+  margin: 12px 0 0;
+  max-width: 100%;
+}
+
+.stream-route-card-badges-lazy {
+  flex-wrap: nowrap;
+  height: 40px;
+  min-height: 40px;
+  overflow: hidden;
+}
+
+.player-source-badges {
+  margin: 0 0 7px;
+}
+
+.player-source-desc + .player-source-badges {
+  margin: 7px 0 0;
+}
+
+/* Android StreamBadgeChips: 20dp chips, 6dp radius, 4dp spacing. */
+.stream-route-stream-badge {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.stream-route-stream-badge.image {
+  padding: 3px 6px;
+  min-width: 68px;
+  max-width: 196px;
+  line-height: 0;
+  overflow: hidden;
+  background: transparent;
+}

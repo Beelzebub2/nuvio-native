@@ -31,6 +31,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,8 @@ import com.nuvio.app.features.player.localizedLabel
 import com.nuvio.app.features.player.IosTargetPrimaries
 import com.nuvio.app.features.player.IosTargetTransfer
 import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.player.MIN_SEEK_SECONDS
+import com.nuvio.app.features.player.MAX_SEEK_SECONDS
 import com.nuvio.app.features.player.STREAM_AUTO_PLAY_TIMEOUT_VALUES
 import com.nuvio.app.features.player.SubtitleBackgroundColorSwatches
 import com.nuvio.app.features.player.SubtitleColorSwatches
@@ -473,6 +476,43 @@ private fun PlaybackSettingsSection(
                         )
                     }
                 }
+            }
+        }
+
+        SettingsSection(
+            title = stringResource(Res.string.settings_playback_section_seek),
+            isTablet = isTablet,
+        ) {
+            SettingsGroup(isTablet = isTablet) {
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_short),
+                    value = autoPlayPlayerSettings.shortSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.shortSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setShortSeekSeconds,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_medium),
+                    value = autoPlayPlayerSettings.mediumSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.mediumSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setMediumSeekSeconds,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_playback_seek_long),
+                    value = autoPlayPlayerSettings.longSeekSeconds,
+                    valueText = stringResource(Res.string.settings_playback_seek_seconds, autoPlayPlayerSettings.longSeekSeconds),
+                    valueRange = MIN_SEEK_SECONDS..MAX_SEEK_SECONDS,
+                    step = 1,
+                    isTablet = isTablet,
+                    onValueChange = PlayerSettingsRepository::setLongSeekSeconds,
+                )
             }
         }
 
@@ -992,7 +1032,43 @@ private fun PlaybackSettingsSection(
             }
         }
 
+        if (SurroundUpmixSettings.isSupported) {
+            val surroundEnabled by SurroundUpmixSettings.enabled.collectAsStateWithLifecycle()
+            SettingsSection(
+                title = stringResource(Res.string.settings_playback_surround_section),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_surround_upmix),
+                        description = stringResource(Res.string.settings_playback_surround_upmix_description),
+                        checked = surroundEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = SurroundUpmixSettings::setEnabled,
+                    )
+                }
+            }
+        }
+
         if (isWindows) {
+            var rtxEnvironment by remember { mutableStateOf<NvidiaRtxVideoEnvironment?>(null) }
+            var rtxAppOpenFailed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                rtxEnvironment = NvidiaRtxVideoPlatform.inspect()
+            }
+            val gpuStatus = when (rtxEnvironment?.gpuSupport) {
+                null -> stringResource(Res.string.settings_playback_nvidia_rtx_checking)
+                NvidiaRtxGpuSupport.DETECTED -> stringResource(
+                    Res.string.settings_playback_nvidia_rtx_detected,
+                    rtxEnvironment?.gpuName.orEmpty(),
+                )
+                NvidiaRtxGpuSupport.NOT_DETECTED ->
+                    stringResource(Res.string.settings_playback_nvidia_rtx_not_detected)
+                NvidiaRtxGpuSupport.UNKNOWN ->
+                    stringResource(Res.string.settings_playback_nvidia_rtx_unknown)
+            }
+            val rtxEnabled = autoPlayPlayerSettings.nvidiaRtxSuperResolutionEnabled
+            val appInstalled = rtxEnvironment?.nvidiaAppInstalled == true
             SettingsSection(
                 title = stringResource(Res.string.settings_playback_nvidia_rtx_video_section),
                 isTablet = isTablet,
@@ -1001,10 +1077,58 @@ private fun PlaybackSettingsSection(
                     SettingsSwitchRow(
                         title = stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution),
                         description = stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution_desc),
-                        checked = autoPlayPlayerSettings.nvidiaRtxSuperResolutionEnabled,
+                        checked = rtxEnabled,
                         isTablet = isTablet,
                         onCheckedChange = PlayerSettingsRepository::setNvidiaRtxSuperResolutionEnabled,
                     )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_nvidia_rtx_hardware),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = gpuStatus,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (rtxEnvironment != null) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(
+                                if (appInstalled) Res.string.settings_playback_nvidia_rtx_open_app
+                                else Res.string.settings_playback_nvidia_rtx_get_app,
+                            ),
+                            description = stringResource(
+                                if (appInstalled) Res.string.settings_playback_nvidia_rtx_setup_desc
+                                else Res.string.settings_playback_nvidia_rtx_get_app_desc,
+                            ),
+                            isTablet = isTablet,
+                            onClick = {
+                                rtxAppOpenFailed = !(if (appInstalled) {
+                                    NvidiaRtxVideoPlatform.openNvidiaApp()
+                                } else {
+                                    NvidiaRtxVideoPlatform.openNvidiaAppDownload()
+                                })
+                            },
+                        )
+                    }
+                    if (rtxAppOpenFailed) {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_nvidia_rtx_open_failed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -1221,6 +1345,17 @@ private fun PlaybackSettingsSection(
                 }
                 SettingsGroupDivider(isTablet = isTablet)
                 when (autoPlayPlayerSettings.nextEpisodeThresholdMode) {
+                    com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART -> {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_threshold_smart_description),
+                            modifier = Modifier.padding(
+                                horizontal = if (isTablet) 18.dp else 16.dp,
+                                vertical = 10.dp,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.PERCENTAGE -> {
                         val thresholdPercent = autoPlayPlayerSettings.nextEpisodeThresholdPercent
                         Column(
@@ -1264,8 +1399,8 @@ private fun PlaybackSettingsSection(
                                 onValueChangeFinished = {
                                     PlayerSettingsRepository.setNextEpisodeThresholdPercent(sliderValue)
                                 },
-                                valueRange = 97f..100f,
-                                steps = calculateSteps(97f, 100f, 0.5f),
+                                valueRange = 85f..100f,
+                                steps = calculateSteps(85f, 100f, 0.5f),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
                                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -2641,6 +2776,8 @@ private fun NextEpisodeThresholdModeDialog(
             val isSelected = mode == selected
             DialogOption(
                 text = stringResource(mode.labelRes),
+                description = if (mode == com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART)
+                    stringResource(Res.string.settings_playback_threshold_smart_description) else null,
                 selected = isSelected,
                 onClick = { onSelect(mode) },
             )
@@ -2682,6 +2819,8 @@ private val StreamAutoPlayMode.labelRes: StringResource
 
 private val com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.labelRes: StringResource
     get() = when (this) {
+        com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART ->
+            Res.string.settings_playback_threshold_mode_smart
         com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.PERCENTAGE ->
             Res.string.settings_playback_threshold_mode_percentage
         com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.MINUTES_BEFORE_END ->

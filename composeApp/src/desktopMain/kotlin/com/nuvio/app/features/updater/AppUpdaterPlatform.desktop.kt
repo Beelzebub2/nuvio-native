@@ -55,6 +55,9 @@ actual object AppUpdaterPlatform {
     actual val isSupported: Boolean
         get() = currentOs != DesktopUpdaterOs.UNKNOWN && linuxInstallMethod != LinuxInstallMethod.FLATPAK
 
+    actual val installsUpdatesInApp: Boolean
+        get() = currentOs != DesktopUpdaterOs.LINUX || linuxInstallsUpdatesInApp(linuxInstallMethod)
+
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
         repo = "starlit",
@@ -351,6 +354,12 @@ internal fun linuxUpdateFileExtensions(method: LinuxInstallMethod): List<String>
     LinuxInstallMethod.UNKNOWN -> listOf(".deb", ".AppImage")
 }
 
+/** Unrecognized installation methods need an external package manager or manual install. */
+internal fun linuxInstallsUpdatesInApp(method: LinuxInstallMethod): Boolean = when (method) {
+    LinuxInstallMethod.APP_IMAGE, LinuxInstallMethod.RPM, LinuxInstallMethod.DEB -> true
+    LinuxInstallMethod.FLATPAK, LinuxInstallMethod.UNKNOWN -> false
+}
+
 internal fun resolveLinuxInstallMethod(
     appImagePath: String?,
     appImageExists: Boolean,
@@ -426,11 +435,10 @@ internal fun linuxInstallerCommand(
     return listOf("xdg-open", updateFile.absolutePath)
 }
 
-// An AppImage has no installer: updating one means replacing the file that is
-// running. The copy waits for this process to exit first, both because the
-// running image is still mounted from that file and because a half-written one
-// would leave nothing to start. When the image sits somewhere this user cannot
-// write, the download is handed to the desktop rather than failing in silence.
+// An AppImage has no installer: the replacement must be prepared beside the
+// running image, then renamed over it after this process exits. A copy into the
+// live executable could leave an unusable installation if interrupted. Keep a
+// backup until the rename succeeds, and hand off to the desktop on failure.
 internal fun appImageReplaceScript(
     downloadedPath: String,
     appImagePath: String,
@@ -439,13 +447,35 @@ internal fun appImageReplaceScript(
     val downloaded = singleQuote(downloadedPath)
     val target = singleQuote(appImagePath)
     return buildString {
-        append("i=0; ")
-        append("while [ \$i -lt $appImageExitWaitTicks ] && kill -0 $currentPid 2>/dev/null; do ")
-        append("sleep 0.1; i=\$((i+1)); ")
-        append("done; ")
-        append("if cp -f -- $downloaded $target; then ")
-        append("chmod +x -- $target; rm -f -- $downloaded; exec $target; ")
-        append("else xdg-open $downloaded; fi")
+        append("downloaded=$downloaded\n")
+        append("target=$target\n")
+        append("i=0\n")
+        append("while [ \"\$i\" -lt $appImageExitWaitTicks ] && kill -0 $currentPid 2>/dev/null; do\n")
+        append("  sleep 0.1; i=\$((i+1))\n")
+        append("done\n")
+        append("if kill -0 $currentPid 2>/dev/null || [ \"\$downloaded\" = \"\$target\" ]; then\n")
+        append("  xdg-open \"\$downloaded\"; exit 1\n")
+        append("fi\n")
+        append("stage=\$(mktemp -- \"\${target}.update.XXXXXXXXXX\") || { xdg-open \"\$downloaded\"; exit 1; }\n")
+        append("backup=\$(mktemp -- \"\${target}.backup.XXXXXXXXXX\") || { rm -f -- \"\$stage\"; xdg-open \"\$downloaded\"; exit 1; }\n")
+        append("trap 'rm -f -- \"\$stage\"; if [ -n \"\$backup\" ]; then rm -f -- \"\$backup\"; fi' 0\n")
+        append("trap 'exit 1' 1 2 15\n")
+        append("if cp -- \"\$downloaded\" \"\$stage\" &&\n")
+        append("   chmod --reference=\"\$target\" -- \"\$stage\" && chmod u+x -- \"\$stage\" &&\n")
+        append("   cp -p -- \"\$target\" \"\$backup\"; then\n")
+        append("  if mv -f -- \"\$stage\" \"\$target\"; then\n")
+        append("    rm -f -- \"\$backup\" \"\$downloaded\"\n")
+        append("    trap - 0 1 2 15\n")
+        append("    exec \"\$target\"\n")
+        append("  fi\n")
+        append("  if ! cmp -s -- \"\$backup\" \"\$target\"; then\n")
+        append("    if ! mv -f -- \"\$backup\" \"\$target\" && ! cp -p -- \"\$backup\" \"\$target\"; then\n")
+        append("      printf '%s\\n' 'Unable to restore the previous AppImage; backup kept at:' \"\$backup\" >&2\n")
+        append("      backup=''\n")
+        append("    fi\n")
+        append("  fi\n")
+        append("fi\n")
+        append("xdg-open \"\$downloaded\"\n")
     }
 }
 

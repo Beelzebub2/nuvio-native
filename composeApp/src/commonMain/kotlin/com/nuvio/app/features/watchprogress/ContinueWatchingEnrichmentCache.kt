@@ -14,6 +14,8 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class CachedNextUpItem(
     val contentId: String,
+    // The source ID is the stable lookup key; an alias can provide the playable metadata.
+    val resolvedContentId: String? = null,
     val contentType: String,
     val name: String,
     val poster: String? = null,
@@ -31,6 +33,8 @@ data class CachedNextUpItem(
     val sortTimestamp: Long,
     val seedSeason: Int? = null,
     val seedEpisode: Int? = null,
+    val sourceSeedSeason: Int? = null,
+    val sourceSeedEpisode: Int? = null,
     val isReleaseAlert: Boolean = false,
     val isNewSeasonRelease: Boolean = false,
     val mediaCategory: String? = null,

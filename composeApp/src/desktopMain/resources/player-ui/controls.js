@@ -28,6 +28,7 @@ const nextEpisodeButtonLabel = document.getElementById("nextEpisodeButtonLabel")
 const autoSkipIntroButton = document.getElementById("autoSkipIntroButton");
 const autoNextEpisodeButton = document.getElementById("autoNextEpisodeButton");
 const discordShareButton = document.getElementById("discordShareButton");
+const surroundUpmixButton = document.getElementById("surroundUpmixButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const pipButton = document.getElementById("pipButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
@@ -194,6 +195,9 @@ const playerToastText = document.getElementById("playerToastText");
 
 let state = {
   title: "",
+  shortSeekSeconds: 10,
+  mediumSeekSeconds: 30,
+  longSeekSeconds: 60,
   episodeText: "",
   streamTitle: "",
   providerName: "",
@@ -394,6 +398,9 @@ let state = {
   autoNextEpisodeEnabled: false,
   showDiscordShare: false,
   discordShareEnabled: false,
+  showSurroundUpmix: false,
+  surroundUpmixEnabled: false,
+  surroundUpmixStatus: 0,
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
@@ -625,8 +632,26 @@ const syncVolumeControl = () => {
 };
 
 const seekToastLabel = command => {
-  if (command === "seekBack" || command === "keyboardSeekBack") return "-10s";
-  if (command === "seekForward" || command === "keyboardSeekForward") return "+10s";
+  const secondsFor = (value, fallback) => {
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds >= 1 && seconds <= 120
+      ? Math.round(seconds)
+      : fallback;
+  };
+  const seekBack = command === "seekBack" || command === "keyboardSeekBack";
+  const seekForward = command === "seekForward" || command === "keyboardSeekForward";
+  if (seekBack || seekForward) {
+    const seconds = secondsFor(state.shortSeekSeconds, 10);
+    return `${seekBack ? "-" : "+"}${seconds}s`;
+  }
+  if (command === "keyboardMediumSeekBack" || command === "keyboardMediumSeekForward") {
+    const seconds = secondsFor(state.mediumSeekSeconds, 30);
+    return `${command.endsWith("Back") ? "-" : "+"}${seconds}s`;
+  }
+  if (command === "keyboardLongSeekBack" || command === "keyboardLongSeekForward") {
+    const seconds = secondsFor(state.longSeekSeconds, 60);
+    return `${command.endsWith("Back") ? "-" : "+"}${seconds}s`;
+  }
   if (command === "pictureInPicture" || command === "pip") return state.pipLabel || "";
   return "";
 };
@@ -877,6 +902,14 @@ const autoToggles = [
     icon: "icon-auto-next-episode",
   },
   {
+    button: surroundUpmixButton,
+    command: "setSurroundUpmixEnabled",
+    stateKey: "surroundUpmixEnabled",
+    visibleKey: "showSurroundUpmix",
+    fallbackLabel: "5.1",
+    icon: "icon-audio",
+  },
+  {
     button: discordShareButton,
     command: "setDiscordShareEnabled",
     stateKey: "discordShareEnabled",
@@ -900,6 +933,22 @@ const syncAutoToggleButtons = () => {
     toggle.button.setAttribute("title", `${label}: ${autoToggleStateLabel(enabled)}`);
     const text = toggle.button.querySelector("span");
     if (text) text.textContent = label;
+    if (toggle.button === surroundUpmixButton) {
+      const status = Number(state.surroundUpmixStatus);
+      const active = enabled && status === 2;
+      const failed = enabled && status === -1;
+      const description = !enabled
+        ? "Original audio · upmix off"
+        : active
+          ? "Stereo upmixed to 5.1 PCM"
+          : failed
+            ? "Upmix unavailable · audio output rejected the filter"
+            : "Upmix not active · requires a Windows output configured for 5.1 PCM";
+      toggle.button.setAttribute("title", description);
+      toggle.button.setAttribute("aria-label", description);
+      toggle.button.setAttribute("data-upmix-status", active ? "active" : failed ? "failed" : enabled ? "waiting" : "off");
+      if (text) text.textContent = active ? "5.1 ✓" : failed ? "5.1 !" : enabled ? "5.1…" : "5.1";
+    }
   });
 };
 
@@ -2663,20 +2712,28 @@ const isInteractiveControlTarget = target => Boolean(
   target && target.closest && target.closest("button, input, textarea, select, a, [contenteditable='true']"),
 );
 const shortcutCommandForEvent = event => {
-  if (event.metaKey || event.ctrlKey || event.altKey) return "";
+  if (event.metaKey || event.altKey) return "";
   const isShift = Boolean(event.shiftKey);
+  const isCtrl = Boolean(event.ctrlKey);
   switch (event.code) {
     case "KeyK":
+      if (isCtrl) return "";
       return "keyboardToggle";
     case "ArrowLeft":
-    case "KeyJ":
-      return isShift ? "keyboardFineSeekBack" : "keyboardSeekBack";
+      return isCtrl ? "keyboardLongSeekBack" : isShift ? "keyboardMediumSeekBack" : "keyboardSeekBack";
     case "ArrowRight":
+      return isCtrl ? "keyboardLongSeekForward" : isShift ? "keyboardMediumSeekForward" : "keyboardSeekForward";
+    case "KeyJ":
+      if (isCtrl) return "";
+      return isShift ? "keyboardFineSeekBack" : "keyboardSeekBack";
     case "KeyL":
+      if (isCtrl) return "";
       return isShift ? "keyboardFineSeekForward" : "keyboardSeekForward";
     case "ArrowUp":
+      if (isCtrl) return "";
       return "keyboardVolumeUp";
     case "ArrowDown":
+      if (isCtrl) return "";
       return "keyboardVolumeDown";
     default:
       return "";
@@ -3823,7 +3880,10 @@ document.addEventListener("keydown", event => {
     togglePlayerFullscreen();
     return;
   }
-  if (event.metaKey || event.ctrlKey || event.altKey || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
+  const isCtrlSeekArrow = event.ctrlKey && !event.metaKey && !event.altKey && !activeModal
+    && (event.code === "ArrowLeft" || event.code === "ArrowRight");
+  if (event.metaKey || (event.ctrlKey && !isCtrlSeekArrow) || event.altKey
+      || event.key === "Alt" || event.key === "Control" || event.key === "Meta") {
     clearSpaceHoldTimerAndStopSpeedBoost();
     return;
   }

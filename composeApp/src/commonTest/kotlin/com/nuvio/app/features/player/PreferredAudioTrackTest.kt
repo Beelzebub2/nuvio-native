@@ -5,6 +5,42 @@ import kotlin.test.assertEquals
 
 class PreferredAudioTrackTest {
     @Test
+    fun norwegianVarietyCodesMatchThePreferredAudioLanguage() {
+        val tracks = listOf(
+            AudioTrack(0, "1", "English", "eng"),
+            AudioTrack(1, "2", "Norwegian Bokmal", "nob"),
+            AudioTrack(2, "3", "Norwegian Nynorsk", "nno"),
+        )
+        assertEquals(1, findPreferredAudioTrackIndex(tracks, listOf("no")))
+        assertEquals(2, findPreferredAudioTrackIndex(tracks.drop(2), listOf("no")) + 2)
+    }
+
+    @Test
+    fun macrolanguageVariantsMatchWithoutCollapsingUnrelatedVarieties() {
+        val tracks = listOf(
+            AudioTrack(0, "1", "Cantonese", "yue"),
+            AudioTrack(1, "2", "Mandarin", "cmn"),
+            AudioTrack(2, "3", "Farsi", "pes"),
+        )
+        assertEquals(1, findPreferredAudioTrackIndex(tracks, listOf("zh")))
+        assertEquals(-1, findPreferredAudioTrackIndex(tracks.take(1), listOf("zh")))
+        assertEquals(2, findPreferredAudioTrackIndex(tracks, listOf("fa")))
+    }
+
+    @Test
+    fun originalLanguageAliasesDistinguishCantoneseFromMandarin() {
+        assertEquals("yue", resolveContentLanguage("cn", null))
+        assertEquals("ro", resolveContentLanguage("mo", null))
+        assertEquals("zh", resolveContentLanguage("cmn", null))
+        assertEquals(listOf("yue"), resolvePreferredAudioLanguageTargets(
+            preferredAudioLanguage = AudioLanguageOption.ORIGINAL,
+            secondaryPreferredAudioLanguage = null,
+            deviceLanguages = listOf("en"),
+            contentOriginalLanguage = "cn",
+        ))
+    }
+
+    @Test
     fun portugueseTwoLetterPreferenceMatchesThreeLetterContainerTag() {
         val tracks = listOf(
             AudioTrack(0, "1", "English", "eng"),

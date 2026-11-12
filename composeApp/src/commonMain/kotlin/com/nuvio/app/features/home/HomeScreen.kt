@@ -50,10 +50,14 @@ import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryRepository
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.findPlaybackTargetForProgress
+import com.nuvio.app.features.details.CompletedSeriesEpisode
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.SeriesPrimaryAction
+import com.nuvio.app.features.details.latestCompletedSeriesEpisode
+import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.alternateContentIdsFor
 import com.nuvio.app.features.details.seriesPrimaryAction
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeContinueWatchingSection
@@ -446,19 +450,8 @@ fun HomeScreen(
             ) {
                 return@mapNotNull null
             }
-            val currentSeed = currentNextUpSeedByContentId[cached.contentId]
-            if (currentSeed != null) {
-                val (currentSeason, currentEpisode) = currentSeed
-                if (
-                    hasHomeNextUpSeedChangedFromCache(
-                        currentSeason = currentSeason,
-                        currentEpisode = currentEpisode,
-                        cachedSeason = cached.seedSeason,
-                        cachedEpisode = cached.seedEpisode,
-                    )
-                ) {
-                    return@mapNotNull null
-                }
+            if (!cachedNextUpMatchesCurrentSeeds(cached, currentNextUpSeedByContentId)) {
+                return@mapNotNull null
             }
             if (
                 progressProviderOwnsCompletedHistory &&
@@ -468,7 +461,7 @@ fun HomeScreen(
             ) {
                 return@mapNotNull null
             }
-            if (nextUpDismissKey(cached.contentId, cached.seedSeason, cached.seedEpisode) in continueWatchingPreferences.dismissedNextUpKeys) {
+            if (cached.isDismissedNextUp(continueWatchingPreferences.dismissedNextUpKeys)) {
                 return@mapNotNull null
             }
             val releaseEpochMs = cachedRelease.epochMs()
@@ -478,9 +471,9 @@ fun HomeScreen(
             ) {
                 return@mapNotNull null
             }
-            if (
-                cached.contentId in watchProgressUiState.hiddenContentIds ||
-                WatchProgressRepository.isDroppedShow(cached.contentId)
+            if (listOf(cached.contentId, cached.canonicalContentId()).any { id ->
+                    id in watchProgressUiState.hiddenContentIds || WatchProgressRepository.isDroppedShow(id)
+                }
             ) {
                 return@mapNotNull null
             }
@@ -523,12 +516,8 @@ fun HomeScreen(
             activeSeedContentIds = activeNextUpSeedContentIds,
             currentSeedByContentId = currentNextUpSeedByContentId,
             shouldDropItemsWithoutActiveSeed = shouldValidateMissingNextUpSeeds,
-        ).filterValues { (_, item) ->
-            nextUpDismissKey(
-                item.parentMetaId,
-                item.nextUpSeedSeasonNumber,
-                item.nextUpSeedEpisodeNumber,
-            ) !in continueWatchingPreferences.dismissedNextUpKeys
+        ).filter { (sourceId, pair) ->
+            !isHomeNextUpDismissed(sourceId, pair.second, continueWatchingPreferences.dismissedNextUpKeys)
         }
         mergeHomeNextUpItemsWithCache(
             resolvedItems = liveNextUpItems,
@@ -565,11 +554,18 @@ fun HomeScreen(
             items.withCustomPosterUrls(cwPosterPattern)
         }
     }
-    val shuffleCandidates = remember(completedSeriesCandidates, continueWatchingPreferences.dismissedNextUpKeys) {
-        completedSeriesCandidates.filter { candidate ->
-            nextUpDismissKey(candidate.content.id, candidate.seasonNumber, candidate.episodeNumber) !in
-                continueWatchingPreferences.dismissedNextUpKeys
-        }
+    val shuffleCandidates = remember(
+        completedSeriesCandidates,
+        continueWatchingPreferences.dismissedNextUpKeys,
+        effectivNextUpItems,
+    ) {
+        val snapshot = SimklSyncRepository.state.value.snapshot
+        filterHomeNextUpShuffleCandidates(
+            candidates = completedSeriesCandidates,
+            nextUpItemsBySource = effectivNextUpItems,
+            dismissedNextUpKeys = continueWatchingPreferences.dismissedNextUpKeys,
+            knownAliasesFor = { contentId -> snapshot.alternateContentIdsFor(contentId) },
+        )
     }
     val shuffledContinueWatchingItems = rememberShuffleHomeItems(
         activeProfileId, allContinueWatchingItems, shuffleCandidates,
@@ -718,8 +714,8 @@ fun HomeScreen(
                 val cached = cachedNextUpItems[candidate.content.id] ?: return@mapNotNull null
                 val item = cached.second
                 if (
-                    item.nextUpSeedSeasonNumber != candidate.seasonNumber ||
-                    item.nextUpSeedEpisodeNumber != candidate.episodeNumber
+                    (item.nextUpSourceSeedSeasonNumber ?: item.nextUpSeedSeasonNumber) != candidate.seasonNumber ||
+                    (item.nextUpSourceSeedEpisodeNumber ?: item.nextUpSeedEpisodeNumber) != candidate.episodeNumber
                 ) {
                     return@mapNotNull null
                 }
@@ -1491,9 +1487,85 @@ internal fun filterNextUpItemsByCurrentSeeds(
         }
         val item = pair.second
         val currentSeed = currentSeedByContentId[contentId] ?: return@filter true
-        item.nextUpSeedSeasonNumber == currentSeed.first &&
-            item.nextUpSeedEpisodeNumber == currentSeed.second
+        (item.nextUpSourceSeedSeasonNumber ?: item.nextUpSeedSeasonNumber) == currentSeed.first &&
+            (item.nextUpSourceSeedEpisodeNumber ?: item.nextUpSeedEpisodeNumber) == currentSeed.second &&
+            (item.parentMetaId.equals(contentId, ignoreCase = true) ||
+                currentSeedByContentId[item.parentMetaId]?.let { canonicalSeed ->
+                    item.nextUpSeedSeasonNumber == canonicalSeed.first &&
+                        item.nextUpSeedEpisodeNumber == canonicalSeed.second
+                } != false)
     }
+
+internal fun CachedNextUpItem.canonicalContentId(): String =
+    resolvedContentId?.trim()?.takeIf(String::isNotEmpty) ?: contentId
+
+internal fun CachedNextUpItem.isDismissedNextUp(dismissedNextUpKeys: Set<String>): Boolean =
+    nextUpDismissKey(canonicalContentId(), seedSeason, seedEpisode) in dismissedNextUpKeys ||
+        nextUpDismissKey(
+            contentId,
+            sourceSeedSeason ?: seedSeason,
+            sourceSeedEpisode ?: seedEpisode,
+        ) in dismissedNextUpKeys
+
+internal fun isHomeNextUpDismissed(
+    sourceId: String,
+    item: ContinueWatchingItem,
+    dismissedNextUpKeys: Set<String>,
+): Boolean =
+    nextUpDismissKey(item.parentMetaId, item.nextUpSeedSeasonNumber, item.nextUpSeedEpisodeNumber) in
+        dismissedNextUpKeys ||
+        nextUpDismissKey(
+            sourceId,
+            item.nextUpSourceSeedSeasonNumber ?: item.nextUpSeedSeasonNumber,
+            item.nextUpSourceSeedEpisodeNumber ?: item.nextUpSeedEpisodeNumber,
+        ) in dismissedNextUpKeys
+
+internal fun filterHomeNextUpShuffleCandidates(
+    candidates: List<CompletedSeriesCandidate>,
+    nextUpItemsBySource: Map<String, Pair<Long, ContinueWatchingItem>>,
+    dismissedNextUpKeys: Set<String>,
+    knownAliasesFor: (String) -> List<String> = { emptyList() },
+): List<CompletedSeriesCandidate> {
+    val representedCanonicalIds = nextUpItemsBySource.values
+        .mapTo(mutableSetOf()) { (_, item) -> item.parentMetaId.trim().lowercase() }
+    val representedSourceIds = nextUpItemsBySource.keys.mapTo(mutableSetOf()) { it.trim().lowercase() }
+    return candidates.filter { candidate ->
+        val id = candidate.content.id.trim().lowercase()
+        nextUpDismissKey(candidate.content.id, candidate.seasonNumber, candidate.episodeNumber) !in dismissedNextUpKeys &&
+            id !in representedSourceIds && id !in representedCanonicalIds &&
+            (representedCanonicalIds.isEmpty() || knownAliasesFor(candidate.content.id).none { alias ->
+                alias.trim().lowercase() in representedCanonicalIds
+            })
+    }
+}
+
+internal fun cachedNextUpMatchesCurrentSeeds(
+    cached: CachedNextUpItem,
+    currentSeedByContentId: Map<String, Pair<Int, Int>>,
+): Boolean {
+    currentSeedByContentId[cached.contentId]?.let { sourceSeed ->
+        if (hasHomeNextUpSeedChangedFromCache(
+                currentSeason = sourceSeed.first,
+                currentEpisode = sourceSeed.second,
+                cachedSeason = cached.sourceSeedSeason ?: cached.seedSeason,
+                cachedEpisode = cached.sourceSeedEpisode ?: cached.seedEpisode,
+            )
+        ) return false
+    }
+    val canonicalId = cached.canonicalContentId()
+    if (!canonicalId.equals(cached.contentId, ignoreCase = true)) {
+        currentSeedByContentId[canonicalId]?.let { canonicalSeed ->
+            if (hasHomeNextUpSeedChangedFromCache(
+                    currentSeason = canonicalSeed.first,
+                    currentEpisode = canonicalSeed.second,
+                    cachedSeason = cached.seedSeason,
+                    cachedEpisode = cached.seedEpisode,
+                )
+            ) return false
+        }
+    }
+    return true
+}
 
 internal fun isHomeNextUpSeedSourceLoaded(
     providerOwnsCompletedHistory: Boolean,
@@ -1508,9 +1580,15 @@ internal fun cachedNextUpHasAired(
     cached: CachedNextUpItem,
     nowEpochMs: Long = WatchProgressClock.nowEpochMs(),
     releaseEpochMs: Long? = com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(cached.released),
-): Boolean =
-    releaseEpochMs?.let { nowEpochMs >= it }
-        ?: cached.hasAired
+    todayIsoDate: String = CurrentDateProvider.todayIsoDate(),
+): Boolean {
+    val released = cached.released?.trim().orEmpty()
+    return if (releaseEpochMs != null && released.isNotEmpty()) {
+        isReleasedBy(todayIsoDate = todayIsoDate, releasedDate = released, nowEpochMs = nowEpochMs)
+    } else {
+        cached.hasAired
+    }
+}
 
 internal fun hasHomeNextUpSeedChangedFromCache(
     currentSeason: Int,
@@ -1545,7 +1623,21 @@ internal fun mergeHomeNextUpItemsWithCache(
     val resolvedItemsWithCacheFallback = resolvedItems.mapValues { (contentId, pair) ->
         pair.first to pair.second.withFallbackMetadata(cachedItems[contentId]?.second)
     }
-    return retainedCachedItems + resolvedItemsWithCacheFallback
+    // Different tracking IDs can resolve to one playable series. Keep one row per
+    // canonical identity, favoring freshly resolved results and stable source IDs.
+    return (retainedCachedItems + resolvedItemsWithCacheFallback).entries
+        .sortedWith(
+            compareByDescending<Map.Entry<String, Pair<Long, ContinueWatchingItem>>> {
+                it.key in resolvedItemsWithCacheFallback
+            }.thenByDescending {
+                it.key.equals(it.value.second.parentMetaId, ignoreCase = true)
+            }.thenByDescending { it.value.first }
+                .thenBy { it.key },
+        )
+        .distinctBy { entry ->
+            entry.value.second.parentMetaId.ifBlank { entry.key }.trim().lowercase()
+        }
+        .associate { it.key to it.value }
 }
 
 internal enum class HomeNextUpCandidateMetadataOutcome {
@@ -1581,6 +1673,27 @@ internal fun classifyHomeNextUpCandidateMetadata(
     )
 }
 
+/** Recompute the Next Up seed when an addon resolves metadata through another content ID. */
+internal fun reanchorHomeNextUpCandidate(
+    candidate: CompletedSeriesCandidate,
+    resolvedContentId: String?,
+    resolvedLatestCompleted: CompletedSeriesEpisode?,
+): CompletedSeriesCandidate? {
+    val resolvedId = resolvedContentId?.trim().orEmpty()
+    if (resolvedId.isBlank() || resolvedId.equals(candidate.content.id.trim(), ignoreCase = true)) {
+        return candidate
+    }
+    // A different metadata ID may represent the complete series while the
+    // requested ID identifies one season; do not reuse the season's old seed.
+    val completed = resolvedLatestCompleted?.takeIf { it.seasonNumber > 0 } ?: return null
+    return CompletedSeriesCandidate(
+        content = candidate.content.copy(id = resolvedId),
+        seasonNumber = completed.seasonNumber,
+        episodeNumber = completed.episodeNumber,
+        markedAtEpochMs = completed.markedAtEpochMs,
+    )
+}
+
 private suspend fun resolveHomeNextUpCandidate(
     completedEntry: CompletedSeriesCandidate,
     watchProgressEntries: List<WatchProgressEntry>,
@@ -1593,6 +1706,9 @@ private suspend fun resolveHomeNextUpCandidate(
     providerOwnsCompletedHistory: Boolean,
 ): HomeNextUpResolutionAttempt {
     val contentId = completedEntry.content.id
+    if (nextUpDismissKey(contentId, completedEntry.seasonNumber, completedEntry.episodeNumber) in dismissedNextUpKeys) {
+        return HomeNextUpResolutionAttempt.conclusiveNone()
+    }
     val meta = try {
         MetaDetailsRepository.fetch(
             type = completedEntry.content.type,
@@ -1606,11 +1722,36 @@ private suspend fun resolveHomeNextUpCandidate(
         return HomeNextUpResolutionAttempt.transientFailure()
     }
 
+    // Only adopt a different metadata ID when tracking actually recognizes it
+    // as the same content. Some addons rewrite IDs independently of the user
+    // history and must not silently hide a valid Next Up candidate.
+    val resolvedContentId = meta.id.takeIf { id ->
+        id.isNotBlank() && (
+            id.equals(contentId, ignoreCase = true) ||
+                SimklSyncRepository.state.value.snapshot.alternateContentIdsFor(contentId)
+                    .any { alias -> alias.equals(id, ignoreCase = true) }
+            )
+    } ?: contentId
     val resolvedProgressEntries = WatchProgressRepository.prepareNextUpProgressEntries(
         entries = watchProgressEntries,
-        contentId = contentId,
+        contentId = resolvedContentId,
     )
     val resolvedWatchedItems = watchedItems
+    val anchoredEntry = if (resolvedContentId.equals(contentId, ignoreCase = true)) {
+        completedEntry
+    } else {
+        reanchorHomeNextUpCandidate(
+            candidate = completedEntry,
+            resolvedContentId = resolvedContentId,
+            resolvedLatestCompleted = latestCompletedSeriesEpisode(
+                parentMetaId = resolvedContentId,
+                parentMetaType = completedEntry.content.type,
+                progressEntries = resolvedProgressEntries,
+                watchedItems = resolvedWatchedItems,
+                preferFurthestEpisode = preferFurthestEpisode,
+            ),
+        ) ?: return HomeNextUpResolutionAttempt.conclusiveNone()
+    }
     val resolvedWatchedKeys = resolvedWatchedItems.mapTo(linkedSetOf()) { item ->
         watchedItemKey(item.type, item.id, item.season, item.episode)
     }
@@ -1632,7 +1773,7 @@ private suspend fun resolveHomeNextUpCandidate(
     }
 
     val action = meta.seriesPrimaryAction(
-        content = completedEntry.content,
+        content = anchoredEntry.content,
         entries = resolvedProgressEntries,
         watchedItems = resolvedWatchedItems,
         todayIsoDate = todayIsoDate,
@@ -1651,12 +1792,19 @@ private suspend fun resolveHomeNextUpCandidate(
         return HomeNextUpResolutionAttempt.conclusiveNone()
     }
     val metadataDecision = classifyHomeNextUpCandidateMetadata(
-        freshItem = completedEntry.toContinueWatchingSeed(meta)
+        freshItem = anchoredEntry.toContinueWatchingSeed(meta)
             .toUpNextContinueWatchingItem(nextEpisode),
         cachedFallbackItem = cachedFallbackItem,
         dismissedNextUpKeys = dismissedNextUpKeys,
     )
-    val item = metadataDecision.item
+    val item = metadataDecision.item.let { resolved ->
+        if (resolvedContentId.equals(contentId, ignoreCase = true)) resolved
+        else resolved.copy(
+            nextUpSourceSeedSeasonNumber = completedEntry.seasonNumber,
+            nextUpSourceSeedEpisodeNumber = completedEntry.episodeNumber,
+            nextUpResolvedSeedMarkedAtEpochMs = anchoredEntry.markedAtEpochMs,
+        )
+    }
     if (metadataDecision.outcome == HomeNextUpCandidateMetadataOutcome.Dismissed) {
         return HomeNextUpResolutionAttempt.conclusiveNone()
     }
@@ -1665,10 +1813,12 @@ private suspend fun resolveHomeNextUpCandidate(
     }
 
     val sortTimestamp = if (item.isReleaseAlert) {
-        com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(item.released) ?: completedEntry.markedAtEpochMs
+        com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(item.released) ?: anchoredEntry.markedAtEpochMs
     } else {
-        completedEntry.markedAtEpochMs
+        anchoredEntry.markedAtEpochMs
     }
+    // Keep the original completion seed as the result/cache lookup key. The item
+    // itself retains the resolved metadata identity for playback and dismissal.
     return HomeNextUpResolutionAttempt.success(
         contentId to (sortTimestamp to item),
     )
@@ -1734,8 +1884,11 @@ internal fun buildHomeContinueWatchingItems(
             },
         )
         addAll(
-            nextUpItemsBySeries.values.mapNotNull { (lastUpdatedEpochMs, item) ->
-                if (item.parentMetaId in suppressedSeriesIds) return@mapNotNull null
+            nextUpItemsBySeries.entries.mapNotNull { (sourceId, pair) ->
+                val (lastUpdatedEpochMs, item) = pair
+                if (sourceId in suppressedSeriesIds || item.parentMetaId in suppressedSeriesIds) {
+                    return@mapNotNull null
+                }
                 HomeContinueWatchingCandidate(
                     lastUpdatedEpochMs = lastUpdatedEpochMs,
                     item = item,
@@ -1889,10 +2042,37 @@ private fun saveContinueWatchingSnapshots(
     todayIsoDate: String,
     seedLastWatchedMap: Map<String, Long>,
 ) {
-    val nextUpCache = nextUpItemsBySeries.mapNotNull { (contentId, pair) ->
+    val nextUpCache = buildHomeNextUpCacheSnapshot(
+        nextUpItemsBySeries = nextUpItemsBySeries,
+        todayIsoDate = todayIsoDate,
+        seedLastWatchedMap = seedLastWatchedMap,
+    )
+    val inProgressCache = buildHomeInProgressCacheSnapshot(
+        visibleEntries = visibleContinueWatchingEntries,
+        cachedEntries = ContinueWatchingEnrichmentCache.getInProgressSnapshot(
+            profileId = profileId,
+            source = source,
+        ),
+    )
+    ContinueWatchingEnrichmentCache.saveSnapshots(
+        profileId = profileId,
+        source = source,
+        generation = cacheGeneration,
+        nextUp = nextUpCache,
+        inProgress = inProgressCache,
+    )
+}
+
+internal fun buildHomeNextUpCacheSnapshot(
+    nextUpItemsBySeries: Map<String, Pair<Long, ContinueWatchingItem>>,
+    todayIsoDate: String,
+    seedLastWatchedMap: Map<String, Long>,
+): List<CachedNextUpItem> =
+    nextUpItemsBySeries.map { (contentId, pair) ->
         val item = pair.second
         CachedNextUpItem(
             contentId = contentId,
+            resolvedContentId = item.parentMetaId.takeUnless { it.equals(contentId, ignoreCase = true) },
             contentType = item.parentMetaType,
             mediaCategory = item.mediaCategory,
             name = item.title,
@@ -1909,29 +2089,19 @@ private fun saveContinueWatchingSnapshots(
             hasAired = item.released?.let { released ->
                 isReleasedBy(todayIsoDate = todayIsoDate, releasedDate = released)
             } ?: true,
-            lastWatched = seedLastWatchedMap[contentId] ?: pair.first,
+            lastWatched = item.nextUpResolvedSeedMarkedAtEpochMs
+                ?: seedLastWatchedMap[item.parentMetaId]
+                ?: seedLastWatchedMap[contentId]
+                ?: pair.first,
             sortTimestamp = pair.first,
             seedSeason = item.nextUpSeedSeasonNumber,
             seedEpisode = item.nextUpSeedEpisodeNumber,
+            sourceSeedSeason = item.nextUpSourceSeedSeasonNumber,
+            sourceSeedEpisode = item.nextUpSourceSeedEpisodeNumber,
             isReleaseAlert = item.isReleaseAlert,
             isNewSeasonRelease = item.isNewSeasonRelease,
         )
     }
-    val inProgressCache = buildHomeInProgressCacheSnapshot(
-        visibleEntries = visibleContinueWatchingEntries,
-        cachedEntries = ContinueWatchingEnrichmentCache.getInProgressSnapshot(
-            profileId = profileId,
-            source = source,
-        ),
-    )
-    ContinueWatchingEnrichmentCache.saveSnapshots(
-        profileId = profileId,
-        source = source,
-        generation = cacheGeneration,
-        nextUp = nextUpCache,
-        inProgress = inProgressCache,
-    )
-}
 
 internal fun buildHomeInProgressCacheSnapshot(
     visibleEntries: List<WatchProgressEntry>,
@@ -1989,7 +2159,7 @@ internal fun CompletedSeriesCandidate.toContinueWatchingSeed(meta: com.nuvio.app
 private fun ContinueWatchingItem.shouldDisplayInContinueWatching(): Boolean =
     isNextUp || progressFraction < 0.995f
 
-private fun CachedNextUpItem.toContinueWatchingItem(
+internal fun CachedNextUpItem.toContinueWatchingItem(
     releaseEpochMs: Long?,
     nowEpochMs: Long,
 ): ContinueWatchingItem {
@@ -2005,7 +2175,7 @@ private fun CachedNextUpItem.toContinueWatchingItem(
     val resolvedBackdrop = backdrop.nonBlankOrNull()
     val resolvedEpisodeThumbnail = episodeThumbnail.nonBlankOrNull()
     return ContinueWatchingItem(
-        parentMetaId = contentId,
+        parentMetaId = canonicalContentId(),
         parentMetaType = contentType,
         mediaCategory = mediaCategory,
         videoId = videoId,
@@ -2028,6 +2198,10 @@ private fun CachedNextUpItem.toContinueWatchingItem(
         isNextUp = true,
         nextUpSeedSeasonNumber = seedSeason,
         nextUpSeedEpisodeNumber = seedEpisode,
+        nextUpSourceSeedSeasonNumber = sourceSeedSeason,
+        nextUpSourceSeedEpisodeNumber = sourceSeedEpisode,
+        nextUpResolvedSeedMarkedAtEpochMs =
+            lastWatched.takeIf { !canonicalContentId().equals(contentId, ignoreCase = true) },
         resumePositionMs = 0L,
         resumeProgressFraction = null,
         durationMs = 0L,

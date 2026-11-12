@@ -18,6 +18,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.isBackPressed
 import androidx.compose.ui.input.pointer.isForwardPressed
@@ -113,13 +115,23 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
                             }
                             Key.DirectionLeft -> {
                                 if (runtime.controlsVisible) false else {
-                                    runtime.seekBy(-10_000L)
+                                    val step = when {
+                                        event.isCtrlPressed -> PlayerSeekStep.LONG
+                                        event.isShiftPressed -> PlayerSeekStep.MEDIUM
+                                        else -> PlayerSeekStep.SHORT
+                                    }
+                                    runtime.seekBy(playerSettingsUiState.seekOffsetMs(step, forward = false))
                                     true
                                 }
                             }
                             Key.DirectionRight -> {
                                 if (runtime.controlsVisible) false else {
-                                    runtime.seekBy(10_000L)
+                                    val step = when {
+                                        event.isCtrlPressed -> PlayerSeekStep.LONG
+                                        event.isShiftPressed -> PlayerSeekStep.MEDIUM
+                                        else -> PlayerSeekStep.SHORT
+                                    }
+                                    runtime.seekBy(playerSettingsUiState.seekOffsetMs(step, forward = true))
                                     true
                                 }
                             }

@@ -45,6 +45,24 @@ class StoredWatchedPayloadTest {
         val restored = json.decodeFromString<StoredWatchedPayload>("{\"items\":[]}")
 
         assertTrue(restored.providerPayloads.isEmpty())
+        assertTrue(restored.pendingDeletedItems.isEmpty())
+    }
+
+    @Test
+    fun pendingDeletedItems_roundTripWithoutExpandingWatchedMetadata() {
+        val deleted = WatchedItem(
+            id = "show:123",
+            type = "series",
+            name = "Large metadata",
+            poster = "poster-url",
+            season = 3,
+            episode = 4,
+            markedAtEpochMs = 1_000L,
+        ).toNuvioDeleteIntent()
+        val encoded = compactJson.encodeToString(StoredWatchedPayload(pendingDeletedItems = listOf(deleted)))
+        assertEquals(listOf(deleted), compactJson.decodeFromString<StoredWatchedPayload>(encoded).pendingDeletedItems)
+        assertTrue("Large metadata" !in encoded)
+        assertTrue("poster-url" !in encoded)
     }
 
     @Test

@@ -361,6 +361,12 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
             return@LaunchedEffect
         }
         if (trackPreferenceRestoreApplied && preferredAudioSelectionApplied && preferredSubtitleSelectionApplied) {
+            // Addon subtitles can complete after the initial preference pass.
+            // Recheck the finished results; TrackActions only upgrades to a
+            // higher-ranked option and retains explicit selections.
+            if (!isLoadingAddonSubtitles && addonSubtitles.isNotEmpty() && !isUserExplicitSubtitleSelection) {
+                refreshTracks()
+            }
             return@LaunchedEffect
         }
 
@@ -564,6 +570,8 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         parentMetaType,
         contentType,
         playerSettingsUiState.skipIntroEnabled,
+        playerSettingsUiState.animeSkipEnabled,
+        playerSettingsUiState.animeSkipClientId,
         playerMeta?.imdbId,
         metaUiState.meta?.imdbId,
     ) {
@@ -757,15 +765,6 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         } else null
     }
 
-    LaunchedEffect(playbackSnapshot.isEnded) {
-        if (playbackSnapshot.isEnded && nextEpisodeCardDismissed &&
-            playerSettingsUiState.streamAutoPlayNextEpisodeEnabled &&
-            nextEpisodeInfo?.hasAired == true
-        ) {
-            nextEpisodeCardDismissed = false
-        }
-    }
-
     LaunchedEffect(
         activePlaybackKey,
         playbackSnapshot,
@@ -782,18 +781,22 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         nextEpisodeCardDismissed,
     ) {
         val shouldShow = nextEpisodeInfo != null && !nextEpisodeCardDismissed && isAtNextEpisodeThreshold()
+        val shouldAutoPlay = shouldShow && isAtNextEpisodeAutoPlayThreshold()
         if (nextEpisodeAutoPlayAutomatic &&
-            (!shouldShow || !playerSettingsUiState.streamAutoPlayNextEpisodeEnabled)
+            (!shouldAutoPlay || !playerSettingsUiState.streamAutoPlayNextEpisodeEnabled)
         ) {
             cancelNextEpisodeAutoPlay()
         }
         if (shouldShow && !showNextEpisodeCard) {
             showNextEpisodeCard = true
-            if (playerSettingsUiState.streamAutoPlayNextEpisodeEnabled && nextEpisodeInfo?.hasAired == true) {
-                playNextEpisode(automatic = true)
-            }
         } else if (!shouldShow) {
             showNextEpisodeCard = false
+        }
+        if (shouldAutoPlay && playerSettingsUiState.streamAutoPlayNextEpisodeEnabled &&
+            nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlayAutomatic &&
+            !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null
+        ) {
+            playNextEpisode(automatic = true)
         }
     }
 }

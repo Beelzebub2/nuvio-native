@@ -21,10 +21,25 @@ class BackendRateLimitTest {
     }
 
     @Test
+    fun `server supplied cooldown is capped for long seconds HTTP dates and numeric overflow`() {
+        assertEquals(300_000L, retryAfterDelayMillis("3600", nowEpochMs = 0L))
+        assertEquals(300_000L, retryAfterDelayMillis(Long.MAX_VALUE.toString(), nowEpochMs = 0L))
+        assertEquals(300_000L, retryAfterDelayMillis("999999999999999999999999", nowEpochMs = 0L))
+        assertEquals(0L, retryAfterDelayMillis("00000000000000000000000", nowEpochMs = 0L))
+        assertEquals(30_000L, retryAfterDelayMillis("00000000000000000000030", nowEpochMs = 0L))
+        assertEquals(
+            300_000L,
+            retryAfterDelayMillis("Wed, 21 Oct 2015 07:28:00 GMT", nowEpochMs = 0L),
+        )
+        assertEquals(0L, retryAfterDelayMillis("Wed, 21 Oct 2015 07:28:00 GMT", nowEpochMs = 1_445_412_480_000L))
+    }
+
+    @Test
     fun `retry delay uses bounded fallback and adds jitter`() {
         assertEquals(1_250L, backendRetryDelayMillis(0, null, nowEpochMs = 0L, jitterMs = 250L))
         assertEquals(30_500L, backendRetryDelayMillis(10, null, nowEpochMs = 0L, jitterMs = 500L))
         assertEquals(60_250L, backendRetryDelayMillis(0, "60", nowEpochMs = 0L, jitterMs = 250L))
+        assertEquals(300_000L, backendRetryDelayMillis(0, "3600", nowEpochMs = 0L, jitterMs = 1_000L))
     }
 
     @Test
@@ -63,5 +78,20 @@ class BackendRateLimitTest {
         coordinator.awaitPermission()
 
         assertEquals(listOf(5_000L), waits)
+    }
+
+    @Test
+    fun `coordinator never pauses longer than maximum cooldown from a single response`() = runBlocking {
+        var now = 1_000L
+        val waits = mutableListOf<Long>()
+        val coordinator = BackendRateLimitCoordinator(
+            currentTimeMillis = { now },
+            pause = { duration -> waits += duration; now += duration },
+        )
+
+        coordinator.record("999999999999999999999999")
+        coordinator.awaitPermission()
+
+        assertEquals(listOf(300_000L), waits)
     }
 }

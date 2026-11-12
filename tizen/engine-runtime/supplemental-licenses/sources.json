@@ -1,0 +1,9 @@
+{
+  "end-of-stream": "https://raw.githubusercontent.com/mafintosh/end-of-stream/master/LICENSE",
+  "fifo": "https://raw.githubusercontent.com/mafintosh/fifo/master/LICENSE",
+  "ip": "https://raw.githubusercontent.com/indutny/node-ip/v1.1.5/README.md",
+  "buffer-alloc": "https://raw.githubusercontent.com/LinusU/buffer-alloc/master/LICENSE",
+  "buffer-fill": "https://raw.githubusercontent.com/LinusU/buffer-fill/master/LICENSE",
+  "buffer-alloc-unsafe": "https://raw.githubusercontent.com/LinusU/buffer-alloc-unsafe/master/LICENSE",
+  "isarray": "https://raw.githubusercontent.com/juliangruber/isarray/0.0.1/README.md"
+}
