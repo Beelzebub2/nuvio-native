@@ -1223,7 +1223,7 @@ private data class DesktopStreamAction(
 )
 
 @Composable
-private fun DesktopStreamActionsMenu(
+internal fun DesktopStreamActionsMenu(
     stream: StreamItem,
     anchorInRoot: Offset,
     externalPlayerSupported: Boolean,
@@ -1393,7 +1393,7 @@ internal class StreamActionsPopupPositionProvider(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StreamActionsSheet(
+internal fun StreamActionsSheet(
     stream: StreamItem?,
     externalPlayerSupported: Boolean,
     externalPlayerEnabled: Boolean,

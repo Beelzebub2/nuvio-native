@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.runtime.Composable
@@ -246,17 +247,21 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         )
         runtime.BindPlayerRuntimeEffects()
         runtime.RenderPlayerRuntimeUi()
-        if (args.privatePlayback) {
-            Text(
-                text = stringResource(Res.string.player_private_mode_active),
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 72.dp, end = 16.dp)
-                    .background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-            )
-        }
+        PrivatePlaybackIndicator(args.privatePlayback)
     }
+}
+
+@Composable
+internal fun BoxScope.PrivatePlaybackIndicator(privatePlayback: Boolean) {
+    if (!privatePlayback) return
+    Text(
+        text = stringResource(Res.string.player_private_mode_active),
+        style = MaterialTheme.typography.labelMedium,
+        color = Color.White,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 72.dp, end = 16.dp)
+            .background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(24.dp))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    )
 }
