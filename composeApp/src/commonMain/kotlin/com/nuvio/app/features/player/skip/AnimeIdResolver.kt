@@ -12,6 +12,7 @@ internal data class AnimeSeasonIds(val mal: String?, val anilist: String?)
 
 internal object AnimeIdResolver {
     private val cache = HashMap<String, AnimeSeasonIds?>()
+    private val kitsuMalCache = HashMap<String, String>()
 
     suspend fun resolveImdbSeason(imdbId: String, season: Int): AnimeSeasonIds? {
         if (!Regex("tt[0-9]+").matches(imdbId) || season <= 0) return null
@@ -27,7 +28,26 @@ internal object AnimeIdResolver {
         }
     }
 
-    fun clearCache() = cache.clear()
+    suspend fun resolveKitsuMalId(kitsuId: String): String? {
+        if (!Regex("[1-9][0-9]*").matches(kitsuId)) return null
+        kitsuMalCache[kitsuId]?.let { return it }
+        return try {
+            val text = httpGetText(
+                "https://kitsu.app/api/edge/anime/$kitsuId/mappings?page%5Blimit%5D=20",
+                timeoutMillis = 4_000L,
+            )
+            parseKitsuMalId(text)?.also { kitsuMalCache[kitsuId] = it }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun clearCache() {
+        cache.clear()
+        kitsuMalCache.clear()
+    }
 }
 
 internal fun parseAnimeSeasonIds(text: String, imdbId: String, season: Int): AnimeSeasonIds? {
@@ -43,3 +63,16 @@ internal fun parseAnimeSeasonIds(text: String, imdbId: String, season: Int): Ani
     return AnimeSeasonIds(positiveId("myanimelist"), positiveId("anilist"))
         .takeIf { it.mal != null || it.anilist != null }
 }
+
+internal fun parseKitsuMalId(text: String): String? =
+    Json.parseToJsonElement(text).jsonObject["data"]?.jsonArray.orEmpty()
+        .mapNotNull { mapping ->
+            val attributes = mapping.jsonObject["attributes"]?.jsonObject ?: return@mapNotNull null
+            if (attributes["externalSite"]?.jsonPrimitive?.content != "myanimelist/anime") {
+                return@mapNotNull null
+            }
+            attributes["externalId"]?.jsonPrimitive?.content
+                ?.takeIf { Regex("[1-9][0-9]*").matches(it) }
+        }
+        .distinct()
+        .singleOrNull()

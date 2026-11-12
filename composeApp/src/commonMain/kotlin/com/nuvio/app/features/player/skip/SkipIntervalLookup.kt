@@ -51,3 +51,19 @@ internal fun resolveSkipIntervalLookup(
         }
     }
 }
+
+/**
+ * Add-ons may use opaque or TMDB episode IDs even when the parent series has a
+ * usable MAL/Kitsu ID. Prefer the episode's explicit identity, then the parent
+ * series identity, before falling back to a resolved IMDb ID.
+ */
+internal fun resolveContentSkipIntervalLookup(
+    videoId: String?,
+    contentId: String?,
+    season: Int?,
+    episode: Int?,
+    fallbackImdbId: String? = null,
+): SkipIntervalLookup? =
+    resolveSkipIntervalLookup(videoId, season, episode)
+        ?: resolveSkipIntervalLookup(contentId, season, episode)
+        ?: resolveSkipIntervalLookup(videoId, season, episode, fallbackImdbId)

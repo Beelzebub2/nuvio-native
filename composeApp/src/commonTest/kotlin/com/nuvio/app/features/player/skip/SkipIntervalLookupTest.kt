@@ -56,6 +56,27 @@ class SkipIntervalLookupTest {
     }
 
     @Test
+    fun recoversAnimeIdentityFromParentWhenEpisodeIdIsOpaque() {
+        assertEquals(
+            SkipIntervalLookup.Mal("123456", episode = 5),
+            resolveContentSkipIntervalLookup("tmdb:9876:2:5", "mal:123456", 2, 5),
+        )
+        assertEquals(
+            SkipIntervalLookup.Kitsu("654321", episode = 8),
+            resolveContentSkipIntervalLookup("episode-from-addon", "kitsu:654321", 1, 8),
+        )
+        assertEquals(
+            SkipIntervalLookup.Imdb("tt9876543", season = 2, episode = 5),
+            resolveContentSkipIntervalLookup("tt9876543:2:5", "mal:123456", 2, 5),
+        )
+        assertEquals(
+            SkipIntervalLookup.Imdb("tt9876543", season = 2, episode = 5),
+            resolveContentSkipIntervalLookup("unmapped-video", "opaque-parent", 2, 5, "tt9876543"),
+        )
+        assertNull(resolveContentSkipIntervalLookup("unmapped-video", "mal:123456", 2, null))
+    }
+
+    @Test
     fun fallbackRejectsMissingEpisodeAndUntrustedImdbValues() {
         assertNull(resolveSkipIntervalLookup("tmdb:123", 1, null, "tt9876543"))
         assertNull(resolveSkipIntervalLookup("tmdb:123", 1, 3, "tt9876543&season=999"))
