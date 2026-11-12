@@ -1,0 +1,3 @@
+# Driver packages are only generated and inspected outside the app source tree.
+unsigned-preview/
+signed-package/
