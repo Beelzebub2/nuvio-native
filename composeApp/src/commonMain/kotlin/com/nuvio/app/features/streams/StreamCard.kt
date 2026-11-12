@@ -1,5 +1,7 @@
 package com.nuvio.app.features.streams
 
+import org.jetbrains.compose.resources.stringResource
+import nuvio.composeapp.generated.resources.*
 import androidx.compose.ui.graphics.compositeOver
 import com.nuvio.app.core.ui.NuvioTag
 import com.nuvio.app.core.ui.NuvioTagStyle
@@ -76,6 +78,8 @@ internal fun StreamCard(
     inlineMetadata: Boolean = false,
     /** Single-line preview for height-constrained desktop source panels. */
     dense: Boolean = false,
+    /** Quality, HDR and audio as small tags above the name (the full Sources list). */
+    showSpecTags: Boolean = false,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
     val tokens = MaterialTheme.nuvio
@@ -125,6 +129,9 @@ internal fun StreamCard(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
+            if (showSpecTags && !dense) {
+                StreamSpecTags(stream)
+            }
             if (hasBadges && badgePlacement == StreamBadgePlacement.TOP) {
                 StreamCardBadgeRow(
                     badgeImages = badgeImages,
@@ -193,6 +200,30 @@ internal fun StreamCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/** "4K", "HDR", "Atmos" read from the source's own metadata; nothing when none is known. */
+@Composable
+private fun StreamSpecTags(stream: StreamItem) {
+    val metadata = remember(stream) { stream.sourceFilterMetadata() }
+    val tags = buildList {
+        if (metadata.quality != StreamQuality.OTHER) add(metadata.quality.label(""))
+        if (metadata.hdr) add(stringResource(Res.string.source_filter_hdr))
+        when {
+            metadata.atmos -> add(stringResource(Res.string.source_filter_atmos))
+            metadata.surround -> add(stringResource(Res.string.source_filter_surround))
+        }
+    }
+    if (tags.isEmpty()) return
+    Row(
+        modifier = Modifier.padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tags.forEach { tag ->
+            NuvioTag(text = tag, style = NuvioTagStyle.Neutral, shape = RoundedCornerShape(6.dp))
         }
     }
 }

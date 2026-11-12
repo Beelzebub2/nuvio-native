@@ -1085,6 +1085,7 @@ private fun LazyListScope.streamSection(
                         onStreamSecondaryClick(stream, position)
                     }
                 },
+                showSpecTags = !isDesktop,
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
