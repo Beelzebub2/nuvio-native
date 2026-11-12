@@ -1990,24 +1990,35 @@ JNIEXPORT void JNICALL NP(setSubtitleDelayMs)(JNIEnv *, jobject, jlong handle, j
 }
 
 JNIEXPORT void JNICALL NP(applySubtitleStyle)(
-    JNIEnv *env, jobject, jlong handle, jstring textColor, jstring /*backgroundColor*/,
+    JNIEnv *env, jobject, jlong handle, jstring textColor, jstring backgroundColor,
     jstring outlineColor, jfloat outlineSize, jboolean bold, jfloat fontSize, jint subPos,
     jboolean useLibass, jboolean stripSdh) {
     Player *p = asPlayer(handle);
     if (!p) return;
+    const bool preserveAssStyles = useLibass == JNI_TRUE;
     // Keep the track's own ASS styling when libass rendering is on, and let the
     // settings below take over when it is off (matching the Windows bridge).
     mpv_set_property_string(p->mpv, "sub-ass-override",
-                            useLibass == JNI_TRUE ? "scale" : "force");
-    mpv_set_property_string(p->mpv, "sub-color", jstringToUtf8(env, textColor).c_str());
-    mpv_set_property_string(p->mpv, "sub-border-color", jstringToUtf8(env, outlineColor).c_str());
-    std::string border = std::to_string(outlineSize);
-    mpv_set_property_string(p->mpv, "sub-border-size", border.c_str());
-    mpv_set_property_string(p->mpv, "sub-bold", bold == JNI_TRUE ? "yes" : "no");
-    std::string size = std::to_string(fontSize);
+                            preserveAssStyles ? "scale" : "force");
+    const double clampedSize = std::max(18.0, std::min(96.0, static_cast<double>(fontSize)));
+    const double subtitleScale = preserveAssStyles ? clampedSize / 54.0 : 1.0;
+    std::string scale = std::to_string(subtitleScale);
+    mpv_set_property_string(p->mpv, "sub-scale", scale.c_str());
+    std::string size = std::to_string(clampedSize);
     mpv_set_property_string(p->mpv, "sub-font-size", size.c_str());
     std::string pos = std::to_string(subPos);
     mpv_set_property_string(p->mpv, "sub-pos", pos.c_str());
+    if (!preserveAssStyles) {
+        std::string background = jstringToUtf8(env, backgroundColor);
+        mpv_set_property_string(p->mpv, "sub-color", jstringToUtf8(env, textColor).c_str());
+        mpv_set_property_string(p->mpv, "sub-back-color", background.c_str());
+        mpv_set_property_string(p->mpv, "sub-border-style",
+                                background.rfind("#00", 0) == 0 ? "outline-and-shadow" : "opaque-box");
+        mpv_set_property_string(p->mpv, "sub-outline-color", jstringToUtf8(env, outlineColor).c_str());
+        std::string outline = std::to_string(std::max(0.0, std::min(8.0, static_cast<double>(outlineSize))));
+        mpv_set_property_string(p->mpv, "sub-outline-size", outline.c_str());
+        mpv_set_property_string(p->mpv, "sub-bold", bold == JNI_TRUE ? "yes" : "no");
+    }
     // Strip captions written for deaf and hard-of-hearing viewers.
     mpv_set_property_string(p->mpv, "sub-filter-sdh", stripSdh == JNI_TRUE ? "yes" : "no");
     mpv_set_property_string(p->mpv, "sub-filter-sdh-harder", stripSdh == JNI_TRUE ? "yes" : "no");

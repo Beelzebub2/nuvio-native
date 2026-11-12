@@ -7,6 +7,7 @@ const network=require("../services/tizen/runtime/proxy-network.cjs");
 test("clean runtime provenance matches the bundled bytes and excludes the opaque engine",async()=>{
  const raw=await readFile(new URL("../services/tizen/runtime/media-http.cjs",import.meta.url));
  const manifest=JSON.parse(await readFile(new URL("../services/tizen/runtime/runtime-manifest.json",import.meta.url),"utf8"));
+ assert(!raw.includes(Buffer.from("\r\n")), "runtime bytes must remain stable across platform checkouts");
  assert.equal(manifest.engine,"torrent-stream@1.2.1");assert.equal(require("node:crypto").createHash("sha256").update(raw).digest("hex"),manifest.sha256);
  assert(!raw.toString().includes("server.js.LICENSE.txt"));assert(manifest.modules.every(item=>item.license || item.files?.length));
 });

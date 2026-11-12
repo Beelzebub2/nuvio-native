@@ -34,27 +34,49 @@ internal fun ExoPlayer.Builder.buildWithAssSupportCompat(
     renderersFactory: RenderersFactory = DefaultRenderersFactory(context)
 ): ExoPlayer {
     val assHandler = AssHandler(renderType)
-    val assSubtitleParserFactory = CompatAssSubtitleParserFactory(assHandler)
-    val assExtractorsFactory = extractorsFactory.withAssMkvSupportCompat(
-        subtitleParserFactory = assSubtitleParserFactory,
-        assHandler = assHandler
-    )
+    var player: ExoPlayer? = null
+    try {
+        val mediaSourceFactory = createAssMediaSourceFactoryCompat(
+            assHandler = assHandler,
+            dataSourceFactory = dataSourceFactory,
+            extractorsFactory = extractorsFactory,
+        )
+        val createdPlayer = this
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setRenderersFactory(renderersFactory.withAssSupport(assHandler))
+            .build()
+        player = createdPlayer
+        assHandler.init(createdPlayer)
+        assHandlersByPlayer[createdPlayer] = assHandler
+        return createdPlayer
+    } catch (failure: Throwable) {
+        player?.let { runCatching { it.release() } }
+        runCatching { assHandler.release() }
+        throw failure
+    }
+}
 
-    val mediaSourceFactory = DefaultMediaSourceFactory(
-        dataSourceFactory,
-        assExtractorsFactory
-    )
-    mediaSourceFactory.setSubtitleParserFactory(assSubtitleParserFactory)
+/** Split video/audio playback must use the same ASS-aware subtitle parser. */
+@OptIn(UnstableApi::class)
+internal fun ExoPlayer.createAssMediaSourceFactoryCompat(
+    dataSourceFactory: DataSource.Factory,
+    extractorsFactory: ExtractorsFactory,
+): DefaultMediaSourceFactory? {
+    val handler = getAssHandlerCompat() ?: return null
+    return createAssMediaSourceFactoryCompat(handler, dataSourceFactory, extractorsFactory)
+}
 
-    val player = this
-        .setMediaSourceFactory(mediaSourceFactory)
-        .setRenderersFactory(renderersFactory.withAssSupport(assHandler))
-        .build()
-
-    assHandlersByPlayer[player] = assHandler
-
-    assHandler.init(player)
-    return player
+@OptIn(UnstableApi::class)
+private fun createAssMediaSourceFactoryCompat(
+    assHandler: AssHandler,
+    dataSourceFactory: DataSource.Factory,
+    extractorsFactory: ExtractorsFactory,
+): DefaultMediaSourceFactory {
+    val parser = CompatAssSubtitleParserFactory(assHandler)
+    val assExtractorsFactory = extractorsFactory.withAssMkvSupportCompat(parser, assHandler)
+    return DefaultMediaSourceFactory(dataSourceFactory, assExtractorsFactory).apply {
+        setSubtitleParserFactory(parser)
+    }
 }
 
 internal fun ExoPlayer.getAssHandlerCompat(): AssHandler? = assHandlersByPlayer[this]

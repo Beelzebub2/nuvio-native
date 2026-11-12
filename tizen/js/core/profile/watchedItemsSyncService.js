@@ -1,6 +1,7 @@
 import { AuthManager } from "../auth/authManager.js";
 import { SupabaseApi } from "../../data/remote/supabase/supabaseApi.js";
 import { watchedItemsRepository } from "../../data/repository/watchedItemsRepository.js";
+import { WatchedItemsStore } from "../../data/local/watchedItemsStore.js";
 import { ProfileManager } from "./profileManager.js";
 import { LocalStore } from "../storage/localStore.js";
 import { TraktAuthStore } from "../../data/local/traktAuthStore.js";
@@ -76,6 +77,40 @@ function writeWatchedStateForProfile(profileId = resolveProfileId(), patch = {})
     updatedAt: Date.now()
   };
   LocalStore.set(SYNC_STATE_KEY, next);
+}
+let deleteRevision = 0;
+function pendingDeletes(profileId) {
+  const items = watchedStateForProfile(profileId).pendingDeletedItems;
+  return Array.isArray(items) ? items : [];
+}
+function recordPendingDeletes(profileId, items) {
+  const pending = new Map(pendingDeletes(profileId).map(item => [watchedItemKey(item), item]));
+  for (const item of items) {
+    if (!item?.contentId) continue;
+    pending.set(watchedItemKey(item), {
+      contentId: item.contentId, season: item.season ?? null, episode: item.episode ?? null,
+      mutationId: `${Date.now()}-${++deleteRevision}`
+    });
+  }
+  writeWatchedStateForProfile(profileId, { pendingDeletedItems: [...pending.values()] });
+}
+async function flushPendingDeletes(profileId) {
+  if (!pendingDeletes(profileId).length) return;
+  const generation = AuthManager.sessionGeneration;
+  const localKeys = new Set(WatchedItemsStore.listForProfile(profileId).map(watchedItemKey));
+  const pending = pendingDeletes(profileId).filter(item => !localKeys.has(watchedItemKey(item)));
+  writeWatchedStateForProfile(profileId, { pendingDeletedItems: pending });
+  for (let offset = 0; offset < pending.length; offset += 200) {
+    const batch = pending.slice(offset, offset + 200);
+    await SupabaseApi.rpc(DELETE_RPC, {
+      p_profile_id: profileId, p_keys: batch.map(toDeleteKey)
+    }, true);
+    if (generation !== AuthManager.sessionGeneration) throw new Error("Obsolete watched sync");
+    const acknowledged = new Set(batch.map(item => item.mutationId));
+    writeWatchedStateForProfile(profileId, {
+      pendingDeletedItems: pendingDeletes(profileId).filter(item => !acknowledged.has(item.mutationId))
+    });
+  }
 }
 function mergeWatchedItems(localItems = [], remoteItems = [], lastSuccessfulPushAt = 0) {
   if (!remoteItems.length) {
@@ -173,7 +208,7 @@ async function pullRemoteWatchedItems(profileId) {
     page += 1;
   }
 }
-export const WatchedItemsSyncService = {
+const watchedItemsSyncOperations = {
   getLastPullStatus() {
     return lastPullStatus;
   },
@@ -208,14 +243,24 @@ export const WatchedItemsSyncService = {
         return [];
       }
       const resolvedProfileId = resolveProfileId(profileId);
+      const generation = AuthManager.sessionGeneration;
+      const localRevision = LocalStore.revision("watchedItems");
       localItems = await watchedItemsRepository.getAll(5000, resolvedProfileId);
+      if (generation !== AuthManager.sessionGeneration) return [];
+      await flushPendingDeletes(resolvedProfileId);
       const lastSuccessfulPushAt = Number(
         watchedStateForProfile(resolvedProfileId).lastSuccessfulPushAt || 0
       );
       const rows = await pullRemoteWatchedItems(resolvedProfileId);
+      if (generation !== AuthManager.sessionGeneration) throw new Error("Obsolete watched sync");
+      if (localRevision !== LocalStore.revision("watchedItems")) {
+        lastPullStatus = "deferred";
+        return WatchedItemsStore.listForProfile(resolvedProfileId);
+      }
+      const deletedKeys = new Set(pendingDeletes(resolvedProfileId).map(watchedItemKey));
       const remoteItems = (rows || [])
         .map((row) => mapRemoteItem(row))
-        .filter((item) => Boolean(item.contentId));
+        .filter((item) => Boolean(item.contentId) && !deletedKeys.has(watchedItemKey(item)));
       if (!remoteItems.length && localItems.length) {
         lastPullHadUnsynced = localItems.some(
           (item) => Number(item.watchedAt || 0) > lastSuccessfulPushAt
@@ -254,7 +299,12 @@ export const WatchedItemsSyncService = {
         return true;
       }
       const resolvedProfileId = resolveProfileId(profileId);
+      const generation = AuthManager.sessionGeneration;
+      const localRevision = LocalStore.revision("watchedItems");
       const items = await watchedItemsRepository.getAll(5000, resolvedProfileId);
+      if (generation !== AuthManager.sessionGeneration) return false;
+      await flushPendingDeletes(resolvedProfileId);
+      if (localRevision !== LocalStore.revision("watchedItems")) return false;
       if (!items.length) {
         // Android does not send an empty full snapshot. An empty payload must
         // never be allowed to mean "delete everything" on the server.
@@ -269,6 +319,7 @@ export const WatchedItemsSyncService = {
         },
         true
       );
+      if (generation !== AuthManager.sessionGeneration) return false;
       writeWatchedStateForProfile(resolvedProfileId, { lastSuccessfulPushAt: Date.now() });
       lastPullHadUnsynced = false;
       return true;
@@ -289,21 +340,7 @@ export const WatchedItemsSyncService = {
         return true;
       }
       const resolvedProfileId = resolveProfileId(profileId);
-      const keys = (Array.isArray(items) ? items : [])
-        .filter((item) => Boolean(item?.contentId))
-        .map((item) => toDeleteKey(item));
-      if (!keys.length) {
-        return true;
-      }
-      await SupabaseApi.rpc(
-        DELETE_RPC,
-        {
-          p_profile_id: resolvedProfileId,
-          p_keys: keys
-        },
-        true
-      );
-      writeWatchedStateForProfile(resolvedProfileId, { lastSuccessfulPushAt: Date.now() });
+      await flushPendingDeletes(resolvedProfileId);
       return true;
     } catch (error) {
       console.warn("Watched items sync delete failed", error);
@@ -311,3 +348,23 @@ export const WatchedItemsSyncService = {
     }
   }
 };
+const syncInFlight = new Map();
+export const WatchedItemsSyncService = { ...watchedItemsSyncOperations };
+for (const operation of ["pull", "push", "deleteItems"]) {
+  WatchedItemsSyncService[operation] = (...args) => {
+    const profileId = resolveProfileId(operation === "deleteItems" ? args[1] : args[0]);
+    if (operation === "deleteItems" && AuthManager.isAuthenticated && shouldUseSupabaseWatchProgressSync()) {
+      recordPendingDeletes(profileId, Array.isArray(args[0]) ? args[0] : []);
+    }
+    const generation = AuthManager.sessionGeneration;
+    const previous = syncInFlight.get(profileId) || Promise.resolve();
+    const current = previous.catch(() => {}).then(() => {
+      if (generation !== AuthManager.sessionGeneration) return operation === "pull" ? [] : false;
+      return watchedItemsSyncOperations[operation](...args);
+    }).finally(() => {
+      if (syncInFlight.get(profileId) === current) syncInFlight.delete(profileId);
+    });
+    syncInFlight.set(profileId, current);
+    return current;
+  };
+}

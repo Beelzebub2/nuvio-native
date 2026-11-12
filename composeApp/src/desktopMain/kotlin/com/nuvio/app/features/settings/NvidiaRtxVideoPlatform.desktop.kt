@@ -1,5 +1,6 @@
 package com.nuvio.app.features.settings
 
+import com.nuvio.app.core.windows.WindowsDisplayAdapters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.Desktop
@@ -14,15 +15,17 @@ internal actual object NvidiaRtxVideoPlatform {
     actual suspend fun inspect(): NvidiaRtxVideoEnvironment = withContext(Dispatchers.IO) {
         if (!onWindows()) return@withContext NvidiaRtxVideoEnvironment()
 
-        val windowsAdapters = gpuNamesFromCommand(
-            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-            "(Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop).Name",
-        )
+        val windowsAdapters = WindowsDisplayAdapters.names()
         // Windows may hide a discrete NVIDIA adapter behind a hybrid display adapter.
         val nvidiaAdapters = if (windowsAdapters?.any(::isNvidiaRtx) == true) {
             emptyList()
         } else {
-            gpuNamesFromCommand("nvidia-smi.exe", "--query-gpu=name", "--format=csv,noheader")
+            nvidiaSmiCandidates().asSequence()
+                .filter(File::isFile)
+                .mapNotNull { executable ->
+                    gpuNamesFromCommand(executable.absolutePath, "--query-gpu=name", "--format=csv,noheader")
+                }
+                .firstOrNull { it.isNotEmpty() }
                 .orEmpty()
         }
         val detected = detectNvidiaRtxGpu(
@@ -52,6 +55,14 @@ internal actual object NvidiaRtxVideoPlatform {
         listOfNotNull(System.getenv("ProgramFiles"), System.getenv("ProgramFiles(x86)"))
             .map { File(it, "NVIDIA Corporation/NVIDIA app/CEF/NVIDIA App.exe") }
             .firstOrNull(File::isFile)
+
+    /** Absolute paths prevent searching a writable working directory or arbitrary PATH entries. */
+    private fun nvidiaSmiCandidates(): List<File> = buildList {
+        add(File(System.getenv("SystemRoot") ?: "C:\\Windows", "System32/nvidia-smi.exe"))
+        System.getenv("ProgramFiles")?.let {
+            add(File(it, "NVIDIA Corporation/NVSMI/nvidia-smi.exe"))
+        }
+    }
 
     private fun gpuNamesFromCommand(vararg command: String): List<String>? = runCatching {
         val process = ProcessBuilder(*command).redirectErrorStream(true).start()

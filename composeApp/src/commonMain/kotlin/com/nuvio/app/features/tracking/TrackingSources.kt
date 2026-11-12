@@ -24,8 +24,11 @@ enum class WatchProgressSource {
     }
 }
 
-val DEFAULT_WATCH_PROGRESS_SOURCE: WatchProgressSource = WatchProgressSource.TRAKT
-val DEFAULT_LIBRARY_SOURCE_MODE: LibrarySourceMode = LibrarySourceMode.TRAKT
+// Connecting a tracking account must not silently replace local library or
+// playback progress with an empty remote collection. Only an explicit
+// selection should activate a remote source.
+val DEFAULT_WATCH_PROGRESS_SOURCE: WatchProgressSource = WatchProgressSource.NUVIO_SYNC
+val DEFAULT_LIBRARY_SOURCE_MODE: LibrarySourceMode = LibrarySourceMode.LOCAL
 
 fun librarySourceModeFromStorage(value: String?): LibrarySourceMode =
     LibrarySourceMode.entries.firstOrNull { it.name == value } ?: DEFAULT_LIBRARY_SOURCE_MODE

@@ -198,7 +198,7 @@
     <string name="trakt_error_network_retry">網路錯誤，請重試</string>
     <string name="trakt_error_network_will_retry">網路錯誤，將重試</string>
     <string name="trakt_library_source_title">媒體庫來源</string>
-    <string name="trakt_missing_credentials">local.properties 中缺少 TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET。</string>
+    <string name="trakt_missing_credentials">local.properties 中缺少 TRAKT_CLIENT_ID。</string>
     <string name="trakt_status_rate_limited_slowing_polling">已達速率限制，減慢輪詢速度…</string>
     <string name="trakt_token_refreshes">Trakt 存取權杖將在 %1$s 後重新整理</string>
     <string name="action_back">返回</string>

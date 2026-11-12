@@ -1,11 +1,14 @@
 import { ProfileManager } from "../../core/profile/profileManager.js";
+import {
+  traktDeviceTokenRequest,
+  traktRefreshTokenRequest,
+  traktRevokeTokenRequest
+} from "./traktPublicOAuthRequests.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./traktAuthService.js";
 export function createTraktAuthServiceMethods01() {
   const {
     TRAKT_CLIENT_ID,
-    TRAKT_CLIENT_SECRET,
-    TRAKT_REDIRECT_URI,
     AuthManager,
     TraktAuthStore,
     WATCHED_MOVIES_PAGE_LIMIT,
@@ -82,11 +85,7 @@ export function createTraktAuthServiceMethods01() {
       }
       const { response, payload } = await requestJson("/oauth/device/token", {
         method: "POST",
-        body: {
-          code: state.deviceCode,
-          client_id: TRAKT_CLIENT_ID,
-          client_secret: TRAKT_CLIENT_SECRET
-        }
+        body: traktDeviceTokenRequest(state.deviceCode, TRAKT_CLIENT_ID)
       });
       if (ProfileManager.getActiveProfileId() !== profileId || TraktAuthStore.get(profileId).deviceCode !== state.deviceCode) {
         return { type: "failed", message: "Trakt authentication session changed" };
@@ -135,13 +134,7 @@ export function createTraktAuthServiceMethods01() {
       }
       const { response, payload } = await requestJson("/oauth/token", {
         method: "POST",
-        body: {
-          refresh_token: state.refreshToken,
-          client_id: TRAKT_CLIENT_ID,
-          client_secret: TRAKT_CLIENT_SECRET,
-          redirect_uri: TRAKT_REDIRECT_URI || "urn:ietf:wg:oauth:2.0:oob",
-          grant_type: "refresh_token"
-        }
+        body: traktRefreshTokenRequest(state.refreshToken, TRAKT_CLIENT_ID)
       });
       if (TraktAuthStore.get(profileId).refreshToken !== state.refreshToken) return false;
       if (!response.ok || !payload) {
@@ -176,11 +169,7 @@ export function createTraktAuthServiceMethods01() {
         try {
           await requestJson("/oauth/revoke", {
             method: "POST",
-            body: {
-              token: state.accessToken,
-              client_id: TRAKT_CLIENT_ID,
-              client_secret: TRAKT_CLIENT_SECRET
-            }
+            body: traktRevokeTokenRequest(state.accessToken, TRAKT_CLIENT_ID)
           });
         } catch (error) {
           console.warn("Trakt revoke failed", error);

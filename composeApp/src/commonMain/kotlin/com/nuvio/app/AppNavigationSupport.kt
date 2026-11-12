@@ -60,7 +60,11 @@ internal fun disposeRouteResources(route: AppRoute) {
         }
 
         is PlayerRoute -> {
-            ResumePromptRepository.markPlayerExitedNormally()
+            // Route disposal also runs after non-back navigation. A private launch must
+            // leave any unrelated normal-session crash-resume marker untouched.
+            if (PlayerLaunchStore.get(route.launchId)?.privatePlayback != true) {
+                ResumePromptRepository.markPlayerExitedNormally()
+            }
             PlayerLaunchStore.remove(route.launchId)
         }
 

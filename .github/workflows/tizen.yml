@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
     defaults:
       run:
         working-directory: tizen

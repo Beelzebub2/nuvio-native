@@ -87,7 +87,7 @@ b.transform(function (file) {
       text = once(text, /depth \+= 1/g, 'depth += 1; if (depth > 32) throw new Error("Bencode nesting limit")');
       text = once(text, /dic\s*=\s*\{\}/, 'dic = Object.create(null)');
     }
-    this.push(text); next();
+    this.push(text.replace(/\r\n/g, '\n')); next();
   });
 }, { global: true });
 var modules = {};

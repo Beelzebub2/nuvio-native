@@ -1675,7 +1675,7 @@
     <string name="settings_trakt_features">FEATURES</string>
     <string name="settings_trakt_finish_sign_in">Finish connection approval</string>
     <string name="settings_trakt_intro_description">Sync your watchlist, watch progress, continue watching, scrobbles, and personal lists with Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Missing Trakt credentials in local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Trakt sign-in is not configured in this build (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Open Trakt Activate</string>
     <string name="settings_trakt_open_login">Open Trakt Login</string>
     <string name="settings_trakt_save_actions_description">Sync your watchlist, watch progress, continue watching, scrobbles, and personal lists with Trakt.</string>
@@ -2056,6 +2056,9 @@
     <string name="streams_active_scrapers">Active scrapers</string>
     <string name="streams_checking_more_addons">Checking more addons…</string>
     <string name="streams_copy_link">Copy stream link</string>
+    <string name="streams_play_privately">Play privately</string>
+    <string name="player_private_mode_active">Private playback</string>
+    <string name="player_private_external_unavailable">External sources are unavailable during private playback</string>
     <string name="streams_download_file">Download file</string>
     <string name="streams_open_external_player">Open in external player</string>
     <string name="streams_open_internal_player">Open in internal player</string>

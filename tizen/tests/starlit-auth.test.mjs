@@ -28,3 +28,53 @@ test("QR containing a token or device secret is rejected",async()=>{
  const client=createDeviceAuthorizationClient({endpoints,fetchImpl:async()=>({ok:true,text:async()=>JSON.stringify({device_code:"secret-device-code-123456789",user_code:"ABCD-EFGH",verification_uri_complete:"https://web.example/account/tv?access_token=secret#code=ABCD-EFGH"})})});
  await assert.rejects(client.start("TV"),/Unsafe/);
 });
+
+const challengeResponse = suffix => ({
+ device_code: `secret-device-code-123456789-${suffix}`, user_code: `CODE-${suffix}`,
+ verification_uri_complete: `https://web.example/account/tv#code=CODE-${suffix}`, expires_in: 60
+});
+const response = payload => ({ ok: true, text: async () => JSON.stringify(payload) });
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise, resolve}; };
+
+test("cancelled and superseded starts cannot restore a challenge", async () => {
+ const first = deferred(), second = deferred();
+ const replies = [first, second];
+ const client = createDeviceAuthorizationClient({ endpoints, fetchImpl: () => replies.shift().promise });
+ const oldStart = client.start("TV");
+ const newStart = client.start("TV");
+ second.resolve(response(challengeResponse("NEW")));
+ const current = await newStart;
+ first.resolve(response(challengeResponse("OLD")));
+ assert.equal(await oldStart, null);
+ assert.equal((await client.poll(current.code)).status, "pending");
+ client.cancel();
+ assert.equal((await client.poll(current.code)).status, "expired");
+
+ const pending = deferred();
+ const cancelled = createDeviceAuthorizationClient({ endpoints, fetchImpl: () => pending.promise });
+ const start = cancelled.start("TV");
+ cancelled.cancel();
+ pending.resolve(response(challengeResponse("OLD")));
+ assert.equal(await start, null);
+});
+
+test("late poll approvals cannot survive cancellation, restart or expiry", async () => {
+ for (const action of ["cancel", "restart", "expire"]) {
+  let now = 0;
+  const pending = deferred();
+  let starts = 0;
+  const client = createDeviceAuthorizationClient({ endpoints, now: () => now, fetchImpl: url =>
+   url === endpoints.start_endpoint ? Promise.resolve(response(challengeResponse(starts++ ? "NEW" : "OLD"))) : pending.promise
+  });
+  const old = await client.start("TV"); now = 5000;
+  const poll = client.poll(old.code);
+  let current;
+  if (action === "cancel") client.cancel();
+  if (action === "restart") current = await client.start("TV");
+  if (action === "expire") now = 60000;
+  pending.resolve(response({ status: "approved", session: { access_token: "access", refresh_token: "refresh" }, device_id: "device" }));
+  assert.equal((await poll).status, action === "expire" ? "expired" : "cancelled");
+  assert.equal(client.takeSession(old.code), null);
+  if (current) assert.equal((await client.poll(current.code)).status, "pending");
+ }
+});
