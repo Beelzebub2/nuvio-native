@@ -37,4 +37,34 @@ int main() {
     assert(uniqueUnusedSteamEndpoint({active[0], {L"steam2", L"Steam Streaming Speakers"}},
                                      L"headphones", L"headphones", L"headphones").empty());
     assert(uniqueUnusedSteamEndpoint({active[1]}, L"headphones", L"headphones", L"headphones").empty());
+
+    // New installs prefer the dedicated Starlit render endpoint; Steam remains
+    // a compatibility path for devices which do not yet have Starlit installed.
+    const std::vector<RenderEndpoint> withStarlit = {
+        {L"starlit", L"Speakers (Starlit Virtual Audio)"},
+        active[0], active[1],
+    };
+    assert(isStarlitVirtualAudio(L"Starlit Virtual Audio"));
+    assert(isStarlitVirtualAudio(L"SPEAKERS (STARLIT VIRTUAL AUDIO)"));
+    assert(!isStarlitVirtualAudio(L"Starlit Virtual Audio Headphones"));
+    assert(!isStarlitVirtualAudio(L"Physical Speakers"));
+    assert(uniqueUnusedDiscordEndpoint(withStarlit, L"headphones", L"headphones",
+                                      L"headphones") == L"starlit");
+    assert(uniqueUnusedDiscordEndpoint(active, L"headphones", L"headphones",
+                                      L"headphones") == L"steam");
+    // No fallback if a Starlit endpoint is present but unsafe.
+    assert(uniqueUnusedDiscordEndpoint(withStarlit, L"starlit", L"headphones",
+                                      L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint(withStarlit, L"headphones", L"starlit",
+                                      L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint(withStarlit, L"headphones", L"headphones",
+                                      L"starlit").empty());
+    assert(uniqueUnusedDiscordEndpoint(withStarlit, L"", L"headphones",
+                                      L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint(
+        {withStarlit[0], {L"starlit2", L"Starlit Virtual Audio"}, active[0]},
+        L"headphones", L"headphones", L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint(
+        {{L"unsafe", L"Starlit Virtual Audio Headphones"}},
+        L"headphones", L"headphones", L"headphones").empty());
 }
