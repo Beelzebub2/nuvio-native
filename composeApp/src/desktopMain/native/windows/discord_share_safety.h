@@ -29,10 +29,21 @@ struct RenderEndpoint {
     std::wstring friendlyName;
 };
 
+inline std::wstring lowercaseEndpointName(std::wstring name) {
+    for (auto &letter : name) letter = static_cast<wchar_t>(std::towlower(letter));
+    return name;
+}
+
+// The Starlit driver exposes a dedicated render device; reject partial-name
+// matches so that similarly named physical devices are never selected.
+inline bool isStarlitVirtualAudio(const std::wstring &name) {
+    const auto lower = lowercaseEndpointName(name);
+    return lower == L"starlit virtual audio" ||
+           lower == L"speakers (starlit virtual audio)";
+}
+
 inline bool isSteamStreamingSpeakers(const std::wstring &name) {
-    std::wstring lower(name);
-    for (auto &letter : lower) letter = static_cast<wchar_t>(std::towlower(letter));
-    return lower.find(L"steam streaming speakers") != std::wstring::npos;
+    return lowercaseEndpointName(name).find(L"steam streaming speakers") != std::wstring::npos;
 }
 
 // Call with only active Windows render endpoints. Ambiguous or default devices
@@ -50,6 +61,28 @@ inline std::wstring uniqueUnusedSteamEndpoint(const std::vector<RenderEndpoint> 
         selected = endpoint.id;
     }
     return selected;
+}
+
+inline std::wstring uniqueUnusedDiscordEndpoint(const std::vector<RenderEndpoint> &active,
+                                                const std::wstring &console,
+                                                const std::wstring &multimedia,
+                                                const std::wstring &communications) {
+    if (console.empty() || multimedia.empty() || communications.empty()) return {};
+
+    // A present but unsafe/ambiguous Starlit endpoint must fail closed rather
+    // than silently switching to another output. Steam is only a legacy fallback
+    // while the optional Starlit driver is not installed.
+    bool hasStarlit = false;
+    std::wstring starlit;
+    for (const auto &endpoint : active) {
+        if (!isStarlitVirtualAudio(endpoint.friendlyName)) continue;
+        if (hasStarlit || endpoint.id.empty() || endpoint.id == console ||
+            endpoint.id == multimedia || endpoint.id == communications) return {};
+        hasStarlit = true;
+        starlit = endpoint.id;
+    }
+    if (hasStarlit) return starlit;
+    return uniqueUnusedSteamEndpoint(active, console, multimedia, communications);
 }
 
 } // namespace discord_share
