@@ -1,3 +1,4 @@
+import { describePlaysBest } from "../../../core/streams/tvPlaybackHints.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./streamScreen.js";
 import { bindCachedBadgeImages } from "../../../core/media/cachedBadgeImages.js";
@@ -57,6 +58,16 @@ export function createStreamScreenMethods09() {
       // Keep the empty state global: a selected source can be empty while
       // another compatible addon is still resolving and may provide streams.
       const hasPendingForAllSources = this.hasPendingSourceLoads("all");
+      const playsBest = describePlaysBest();
+      const sourceAddonCount = new Set(allStreams.map((stream) => String(stream?.addonName || ""))).size;
+      const sourceCountLabel = [
+        allStreams.length === 1
+          ? t("sources_count_source_one", {}, "1 source")
+          : t("sources_count_source_other", [allStreams.length], "%1$s sources"),
+        sourceAddonCount === 1
+          ? t("sources_count_addon_one", {}, "1 add-on")
+          : t("sources_count_addon_other", [sourceAddonCount], "%1$s add-ons")
+      ].join(" · ");
       const streamBadgesEnabled = DebridSettingsStore.get().streamBadgesEnabled !== false;
       const badgeSettings = StreamBadgeSettingsStore.snapshot();
       const showAddonLogo = badgeSettings.showAddonLogo === true;
@@ -126,15 +137,24 @@ export function createStreamScreenMethods09() {
         : `
             <div class="stream-route-content">
               <section class="stream-route-left">
-                <div class="stream-route-left-inner">
+                <div class="stream-route-left-inner${episodeLabel ? " is-episode" : ""}">
+                  ${backdrop ? `<div class="stream-route-thumb" style="background-image:url('${String(backdrop).replace(/'/g, "%27")}')"></div>` : ""}
                   ${logo ? `<img src="${logo}" class="stream-route-logo" alt="${escapeHtml(title)}" />` : `<h1 class="stream-route-title" dir="${contentTextDirection(title)}">${escapeHtml(title)}</h1>`}
                   ${episodeLabel ? `<div class="stream-route-episode-code" dir="${contentTextDirection(episodeLabel)}">${escapeHtml(episodeLabel)}</div>` : ""}
                   ${subtitle ? `<div class="stream-route-subtitle" dir="${contentTextDirection(subtitle)}">${escapeHtml(subtitle)}</div>` : ""}
                   ${detailLine ? `<div class="stream-route-detail-line${isSeries ? "" : " is-info"}" dir="${contentTextDirection(detailLine)}">${escapeHtml(detailLine)}</div>` : !isSeries && subtitle ? `<div class="stream-route-detail-line" dir="${contentTextDirection(subtitle)}">${escapeHtml(subtitle)}</div>` : ""}
                 </div>
+                <div class="stream-route-left-footer">
+                  ${playsBest ? `<div class="stream-route-plays-best"><div class="stream-route-plays-best-title">${escapeHtml(t("sources_plays_best_title", {}, "This TV plays best"))}</div><div class="stream-route-plays-best-body">${escapeHtml(t("sources_plays_best_body", [playsBest], "%1$s. Sources it may not play are marked."))}</div></div>` : ""}
+                  <div class="stream-route-hints"><span class="stream-route-hint-key">OK</span><span class="stream-route-hint-label">${escapeHtml(t("sources_hint_play", {}, "Play"))}</span></div>
+                </div>
               </section>
               <section class="stream-route-right">
                 <div class="stream-route-panel-shell">
+                  <div class="stream-route-heading">
+                    <h2 class="stream-route-heading-title">${escapeHtml(t("sources_choose_title", {}, "Choose a source"))}</h2>
+                    ${allStreams.length ? `<span class="stream-route-heading-count">${escapeHtml(sourceCountLabel)}</span>` : ""}
+                  </div>
                   <div class="stream-route-panel-header">
                     ${resumeLabel ? `<div class="stream-route-resume-label">${escapeHtml(resumeLabel)}</div>` : ""}
                     <div class="stream-route-chip-wrap">

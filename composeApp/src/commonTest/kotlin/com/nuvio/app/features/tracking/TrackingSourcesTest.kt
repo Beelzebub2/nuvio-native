@@ -11,6 +11,27 @@ class TrackingSourcesTest {
         assertEquals(WatchProgressSource.TRAKT, WatchProgressSource.fromStorage("TRAKT"))
         assertEquals(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.fromStorage("NUVIO_SYNC"))
         assertEquals(LibrarySourceMode.TRAKT, librarySourceModeFromStorage("TRAKT"))
+        assertEquals(LibrarySourceMode.LOCAL, librarySourceModeFromStorage("LOCAL"))
+    }
+
+    @Test
+    fun `connecting Trakt preserves local sources when preferences have never been set`() {
+        val librarySource = librarySourceModeFromStorage(null)
+        val progressSource = WatchProgressSource.fromStorage(null)
+        assertEquals(LibrarySourceMode.LOCAL, effectiveLibrarySourceMode(librarySource) { false })
+        assertEquals(LibrarySourceMode.LOCAL, effectiveLibrarySourceMode(librarySource) { true })
+        assertEquals(WatchProgressSource.NUVIO_SYNC, effectiveWatchProgressSource(progressSource) { false })
+        assertEquals(WatchProgressSource.NUVIO_SYNC, effectiveWatchProgressSource(progressSource) { true })
+    }
+
+    @Test
+    fun `explicit Trakt preferences become active only after authorization`() {
+        val librarySource = librarySourceModeFromStorage("TRAKT")
+        val progressSource = WatchProgressSource.fromStorage("TRAKT")
+        assertEquals(LibrarySourceMode.LOCAL, effectiveLibrarySourceMode(librarySource) { false })
+        assertEquals(LibrarySourceMode.TRAKT, effectiveLibrarySourceMode(librarySource) { it == TrackingProviderId.TRAKT })
+        assertEquals(WatchProgressSource.NUVIO_SYNC, effectiveWatchProgressSource(progressSource) { false })
+        assertEquals(WatchProgressSource.TRAKT, effectiveWatchProgressSource(progressSource) { it == TrackingProviderId.TRAKT })
     }
 
     @Test

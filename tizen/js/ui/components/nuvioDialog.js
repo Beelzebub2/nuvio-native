@@ -43,6 +43,7 @@
  *   dialog.destroy();              // animated exit then removes from DOM
  */
 import { focusWithoutScroll } from "../navigation/focusWithoutScroll.js";
+import { TV_MIN_LAYOUT_WIDTH } from "../../platform/tvViewport.js";
 export class NuvioDialog {
   constructor({
     title,
@@ -118,7 +119,8 @@ export class NuvioDialog {
     // Panel
     const panel = document.createElement("div");
     panel.className = `nuvio-dialog-panel${this.panelClassName ? ` ${this.panelClassName}` : ""}`;
-    panel.style.maxWidth = `${this.widthVw}vw`;
+    // widthVw is a share of the 1920-wide reference canvas, not of the window.
+    panel.style.maxWidth = `${Math.round((this.widthVw * TV_MIN_LAYOUT_WIDTH) / 100)}px`;
     // Title
     const titleEl = document.createElement("div");
     titleEl.className = "nuvio-dialog-title";

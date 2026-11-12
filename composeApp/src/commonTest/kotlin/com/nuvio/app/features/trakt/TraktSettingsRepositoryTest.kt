@@ -36,10 +36,10 @@ class TraktSettingsRepositoryTest {
     }
 
     @Test
-    fun `watch progress source defaults to Trakt for unset or invalid storage`() {
-        assertEquals(WatchProgressSource.TRAKT, WatchProgressSource.fromStorage(null))
-        assertEquals(WatchProgressSource.TRAKT, WatchProgressSource.fromStorage(""))
-        assertEquals(WatchProgressSource.TRAKT, WatchProgressSource.fromStorage("not-a-source"))
+    fun `watch progress source defaults to Starlit for unset or invalid storage`() {
+        assertEquals(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.fromStorage(null))
+        assertEquals(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.fromStorage(""))
+        assertEquals(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.fromStorage("not-a-source"))
     }
 
     @Test
@@ -49,10 +49,10 @@ class TraktSettingsRepositoryTest {
     }
 
     @Test
-    fun `library source defaults to Trakt for unset or invalid storage`() {
-        assertEquals(LibrarySourceMode.TRAKT, librarySourceModeFromStorage(null))
-        assertEquals(LibrarySourceMode.TRAKT, librarySourceModeFromStorage(""))
-        assertEquals(LibrarySourceMode.TRAKT, librarySourceModeFromStorage("not-a-source"))
+    fun `library source defaults to local for unset or invalid storage`() {
+        assertEquals(LibrarySourceMode.LOCAL, librarySourceModeFromStorage(null))
+        assertEquals(LibrarySourceMode.LOCAL, librarySourceModeFromStorage(""))
+        assertEquals(LibrarySourceMode.LOCAL, librarySourceModeFromStorage("not-a-source"))
     }
 
     @Test

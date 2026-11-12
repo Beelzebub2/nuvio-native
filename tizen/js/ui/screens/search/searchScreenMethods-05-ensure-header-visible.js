@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./searchScreen.js";
+import { applySearchKeyboardKey, moveInSearchKeyboard } from "./searchKeyboard.js";
 export function createSearchScreenMethods05() {
   const {
     SEARCH_HISTORY_MAX_ITEMS,
@@ -54,6 +55,11 @@ export function createSearchScreenMethods05() {
           }
           return true;
         }
+        if (direction === "down" && current?.id === "searchInput" && nav.keyboard?.length) {
+          // The on-screen keyboard sits right under the field.
+          current.blur?.();
+          return this.focusNode(current, this.getSearchKeyboardNode()) || true;
+        }
         if (direction === "down") {
           const firstRow = nav.rows?.[0] || [];
           const target = current?.id === "searchInput" ? firstRow[0] || null : this.resolvePreferredResultsNode(firstRow, col);
@@ -77,6 +83,9 @@ export function createSearchScreenMethods05() {
         if (direction === "left") {
           if (col > 0) {
             return this.focusNode(current, rowNodes[col - 1] || current) || true;
+          }
+          if (nav.keyboard?.length) {
+            return this.focusNode(current, this.getSearchKeyboardNode()) || true;
           }
           return "sidebar";
         }
@@ -106,7 +115,29 @@ export function createSearchScreenMethods05() {
         }
         return true;
       }
+      if (zone === "keyboard") {
+        const keyIds = (nav.keyboard || []).map((row) => row.map((node) => String(node?.dataset?.key || "")));
+        const move = moveInSearchKeyboard(keyIds, Number(current.dataset.navRow || 0), Number(current.dataset.navCol || 0), direction);
+        if (move === "sidebar") {
+          return "sidebar";
+        }
+        if (move === "header") {
+          return this.focusNode(current, nav.header?.[0] || null) || true;
+        }
+        if (move === "results") {
+          const firstRow = nav.rows?.[0] || null;
+          const target = firstRow ? this.resolvePreferredResultsNode(firstRow, 0) : nav.recentClear || null;
+          return this.focusNode(current, target) || true;
+        }
+        if (move && nav.keyboard?.[move.row]?.[move.col]) {
+          return this.focusNode(current, nav.keyboard[move.row][move.col]) || true;
+        }
+        return true;
+      }
       if (zone === "recent-clear") {
+        if (direction === "left" && nav.keyboard?.length) {
+          return this.focusNode(current, this.getSearchKeyboardNode()) || true;
+        }
         if (direction === "down") {
           const target = nav.rows?.[0]?.[0] || null;
           return this.focusNode(current, target) || true;
@@ -192,6 +223,28 @@ export function createSearchScreenMethods05() {
       }
       this.recentSearches = SearchHistoryStore.remove(query);
       this.requestRender();
+    },
+    /** The key to return to: the last one used, else the first. */
+    getSearchKeyboardNode() {
+      const keyboard = this.navModel?.keyboard || [];
+      const last = this.lastSearchKeyboardFocus;
+      return (last && keyboard[last.row]?.[last.col]) || keyboard[0]?.[0] || null;
+    },
+    isSearchKeyboardFocused() {
+      return Boolean(this.container?.querySelector(".search-key.focusable.focused"));
+    },
+    pressSearchKey(node) {
+      const input = this.container?.querySelector("#searchInput");
+      if (!input || !node) {
+        return;
+      }
+      const next = applySearchKeyboardKey(input.value, node.dataset.key);
+      if (next === input.value) {
+        return;
+      }
+      input.value = next;
+      this.query = trimLeadingWhitespace(next);
+      this.scheduleSearchFromInput(input);
     },
     scheduleSearchFromInput(input) {
       this.cancelScheduledInputSearch();

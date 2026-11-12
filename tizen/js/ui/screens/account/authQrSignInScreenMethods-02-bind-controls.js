@@ -35,6 +35,7 @@ export function createAuthQrSignInScreenMethods02() {
       this.container.querySelector("[data-action='connect-custom']")?.addEventListener("click", () => this.openServerConnection("input"));
       this.container.querySelector("[data-action='login-qr']")?.addEventListener("click", () => this.toggleLoginMode(false));
       this.container.querySelector("[data-action='login-email']")?.addEventListener("click", () => this.toggleLoginMode(true));
+      this.container.querySelector("[data-action='use-email']")?.addEventListener("click", () => this.toggleLoginMode(true));
       this.container.querySelector("[data-action='email-submit']")?.addEventListener("click", () => void this.submitEmailLogin());
       this.container.querySelector("[data-action='cancel-signout']")?.addEventListener("click", () => this.dismissSignOutConfirmation());
       this.container.querySelector("[data-action='confirm-signout']")?.addEventListener("click", () => void this.handleSignOut());
@@ -184,9 +185,9 @@ export function createAuthQrSignInScreenMethods02() {
           .replace(/\/+$/, "");
         manualText.innerText = manualUrl && (displayCode || code) ? I18n.t("auth.qr.manualInstruction", { url: manualUrl }) : "";
       }
-      codeText.innerText = I18n.t("auth.qr.codeLabel", {
-        code: displayCode || code || ""
-      });
+      const shownCode = String(displayCode || code || "");
+      codeText.innerText = shownCode;
+      codeText.setAttribute("aria-label", I18n.t("auth.qr.codeLabel", { code: shownCode }));
       this.startCountdown(expiresAt);
     },
     clearQr() {

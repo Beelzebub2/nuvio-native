@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./authQrSignInScreen.js";
+import { STARLIT_TV_DEVICE_NAME } from "../../../core/auth/qrLoginService.js";
 export function createAuthQrSignInScreenMethods01() {
   const {
     Router,
@@ -98,18 +99,41 @@ export function createAuthQrSignInScreenMethods01() {
             { action: "connect-custom", label: I18n.t("server_options_change_custom") }
           ]
         : [...loginModeItem, { action: "connect-custom", label: I18n.t("server_options_connect_custom") }];
+      // Signed out with QR available: "sign in with your phone" — the steps
+      // and buttons on the left, the code card on the right.
+      const phoneLayout = Boolean(this.useQrLogin && !this.isSignedIn);
+      const tvName = STARLIT_TV_DEVICE_NAME;
+      const phoneSteps = [
+        I18n.t("auth_phone_step_scan", {}, { fallback: "Point your phone's camera at the code" }),
+        I18n.t("auth_phone_step_approve", [tvName], { fallback: "Sign in and approve \u201C%1$s\u201D" }),
+        I18n.t("auth_phone_step_profile", {}, { fallback: "Pick your profile and start watching" })
+      ];
+      const leftCopy = phoneLayout
+        ? `
+                <h1 class="qr-title">${escapeHtml(I18n.t("auth_phone_title", {}, { fallback: "Sign in with your phone" }))}</h1>
+                <p id="qr-description" class="qr-description">${escapeHtml(
+                  I18n.t("auth_phone_description", {}, {
+                    fallback: "No typing on the remote. Your profiles, library, add-ons and progress follow you to this TV."
+                  })
+                )}</p>
+                <ol class="qr-steps">${phoneSteps
+                  .map((step, index) => `<li class="qr-step"><span class="qr-step-number" aria-hidden="true">${index + 1}</span><span class="qr-step-text">${escapeHtml(step)}</span></li>`)
+                  .join("")}</ol>
+                <div class="qr-actions qr-actions-left">${this.renderActions()}</div>
+                ${this.renderTermsAcknowledgement()}`
+        : `
+                <h1 class="qr-title">${I18n.t("auth.qr.title")}</h1>
+                <p id="qr-description" class="qr-description">${this.getLeftDescription()}</p>
+                ${this.renderConnectedAccountIdentity()}`;
       this.container.innerHTML = `
-          <div class="qr-layout">
+          <div class="qr-layout${phoneLayout ? " qr-layout-phone" : ""}">
             <button type="button" class="qr-server-menu-trigger focusable" data-action="server-menu"
                     aria-label="${escapeHtml(I18n.t("server_options_content_description"))}">⋮</button>
             <section class="qr-left-panel">
               <div class="qr-brand-lockup">
                 ${renderBrandWordmarkImage({ className: "qr-logo" })}
               </div>
-              <div class="qr-copy-block">
-                <h1 class="qr-title">${I18n.t("auth.qr.title")}</h1>
-                <p id="qr-description" class="qr-description">${this.getLeftDescription()}</p>
-                ${this.renderConnectedAccountIdentity()}
+              <div class="qr-copy-block">${leftCopy}
               </div>
             </section>
             <section class="qr-card-panel" aria-label="${escapeHtml(I18n.t("auth.qr.cardAriaLabel"))}">
@@ -128,9 +152,9 @@ export function createAuthQrSignInScreenMethods01() {
                   }
                 </p>
                 ${this.renderLoginContent()}
-                ${!this.isSignedIn ? this.renderTermsAcknowledgement() : ""}
+                ${!this.isSignedIn && !phoneLayout ? this.renderTermsAcknowledgement() : ""}
                 ${!this.isSignedIn && AuthManager.lastDeviceRevocationConfirmed === false ? '<p role="status">Signed out on this TV. Remote revocation could not be confirmed. Remove this TV from your account on another device.</p>' : ""}
-                <div class="qr-actions">${this.renderActions()}</div>
+                ${phoneLayout ? "" : `<div class="qr-actions">${this.renderActions()}</div>`}
               </div>
             </section>
             ${this.isServerMenuOpen ? this.renderServerMenu(menuItems) : ""}
@@ -147,7 +171,12 @@ export function createAuthQrSignInScreenMethods01() {
         ? ".server-dialog-cancel"
         : this.isServerMenuOpen
           ? ".qr-server-menu-item.focusable"
-          : this.focusAfterRender || (this.useEmailLogin && !this.isSignedIn ? "#auth-email-input" : "#qr-refresh-btn");
+          : this.focusAfterRender ||
+            (this.useEmailLogin && !this.isSignedIn
+              ? "#auth-email-input"
+              : this.container.querySelector("#qr-email-btn")
+                ? "#qr-email-btn"
+                : "#qr-refresh-btn");
       const focusContainer = this.showSignOutConfirmation ? this.container.querySelector(".auth-signout-confirm-dialog") : this.container;
       this.focusAfterRender = null;
       ScreenUtils.setInitialFocus(focusContainer, initialSelector);
@@ -181,6 +210,8 @@ export function createAuthQrSignInScreenMethods01() {
       }
       return `
           <div id="qr-container" class="qr-code-frame"></div>
+          <div class="qr-scan-caption">${escapeHtml(I18n.t("auth_phone_scan_caption", {}, { fallback: "Scan with your phone camera" }))}</div>
+          <div class="qr-divider" aria-hidden="true"></div>
           <div id="qr-manual-text" class="qr-manual-text"></div>
           <div id="qr-code-text" class="qr-code-text"></div>
           <div id="qr-expiry" class="qr-expiry"></div>
@@ -279,10 +310,16 @@ export function createAuthQrSignInScreenMethods01() {
           : `<button type="button" id="qr-refresh-btn" class="qr-action-btn qr-action-btn-primary focusable" data-action="refresh">
                  ${escapeHtml(I18n.t("auth.qr.refresh"))}
                </button>`;
+      const emailAction =
+        !this.isSignedIn && this.useQrLogin && this.supportsEmailAuth
+          ? `<button type="button" id="qr-email-btn" class="qr-action-btn qr-action-btn-primary focusable" data-action="use-email">
+                 ${escapeHtml(I18n.t("auth_phone_use_email", {}, { fallback: "Use email on this TV" }))}
+               </button>`
+          : "";
       const continueLabel = `<button type="button" id="qr-back-btn" class="qr-action-btn qr-action-btn-secondary focusable" data-action="back">
           ${escapeHtml(backLabel)}
         </button>`;
-      return `${refreshAction}${continueLabel}`;
+      return `${emailAction}${refreshAction}${continueLabel}`;
     },
     renderServerMenu(items) {
       return `

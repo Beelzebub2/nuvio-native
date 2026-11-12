@@ -1,5 +1,7 @@
 import { saveReusableStreamLink } from "../../../core/streams/streamLinkReuse.js";
 import { streamProviderHeader } from "../../../core/streams/streamOrdering.js";
+import { describeStreamSummary, parseStreamTechnicalSummary } from "../../../core/streams/streamTechnicalSummary.js";
+import { getPlaybackWarnings } from "../../../core/streams/tvPlaybackHints.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./streamScreen.js";
 export function createStreamScreenMethods08() {
@@ -183,6 +185,7 @@ export function createStreamScreenMethods08() {
           <button class="${classes}" data-action="setFilter" data-addon="${escapeHtml(name)}" aria-selected="${selected ? "true" : "false"}">
             ${spinner}
             <span dir="${contentTextDirection(name === "all" ? t("common.all", {}, "All") : name)}">${escapeHtml(name === "all" ? t("common.all", {}, "All") : name)}</span>
+            ${chipStatus === "loading" ? "" : `<span class="stream-route-chip-count">${this.getFilteredStreams(name).length}</span>`}
           </button>
         `;
     },
@@ -233,6 +236,32 @@ export function createStreamScreenMethods08() {
                 <div class="stream-route-addon-name" dir="${contentTextDirection(stream.addonName || "Addon")}">${escapeHtml(stream.addonName || "Addon")}</div>
               </div>`;
       }
+      // What the source is (resolution, range, audio, codec) and whether this
+      // TV is likely to play it as advertised.
+      const summary = parseStreamTechnicalSummary(stream);
+      const summaryLine = describeStreamSummary(summary);
+      const warnings = getPlaybackWarnings(summary);
+      const qualityBlock = summary.resolution
+        ? `<div class="stream-route-quality" aria-hidden="true"><span class="stream-route-quality-res">${escapeHtml(summary.resolution)}</span>${summary.dynamicRange ? `<span class="stream-route-quality-range">${escapeHtml(summary.dynamicRange)}</span>` : ""}</div>`
+        : "";
+      const metaParts = [summary.sizeText, stream.addonName || ""].filter(Boolean);
+      const metaLine =
+        summaryLine && (metaParts.length || warnings.length)
+          ? `<div class="stream-route-card-meta">${metaParts.map((part) => `<span class="stream-route-card-meta-part" dir="auto">${escapeHtml(part)}</span>`).join("")}${warnings.map((warning) => `<span class="stream-route-warning" data-warning="${escapeHtml(warning.id)}">${escapeHtml(t(warning.labelKey, {}, warning.label))}</span>`).join("")}</div>`
+          : "";
+      const availabilityLabel =
+        summary.availability === "instant"
+          ? t("sources_instant", {}, "Instant")
+          : summary.availability === "peers"
+            ? summary.peers !== null
+              ? t("sources_peers", [summary.peers], "%1$s peers")
+              : t("sources_torrent", {}, "Torrent")
+            : summary.availability === "direct"
+              ? t("sources_direct", {}, "Direct")
+              : "";
+      const availabilityBlock = availabilityLabel
+        ? `<div class="stream-route-card-status${summary.availability === "instant" ? " is-instant" : ""}">${summary.availability === "instant" ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/></svg>' : ""}<span>${escapeHtml(availabilityLabel)}</span></div>`
+        : "";
       const virtualRowStyle =
         virtualized && Number.isFinite(Number(virtualRowGap))
           ? ` style="margin-bottom:${virtualLast ? 0 : Math.max(0, Number(virtualRowGap))}px"`
@@ -246,13 +275,16 @@ export function createStreamScreenMethods08() {
                      data-card-action="play"
                      data-stream-id="${escapeHtml(stream.id)}"
                      data-stream-row="${index}">
-              <div class="stream-route-card-copy">
+              ${qualityBlock}
+              <div class="stream-route-card-copy${summaryLine ? " has-summary" : ""}">
                 ${topBadges || ""}
-                <div class="stream-route-card-heading" dir="${contentTextDirection(headline)}">${escapeHtml(headline)}</div>
+                <div class="stream-route-card-heading" dir="${contentTextDirection(summaryLine || headline)}">${escapeHtml(summaryLine || headline)}</div>
                 ${partySource ? `<div class="stream-route-party-source" dir="auto">${escapeHtml(t("party_source", {}, "Party's source"))}</div>` : ""}
-                ${descriptionLines.map((line, lineIndex) => `<div class="stream-route-card-line${lineIndex > 0 ? " secondary" : ""}" dir="${contentTextDirection(line)}">${escapeHtml(line).replace(/([._-])(?=\S)/g, "$1<wbr>")}</div>`).join("")}
+                ${metaLine}
+                ${(summaryLine ? [] : descriptionLines).map((line, lineIndex) => `<div class="stream-route-card-line${lineIndex > 0 ? " secondary" : ""}" dir="${contentTextDirection(line)}">${escapeHtml(line).replace(/([._-])(?=\S)/g, "$1<wbr>")}</div>`).join("")}
                 ${bottomBadges || ""}
               </div>
+              ${availabilityBlock}
               ${addonIdentity}
             </article>
           </div>

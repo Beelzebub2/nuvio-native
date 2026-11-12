@@ -1,6 +1,7 @@
 import { syncHtmlSubtitleClearance } from "./subtitleOverlayClearance.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
+import { getTvCanvasSize } from "../../../platform/tvViewport.js";
 export function createPlayerScreenMethods24() {
   const {
     PlayerController,
@@ -334,14 +335,20 @@ export function createPlayerScreenMethods24() {
       }
       uiRoot.style.setProperty("--player-subtitle-font-weight", subtitleFontWeight);
       uiRoot.style.setProperty("--player-subtitle-shadow", htmlSubtitleShadow);
-      uiRoot.style.setProperty("--player-subtitle-offset", `${verticalOffsetVh.toFixed(2)}vh`);
+      uiRoot.style.setProperty(
+        "--player-subtitle-offset",
+        `${((verticalOffsetVh / 100) * getTvCanvasSize().height).toFixed(1)}px`
+      );
       video.style.setProperty("--player-subtitle-color", subtitleColor);
       video.style.setProperty("--player-subtitle-background", hdrStyle.backgroundColor);
       video.style.setProperty("--player-subtitle-outline-color", outlineColor);
       video.style.setProperty("--player-subtitle-font-size", `${subtitleFontSize}%`);
       video.style.setProperty("--player-subtitle-font-weight", subtitleFontWeight);
       video.style.setProperty("--player-subtitle-shadow", subtitleShadow);
-      video.style.setProperty("--player-subtitle-offset", `${residualOffsetVh.toFixed(2)}vh`);
+      video.style.setProperty(
+        "--player-subtitle-offset",
+        `${((residualOffsetVh / 100) * getTvCanvasSize().height).toFixed(1)}px`
+      );
       this.refreshSubtitleCueStyles();
       syncHtmlSubtitleClearance(this);
       this.renderBitmapSubtitleAtCurrentTime({ force: true });

@@ -1,3 +1,4 @@
+import { getTvCanvasRoot } from "../../../platform/tvViewport.js";
 // Android ui/screens/party/PartyEffects.kt: app-wide watch party toasts and
 // an availability refresh whenever the app comes to the foreground.
 import { PartyRepository } from "../../../core/party/partyRepository.js";
@@ -16,7 +17,7 @@ export function showPartyToast(message) {
     toast.className = "party-toast";
     toast.setAttribute("role", "status");
     toast.setAttribute("aria-live", "polite");
-    document.body.appendChild(toast);
+    getTvCanvasRoot().appendChild(toast);
   }
   toast.textContent = text;
   toast.classList.add("is-visible");

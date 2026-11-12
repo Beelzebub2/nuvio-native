@@ -9,6 +9,7 @@ import {
   cloudPlaybackFileForSession
 } from "../../data/local/cloudLibraryPlaybackStore.js";
 import { Platform } from "../../platform/index.js";
+import { nativeRectToCanvas } from "../../platform/tvViewport.js";
 import { TizenPlaybackProxy } from "../../platform/tizen/tizenPlaybackProxy.js";
 import { WebOsPlaybackProxy } from "../../platform/webos/webosPlaybackProxy.js";
 import { WatchProgressSyncService } from "../profile/watchProgressSyncService.js";
@@ -208,21 +209,16 @@ function syncTizenAvPlayObjectStyle(rect) {
   // HTML video element. Keep the object CSS rectangle in lockstep with the
   // native display rectangle as required by the AVPlay API. Native coordinates
   // always use 1920x1080; the object style must use the actual CSS viewport.
-  const cssWidth = Number(
-    globalThis.window?.innerWidth || globalThis.document?.documentElement?.clientWidth || 1920
-  );
-  const cssHeight = Number(
-    globalThis.window?.innerHeight || globalThis.document?.documentElement?.clientHeight || 1080
-  );
-  const scaleX = cssWidth / 1920;
-  const scaleY = cssHeight / 1080;
+  // The object lives inside the app canvas, which can be scaled or inset
+  // (Settings > Display & scaling), so go through the canvas mapping.
+  const cssRect = nativeRectToCanvas(rect);
   object.style.position = "fixed";
-  object.style.left = `${rect.x * scaleX}px`;
-  object.style.top = `${rect.y * scaleY}px`;
+  object.style.left = `${cssRect.x}px`;
+  object.style.top = `${cssRect.y}px`;
   object.style.right = "auto";
   object.style.bottom = "auto";
-  object.style.width = `${rect.width * scaleX}px`;
-  object.style.height = `${rect.height * scaleY}px`;
+  object.style.width = `${cssRect.width}px`;
+  object.style.height = `${cssRect.height}px`;
   object.style.maxWidth = "none";
   object.style.maxHeight = "none";
   object.style.transform = "none";

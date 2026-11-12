@@ -1,3 +1,4 @@
+import { getTvCanvasRoot } from "../../platform/tvViewport.js";
 import { isAmbientTrailerPlaying } from "./ambientPlaybackPolicy.js";
 import { focusWithoutScroll } from "../navigation/focusWithoutScroll.js";
 import { WebOSPlayerExtensions } from "../../platform/webos/webosPlayerExtensions.js";
@@ -269,7 +270,7 @@ export const AmbientMode = {
     const root = document.createElement("div");
     root.className = "ambient-mode";
     root.setAttribute("role", "presentation");
-    document.body.appendChild(root);
+    getTvCanvasRoot().appendChild(root);
     this.root = root;
     if (
       this.loadedSignature !== this.signature ||
