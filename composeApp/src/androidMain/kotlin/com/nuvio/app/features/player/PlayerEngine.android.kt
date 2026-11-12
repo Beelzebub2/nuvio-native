@@ -14,6 +14,8 @@ import android.os.SystemClock
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.util.AttributeSet
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -123,10 +125,8 @@ actual fun PlatformPlayerSurface(
     onError: (String?) -> Unit,
     sourceAvailable: Boolean,
 ) {
-    val playerSettings = remember {
-        PlayerSettingsRepository.ensureLoaded()
-        PlayerSettingsRepository.uiState.value
-    }
+    remember { PlayerSettingsRepository.ensureLoaded() }
+    val playerSettings by PlayerSettingsRepository.uiState.collectAsState()
     val playerSourceKey = listOf(
         sourceUrl,
         sourceAudioUrl.orEmpty(),
@@ -136,12 +136,18 @@ actual fun PlatformPlayerSurface(
         useYoutubeChunkedPlayback,
         initialPositionRequestKey.orEmpty(),
     )
+    // Rebuilding the ASS renderer must not restart a playing video from the
+    // original resume point. Retain only a position for this media source.
+    var lastReadyPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
     var activeEngine by remember(playerSourceKey, playerSettings.androidPlaybackEngine) {
         mutableStateOf(playerSettings.androidPlaybackEngine.initialAndroidEngine())
     }
 
     when (activeEngine) {
-        ResolvedAndroidPlaybackEngine.ExoPlayer -> ExoPlayerSurface(
+        ResolvedAndroidPlaybackEngine.ExoPlayer -> key(
+            playerSettings.useLibass,
+            playerSettings.libassRenderType,
+        ) { ExoPlayerSurface(
             sourceUrl = sourceUrl,
             sourceAudioUrl = sourceAudioUrl,
             sourceHeaders = sourceHeaders,
@@ -151,13 +157,18 @@ actual fun PlatformPlayerSurface(
             useYoutubeChunkedPlayback = useYoutubeChunkedPlayback,
             modifier = modifier,
             playWhenReady = playWhenReady,
-            initialPositionMs = initialPositionMs,
+            initialPositionMs = lastReadyPositionMs ?: initialPositionMs,
             initialPositionRequestKey = initialPositionRequestKey,
             resizeMode = resizeMode,
             useNativeController = useNativeController,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = onControllerReady,
-            onSnapshot = onSnapshot,
+            onSnapshot = { snapshot ->
+                if (!snapshot.isLoading && !snapshot.isEnded && snapshot.durationMs > 0L) {
+                    lastReadyPositionMs = snapshot.positionMs
+                }
+                onSnapshot(snapshot)
+            },
             onError = { message ->
                 if (message != null && playerSettings.androidPlaybackEngine == AndroidPlaybackEngine.Auto) {
                     Log.w(TAG, "ExoPlayer failed; falling back to libmpv: $message")
@@ -170,7 +181,7 @@ actual fun PlatformPlayerSurface(
                     onError(message)
                 }
             },
-        )
+        ) }
         ResolvedAndroidPlaybackEngine.Libmpv -> {
             LaunchedEffect(initialPositionRequestKey) {
                 initialPositionRequestKey?.let { key ->
@@ -324,7 +335,8 @@ private fun ExoPlayerSurface(
 
     fun ExoPlayer.setPlaybackMediaItem(videoMediaItem: MediaItem, startPositionMs: Long? = null) {
         if (!sourceAudioUrl.isNullOrBlank()) {
-            val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+            val mediaSourceFactory = createAssMediaSourceFactoryCompat(dataSourceFactory, extractorsFactory)
+                ?: DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
             val videoSource = mediaSourceFactory.createMediaSource(videoMediaItem)
             val audioSource = mediaSourceFactory.createMediaSource(playbackMediaItemFromUrl(sourceAudioUrl))
             val mergedSource = MergingMediaSource(videoSource, audioSource)
@@ -407,29 +419,40 @@ private fun ExoPlayerSurface(
             )
             .build()
 
-        val player = if (useLibass) {
-            ExoPlayer.Builder(context)
-                .setTrackSelector(trackSelector)
-                .setLoadControl(loadControl)
-                .buildWithAssSupportCompat(
-                    context = context,
-                    renderType = libassRenderType.toAssRenderType(),
-                    dataSourceFactory = dataSourceFactory,
-                    extractorsFactory = extractorsFactory,
-                    renderersFactory = renderersFactory
-                )
-        } else {
+        fun buildStandardPlayer(): ExoPlayer {
             val mediaSourceFactory = DefaultMediaSourceFactory(
                 dataSourceFactory,
                 extractorsFactory,
             )
-
-            ExoPlayer.Builder(context)
+            return ExoPlayer.Builder(context)
                 .setRenderersFactory(renderersFactory)
                 .setTrackSelector(trackSelector)
                 .setLoadControl(loadControl)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build()
+        }
+
+        val player = if (useLibass) {
+            try {
+                ExoPlayer.Builder(context)
+                    .setTrackSelector(trackSelector)
+                    .setLoadControl(loadControl)
+                    .buildWithAssSupportCompat(
+                        context = context,
+                        renderType = libassRenderType.toAssRenderType(),
+                        dataSourceFactory = dataSourceFactory,
+                        extractorsFactory = extractorsFactory,
+                        renderersFactory = renderersFactory,
+                    )
+            } catch (failure: Exception) {
+                Log.w(TAG, "ASS renderer unavailable; using standard subtitles", failure)
+                buildStandardPlayer()
+            } catch (failure: LinkageError) {
+                Log.w(TAG, "ASS native renderer unavailable; using standard subtitles", failure)
+                buildStandardPlayer()
+            }
+        } else {
+            buildStandardPlayer()
         }
 
         player.applySubtitleTrackPreferences(
@@ -945,7 +968,9 @@ private fun ExoPlayerSurface(
 
                 override fun applySubtitleStyle(style: SubtitleStyleState, useLibass: Boolean) {
                     currentSubtitleStyle = style
-                    playerViewRef?.applySubtitleStyle(style, pipSubtitleScale)
+                    playerViewRef?.applySubtitleStyle(
+                        style, pipSubtitleScale, useLibass && exoPlayer.getAssHandlerCompat() != null,
+                    )
                 }
 
                 override fun applySubtitlePreferences(
@@ -996,7 +1021,9 @@ private fun ExoPlayerSurface(
                     enabled = useLibass,
                     renderType = libassRenderType,
                 )
-                applySubtitleStyle(currentSubtitleStyle, pipSubtitleScale)
+                applySubtitleStyle(
+                    currentSubtitleStyle, pipSubtitleScale, useLibass && exoPlayer.getAssHandlerCompat() != null,
+                )
             }
         },
         update = { playerView ->
@@ -1011,7 +1038,9 @@ private fun ExoPlayerSurface(
                 enabled = useLibass,
                 renderType = libassRenderType,
             )
-            playerView.applySubtitleStyle(currentSubtitleStyle, pipSubtitleScale)
+            playerView.applySubtitleStyle(
+                currentSubtitleStyle, pipSubtitleScale, useLibass && exoPlayer.getAssHandlerCompat() != null,
+            )
         },
     )
 }
@@ -1937,37 +1966,35 @@ private fun PlayerResizeMode.toExoResizeMode(): Int =
         PlayerResizeMode.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     }
 
-private fun PlayerView.syncLibassOverlay(
+internal fun PlayerView.syncLibassOverlay(
     player: ExoPlayer,
     enabled: Boolean,
     renderType: LibassRenderType,
 ) {
-    val containerId = if (renderType == LibassRenderType.OVERLAY_OPEN_GL) {
-        R.id.libass_overlay_container_gl
-    } else {
-        R.id.libass_overlay_container
-    }
-    val overlayContainer = findViewById<android.widget.FrameLayout>(containerId) ?: return
+    val canvasContainer = findViewById<android.widget.FrameLayout>(R.id.libass_overlay_container)
+    val glContainer = findViewById<android.widget.FrameLayout>(R.id.libass_overlay_container_gl)
+    val overlayContainer = if (renderType == LibassRenderType.OVERLAY_OPEN_GL) glContainer else canvasContainer
+    val otherContainer = if (renderType == LibassRenderType.OVERLAY_OPEN_GL) canvasContainer else glContainer
     val needsOverlay = enabled && renderType.usesOverlaySubtitleView()
     val boundPlayer = getTag(R.id.libass_overlay_bound_player) as? ExoPlayer
-    val hasOverlayChild = overlayContainer.hasAssOverlayChild()
 
     if (!needsOverlay) {
-        if (hasOverlayChild) {
-            overlayContainer.removeAssOverlayChildren()
-        }
-        if (boundPlayer != null) {
-            setTag(R.id.libass_overlay_bound_player, null)
-        }
+        canvasContainer?.removeAssOverlayChildren()
+        glContainer?.removeAssOverlayChildren()
+        setTag(R.id.libass_overlay_bound_player, null)
         return
     }
 
+    if (overlayContainer == null) return
     val assHandler = player.getAssHandlerCompat() ?: return
-    if (boundPlayer === player && hasOverlayChild) {
+    if (boundPlayer === player && overlayContainer.hasAssOverlayChild() &&
+        otherContainer?.hasAssOverlayChild() != true
+    ) {
         return
     }
 
-    overlayContainer.removeAssOverlayChildren()
+    canvasContainer?.removeAssOverlayChildren()
+    glContainer?.removeAssOverlayChildren()
     val assSubtitleView = AssSubtitleView(overlayContainer.context, assHandler)
     overlayContainer.addView(
         assSubtitleView,
@@ -2004,14 +2031,20 @@ private fun PlayerView.releaseLibassOverlay() {
     setTag(R.id.libass_overlay_bound_player, null)
 }
 
-private fun PlayerView.applySubtitleStyle(style: SubtitleStyleState, pipScale: Float = 1.0f) {
+internal fun PlayerView.applySubtitleStyle(
+    style: SubtitleStyleState,
+    pipScale: Float = 1.0f,
+    useLibass: Boolean = false,
+) {
     subtitleView?.apply {
         val baseBottomPaddingFraction = SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION * 2f / 3f
         val offsetFraction = (style.bottomOffset / 1000f).coerceIn(0f, 0.2f)
         val bottomPaddingFraction = (baseBottomPaddingFraction + offsetFraction).coerceIn(0f, 0.4f)
 
-        setApplyEmbeddedStyles(false)
-        setApplyEmbeddedFontSizes(false)
+        // In cue mode, the ASS parser supplies embedded spans for authored
+        // fonts, colors and positioning. Discarding them defeats libass.
+        setApplyEmbeddedStyles(useLibass)
+        setApplyEmbeddedFontSizes(useLibass)
         setBottomPaddingFraction(bottomPaddingFraction)
         setStyle(
             CaptionStyleCompat(
