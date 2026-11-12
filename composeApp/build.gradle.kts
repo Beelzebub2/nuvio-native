@@ -69,6 +69,12 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:Input
     abstract val tmdbApiKey: Property<String>
 
+    @get:Input
+    abstract val traktClientId: Property<String>
+
+    @get:Input
+    abstract val traktRedirectUri: Property<String>
+
     @TaskAction
     fun generate() {
         val props = Properties()
@@ -126,9 +132,8 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.trakt
                 |
                 |object TraktConfig {
-                |    const val CLIENT_ID = "${props.getProperty("TRAKT_CLIENT_ID", "")}" 
-                |    const val CLIENT_SECRET = "${props.getProperty("TRAKT_CLIENT_SECRET", "")}" 
-                |    const val REDIRECT_URI = "${props.getProperty("TRAKT_REDIRECT_URI", "nuvio://auth/trakt")}" 
+                |    const val CLIENT_ID = "${traktClientId.get()}"
+                |    const val REDIRECT_URI = "${traktRedirectUri.get()}"
                 |}
                 """.trimMargin()
             )
@@ -650,6 +655,9 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
     sentryDesktopDsn.set(runtimeConfigValue("SENTRY_DESKTOP_DSN"))
     tmdbApiKey.set(runtimeConfigValue("TMDB_API_KEY"))
+    traktClientId.set(runtimeConfigValue("TRAKT_CLIENT_ID"))
+    // Leave blank until a production HTTPS app/universal link is verified on its domain.
+    traktRedirectUri.set(runtimeConfigValue("TRAKT_REDIRECT_URI"))
     sentryEnvironment.set(
         when {
             requestedGradleTasks.any { "benchmark" in it } -> "benchmark"

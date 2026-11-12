@@ -1619,7 +1619,7 @@
     <string name="settings_trakt_features">அம்சங்கள்</string>
     <string name="settings_trakt_finish_sign_in">இணைப்பு ஒப்புதலை முடிக்கவும்</string>
     <string name="settings_trakt_intro_description">உங்கள் கண்காணிப்புப் பட்டியலை ஒத்திசைக்கவும், முன்னேற்றத்தைப் பார்க்கவும், தொடர்ந்து பார்க்கவும், ஸ்க்ரோபிள் செய்யவும் மற்றும் தனிப்பட்ட பட்டியல்களை Trakt உடன் ஒத்திசைக்கவும்.</string>
-    <string name="settings_trakt_missing_credentials">உள்ளூர் பண்புகளில் Trakt நற்சான்றிதழ்கள் இல்லை (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">உள்ளூர் பண்புகளில் Trakt நற்சான்றிதழ்கள் இல்லை (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">திற Trakt செயல்படுத்தவும்</string>
     <string name="settings_trakt_open_login">Trakt உள்நுழைவைத் திறக்கவும்</string>
     <string name="settings_trakt_save_actions_description">உங்கள் கண்காணிப்புப் பட்டியலை ஒத்திசைக்கவும், முன்னேற்றத்தைப் பார்க்கவும், தொடர்ந்து பார்க்கவும், ஸ்க்ரோபிள் செய்யவும் மற்றும் தனிப்பட்ட பட்டியல்களை Trakt உடன் ஒத்திசைக்கவும்.</string>

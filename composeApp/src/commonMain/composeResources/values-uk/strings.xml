@@ -1627,7 +1627,7 @@
     <string name="settings_trakt_features">ОСОБЛИВОСТІ</string>
     <string name="settings_trakt_finish_sign_in">Завершити підтвердження підключення</string>
     <string name="settings_trakt_intro_description">Синхронізуйте свій список спостереження, перегляд прогресу, продовження перегляду, скробблування та особисті списки за допомогою Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Відсутні облікові дані Trakt у local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Відсутні облікові дані Trakt у local.properties (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Відкрити Trakt Активувати</string>
     <string name="settings_trakt_open_login">Відкрийте Trakt Вхід</string>
     <string name="settings_trakt_save_actions_description">Синхронізуйте свій список спостереження, перегляд прогресу, продовження перегляду, прокручування та особисті списки за допомогою Trakt.</string>

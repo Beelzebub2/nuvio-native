@@ -1634,7 +1634,7 @@ Hindi available ang profile ng</string>
     <string name="settings_trakt_features">MGA TAMPOK</string>
     <string name="settings_trakt_finish_sign_in">Tapusin ang pag-apruba ng koneksyon</string>
     <string name="settings_trakt_intro_description">I-sync ang iyong watchlist, panoorin ang progreso, ipagpatuloy ang panonood, scrobbles, at mga personal na listahan gamit ang Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Walang Trakt na kredensyal sa local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Walang Trakt na kredensyal sa local.properties (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Buksan Trakt I-activate</string>
     <string name="settings_trakt_open_login">Buksan ang Trakt Login</string>
     <string name="settings_trakt_save_actions_description">I-sync ang iyong watchlist, panoorin ang progreso, ipagpatuloy ang panonood, scrobbles, at mga personal na listahan gamit ang Trakt.</string>

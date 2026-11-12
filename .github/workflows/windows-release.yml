@@ -15,6 +15,10 @@ permissions:
 
 env:
   RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+  # Public OAuth app identity; never place a Trakt client secret in shipped binaries.
+  TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
+  # Set only after an HTTPS Universal Link / verified App Link is deployed.
+  TRAKT_REDIRECT_URI: ${{ vars.TRAKT_REDIRECT_URI }}
 
 concurrency:
   group: windows-release-${{ inputs.release_tag || github.ref_name }}
