@@ -9,6 +9,7 @@ on:
       - 'composeApp/src/desktopTest/js/discord-share-toggle.test.mjs'
       - 'tests/native-discord-share-safety.test.cpp'
       - 'tests/native-play*.test.*'
+      - 'tests/surround-upmix-libmpv-probe.windows.py'
       - '.github/workflows/playback-diagnostics-check.yml'
   workflow_dispatch:
 
@@ -75,6 +76,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - uses: gradle/actions/setup-gradle@v6
       - name: Install WebView2 build SDK
         shell: pwsh
@@ -94,6 +98,9 @@ jobs:
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
+      - name: Verify real 5.1 PCM output from bundled audio engine
+        shell: pwsh
+        run: python tests/surround-upmix-libmpv-probe.windows.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:
