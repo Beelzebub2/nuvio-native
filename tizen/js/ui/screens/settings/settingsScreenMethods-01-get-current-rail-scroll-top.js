@@ -65,6 +65,7 @@ export function createSettingsScreenMethods01() {
             <div class="settings-root-sidebar-slot" data-settings-root-sidebar></div>
             <div class="settings-workspace">
               <div class="settings-sidebar-frame">
+                <h1 class="settings-heading" data-settings-heading></h1>
                 <aside class="settings-sidebar" data-settings-nav></aside>
                 ${settingsScrollIndicatorMarkup("vertical")}
                 ${settingsScrollIndicatorMarkup("horizontal")}
@@ -105,6 +106,13 @@ export function createSettingsScreenMethods01() {
           ? this.navIndex
           : SECTION_META.findIndex((section) => section.id === this.activeSection);
       this.contentFocusKey = persistedUiState.contentFocusKey || this.contentFocusKey || null;
+      // Deep link: Router.navigate("settings", { section: "display" }).
+      const requestedSection = String(_params?.section || "");
+      if (requestedSection && SECTION_META.some((section) => section.id === requestedSection)) {
+        this.activeSection = requestedSection;
+        this.navIndex = Number.NaN;
+        this.contentFocusKey = null;
+      }
       this.appearanceThemeFocusKey = persistedUiState.appearanceThemeFocusKey || this.appearanceThemeFocusKey || null;
       this.pluginDraft = this.pluginDraft || "";
       this.integrationView = persistedUiState.integrationView || this.integrationView || "hub";

@@ -1,0 +1,213 @@
+/*
+ * Starlit TV design tokens.
+ *
+ * Every size is a CSS px value on the 1080-tall reference canvas that
+ * js/platform/tvViewport.js maps onto the screen. Do not size anything with
+ * vw, vh or clamp(): Tizen 4 (Chromium 56) has no CSS min/max/clamp, and the
+ * canvas is already scaled as a whole.
+ *
+ * Colours alias the variables ThemeManager sets (css/base.css defaults), so
+ * every palette, including a custom one, drives the same tokens:
+ *   --tv-accent       = --secondary-color
+ *   --tv-on-accent    = --on-secondary
+ *   --tv-ring         = --focus-color
+ *   --tv-focus-bg     = --focus-bg
+ *   --tv-bg           = --bg-color
+ *   --tv-bg-elevated  = --bg-elevated
+ *   --tv-bg-card      = --card-bg
+ */
+
+:root {
+  /* Reference canvas. tvViewport.js overwrites the layout size. */
+  --tv-ref-height: 1080px;
+  --tv-layout-width: 1920px;
+  --tv-layout-height: 1080px;
+
+  /* Safe areas and keylines */
+  --tv-safe-action: 48px; /* nothing focusable closer to any edge */
+  --tv-rail-width: 128px; /* collapsed navigation rail */
+  --tv-keyline: 176px; /* text and rows start here when the rail shows */
+  --tv-keyline-full: 120px; /* screens without the rail (details, player, sign-in) */
+  --tv-top: 96px; /* first line of content */
+
+  /* Type: size / line-height / weight */
+  --tv-font: "Inter", "Roboto", "Segoe UI", Arial, sans-serif;
+  --tv-type-hero: 104px;
+  --tv-type-hero-lh: 104px;
+  --tv-type-display: 76px;
+  --tv-type-display-lh: 84px;
+  --tv-type-screen: 48px;
+  --tv-type-screen-lh: 56px;
+  --tv-type-subtitle: 30px;
+  --tv-type-subtitle-lh: 36px;
+  --tv-type-row: 30px;
+  --tv-type-row-lh: 36px;
+  --tv-type-body: 26px;
+  --tv-type-body-lh: 38px;
+  --tv-type-label: 24px;
+  --tv-type-label-lh: 30px;
+  --tv-type-meta: 22px;
+  --tv-type-meta-lh: 28px;
+  --tv-type-caption: 20px;
+  --tv-type-caption-lh: 26px;
+  --tv-type-eyebrow-tracking: 0.14em; /* uppercase eyebrows, 20px / 700 */
+  --tv-type-title-tracking: -0.025em; /* hero and display titles */
+
+  /* Text on dark grounds */
+  --tv-text: #f4f6fa;
+  --tv-text-2: rgba(244, 246, 250, 0.76); /* body, synopsis */
+  --tv-text-3: rgba(244, 246, 250, 0.64); /* meta, inactive tabs */
+  --tv-warn-text: #ffb870;
+  --tv-warn-bg: rgba(255, 170, 84, 0.16);
+
+  /* Fills */
+  --tv-fill-button: rgba(255, 255, 255, 0.14); /* unfocused buttons */
+  --tv-fill-chip: rgba(255, 255, 255, 0.08); /* filter chips, keys */
+  --tv-fill-row: rgba(255, 255, 255, 0.045); /* list rows, settings rows */
+  --tv-fill-selected: rgba(255, 255, 255, 0.92); /* selected tab: dark text on it */
+  --tv-on-selected: #10141c;
+  --tv-badge-border: rgba(244, 246, 250, 0.36);
+
+  /* Spacing (8 px grid) */
+  --tv-space-1: 8px;
+  --tv-space-2: 16px;
+  --tv-space-3: 24px;
+  --tv-space-4: 32px;
+  --tv-space-5: 40px;
+  --tv-space-6: 48px;
+  --tv-row-title-gap: 24px; /* row title to its cards */
+
+  /* Components */
+  --tv-card-w: 400px; /* landscape 16:9 */
+  --tv-card-h: 225px;
+  --tv-card-gap: 36px; /* leaves room for a 1.06 focused card plus its ring */
+  --tv-poster-w: 216px; /* 2:3 */
+  --tv-poster-h: 324px;
+  --tv-poster-gap: 24px;
+  --tv-episode-w: 352px;
+  --tv-episode-h: 198px;
+  --tv-button-h: 72px;
+  --tv-button-h-primary: 76px;
+  --tv-button-pad-x: 34px;
+  --tv-icon-button: 72px;
+  --tv-chip-h: 52px;
+  --tv-key: 72px; /* on-screen keyboard key */
+  --tv-list-row-h: 112px; /* sources, settings */
+  --tv-rail-item: 72px;
+  --tv-play-button: 84px;
+
+  /* Radii */
+  --tv-radius-card: 18px;
+  --tv-radius-poster: 16px;
+  --tv-radius-row: 20px;
+  --tv-radius-key: 16px;
+  --tv-radius-pill: 999px;
+
+  /* Focus: fill + gap + ring. Cards and posters also scale. */
+  --tv-focus-gap: 4px;
+  --tv-focus-ring: 5px;
+  --tv-focus-card-scale: 1.06;
+  --tv-focus-duration: 140ms;
+
+  /* Palette: follows the active theme, Arctic Blue values as the fallback. */
+  --tv-accent: var(--secondary-color, #3185f5);
+  --tv-on-accent: var(--on-secondary, #ffffff);
+  --tv-ring: var(--focus-color, #4de3ff);
+  --tv-focus-bg: var(--focus-bg, #172844);
+  --tv-bg: var(--bg-color, #0b0e14);
+  --tv-bg-elevated: var(--bg-elevated, #141a24);
+  --tv-bg-card: var(--card-bg, #161e2a);
+
+  /* The three focus treatments, as shadows (no layout, no blur). */
+  --tv-focus-shadow-button: 0 0 0 4px var(--tv-bg), 0 0 0 9px var(--tv-ring);
+  --tv-focus-shadow-row: 0 0 0 4px var(--tv-bg), 0 0 0 8px var(--tv-ring);
+  --tv-focus-shadow-card:
+    0 0 0 4px var(--tv-bg), 0 0 0 9px var(--tv-ring), 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* Settings > Display & scaling > Text size. Reading text grows, layout and
+   hero titles stay, so nothing is pushed off the canvas. */
+.tv-text-large {
+  --tv-type-subtitle: 34px;
+  --tv-type-subtitle-lh: 40px;
+  --tv-type-row: 34px;
+  --tv-type-row-lh: 40px;
+  --tv-type-body: 30px;
+  --tv-type-body-lh: 42px;
+  --tv-type-label: 28px;
+  --tv-type-label-lh: 34px;
+  --tv-type-meta: 26px;
+  --tv-type-meta-lh: 32px;
+  --tv-type-caption: 23px;
+  --tv-type-caption-lh: 28px;
+}
+
+.tv-text-xlarge {
+  --tv-type-subtitle: 38px;
+  --tv-type-subtitle-lh: 44px;
+  --tv-type-row: 38px;
+  --tv-type-row-lh: 44px;
+  --tv-type-body: 34px;
+  --tv-type-body-lh: 46px;
+  --tv-type-label: 31px;
+  --tv-type-label-lh: 38px;
+  --tv-type-meta: 29px;
+  --tv-type-meta-lh: 36px;
+  --tv-type-caption: 26px;
+  --tv-type-caption-lh: 32px;
+}
+
+/* ---- Focus patterns ------------------------------------------------------ */
+
+/* Buttons, keys, chips, rail items: fill and ring, no scale. */
+.tv-focus-button.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+/* List rows (sources, settings): tinted fill and ring, no scale. */
+.tv-focus-row.focused {
+  background: var(--tv-focus-bg);
+  box-shadow: var(--tv-focus-shadow-row);
+}
+
+/* Cards and posters: ring, lift and scale. Only transform and box-shadow
+   change, so focus moves stay on the compositor on slow TVs. */
+.tv-focus-card {
+  -webkit-transition: -webkit-transform var(--tv-focus-duration) ease-out;
+  transition: transform var(--tv-focus-duration) ease-out;
+}
+
+.tv-focus-card.focused {
+  -webkit-transform: scale(1.06);
+  transform: scale(1.06);
+  box-shadow: var(--tv-focus-shadow-card);
+}
+
+/* "Lighter animations" setting and constrained devices. */
+.tv-reduce-motion .tv-focus-card,
+.legacy-tizen .tv-focus-card {
+  -webkit-transition: none;
+  transition: none;
+}
+
+.tv-reduce-motion .tv-focus-card.focused {
+  -webkit-transform: none;
+  transform: none;
+}
+
+/* ---- Legacy engine fallbacks (classes set by assets/runtime/legacy-features.js) */
+
+/* Tizen 4/5 engines without flex gap: rows use margins instead. */
+.no-flex-gap .tv-row > * + * {
+  margin-left: var(--tv-card-gap);
+}
+
+.no-flex-gap .tv-poster-row > * + * {
+  margin-left: var(--tv-poster-gap);
+}
+
+.no-flex-gap .tv-stack > * + * {
+  margin-top: var(--tv-space-2);
+}

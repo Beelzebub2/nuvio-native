@@ -35,6 +35,9 @@ export function createSearchScreenMethods04() {
     },
     restoreContentFocus(preferResults = false) {
       let target = null;
+      if (!preferResults && this.lastContentFocus?.zone === "keyboard") {
+        target = this.getSearchKeyboardNode();
+      }
       if (preferResults) {
         target = this.container?.querySelector(".search-results-row .search-result-card.focusable") || null;
       }

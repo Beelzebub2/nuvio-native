@@ -26,6 +26,7 @@ export function createSearchScreenMethods06() {
       if (action === "runRecentSearch") void this.runRecentSearchFromNode(node);
       if (action === "clearSearchHistory") this.clearSearchHistory();
       if (action === "removeRecentSearch") this.removeRecentSearchFromNode(node);
+      if (action === "searchKey") this.pressSearchKey(node);
     },
     ensureVoiceRecognition() {
       if (this.voiceRecognition || !this.voiceSearchSupported) {
@@ -241,6 +242,13 @@ export function createSearchScreenMethods06() {
       const current = this.container.querySelector(".focusable.focused");
       if (!current) return;
       const action = String(current.dataset.action || "");
+      if (action === "searchKey") {
+        event.preventDefault?.();
+        if (!event?.repeat || current.dataset.key === "backspace") {
+          this.pressSearchKey(current);
+        }
+        return;
+      }
       if (
         action === "openDiscover" ||
         action === "openVoice" ||

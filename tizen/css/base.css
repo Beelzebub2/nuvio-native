@@ -77,6 +77,10 @@ body {
 }
 
 #app {
+  /* Sized and, when needed, scaled by js/platform/tvViewport.js. */
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -93,6 +97,7 @@ body {
 .tizen-tv #app,
 .tizen-tv .screen {
   height: 1080px;
+  height: var(--tv-layout-height, 1080px);
 }
 
 .row {
