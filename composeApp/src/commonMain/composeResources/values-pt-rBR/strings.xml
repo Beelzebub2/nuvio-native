@@ -459,6 +459,7 @@
     <string name="player_local_subtitle_unsupported">Escolha um arquivo de legendas SRT, ASS, SSA ou VTT.</string>
     <string name="player_local_subtitle_unreadable">O arquivo de legendas está vazio, não existe ou não pode ser lido.</string>
     <string name="player_local_subtitle_oversized">Os arquivos de legendas devem ter no máximo 16 MiB.</string>
+    <string name="player_local_subtitle_multiple_files">Solte apenas um arquivo de legendas por vez.</string>
     <string name="player_local_subtitle_failed">Não foi possível abrir o seletor de arquivos. Tente novamente.</string>
     <string name="player_local_subtitle_player_not_ready">O player ainda não está pronto para carregar legendas.</string>
     <string name="compose_player_brightness_level">Brilho %1$s</string>
