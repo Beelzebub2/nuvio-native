@@ -1260,6 +1260,17 @@ private fun PlaybackSettingsSection(
                 }
                 SettingsGroupDivider(isTablet = isTablet)
                 when (autoPlayPlayerSettings.nextEpisodeThresholdMode) {
+                    com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART -> {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_threshold_smart_description),
+                            modifier = Modifier.padding(
+                                horizontal = if (isTablet) 18.dp else 16.dp,
+                                vertical = 10.dp,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.PERCENTAGE -> {
                         val thresholdPercent = autoPlayPlayerSettings.nextEpisodeThresholdPercent
                         Column(
@@ -1303,8 +1314,8 @@ private fun PlaybackSettingsSection(
                                 onValueChangeFinished = {
                                     PlayerSettingsRepository.setNextEpisodeThresholdPercent(sliderValue)
                                 },
-                                valueRange = 97f..100f,
-                                steps = calculateSteps(97f, 100f, 0.5f),
+                                valueRange = 85f..100f,
+                                steps = calculateSteps(85f, 100f, 0.5f),
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
                                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -2680,6 +2691,8 @@ private fun NextEpisodeThresholdModeDialog(
             val isSelected = mode == selected
             DialogOption(
                 text = stringResource(mode.labelRes),
+                description = if (mode == com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART)
+                    stringResource(Res.string.settings_playback_threshold_smart_description) else null,
                 selected = isSelected,
                 onClick = { onSelect(mode) },
             )
@@ -2721,6 +2734,8 @@ private val StreamAutoPlayMode.labelRes: StringResource
 
 private val com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.labelRes: StringResource
     get() = when (this) {
+        com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.SMART ->
+            Res.string.settings_playback_threshold_mode_smart
         com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.PERCENTAGE ->
             Res.string.settings_playback_threshold_mode_percentage
         com.nuvio.app.features.player.skip.NextEpisodeThresholdMode.MINUTES_BEFORE_END ->

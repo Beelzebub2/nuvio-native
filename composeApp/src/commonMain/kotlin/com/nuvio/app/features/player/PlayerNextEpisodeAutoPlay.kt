@@ -55,6 +55,19 @@ internal fun PlayerScreenRuntime.isAtNextEpisodeThreshold(): Boolean {
     )
 }
 
+internal fun PlayerScreenRuntime.isAtNextEpisodeAutoPlayThreshold(): Boolean {
+    if (!isAtNextEpisodeThreshold()) return false
+    if (playbackSnapshot.isEnded) return true
+    return PlayerNextEpisodeRules.shouldAutomaticallyPlayNextEpisode(
+        positionMs = playbackSnapshot.positionMs,
+        durationMs = playbackSnapshot.durationMs,
+        skipIntervals = skipIntervals,
+        thresholdMode = playerSettingsUiState.nextEpisodeThresholdMode,
+        thresholdPercent = playerSettingsUiState.nextEpisodeThresholdPercent,
+        thresholdMinutesBeforeEnd = playerSettingsUiState.nextEpisodeThresholdMinutesBeforeEnd,
+    )
+}
+
 internal fun PlayerScreenRuntime.cancelNextEpisodeAutoPlay() {
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
