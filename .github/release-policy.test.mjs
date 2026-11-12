@@ -47,6 +47,18 @@ test('every published release requires a signed Android TV package and checksum'
   assert.match(workflow, /"Starlit-TV-\$version\.apk"/, 'TV APK must be uploaded to the public release');
 });
 
+test('Windows release uses pinned same-repository LFS runtimes and verifies both binaries', () => {
+  const workflow = readFileSync(new URL('./workflows/windows-release.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /git lfs fetch origin "refs\/tags\/\$env:RELEASE_TAG"/,
+    'release Windows job must retrieve exact tagged LFS objects from its own repository');
+  assert.match(workflow, /07c68bb211f23a218ded0a36eb12207dc3aeb44e5318ffca6ce9dcc7c3173906/,
+    'libmpv pinned SHA-256 must be checked');
+  assert.match(workflow, /13031185a54abe0f729f9f3bdb7271a349a89ac8c559327d773c66007ed604f4/,
+    'TorrServer pinned SHA-256 must be checked');
+  assert.doesNotMatch(workflow, /git lfs fetch https?:\/\//,
+    'release jobs must not depend on third-party Git LFS quotas');
+});
+
 test('Android TV pull requests compile and smoke-test a minified release build', () => {
   const workflow = readFileSync(new URL('./workflows/android-check.yml', import.meta.url), 'utf8');
   const smoke = readFileSync(new URL('./scripts/tv-emulator-smoke.sh', import.meta.url), 'utf8');

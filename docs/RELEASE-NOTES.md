@@ -1,3 +1,64 @@
+## Starlit 1.22.1
+
+### Release packaging
+
+- **Verified Windows native runtimes:** Fetch the exact bundled libmpv and torrent runtime binaries from the release repository rather than depending on a separate repository's Git LFS bandwidth allowance. Both files are checked against pinned SHA-256 digests and sizes before build or installation.
+- **Safe version recovery:** The v1.22.0 tag did not publish installers. This release includes the merged changes prepared for that version, using a new version and Android build code so installed clients can update normally.
+
+### Playback and audio
+
+- **Play privately:** Start a single playback session without watch history, progress, account synchronization, or Trakt/Simkl scrobbles. External-player and phone-to-PC handoff actions are unavailable in private mode; all other sessions retain normal history.
+- **Smarter intros and episode transitions:** Resolve more series identifiers, improve late-outro suggestions and automatic next episodes, and configure seek intervals. Episodes without credible intro/outro markers are not guessed.
+- **Windows stereo-to-5.1 (experimental):** Opt into matrix-based upmix on compatible shared-mode 5.1 speakers. Native surround, headphones, passthrough, and unsupported outputs stay unchanged.
+- **Subtitles and metadata:** Restore delayed embedded subtitle tracks, handle sparse track indexes, improve language aliases, and reconcile alternate IDs and Next Up results.
+
+### Accounts and platforms
+
+- **Trakt public-client OAuth:** Use device authorization and PKCE without a bundled client secret. Real sign-in requires a registered Trakt Client ID; browser redirects need verified HTTPS app links.
+- **Windows RTX Video guidance:** Detect compatible graphics adapters using native system APIs, without hidden shell commands. Hardware eligibility does not prove that upscaling is currently active.
+- **Linux Niri fullscreen fixes:** Restore window geometry without changing fullscreen behavior on other compositors.
+- **Android TV reliability and Samsung Tizen preview:** Improve TV authentication, watched-removal syncing, and idle update safety. Tizen packages remain unsigned and gated on physical-device acceptance.
+
+### Downloads, updates and library
+
+- **Safer updates and streaming:** Verify Android installer downloads, stage Linux AppImage replacements with rollback, and reduce redundant desktop torrent engine configuration.
+- **Dependable data synchronization:** Preserve playback-progress and watched-history deletions across failed sync attempts.
+- **Home and browse performance:** Improve catalogue visibility, caching, bounded retry behavior, and updater progress handling.
+
+### Verification and limitations
+
+- Release packages are published only after Windows installer and uninstall checks, signed Android phone and TV builds, all Linux formats, provenance and SHA-256 verification succeed.
+- Real-world testing remains necessary for Trakt sign-in and token refresh, surround sound on physical speakers, and Samsung Tizen deployment. No iOS App Store release is included.
+
+## Starlit 1.22.0
+
+### Playback and audio
+
+- **Play privately:** Start a single playback session without recording watch history, progress, account synchronization, or Trakt/Simkl scrobbles. Private mode is off by default; external-player and phone-to-PC handoff actions are unavailable when their history cannot be controlled.
+- **Improved intros and episode transitions:** Resolve skip-intro markers from more reliable series identifiers, use smarter end-of-episode timing, and offer configurable seek intervals. Episodes without trustworthy timestamps are not guessed.
+- **Experimental stereo-to-5.1 on Windows:** Opt into an audio upmix for compatible shared-mode 5.1 speaker systems. The option is off by default and leaves native surround, headphones, passthrough, and unsupported routes unchanged.
+- **More dependable subtitles and metadata:** Restore late-arriving embedded tracks, handle sparse track indexes, improve language aliases, and reconcile alternate media IDs and Next Up results.
+
+### Sign-in and platform compatibility
+
+- **Safer Trakt sign-in:** Use a public OAuth client with device authorization and PKCE support instead of bundling a client secret. Existing sessions are retained where Trakt permits; the optional browser callback requires correctly registered, verified HTTPS app links.
+- **Windows RTX Video detection:** Read graphics adapters through native Windows APIs without hidden shell commands. Use optional trusted NVIDIA diagnostics only when required for hybrid graphics; detection does not confirm that upscaling is active.
+- **Linux fullscreen reliability:** Restore prior window geometry when exiting fullscreen under Niri Wayland, without changing the behavior of other compositors.
+- **TV preview and safety:** Include Android TV application fixes and experimental Samsung Tizen source support. Samsung TV signing and general installation remain gated on real-device verification.
+
+### Updates, library, and reliability
+
+- **Safer updates:** Validate Android installer downloads, preserve rollback during Linux AppImage replacement, and improve handling for unmanaged Linux installations.
+- **More reliable synchronization:** Persist pending deletions of watched history and playback progress until acknowledged, with profile isolation on TV.
+- **Faster browsing and startup:** Improve catalogue visibility controls, reduce repeated Home projections, bound network retries, and reduce unnecessary desktop torrent reconfiguration and updater notifications.
+
+### Verification and limitations
+
+- The earlier 1.21.0 tag did not publish installers. Version 1.22.0 includes those merged improvements together with subsequent compatibility and playback changes.
+- Release artifacts are published only after the Windows, Linux, Android phone and Android TV test, build, signing and checksum-verification jobs pass.
+- Trakt sign-in requires a registered public client ID; browser redirects remain disabled until matching verified app links are configured. Real third-party login and refresh still require device acceptance tests.
+- Experimental upmixing requires listening tests on actual 5.1 hardware. The Samsung Tizen preview is not a signed TV installer, and no iOS App Store release is included.
+
 ## Starlit 1.21.0
 
 ### Playback and metadata
