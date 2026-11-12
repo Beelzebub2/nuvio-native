@@ -57,6 +57,23 @@ class DesktopAppFullscreenTest {
     }
 
     @Test
+    fun `Niri Wayland selects the frame geometry workaround`() {
+        assertTrue(isNiriWaylandFullscreenSession("wayland-1", null, "niri", null))
+        assertTrue(isNiriWaylandFullscreenSession(null, "Wayland", "GNOME:Niri", null))
+        assertTrue(isNiriWaylandFullscreenSession(null, "wayland", null, "niri"))
+    }
+
+    @Test
+    fun `other Wayland compositors preserve AWT fullscreen exit enforcement`() {
+        for (desktop in listOf("GNOME", "ubuntu:GNOME", "KDE", "sway", "Hyprland", null)) {
+            assertFalse(isNiriWaylandFullscreenSession("wayland-0", "wayland", desktop, null))
+        }
+        assertFalse(isNiriWaylandFullscreenSession(null, "x11", "niri", "niri"))
+        assertFalse(isNiriWaylandFullscreenSession(null, null, "niri", null))
+        assertFalse(isNiriWaylandFullscreenSession(null, "wayland", "not-niri", null))
+    }
+
+    @Test
     fun `native fullscreen exit lets the window listener restore placement`() {
         val updates = mutableListOf<String>()
 

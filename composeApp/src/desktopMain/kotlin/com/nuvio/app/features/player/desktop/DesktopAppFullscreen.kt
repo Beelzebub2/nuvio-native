@@ -102,7 +102,7 @@ internal class DesktopAppFullscreenController {
      * applied the change itself.
      */
     private fun enforceLinuxFullscreen(window: Window, windowState: WindowState) {
-        if (isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))) {
+        if (usesNiriWaylandFullscreenWorkaround()) {
             applyWaylandFullscreenExtendedState(window, windowState.placement == WindowPlacement.Fullscreen)
             SwingUtilities.invokeLater {
                 window.revalidate()
@@ -122,9 +122,10 @@ internal class DesktopAppFullscreenController {
     }
 
     /**
-     * XWayland compositors can report phantom window decoration insets for an
-     * exclusive AWT fullscreen window. Keep the compositor's fullscreen state
-     * and maximize the frame instead; restore its prior state on exit.
+     * Niri via XWayland can report phantom window decoration insets for an
+     * exclusive AWT fullscreen window. Temporarily maximize the frame to
+     * compensate, restoring the prior state on exit. Other compositors retain
+     * the original enforcement path: mutter needs it to exit fullscreen.
      */
     private fun applyWaylandFullscreenExtendedState(window: Window, entering: Boolean) {
         val frame = window as? Frame ?: return
@@ -142,7 +143,7 @@ internal class DesktopAppFullscreenController {
 
     fun dispose(window: Window) {
         if (DesktopHostOs.current == DesktopHostOs.LINUX &&
-            isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))
+            usesNiriWaylandFullscreenWorkaround()
         ) {
             applyWaylandFullscreenExtendedState(window, false)
         }
@@ -166,7 +167,7 @@ internal class DesktopAppFullscreenController {
                 ?: WindowPlacement.Floating
             windowState.placement = WindowPlacement.Fullscreen
             if (DesktopHostOs.current == DesktopHostOs.LINUX &&
-                isWaylandDesktopSession(System.getenv("WAYLAND_DISPLAY"), System.getenv("XDG_SESSION_TYPE"))
+                usesNiriWaylandFullscreenWorkaround()
             ) {
                 applyWaylandFullscreenExtendedState(window, true)
             }
@@ -348,3 +349,23 @@ private fun KeyEvent.isDesktopAppFullscreenShortcut(): Boolean {
 
 internal fun isWaylandDesktopSession(waylandDisplay: String?, sessionType: String?): Boolean =
     !waylandDisplay.isNullOrBlank() || sessionType?.equals("wayland", ignoreCase = true) == true
+
+private fun usesNiriWaylandFullscreenWorkaround(): Boolean =
+    isNiriWaylandFullscreenSession(
+        waylandDisplay = System.getenv("WAYLAND_DISPLAY"),
+        sessionType = System.getenv("XDG_SESSION_TYPE"),
+        currentDesktop = System.getenv("XDG_CURRENT_DESKTOP"),
+        sessionDesktop = System.getenv("XDG_SESSION_DESKTOP"),
+    )
+
+/** Keep mutter/KWin and unknown compositors on the existing AWT exit-enforcement path. */
+internal fun isNiriWaylandFullscreenSession(
+    waylandDisplay: String?,
+    sessionType: String?,
+    currentDesktop: String?,
+    sessionDesktop: String?,
+): Boolean =
+    isWaylandDesktopSession(waylandDisplay, sessionType) &&
+        listOfNotNull(currentDesktop, sessionDesktop)
+            .flatMap { it.split(':') }
+            .any { it.trim().equals("niri", ignoreCase = true) }
