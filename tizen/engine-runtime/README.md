@@ -1,0 +1,26 @@
+# Memory-only torrent service
+
+This is a newly authored MIT loopback HTTP facade around pinned MIT `torrent-stream@1.2.1`. It contains no Stremio `server.js`, EngineFS source, proprietary runtime, or opaque upstream service blob. `build.cjs` makes explicit, fail-closed modifications of npm integrity-pinned source and produces `media-http.cjs`, `runtime-manifest.json`, and `THIRD-PARTY-LICENSES.txt`. All deployed dependencies are bundled; the TV needs no npm install or external runtime host.
+
+Build on a development machine with Node 24 and npm 11:
+
+```sh
+npm ci
+npm run build
+npm test
+node test-network.cjs
+```
+
+The generated service targets the Node 4.9.1 API baseline and passes a complete ES5 parser check during build. Build tools are development-only. Re-run the generated bundle and the two tests under `node:4.9.1` to verify this baseline; this is not a Samsung hardware playback certification.
+
+Start with `require('./media-http.cjs').start({controlToken: secret, allowNullOrigin: true, proxyHandler: optionalHandler})`. The caller generates a fresh 32-byte cryptographic hex secret and transfers it only through a trusted MessagePort bridge that verifies the expected app ID. If the platform cannot supply this bridge, do not start the service. `stop(callback)` cancels the active stream, releases the cache, destroys the engine and its peers/discovery, and closes HTTP connections. `proxyHandler(req,res)` may return true to handle a separate proxy route after common loopback/Host/Origin checks.
+
+The service listens only on `127.0.0.1:2710`. State changes and private statistics require `X-Starlit-Token`; `Origin: null` is allowed only when configured for the signed widget. `/settings` and `/range-probe` expose fixed nonprivate data without authentication. `POST /{40hex}/create` accepts `{torrent:{infoHash},peerSearch:{sources:["dht:...","tracker:https://...","tracker:udp://..."]}}`, returns files, guessed file index and a random file-scoped playback ticket. `GET`/`HEAD /{hash}/{fileIndex}?ticket=...` supports one byte range, including suffix/open ranges; unsatisfiable/multiple ranges return 416. `POST /{hash}/remove`, `POST /removeAll`, and `GET /{hash}/stats` require the control token. `/hash/fileIndex/stats.json` aliases the stats endpoint. Media URLs contain only the per-file playback ticket. `/range-probe` contains the 22-byte ASCII string `starlit-range-probe-v1`.
+
+There is one active torrent and one media response at a time. RAM cache is capped at 48 MiB; no persistent metadata or media is written. Additional engine, peer, HTTP, and JavaScript bookkeeping consumes bounded overhead outside that cache; 48 MiB is not a total process RSS guarantee. File reads select one piece at a time. LRU eviction invalidates the corresponding verified engine bit so seeking refetches it. Cancellation resets incomplete piece buffers. Limits are 256 files, 16,384 pieces, 256 KiB metadata, 2 MiB maximum piece, 12 connections, 128 queued peers, 16 HTTP connections, and eight pending identical creates. Larger torrents fail visibly. The lifetime bad-peer blacklist is capped at 1,024 entries. A new torrent replaces the old engine. Torrent removal invalidates its playback ticket.
+
+Peers use TCP/IPv4 and must have public addresses. UDP/HTTP/HTTPS trackers are supported; tracker DNS is checked on actual outbound connections. HTTP tracker responses are limited to 256 KiB and ten seconds, redirects to three, and repeated announce intervals to one minute through one hour. Compressed tracker responses are rejected. uTP, WebRTC/WebSocket trackers, offline downloads, and seeding uploads are disabled. The tests' `allowPrivatePeers`, `onEngine`, ephemeral `port`, and reduced cache options are programmatic synthetic-fixture hooks, never HTTP request fields or production settings.
+
+Licenses are copied verbatim for bundled third-party code. Supplemental notices retain upstream URL provenance in `supplemental-licenses/sources.json`. The unlicensed `bitfield@0.1.0` implementation is excluded and replaced with a new MIT bitset. Small compatibility functions also replace `hat`, `flatten`, `buffer-equal`, `simple-sha1`, and the unbounded `simple-get` HTTP helper in full. The remaining legacy packages include npm advisory findings; notably `ip@1.1.5` is retained only for protocol address conversion/blocklist functionality, never for public-address security classification. Public-address security uses the separately tested native-IP/DNS policy. This legacy dependency baseline and Node 4 itself still require security review and physical Tizen validation before a production release.
+
+`test-runtime.cjs` generates its own synthetic two-file torrent entirely in RAM, serves metadata and pieces over a real TCP seed, and checks exact HTTP range bytes, file boundaries, suffix/HEAD/416 behavior, demand-only loading, bounded eviction/refetch, seeking/cancellation, removal/recreation, a deliberately delayed concurrent-create race, token/Host/Origin checks, and absence of persistent filesystem calls. `test-network.cjs` proves public-DNS policy enforcement through a real native HTTP Agent, plus synthetic response bounds, redirect handling and cancellation. Neither test downloads third-party media.

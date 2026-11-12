@@ -7,6 +7,7 @@ import com.nuvio.app.features.cloud.CloudLibraryProviderState
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.playbackVideoId
 import com.nuvio.app.features.debrid.DebridProviders
+import com.nuvio.app.features.details.CompletedSeriesEpisode
 import com.nuvio.app.features.watchprogress.CachedInProgressItem
 import com.nuvio.app.features.watchprogress.CachedNextUpItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
@@ -19,14 +20,357 @@ import com.nuvio.app.features.watchprogress.resolvedProgressKey
 import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watching.domain.WatchingContentRef
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeScreenTest {
+
+    @Test
+    fun `resolved alias retains its source key while displaying canonical series identity`() {
+        val aliasItem = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seasonNumber = 4,
+            episodeNumber = 6,
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(
+            imageUrl = "https://example.test/poster.jpg",
+            nextUpSourceSeedSeasonNumber = 2,
+            nextUpSourceSeedEpisodeNumber = 7,
+        )
+        val resolvedBySource = mapOf("season-alias" to (2_000L to aliasItem))
+        val currentSeeds = mapOf("season-alias" to (2 to 7), "canonical" to (4 to 5))
+
+        val validated = filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = resolvedBySource,
+            activeSeedContentIds = setOf("season-alias", "canonical"),
+            currentSeedByContentId = currentSeeds,
+            shouldDropItemsWithoutActiveSeed = true,
+        )
+
+        assertEquals(listOf("season-alias"), validated.keys.toList())
+        assertEquals("canonical", validated.values.single().second.parentMetaId)
+        assertEquals("canonical:4:6", validated.values.single().second.videoId)
+        assertEquals(2 to 7, validated.values.single().second.let {
+            it.nextUpSourceSeedSeasonNumber to it.nextUpSourceSeedEpisodeNumber
+        })
+        assertEquals(4 to 5, validated.values.single().second.let {
+            it.nextUpSeedSeasonNumber to it.nextUpSeedEpisodeNumber
+        })
+
+        assertTrue(filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = validated,
+            activeSeedContentIds = setOf("season-alias", "canonical"),
+            currentSeedByContentId = currentSeeds + ("season-alias" to (2 to 8)),
+            shouldDropItemsWithoutActiveSeed = true,
+        ).isEmpty())
+        assertTrue(filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = validated,
+            activeSeedContentIds = setOf("season-alias", "canonical"),
+            currentSeedByContentId = currentSeeds + ("canonical" to (4 to 6)),
+            shouldDropItemsWithoutActiveSeed = true,
+        ).isEmpty())
+        assertTrue(filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = validated,
+            activeSeedContentIds = setOf("canonical"),
+            currentSeedByContentId = currentSeeds,
+            shouldDropItemsWithoutActiveSeed = true,
+        ).isEmpty())
+    }
+
+    @Test
+    fun `alias cache round-trip preserves source seed and canonical playable identity`() {
+        val aliasItem = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seasonNumber = 4,
+            episodeNumber = 6,
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+            imageUrl = "https://example.test/episode.jpg",
+        ).copy(
+            poster = "https://example.test/poster.jpg",
+            nextUpSourceSeedSeasonNumber = 2,
+            nextUpSourceSeedEpisodeNumber = 7,
+            nextUpResolvedSeedMarkedAtEpochMs = 9_000L,
+        )
+        val cache = buildHomeNextUpCacheSnapshot(
+            nextUpItemsBySeries = mapOf("season-alias" to (4_000L to aliasItem)),
+            todayIsoDate = "2026-04-02",
+            seedLastWatchedMap = mapOf("season-alias" to 3_000L),
+        ).single()
+        val restored = Json.decodeFromString<CachedNextUpItem>(Json.encodeToString(cache))
+
+        assertEquals("season-alias", restored.contentId)
+        assertEquals("canonical", restored.canonicalContentId())
+        assertEquals(2 to 7, restored.sourceSeedSeason to restored.sourceSeedEpisode)
+        assertEquals(4 to 5, restored.seedSeason to restored.seedEpisode)
+        assertEquals(9_000L, restored.lastWatched)
+        assertEquals("canonical:4:6", restored.videoId)
+        val cachedItem = restored.toContinueWatchingItem(releaseEpochMs = null, nowEpochMs = 8_000L)
+        assertEquals("canonical", cachedItem.parentMetaId)
+        assertEquals("canonical:4:6", cachedItem.videoId)
+        assertEquals(2, cachedItem.nextUpSourceSeedSeasonNumber)
+        assertEquals(7, cachedItem.nextUpSourceSeedEpisodeNumber)
+        assertEquals(9_000L, cachedItem.nextUpResolvedSeedMarkedAtEpochMs)
+
+        val currentSeeds = mapOf("season-alias" to (2 to 7), "canonical" to (4 to 5))
+        assertTrue(cachedNextUpMatchesCurrentSeeds(restored, currentSeeds))
+        val cachedBySource = mapOf(restored.contentId to (restored.sortTimestamp to cachedItem))
+        assertEquals("season-alias", filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = cachedBySource,
+            activeSeedContentIds = setOf("season-alias", "canonical"),
+            currentSeedByContentId = currentSeeds,
+            shouldDropItemsWithoutActiveSeed = true,
+        ).keys.single())
+        assertFalse(cachedNextUpMatchesCurrentSeeds(restored, currentSeeds + ("season-alias" to (3 to 1))))
+        assertFalse(cachedNextUpMatchesCurrentSeeds(restored, currentSeeds + ("canonical" to (4 to 6))))
+    }
+
+    @Test
+    fun `cached alias keeps date-only next up unaired through its local release day`() {
+        val nextUp = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seasonNumber = 4,
+            episodeNumber = 6,
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(
+            released = "2026-04-02",
+            nextUpSourceSeedSeasonNumber = 2,
+            nextUpSourceSeedEpisodeNumber = 7,
+        )
+        val cached = buildHomeNextUpCacheSnapshot(
+            nextUpItemsBySeries = mapOf("season-alias" to (2_000L to nextUp)),
+            todayIsoDate = "2026-04-01",
+            seedLastWatchedMap = mapOf("season-alias" to 1_000L),
+        ).single()
+        val restored = Json.decodeFromString<CachedNextUpItem>(
+            Json.encodeToString(cached.copy(hasAired = true)),
+        )
+        val releaseEpochMs = requireNotNull(parseReleaseDateToEpochMs("2026-04-02"))
+
+        assertEquals("season-alias", restored.contentId)
+        assertEquals("canonical", restored.canonicalContentId())
+        assertTrue(cachedNextUpMatchesCurrentSeeds(restored, mapOf("season-alias" to (2 to 7))))
+        assertFalse(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs - 1L,
+            todayIsoDate = "2026-04-01",
+        ))
+        assertFalse(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs + 12L * 60L * 60L * 1000L,
+            todayIsoDate = "2026-04-02",
+        ))
+        assertTrue(cachedNextUpHasAired(
+            cached = restored,
+            nowEpochMs = releaseEpochMs + 24L * 60L * 60L * 1000L,
+            todayIsoDate = "2026-04-03",
+        ))
+    }
+
+    @Test
+    fun `legacy cached series and unchanged source IDs retain existing key semantics`() {
+        val legacy = Json.decodeFromString<CachedNextUpItem>(
+            """{"contentId":"show","contentType":"series","name":"Show","videoId":"show:1:2","lastWatched":1000,"sortTimestamp":1000,"seedSeason":1,"seedEpisode":1}""",
+        )
+        assertEquals("show", legacy.canonicalContentId())
+        assertNull(legacy.resolvedContentId)
+        assertTrue(cachedNextUpMatchesCurrentSeeds(legacy, mapOf("show" to (1 to 1))))
+        assertFalse(cachedNextUpMatchesCurrentSeeds(legacy, mapOf("show" to (1 to 2))))
+
+        val item = legacy.toContinueWatchingItem(releaseEpochMs = null, nowEpochMs = 2_000L)
+        assertEquals("show", item.parentMetaId)
+        assertNull(item.nextUpSourceSeedSeasonNumber)
+        assertEquals("show", filterNextUpItemsByCurrentSeeds(
+            nextUpItemsBySeries = mapOf("show" to (1_000L to item)),
+            activeSeedContentIds = setOf("show"),
+            currentSeedByContentId = mapOf("show" to (1 to 1)),
+            shouldDropItemsWithoutActiveSeed = true,
+        ).keys.single())
+    }
+
+    @Test
+    fun `multiple aliases and a canonical source produce one stable next up row`() {
+        val resolved = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(
+            poster = "https://example.test/canonical-poster.jpg",
+            nextUpSourceSeedSeasonNumber = 2,
+            nextUpSourceSeedEpisodeNumber = 7,
+        )
+        val live = mapOf(
+            "season-alias" to (4_000L to resolved),
+            "canonical" to (3_000L to resolved.copy(
+                nextUpSourceSeedSeasonNumber = null,
+                nextUpSourceSeedEpisodeNumber = null,
+            )),
+        )
+        val cached = mapOf("older-alias" to (6_000L to resolved.copy(title = "Stale")))
+
+        val merged = mergeHomeNextUpItemsWithCache(
+            resolvedItems = live,
+            cachedItems = cached,
+            conclusivelyProcessedContentIds = setOf("season-alias", "canonical"),
+        )
+
+        assertEquals(listOf("canonical"), merged.keys.toList())
+        assertEquals("canonical:4:6", merged.values.single().second.videoId)
+        assertEquals(1, buildHomeContinueWatchingItems(
+            visibleEntries = emptyList(),
+            nextUpItemsBySeries = merged,
+        ).size)
+        assertEquals(1, buildHomeNextUpCacheSnapshot(
+            nextUpItemsBySeries = merged,
+            todayIsoDate = "2026-04-02",
+            seedLastWatchedMap = mapOf("canonical" to 1_000L),
+        ).size)
+
+        val newerAliasOnly = mergeHomeNextUpItemsWithCache(
+            resolvedItems = mapOf("season-alias" to (4_000L to resolved)),
+            cachedItems = mapOf("canonical" to (6_000L to resolved.copy(title = "Old cache"))),
+            conclusivelyProcessedContentIds = setOf("season-alias"),
+        )
+        assertEquals(listOf("season-alias"), newerAliasOnly.keys.toList())
+        assertEquals("Show", newerAliasOnly.values.single().second.title)
+    }
+
+    @Test
+    fun `shuffle never adds a second seed for a represented canonical alias`() {
+        val resolved = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        )
+        val candidates = listOf("season-alias", "canonical", "other-series", "source-id")
+            .mapIndexed { index, contentId ->
+                CompletedSeriesCandidate(
+                    content = WatchingContentRef(type = "series", id = contentId),
+                    seasonNumber = 2,
+                    episodeNumber = index + 1,
+                    markedAtEpochMs = 1_000L,
+                )
+            }
+        val selected = filterHomeNextUpShuffleCandidates(
+            candidates = candidates,
+            nextUpItemsBySource = mapOf("source-id" to (2_000L to resolved)),
+            dismissedNextUpKeys = emptySet(),
+            knownAliasesFor = { if (it == "season-alias") listOf("canonical") else emptyList() },
+        )
+
+        assertEquals(listOf("other-series"), selected.map { it.content.id })
+    }
+
+    @Test
+    fun `active progress for an alias suppresses its canonical next up row`() {
+        val inProgress = progressEntry(
+            videoId = "season-alias:2:7",
+            title = "Show",
+            lastUpdatedEpochMs = 3_000L,
+        )
+        val nextUp = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(nextUpSourceSeedSeasonNumber = 2, nextUpSourceSeedEpisodeNumber = 7)
+
+        val result = buildHomeContinueWatchingItems(
+            visibleEntries = listOf(inProgress),
+            nextUpItemsBySeries = mapOf("season-alias" to (2_000L to nextUp)),
+            nextUpSuppressedSeriesIds = setOf("season-alias"),
+        )
+
+        assertEquals(1, result.size)
+        assertFalse(result.single().isNextUp)
+        assertEquals("season-alias", result.single().parentMetaId)
+    }
+
+    @Test
+    fun `cached and live aliases respect both canonical and original dismiss keys`() {
+        val live = continueWatchingItem(
+            videoId = "canonical:4:6",
+            subtitle = "S4E6",
+            seedSeasonNumber = 4,
+            seedEpisodeNumber = 5,
+        ).copy(nextUpSourceSeedSeasonNumber = 2, nextUpSourceSeedEpisodeNumber = 7)
+        val cached = buildHomeNextUpCacheSnapshot(
+            nextUpItemsBySeries = mapOf("season-alias" to (2_000L to live)),
+            todayIsoDate = "2026-04-02",
+            seedLastWatchedMap = mapOf("season-alias" to 1_000L),
+        ).single()
+        val canonicalDismissal = setOf(nextUpDismissKey("canonical", 4, 5))
+        val sourceDismissal = setOf(nextUpDismissKey("season-alias", 2, 7))
+
+        assertTrue(isHomeNextUpDismissed("season-alias", live, canonicalDismissal))
+        assertTrue(isHomeNextUpDismissed("season-alias", live, sourceDismissal))
+        assertTrue(cached.isDismissedNextUp(canonicalDismissal))
+        assertTrue(cached.isDismissedNextUp(sourceDismissal))
+        assertFalse(isHomeNextUpDismissed("season-alias", live, emptySet()))
+        assertFalse(cached.isDismissedNextUp(emptySet()))
+    }
+
+    @Test
+    fun `next up metadata keeps the seed when original content identity resolves`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001001"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        assertEquals(candidate, reanchorHomeNextUpCandidate(candidate, "tt0001001", null))
+        assertEquals(candidate, reanchorHomeNextUpCandidate(candidate, null, null))
+    }
+
+    @Test
+    fun `next up reanchors a fallback series to its own watched history`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001002"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        val result = reanchorHomeNextUpCandidate(
+            candidate = candidate,
+            resolvedContentId = "tt0001001",
+            resolvedLatestCompleted = CompletedSeriesEpisode(4, 5, 2000L),
+        )
+        assertNotNull(result)
+        assertEquals("tt0001001", result.content.id)
+        assertEquals(4, result.seasonNumber)
+        assertEquals(5, result.episodeNumber)
+        assertEquals(2000L, result.markedAtEpochMs)
+        assertEquals(
+            nextUpDismissKey("tt0001001", 4, 5),
+            nextUpDismissKey(result.content.id, result.seasonNumber, result.episodeNumber),
+        )
+    }
+
+    @Test
+    fun `next up fallback without a usable completed episode stays hidden`() {
+        val candidate = CompletedSeriesCandidate(
+            content = WatchingContentRef(type = "series", id = "tt0001002"),
+            seasonNumber = 2,
+            episodeNumber = 7,
+            markedAtEpochMs = 1000L,
+        )
+        assertNull(reanchorHomeNextUpCandidate(candidate, "tt0001001", null))
+        assertNull(reanchorHomeNextUpCandidate(candidate, "tt0001001", CompletedSeriesEpisode(0, 1, 2000L)))
+    }
 
     @Test
     fun `home remains loading while initial addon manifests are pending`() {

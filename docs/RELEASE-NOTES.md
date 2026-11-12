@@ -1,3 +1,30 @@
+## Starlit 1.21.0
+
+### Playback and metadata
+
+- **Broader intro skipping:** Recover MyAnimeList and Kitsu series identifiers when an add-on provides an opaque episode ID. A public Kitsu mapping can provide AniSkip markers without Simkl credentials, and changing skip-provider settings refreshes cached results.
+- **Smarter next-episode timing:** Smart mode uses credible late-outro markers when available and otherwise shows the next-episode suggestion near the end. Automatic transitions wait until the closing seconds, protect post-credit scenes, and respect dismissed suggestions. Manual percentage thresholds now support 85–100%.
+- **Configurable seeking:** Choose short, medium and long seek intervals per profile, including TV controls, double-tap seeking and desktop keyboard modifiers.
+- **More consistent metadata and subtitles:** Retry a bounded set of known alternate media IDs, reconcile Next Up history, update automatic subtitle selection after delayed provider results, and improve language alias matching. Subtitle timing and outline adjustments are available in player settings.
+
+### Platforms and reliability
+
+- **Samsung Tizen client preview:** The source tree now includes a Tizen TV application with remote navigation, playback and account features. Its package distribution is gated behind physical-device acceptance; this release does not imply that a signed Samsung TV installer is available.
+- **Windows RTX Video setup guidance:** Detect compatible NVIDIA adapters and help locate NVIDIA App configuration. Hardware detection does not prove that RTX video processing is active.
+- **Safer updates:** Android package downloads are verified before installation, while Linux AppImage replacements use staged writes with rollback protection and clearer unmanaged-install fallbacks.
+- **Lower playback overhead:** Reduce Windows loopback demuxer cache limits and repeated updater progress updates, and improve bounded network retry behavior.
+
+### Library and synchronization
+
+- **More dependable deletion sync:** Retry watched-history and playback-progress deletions after reconnects instead of restoring entries that were removed on another device.
+- **Home catalogue improvements:** Add bulk visibility controls and reuse catalogue projections across row updates to reduce unnecessary reloads.
+
+### Verification and limitations
+
+- Focused intro-resolution tests cover 22 cases on Windows, including missing or ambiguous metadata and provider fallbacks. Release builds and their checks must pass before assets are published.
+- Intro skipping requires credible community timestamps; it does not guess boundaries for episodes without usable markers. Real playback on representative media, Android devices and TVs remains to be confirmed.
+- The Samsung Tizen client is not yet verified on physical TVs and signed deployment remains gated. No iOS App Store release is included.
+
 ## Starlit 1.20.1
 
 ### Torrent playback and downloads

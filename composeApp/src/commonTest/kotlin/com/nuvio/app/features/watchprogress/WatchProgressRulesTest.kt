@@ -61,6 +61,69 @@ class WatchProgressRulesTest {
     }
 
     @Test
+    fun `offline delete outbox survives reload without preserving deleted playback metadata`() {
+        val removed = entry(
+            videoId = "show:1:2",
+            parentMetaId = "show",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            progressKey = "server-opaque-key",
+        ).copy(poster = "https://example.invalid/private-poster", lastSourceUrl = "private-stream")
+        val payload = WatchProgressCodec.encodePayload(
+            entries = emptyList(),
+            lastSuccessfulPushEpochMs = 500L,
+            deltaCursorEventId = 12L,
+            deltaInitialized = true,
+            pendingDeletes = listOf(removed.asPendingDelete()),
+        )
+
+        val restored = WatchProgressCodec.decodePayload(payload)
+
+        assertTrue(restored.entries.isEmpty())
+        assertEquals(listOf(removed.asPendingDelete()), restored.pendingDeletes)
+        assertEquals("server-opaque-key", restored.pendingDeletes.single().asDeleteEntry().resolvedProgressKey())
+        assertFalse(payload.contains("private-poster"))
+        assertFalse(payload.contains("private-stream"))
+        assertEquals(12L, restored.deltaCursorEventId)
+        assertEquals(500L, restored.lastSuccessfulPushEpochMs)
+    }
+
+    @Test
+    fun `re-adding deleted progress restores remote identity and cancels persisted delete`() {
+        val removed = entry(
+            videoId = "show:1:2",
+            parentMetaId = "show",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            progressKey = "server-opaque-key",
+        ).asPendingDelete()
+        val readded = listOf(removed).restoreIdentityForUpsert(
+            entry(videoId = "show:1:2", parentMetaId = "show", seasonNumber = 1, episodeNumber = 2),
+        )
+        val persisted = WatchProgressCodec.decodePayload(WatchProgressCodec.encodePayload(
+            entries = listOf(readded),
+            lastSuccessfulPushEpochMs = 0L,
+            deltaCursorEventId = 0L,
+            deltaInitialized = false,
+            dirtyProgressKeys = setOf(readded.resolvedProgressKey()),
+            pendingDeletes = listOf(removed),
+        ))
+
+        assertEquals("server-opaque-key", readded.resolvedProgressKey())
+        assertTrue(persisted.pendingDeletes.isEmpty())
+        assertEquals(setOf("server-opaque-key"), persisted.dirtyProgressKeys)
+    }
+
+    @Test
+    fun `guest deletes cannot be queued for a later signed-in account`() {
+        assertFalse(canQueueRemoteProgressDelete(true, isAuthenticated = false, isAnonymous = false))
+        assertFalse(canQueueRemoteProgressDelete(true, isAuthenticated = true, isAnonymous = true))
+        assertFalse(canQueueRemoteProgressDelete(false, isAuthenticated = true, isAnonymous = false))
+        assertTrue(canQueueRemoteProgressDelete(true, isAuthenticated = true, isAnonymous = false))
+        assertTrue(WatchProgressCodec.decodePayload("""{"entries":[]}""").pendingDeletes.isEmpty())
+    }
+
+    @Test
     fun `codec ignores corrupt payload`() {
         assertTrue(WatchProgressCodec.decodeEntries("{not json").isEmpty())
     }

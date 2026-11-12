@@ -1,0 +1,13 @@
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readAppMetadata } from "./appMetadata.mjs";
+const { version } = await readAppMetadata();
+const acceptance = JSON.parse(await readFile(new URL("../release/acceptance.json", import.meta.url), "utf8"));
+const file = await readFile(new URL(`../artifacts/Starlit-Tizen-${version}.wgt`, import.meta.url));
+const hash = createHash("sha256").update(file).digest("hex");
+const checks = ["remote_navigation", "signed_install_update", "direct_mp4_hls_dash", "torrent_multifile_seek_cleanup", "account_two_profile_roundtrip", "mal_tracking", "low_storage_recovery", "standby_network_recovery", "proxy_security", "license_completeness"];
+if (!acceptance || acceptance.status !== "PASS" || acceptance.version !== version || acceptance.wgt_sha256 !== hash) throw new Error("Tizen release blocked: exact package has no physical-device acceptance");
+for (const name of checks) if (acceptance.checks?.[name]?.status !== "PASS" || !acceptance.checks[name].evidence) throw new Error(`Tizen release blocked: ${name}`);
+for (const major of [4,5,6]) if (!acceptance.devices?.some(d => d.tizen_major === major && d.model && d.firmware && d.evidence && d.status === "PASS")) throw new Error(`Tizen release blocked: Tizen ${major} device evidence absent`);
+if (!acceptance.reviewer || !acceptance.reviewed_at) throw new Error("Tizen release blocked: acceptance review absent");
+console.log("Exact WGT passed Tizen release acceptance");

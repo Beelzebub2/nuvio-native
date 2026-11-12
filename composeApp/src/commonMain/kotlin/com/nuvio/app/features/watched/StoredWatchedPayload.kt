@@ -49,6 +49,7 @@ internal data class StoredWatchedPayload(
     val deltaCursorEventId: Long = 0L,
     val deltaInitialized: Boolean = false,
     val dirtyWatchedKeys: Set<String> = emptySet(),
+    val pendingDeletedItems: List<WatchedItem> = emptyList(),
     val providerPayloads: Map<String, StoredProviderWatchedPayload> = emptyMap(),
 )
 

@@ -53,6 +53,8 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
 @Composable internal actual fun MyAnimeListSettingsCard() {
     val connection = rememberMalConnection()
     var setup by remember { mutableStateOf(false) }
+    val syncScope = rememberCoroutineScope()
+    var tvSyncMessage by remember(connection.profileId) { mutableStateOf<String?>(null) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("MyAnimeList", style = MaterialTheme.typography.titleMedium)
@@ -63,6 +65,17 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
                 Button(enabled = !connection.busy, onClick = { setup = true }) { Text(if (connection.connected) "Reconnect" else "Set up / Connect") }
                 if (connection.connected) TextButton(onClick = MyAnimeListRepository::disconnect) { Text("Disconnect") }
                 if (connection.connecting) TextButton(onClick = MyAnimeListRepository::cancelConnect) { Text("Cancel") }
+            }
+            if (connection.connected) {
+                TextButton(enabled = !connection.busy, onClick = {
+                    syncScope.launch {
+                        tvSyncMessage = try { MyAnimeListRepository.syncConnectionToAccount(); "Connection synced to this Starlit profile. Load it from MyAnimeList settings on your TV." }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { "Unable to sync MyAnimeList. Sign in to Starlit and retry." }
+                    }
+                }) { Text("Sync connection to linked TVs") }
+                Text("Shares this profile's MyAnimeList tokens through private account provider sync. Account server administrators are trusted.", style = MaterialTheme.typography.bodySmall)
+                tvSyncMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {

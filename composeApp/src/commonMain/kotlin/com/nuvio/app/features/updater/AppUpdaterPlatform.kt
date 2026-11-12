@@ -22,6 +22,8 @@ expect object AppUpdaterPlatform {
     val isSupported: Boolean
     val isDebugBuild: Boolean
     val hasSingleUpdateChannel: Boolean
+    /** Whether the running installation can apply an update through the app. */
+    val installsUpdatesInApp: Boolean
 
     fun getSupportedAbis(): List<String>
 

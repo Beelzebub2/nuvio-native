@@ -1,0 +1,29 @@
+{
+  "name": "starlit-tizen-torrent-runtime",
+  "version": "1.0.0",
+  "description": "Memory-only loopback torrent HTTP service for legacy Node runtimes",
+  "scripts": {
+    "test": "node test-all.cjs",
+    "build": "node build.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "torrent-stream": "1.2.1"
+  },
+  "overrides": {
+    "simple-get": "2.0.0",
+    "ip": "1.1.5",
+    "run-parallel": "1.1.10",
+    "k-rpc-socket": {
+      "bencode": "0.11.0"
+    }
+  },
+  "devDependencies": {
+    "acorn": "8.15.0",
+    "browserify": "17.0.1",
+    "through2": "4.0.2"
+  }
+}

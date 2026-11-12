@@ -973,6 +973,7 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
     inputs.file(windowsPlayerBridgeSource)
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_protocol.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/discord_share_safety.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/surround_upmix_policy.h"))
     inputs.file("src/desktopMain/native/playback_diagnostics.h")
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/file_dialogs.h"))
     inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/windows_media_session.h"))
@@ -1003,8 +1004,21 @@ val windowsMediaSessionTest = tasks.register<Exec>("testWindowsMediaSessionActio
         windowsMediaSessionTestScript.asFile.absolutePath, "-VcvarsPath", windowsVcvarsPath.orEmpty(),
     )
 }
+val windowsSurroundPolicyTest = tasks.register<Exec>("testWindowsSurroundUpmixPolicy") {
+    notCompatibleWithConfigurationCache("Compiles native surround policy tests on Windows.")
+    enabled = isWindowsHost
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/surround_upmix_policy.h"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/surround_upmix_policy_test.cpp"))
+    inputs.file(layout.projectDirectory.file("src/desktopMain/native/windows/test_surround_upmix_policy.ps1"))
+    outputs.upToDateWhen { false }
+    commandLine(
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+        layout.projectDirectory.file("src/desktopMain/native/windows/test_surround_upmix_policy.ps1").asFile.absolutePath,
+        "-VcvarsPath", windowsVcvarsPath.orEmpty(),
+    )
+}
 tasks.matching { it.name == "desktopTest" }.configureEach {
-    dependsOn(windowsMediaSessionTest)
+    dependsOn(windowsMediaSessionTest, windowsSurroundPolicyTest)
 }
 
 // Windows RFCOMM host runs in a small isolated native helper. Unlike the

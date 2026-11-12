@@ -414,6 +414,9 @@ fun normalizeLanguageCode(language: String?): String? {
     }
 
     LanguageCodeAliases[raw]?.let { return it.replace('_', '-').lowercase() }
+    // Container metadata uses ISO 639-2 codes and some language varieties that
+    // are more specific than the two-letter preferences in settings.
+    iso639Part1Code(raw)?.let { return it }
     LanguageNameAliases[tokenized]?.let { return it }
     LanguageNameAliases.entries
         .sortedByDescending { it.key.length }
@@ -425,8 +428,16 @@ fun normalizeLanguageCode(language: String?): String? {
         }
         ?.let { return it.value }
 
+    // Some players place a three-letter variety after the macrolanguage.
+    // For example, "no-nob" and "zh-cmn" should match "no" and "zh".
+    raw.split('-').getOrNull(1)
+        ?.takeIf { it.length == 3 && it.all(Char::isLetter) }
+        ?.let(::iso639Part1Code)
+        ?.let { return it }
+
     val primary = raw.substringBefore('-')
-    val primaryAlias = LanguageCodeAliases[primary]?.replace('_', '-')?.lowercase()
+    val primaryAlias = (LanguageCodeAliases[primary] ?: iso639Part1Code(primary))
+        ?.replace('_', '-')?.lowercase()
     val suffix = raw.substringAfter('-', "")
     return if (suffix.isBlank()) {
         primaryAlias ?: primary
@@ -502,7 +513,7 @@ fun resolvePreferredAudioLanguageTargets(
             SubtitleLanguageOption.NONE,
             SubtitleLanguageOption.FORCED,
             -> null
-            AudioLanguageOption.ORIGINAL -> contentOriginalLanguage?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+            AudioLanguageOption.ORIGINAL -> normalizeContentLanguageCode(contentOriginalLanguage)
             else -> normalized
         }
     }
@@ -520,7 +531,7 @@ fun resolvePreferredAudioLanguageTargets(
             ).distinct()
 
         AudioLanguageOption.ORIGINAL -> {
-            val originalLang = contentOriginalLanguage?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+            val originalLang = normalizeContentLanguageCode(contentOriginalLanguage)
             if (originalLang != null) {
                 listOfNotNull(
                     originalLang,
@@ -608,12 +619,24 @@ fun countryToLanguageCode(country: String?): String? {
     return COUNTRY_TO_LANGUAGE_MAP[normalized]
 }
 
+// Some metadata services use legacy language identifiers outside ISO 639.
+// Resolve these only for original-content metadata, preserving regular track
+// language codes (including regional preferences) elsewhere.
+internal fun normalizeContentLanguageCode(language: String?): String? =
+    normalizeLanguageCode(language)?.let { code ->
+        when (code) {
+            "cn" -> "yue"
+            "mo" -> "ro"
+            else -> code
+        }
+    }
+
 /**
  * Resolves the original content language as an ISO 639-1 code.
  * Falls back to country-based inference when the explicit language field is absent.
  */
 fun resolveContentLanguage(language: String?, country: String?): String? {
-    normalizeLanguageCode(language)?.let { return it }
+    normalizeContentLanguageCode(language)?.let { return it }
     countryToLanguageCode(country)?.let { return it }
     return null
 }

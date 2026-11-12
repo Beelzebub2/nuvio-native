@@ -267,6 +267,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     }
     val playerControlsState = PlayerControlsState(
         title = title,
+        shortSeekSeconds = playerSettingsUiState.shortSeekSeconds,
+        mediumSeekSeconds = playerSettingsUiState.mediumSeekSeconds,
+        longSeekSeconds = playerSettingsUiState.longSeekSeconds,
         episodeText = if (hasPlaybackStarted) episodeText else "",
         streamTitle = activeStreamTitle,
         providerName = activeProviderName,
@@ -751,8 +754,9 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             },
             onBack = { requestBack() },
             onTogglePlayback = { togglePlayback() },
-            onSeekBack = { seekBy(-10_000L) },
-            onSeekForward = { seekBy(10_000L) },
+            onSeekBack = { seekBy(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = false)) },
+            onSeekForward = { seekBy(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = true)) },
+            shortSeekSeconds = playerSettingsUiState.shortSeekSeconds,
             onResizeModeClick = { cycleResizeMode() },
             onSpeedClick = { cyclePlaybackSpeed() },
             onSubtitleClick = {
@@ -1066,19 +1070,35 @@ private fun PlayerScreenRuntime.handlePlayerControlsAction(action: PlayerControl
             return false
         }
         PlayerControlsAction.SeekBack -> {
-            prepareSeekByForNativeFallback(-10_000L)
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = false))
             return false
         }
         PlayerControlsAction.KeyboardSeekBack -> {
-            prepareSeekByForNativeFallback(-10_000L, revealControls = false)
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = false), revealControls = false)
             return false
         }
         PlayerControlsAction.SeekForward -> {
-            prepareSeekByForNativeFallback(10_000L)
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = true))
             return false
         }
         PlayerControlsAction.KeyboardSeekForward -> {
-            prepareSeekByForNativeFallback(10_000L, revealControls = false)
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.SHORT, forward = true), revealControls = false)
+            return false
+        }
+        PlayerControlsAction.KeyboardMediumSeekBack -> {
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.MEDIUM, forward = false), revealControls = false)
+            return false
+        }
+        PlayerControlsAction.KeyboardMediumSeekForward -> {
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.MEDIUM, forward = true), revealControls = false)
+            return false
+        }
+        PlayerControlsAction.KeyboardLongSeekBack -> {
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.LONG, forward = false), revealControls = false)
+            return false
+        }
+        PlayerControlsAction.KeyboardLongSeekForward -> {
+            prepareSeekByForNativeFallback(playerSettingsUiState.seekOffsetMs(PlayerSeekStep.LONG, forward = true), revealControls = false)
             return false
         }
         PlayerControlsAction.KeyboardVolumeDown,

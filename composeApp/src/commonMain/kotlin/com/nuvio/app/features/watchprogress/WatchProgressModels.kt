@@ -226,6 +226,11 @@ data class ContinueWatchingItem(
     val isNextUp: Boolean = false,
     val nextUpSeedSeasonNumber: Int? = null,
     val nextUpSeedEpisodeNumber: Int? = null,
+    // When metadata resolves through an alias, these keep the original history seed
+    // distinct from the resolved series' completed-episode seed.
+    val nextUpSourceSeedSeasonNumber: Int? = null,
+    val nextUpSourceSeedEpisodeNumber: Int? = null,
+    val nextUpResolvedSeedMarkedAtEpochMs: Long? = null,
     val resumePositionMs: Long,
     val resumeProgressFraction: Float? = null,
     val durationMs: Long,

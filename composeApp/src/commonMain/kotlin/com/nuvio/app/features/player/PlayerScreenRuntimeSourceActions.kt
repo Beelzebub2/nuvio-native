@@ -400,7 +400,7 @@ internal fun PlayerScreenRuntime.playNextEpisode(automatic: Boolean = false) {
         nextEpisodeInfo?.videoId == nextVideoId &&
         (!automatic || (
             playerSettingsUiState.streamAutoPlayNextEpisodeEnabled &&
-                !nextEpisodeCardDismissed && isAtNextEpisodeThreshold()
+                !nextEpisodeCardDismissed && isAtNextEpisodeAutoPlayThreshold()
             ))
     if (!isCurrentRequest()) return
     nextEpisodeAutoPlayAutomatic = automatic

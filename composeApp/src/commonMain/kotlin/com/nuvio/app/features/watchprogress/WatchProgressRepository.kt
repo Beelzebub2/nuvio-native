@@ -227,6 +227,14 @@ internal class RemoteProgressWriteDeduplicator(
             recentWrites.clear()
         }
     }
+
+    fun forget(profileId: Int, progressKeys: Collection<String>) {
+        synchronized(lock) {
+            progressKeys.forEach { key ->
+                recentWrites.remove(RemoteProgressWriteKey(profileId, key))
+            }
+        }
+    }
 }
 
 object WatchProgressRepository {
@@ -247,8 +255,10 @@ object WatchProgressRepository {
     private val _activeSourceState = MutableStateFlow(activeSource)
     internal val activeSourceState: StateFlow<WatchProgressSource> = _activeSourceState.asStateFlow()
     private val entriesLock = SynchronizedObject()
+    private val persistenceLock = SynchronizedObject()
     private var entriesByProgressKey: MutableMap<String, WatchProgressEntry> = mutableMapOf()
     private var dirtyProgressKeys: MutableSet<String> = mutableSetOf()
+    private var pendingDeletesByProgressKey: MutableMap<String, PendingWatchProgressDelete> = mutableMapOf()
     private var metadataResolutionJob: Job? = null
     private val metadataResolutionRetryCoordinator = MetadataResolutionRetryCoordinator()
     private val providerMetadataOverlay = ProviderProgressMetadataOverlay()
@@ -306,13 +316,18 @@ object WatchProgressRepository {
         var changed = false
         guestEntries.forEach { entry ->
             if (entry.parentMetaId.isBlank() || entry.videoId.isBlank()) return@forEach
-            val candidate = entry.normalizedCompletion().withResolvedProgressKey()
-            val key = candidate.resolvedProgressKey()
-            val current = localEntry(key)
-            if (current == null || candidate.isFresherThan(current)) {
-                upsertLocalEntry(candidate)
-                markProgressDirty(candidate)
-                changed = true
+            synchronized(entriesLock) {
+                val candidate = pendingDeletesByProgressKey.values.restoreIdentityForUpsert(
+                    entry.normalizedCompletion().withResolvedProgressKey(),
+                )
+                val key = candidate.resolvedProgressKey()
+                val current = entriesByProgressKey[key]
+                if (current == null || candidate.isFresherThan(current)) {
+                    entriesByProgressKey[key] = candidate
+                    pendingDeletesByProgressKey.remove(key)
+                    dirtyProgressKeys += key
+                    changed = true
+                }
             }
         }
         if (changed) {
@@ -375,8 +390,12 @@ object WatchProgressRepository {
         if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return false
         return nuvioPullMutex.withLock {
             val generation = activeOperationGeneration(profileId) ?: return@withLock false
+            if (!flushPendingDeletesLocked(profileId, generation, auth.userId)) return@withLock false
             val dirtyKeys = dirtyProgressKeysSnapshot()
-            val pending = localEntriesSnapshot().filter { it.resolvedProgressKey() in dirtyKeys }
+            val deleteKeys = pendingDeletesSnapshot().mapTo(mutableSetOf(), PendingWatchProgressDelete::progressKey)
+            val pending = localEntriesSnapshot().filter { entry ->
+                entry.resolvedProgressKey() in dirtyKeys && entry.resolvedProgressKey() !in deleteKeys
+            }
             try {
                 pending.chunked(200).forEach { batch ->
                     if (!sameAccountForProgressUpload(profileId, generation, auth.userId)) return@withLock false
@@ -391,6 +410,69 @@ object WatchProgressRepository {
                 log.e(error) { "Could not deliver pending playback progress; keeping local changes" }
                 false
             }
+        }
+    }
+
+    /** Called with [nuvioPullMutex] held, before reading remote progress. */
+    private suspend fun flushPendingDeletesLocked(
+        profileId: Int,
+        operationGeneration: Long,
+        userId: String,
+    ): Boolean {
+        if (!sameAccountForProgressUpload(profileId, operationGeneration, userId)) return false
+        if (pendingDeletesSnapshot().isEmpty()) return true
+        return try {
+            val needsKeyReconciliation = pendingDeletesSnapshot().any { pending ->
+                pending.progressKey == buildWatchProgressKey(
+                    pending.contentId,
+                    pending.seasonNumber,
+                    pending.episodeNumber,
+                )
+            }
+            if (needsKeyReconciliation) {
+                val serverEntries = syncAdapter.pull(profileId)
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, userId)) return false
+                val migrated = synchronized(entriesLock) {
+                    val before = pendingDeletesByProgressKey.values.toList()
+                    val reconciled = before.reconcileWithProgressSnapshot(serverEntries)
+                        .normalizedPendingDeletes(entriesByProgressKey.values)
+                    if (before == reconciled) {
+                        false
+                    } else {
+                        pendingDeletesByProgressKey = reconciled
+                            .associateByTo(linkedMapOf(), PendingWatchProgressDelete::progressKey)
+                        true
+                    }
+                }
+                if (migrated) persist()
+            }
+
+            pendingDeletesSnapshot().chunked(200).forEach { batch ->
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, userId)) return false
+                val outstanding = synchronized(entriesLock) {
+                    batch.filter { marker -> pendingDeletesByProgressKey[marker.progressKey] == marker }
+                }
+                if (outstanding.isEmpty()) return@forEach
+                syncAdapter.delete(profileId = profileId, entries = outstanding.map(PendingWatchProgressDelete::asDeleteEntry))
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, userId)) return false
+                val acknowledged = synchronized(entriesLock) {
+                    outstanding.count { marker ->
+                        if (pendingDeletesByProgressKey[marker.progressKey] != marker) {
+                            false
+                        } else {
+                            pendingDeletesByProgressKey.remove(marker.progressKey)
+                            true
+                        }
+                    }
+                }
+                if (acknowledged > 0) persist()
+            }
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            log.e(error) { "Could not deliver pending playback deletes; keeping them for the next sync" }
+            false
         }
     }
 
@@ -437,30 +519,33 @@ object WatchProgressRepository {
     }
 
     private fun loadFromDisk(profileId: Int) {
-        cancelMetadataResolution(resetProviderHistory = true)
-        currentProfileId = profileId
-        profileGeneration += 1L
-        hasLoaded = true
-        hasLoadedNuvioRemoteProgress = false
-        providerMetadataOverlay.clear()
-        clearLocalEntries()
+        synchronized(persistenceLock) {
+            cancelMetadataResolution(resetProviderHistory = true)
+            currentProfileId = profileId
+            profileGeneration += 1L
+            hasLoaded = true
+            hasLoadedNuvioRemoteProgress = false
+            providerMetadataOverlay.clear()
+            clearLocalEntries()
 
-        val payload = WatchProgressStorage.loadPayload(profileId).orEmpty().trim()
-        if (payload.isNotEmpty()) {
-            val storedPayload = WatchProgressCodec.decodePayload(payload)
-            lastSuccessfulPushEpochMs = storedPayload.lastSuccessfulPushEpochMs
-            deltaCursorEventId = storedPayload.deltaCursorEventId
-            deltaInitialized = storedPayload.deltaInitialized
-            replaceLocalEntries(storedPayload.entries)
-            replaceDirtyProgressKeys(storedPayload.dirtyProgressKeys)
-        } else {
-            lastSuccessfulPushEpochMs = 0L
-            deltaCursorEventId = 0L
-            deltaInitialized = false
-        }
-        log.d {
-            "Loaded watch progress for profile $profileId: entries=${localEntryCount()} " +
-                "deltaInitialized=$deltaInitialized cursor=$deltaCursorEventId lastPush=$lastSuccessfulPushEpochMs"
+            val payload = WatchProgressStorage.loadPayload(profileId).orEmpty().trim()
+            if (payload.isNotEmpty()) {
+                val storedPayload = WatchProgressCodec.decodePayload(payload)
+                lastSuccessfulPushEpochMs = storedPayload.lastSuccessfulPushEpochMs
+                deltaCursorEventId = storedPayload.deltaCursorEventId
+                deltaInitialized = storedPayload.deltaInitialized
+                replaceLocalEntries(storedPayload.entries)
+                replaceDirtyProgressKeys(storedPayload.dirtyProgressKeys)
+                replacePendingDeletes(storedPayload.pendingDeletes)
+            } else {
+                lastSuccessfulPushEpochMs = 0L
+                deltaCursorEventId = 0L
+                deltaInitialized = false
+            }
+            log.d {
+                "Loaded watch progress for profile $profileId: entries=${localEntryCount()} " +
+                    "deltaInitialized=$deltaInitialized cursor=$deltaCursorEventId lastPush=$lastSuccessfulPushEpochMs"
+            }
         }
         publish()
         resolveRemoteMetadata()
@@ -638,18 +723,28 @@ object WatchProgressRepository {
 
         return nuvioPullMutex.withLock {
             try {
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, authState.userId)) {
+                    return@withLock false
+                }
+                // Keep failed tombstones during pulls, but try to deliver them first.
+                flushPendingDeletesLocked(profileId, operationGeneration, authState.userId)
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, authState.userId)) {
+                    return@withLock false
+                }
                 if (force) {
                     pullNuvioSnapshotFromServer(
                         profileId = profileId,
                         operationGeneration = operationGeneration,
+                        expectedUserId = authState.userId,
                     )
                 } else {
                     pullSupabaseDeltaFromServer(
                         profileId = profileId,
                         operationGeneration = operationGeneration,
+                        expectedUserId = authState.userId,
                     )
                 }
-                true
+                sameAccountForProgressUpload(profileId, operationGeneration, authState.userId)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
@@ -662,6 +757,7 @@ object WatchProgressRepository {
     private suspend fun pullNuvioSnapshotFromServer(
         profileId: Int,
         operationGeneration: Long,
+        expectedUserId: String,
     ) {
         val cursorBeforeSnapshot = try {
             syncAdapter.getDeltaCursor(profileId)
@@ -677,8 +773,9 @@ object WatchProgressRepository {
             resetDeltaState = cursorBeforeSnapshot == null,
             operationGeneration = operationGeneration,
             preserveLocalEntries = true,
+            expectedUserId = expectedUserId,
         )
-        if (!isActiveOperation(profileId, operationGeneration)) return
+        if (!sameAccountForProgressUpload(profileId, operationGeneration, expectedUserId)) return
 
         if (cursorBeforeSnapshot != null) {
             deltaCursorEventId = cursorBeforeSnapshot
@@ -690,8 +787,9 @@ object WatchProgressRepository {
     private suspend fun pullSupabaseDeltaFromServer(
         profileId: Int,
         operationGeneration: Long,
+        expectedUserId: String,
     ) {
-        if (!isActiveOperation(profileId, operationGeneration)) return
+        if (!sameAccountForProgressUpload(profileId, operationGeneration, expectedUserId)) return
         log.d {
             "Watch progress delta sync start: profile=$profileId entries=${localEntryCount()} " +
                 "deltaInitialized=$deltaInitialized cursor=$deltaCursorEventId lastPush=$lastSuccessfulPushEpochMs"
@@ -712,6 +810,7 @@ object WatchProgressRepository {
                     profileId = profileId,
                     resetDeltaState = true,
                     operationGeneration = operationGeneration,
+                    expectedUserId = expectedUserId,
                 )
                 return
             }
@@ -721,8 +820,9 @@ object WatchProgressRepository {
                 profileId = profileId,
                 resetDeltaState = false,
                 operationGeneration = operationGeneration,
+                expectedUserId = expectedUserId,
             )
-            if (!isActiveOperation(profileId, operationGeneration)) return
+            if (!sameAccountForProgressUpload(profileId, operationGeneration, expectedUserId)) return
             deltaCursorEventId = cursorBeforeSnapshot
             deltaInitialized = true
             persist()
@@ -757,10 +857,11 @@ object WatchProgressRepository {
                     profileId = profileId,
                     resetDeltaState = true,
                     operationGeneration = operationGeneration,
+                    expectedUserId = expectedUserId,
                 )
                 return
             }
-            if (!isActiveOperation(profileId, operationGeneration)) return
+            if (!sameAccountForProgressUpload(profileId, operationGeneration, expectedUserId)) return
             if (events.isEmpty()) {
                 log.d { "Watch progress delta page $page returned no events for profile $profileId at cursor $cursor" }
                 break
@@ -819,47 +920,61 @@ object WatchProgressRepository {
         resetDeltaState: Boolean,
         operationGeneration: Long,
         preserveLocalEntries: Boolean = true,
+        expectedUserId: String,
     ) {
         val serverEntries = syncAdapter.pull(profileId = profileId)
-        if (!isActiveOperation(profileId, operationGeneration)) return
+        if (!sameAccountForProgressUpload(profileId, operationGeneration, expectedUserId)) return
         log.d {
             "Watch progress snapshot fetched ${serverEntries.size} entries for profile $profileId " +
                 "resetDeltaState=$resetDeltaState preserveLocalEntries=$preserveLocalEntries"
         }
-        val localBeforePull = localEntriesSnapshot()
-        val reconciliation = reconcileLocalProgressKeysWithSnapshot(
-            serverEntries = serverEntries,
-            localEntries = localBeforePull,
-        )
-        migrateDirtyProgressKeys(reconciliation.migratedKeys)
-        val dirtyBeforeApply = dirtyProgressKeysSnapshot()
-        val updatedEntries = if (preserveLocalEntries) {
-            mergeWatchProgressEntriesPreservingUnsynced(
-                serverEntries = serverEntries,
-                localEntries = reconciliation.entries,
-                dirtyProgressKeys = dirtyBeforeApply,
-            )
-        } else {
-            val newestRemoteByKey = linkedMapOf<String, WatchProgressEntry>()
-            serverEntries.forEach { record ->
-                val key = record.resolvedProgressKey()
-                val candidate = record.toWatchProgressEntry(cached = null)
-                val existing = newestRemoteByKey[key]
-                if (existing == null || candidate.isFresherThan(existing)) {
-                    newestRemoteByKey[key] = candidate
+        // Local playback/delete callbacks do not take the pull mutex. Keep the
+        // read/merge/replace transaction atomic with those callbacks.
+        synchronized(entriesLock) {
+            val pendingBeforeApply = pendingDeletesByProgressKey.values.toList()
+            val remoteEntriesToApply = serverEntries.filterNot { record ->
+                pendingBeforeApply.any { delete ->
+                    delete.matches(record.resolvedProgressKey(), record.contentId, record.season, record.episode)
                 }
             }
-            newestRemoteByKey
-        }
-        replaceLocalEntries(updatedEntries)
-        acknowledgeDirtyProgressFromSnapshot(
-            serverEntries = serverEntries,
-            localEntriesBeforeApply = reconciliation.entries,
-            dirtyKeysBeforeApply = dirtyBeforeApply,
-        )
-        if (resetDeltaState) {
-            deltaCursorEventId = 0L
-            deltaInitialized = false
+            val localBeforePull = entriesByProgressKey.values.toList()
+            val reconciliation = reconcileLocalProgressKeysWithSnapshot(
+                serverEntries = remoteEntriesToApply,
+                localEntries = localBeforePull,
+            )
+            reconciliation.migratedKeys.forEach { (oldKey, newKey) ->
+                if (dirtyProgressKeys.remove(oldKey)) dirtyProgressKeys += newKey
+            }
+            val dirtyBeforeApply = dirtyProgressKeys.toSet()
+            val updatedEntries = if (preserveLocalEntries) {
+                mergeWatchProgressEntriesPreservingUnsynced(
+                    serverEntries = remoteEntriesToApply,
+                    localEntries = reconciliation.entries,
+                    dirtyProgressKeys = dirtyBeforeApply,
+                    pendingDeletes = pendingBeforeApply,
+                )
+            } else {
+                val newestRemoteByKey = linkedMapOf<String, WatchProgressEntry>()
+                remoteEntriesToApply.forEach { record ->
+                    val key = record.resolvedProgressKey()
+                    val candidate = record.toWatchProgressEntry(cached = null)
+                    val existing = newestRemoteByKey[key]
+                    if (existing == null || candidate.isFresherThan(existing)) {
+                        newestRemoteByKey[key] = candidate
+                    }
+                }
+                newestRemoteByKey
+            }
+            entriesByProgressKey = updatedEntries.values.newestByProgressKey().toMutableMap()
+            acknowledgeDirtyProgressFromSnapshot(
+                serverEntries = remoteEntriesToApply,
+                localEntriesBeforeApply = reconciliation.entries,
+                dirtyKeysBeforeApply = dirtyBeforeApply,
+            )
+            if (resetDeltaState) {
+                deltaCursorEventId = 0L
+                deltaInitialized = false
+            }
         }
         hasLoaded = true
         hasLoadedNuvioRemoteProgress = true
@@ -899,31 +1014,36 @@ object WatchProgressRepository {
         }
 
         latestEventByProgressKey.forEach { (progressKey, event) ->
-            val current = localEntry(progressKey)
-            val decision = decideWatchProgressDeltaEvent(
-                current = current,
-                event = event,
-                isLocalDirty = progressKey in dirtyProgressKeysSnapshot(),
-            )
-            when (decision.type) {
-                WatchProgressDeltaDecisionType.UPSERT -> {
-                    upsertLocalEntry(requireNotNull(decision.updatedEntry))
-                    changed = true
-                    appliedUpserts += 1
-                }
-                WatchProgressDeltaDecisionType.DELETE -> {
-                    if (removeLocalEntry(progressKey) != null) {
+            synchronized(entriesLock) {
+                val decision = decideWatchProgressDeltaEvent(
+                    current = entriesByProgressKey[progressKey],
+                    event = event,
+                    isLocalDirty = progressKey in dirtyProgressKeys,
+                    isPendingDelete = pendingDeletesByProgressKey.values.any { delete ->
+                        delete.matches(progressKey, event.contentId, event.season, event.episode)
+                    },
+                )
+                when (decision.type) {
+                    WatchProgressDeltaDecisionType.UPSERT -> {
+                        val updated = requireNotNull(decision.updatedEntry).withResolvedProgressKey()
+                        entriesByProgressKey[updated.resolvedProgressKey()] = updated
                         changed = true
-                        appliedDeletes += 1
+                        appliedUpserts += 1
                     }
+                    WatchProgressDeltaDecisionType.DELETE -> {
+                        if (entriesByProgressKey.remove(progressKey) != null) {
+                            changed = true
+                            appliedDeletes += 1
+                        }
+                    }
+                    WatchProgressDeltaDecisionType.PRESERVE_LOCAL -> {
+                        preservedLocalItems = true
+                    }
+                    WatchProgressDeltaDecisionType.IGNORE -> Unit
                 }
-                WatchProgressDeltaDecisionType.PRESERVE_LOCAL -> {
-                    preservedLocalItems = true
+                if (decision.clearsDirtyProgress) {
+                    dirtyProgressKeys -= progressKey
                 }
-                WatchProgressDeltaDecisionType.IGNORE -> Unit
-            }
-            if (decision.clearsDirtyProgress) {
-                clearProgressDirty(progressKey)
             }
         }
         return WatchProgressDeltaApplyResult(
@@ -938,7 +1058,10 @@ object WatchProgressRepository {
         current: WatchProgressEntry?,
         event: ProgressDeltaEvent,
         isLocalDirty: Boolean,
-    ): WatchProgressDeltaDecision = when (event.operation.lowercase()) {
+        isPendingDelete: Boolean = false,
+    ): WatchProgressDeltaDecision = if (isPendingDelete) {
+        WatchProgressDeltaDecision(WatchProgressDeltaDecisionType.IGNORE)
+    } else when (event.operation.lowercase()) {
         WATCH_PROGRESS_DELTA_OPERATION_UPSERT -> {
             if (event.videoId.isBlank()) {
                 WatchProgressDeltaDecision(WatchProgressDeltaDecisionType.IGNORE)
@@ -1022,9 +1145,15 @@ object WatchProgressRepository {
         serverEntries: Collection<ProgressSyncRecord>,
         localEntries: Collection<WatchProgressEntry>,
         dirtyProgressKeys: Set<String>,
+        pendingDeletes: Collection<PendingWatchProgressDelete> = emptyList(),
     ): Map<String, WatchProgressEntry> {
+        val allowedServerEntries = serverEntries.filterNot { record ->
+            pendingDeletes.any { delete ->
+                delete.matches(record.resolvedProgressKey(), record.contentId, record.season, record.episode)
+            }
+        }
         val reconciliation = reconcileLocalProgressKeysWithSnapshot(
-            serverEntries = serverEntries,
+            serverEntries = allowedServerEntries,
             localEntries = localEntries,
         )
         val effectiveDirtyKeys = dirtyProgressKeys.mapTo(mutableSetOf()) { key ->
@@ -1032,7 +1161,7 @@ object WatchProgressRepository {
         }
         val localByProgressKey = reconciliation.entries.newestByProgressKey()
         val merged = linkedMapOf<String, WatchProgressEntry>()
-        serverEntries.forEach { record ->
+        allowedServerEntries.forEach { record ->
             val progressKey = record.resolvedProgressKey()
             val candidate = record.toWatchProgressEntry(cached = localByProgressKey[progressKey])
             val existing = merged[progressKey]
@@ -1127,11 +1256,16 @@ object WatchProgressRepository {
                     val appliedEntries = if (targetSource.providerId == null) {
                         var appliedLocalEntries = 0
                         for (entry in result.entries) {
-                            val current = localEntry(entry.resolvedProgressKey()) ?: continue
-                            val enriched = enrichWatchProgressEntry(current = current, meta = meta)
-                            if (enriched == current) continue
-                            upsertLocalEntry(enriched)
-                            appliedLocalEntries += 1
+                            val applied = synchronized(entriesLock) {
+                                val key = entry.resolvedProgressKey()
+                                val current = entriesByProgressKey[key] ?: return@synchronized false
+                                if (key in pendingDeletesByProgressKey) return@synchronized false
+                                val enriched = enrichWatchProgressEntry(current = current, meta = meta)
+                                if (enriched == current) return@synchronized false
+                                entriesByProgressKey[key] = enriched
+                                true
+                            }
+                            if (applied) appliedLocalEntries += 1
                         }
                         appliedLocalEntries
                     } else if (providerMetadataOverlay.put(targetSource, result.key, meta)) {
@@ -1247,11 +1381,16 @@ object WatchProgressRepository {
         val removedEntries = removeLocalEntriesForVideoIds(
             videoIds = videoIds,
             parentMetaId = parentMetaId,
+            queueRemoteDeletes = shouldQueueRemoteProgressDelete(),
         )
         if (removedEntries.isNotEmpty()) {
+            remoteWriteDeduplicator.forget(
+                currentProfileId,
+                removedEntries.map(WatchProgressEntry::resolvedProgressKey),
+            )
             publish()
             persist()
-            pushDeleteToServer(removedEntries)
+            pushDeleteToServer()
         }
     }
 
@@ -1286,12 +1425,17 @@ object WatchProgressRepository {
             return
         }
 
-        entriesToRemove.forEach { entry ->
-            removeLocalEntry(entry.resolvedProgressKey())
-        }
+        val removedEntries = removeLocalEntriesForProgressKeys(
+            keys = entriesToRemove.map(WatchProgressEntry::resolvedProgressKey),
+            queueRemoteDeletes = shouldQueueRemoteProgressDelete(),
+        )
+        remoteWriteDeduplicator.forget(
+            currentProfileId,
+            removedEntries.map(WatchProgressEntry::resolvedProgressKey),
+        )
         publish()
         persist()
-        pushDeleteToServer(entriesToRemove)
+        pushDeleteToServer()
     }
 
     fun progressForVideo(
@@ -1435,7 +1579,9 @@ object WatchProgressRepository {
             return
         }
 
-        val entry = localEntriesSnapshot().resolveIdentityForUpsert(candidateEntry)
+        val entry = pendingDeletesSnapshot().restoreIdentityForUpsert(
+            localEntriesSnapshot().resolveIdentityForUpsert(candidateEntry),
+        )
         if (
             syncRemote &&
             !remoteWriteDeduplicator.shouldSend(
@@ -1451,8 +1597,7 @@ object WatchProgressRepository {
             ContinueWatchingPreferencesRepository.removeDismissedNextUpKeysForContent(entry.parentMetaId)
         }
 
-        upsertLocalEntry(entry)
-        markProgressDirty(entry)
+        upsertLocalEntryAndMarkDirty(entry)
         progressProvider?.applyOptimisticProgress(entry)
         publish()
         if (persist) persist()
@@ -1475,14 +1620,16 @@ object WatchProgressRepository {
     private fun upsertStoredProfileProgress(
         profileId: Int,
         entry: WatchProgressEntry,
-    ): WatchProgressEntry {
+    ): WatchProgressEntry = synchronized(persistenceLock) {
         val payload = WatchProgressStorage.loadPayload(profileId).orEmpty().trim()
         val storedPayload = if (payload.isNotEmpty()) {
             WatchProgressCodec.decodePayload(payload)
         } else {
             StoredWatchProgressPayload()
         }
-        val resolvedEntry = storedPayload.entries.resolveIdentityForUpsert(entry)
+        val resolvedEntry = storedPayload.pendingDeletes.restoreIdentityForUpsert(
+            storedPayload.entries.resolveIdentityForUpsert(entry),
+        )
         val progressKey = resolvedEntry.resolvedProgressKey()
         val updatedEntries = storedPayload.entries
             .filterNot { it.resolvedProgressKey() == progressKey } + resolvedEntry
@@ -1494,49 +1641,65 @@ object WatchProgressRepository {
                 deltaCursorEventId = storedPayload.deltaCursorEventId,
                 deltaInitialized = storedPayload.deltaInitialized,
                 dirtyProgressKeys = storedPayload.dirtyProgressKeys + progressKey,
+                pendingDeletes = storedPayload.pendingDeletes.filterNot { it.progressKey == progressKey },
             ),
         )
-        return resolvedEntry
+        resolvedEntry
     }
 
     private fun resolveStoredProfileProgressIdentity(
         profileId: Int,
         entry: WatchProgressEntry,
-    ): WatchProgressEntry {
+    ): WatchProgressEntry = synchronized(persistenceLock) {
         val payload = WatchProgressStorage.loadPayload(profileId).orEmpty().trim()
-        val storedEntries = if (payload.isEmpty()) {
-            emptyList()
+        val storedPayload = if (payload.isEmpty()) {
+            StoredWatchProgressPayload()
         } else {
-            WatchProgressCodec.decodePayload(payload).entries
+            WatchProgressCodec.decodePayload(payload)
         }
-        return storedEntries.resolveIdentityForUpsert(entry)
+        storedPayload.pendingDeletes.restoreIdentityForUpsert(
+            storedPayload.entries.resolveIdentityForUpsert(entry),
+        )
     }
 
     private fun pushScrobbleToServer(entry: WatchProgressEntry, profileId: Int) {
-        val operationGeneration = profileGeneration.takeIf { profileId == currentProfileId }
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return
+        if (auth.isAnonymous || ProfileRepository.activeProfileId != profileId) return
+        val operationGeneration = profileGeneration.takeIf { profileId == currentProfileId } ?: return
         accountScopeSnapshot().launch {
-            runCatching {
-                syncAdapter.push(profileId = profileId, entries = listOf(entry))
-                recordSuccessfulPush(
-                    profileId = profileId,
-                    operationGeneration = operationGeneration,
-                    entries = listOf(entry),
-                )
-            }.onFailure { e ->
-                log.e(e) { "Failed to push watch progress scrobble" }
+            nuvioPullMutex.withLock {
+                if (!sameAccountForProgressUpload(profileId, operationGeneration, auth.userId)) return@withLock
+                val progressKey = entry.resolvedProgressKey()
+                if (pendingDeletesSnapshot().any { it.progressKey == progressKey } || localEntry(progressKey) != entry) {
+                    return@withLock
+                }
+                try {
+                    syncAdapter.push(profileId = profileId, entries = listOf(entry))
+                    if (sameAccountForProgressUpload(profileId, operationGeneration, auth.userId)) {
+                        recordSuccessfulPush(
+                            profileId = profileId,
+                            operationGeneration = operationGeneration,
+                            entries = listOf(entry),
+                        )
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    log.e(error) { "Failed to push watch progress scrobble" }
+                }
             }
         }
     }
 
-    private fun pushDeleteToServer(entries: Collection<WatchProgressEntry>) {
+    private fun pushDeleteToServer() {
         if (activeSource.providerId != null) return
+        val auth = AuthRepository.state.value as? AuthState.Authenticated ?: return
+        if (auth.isAnonymous || pendingDeletesSnapshot().isEmpty()) return
         val profileId = currentProfileId
+        val generation = profileGeneration
         accountScopeSnapshot().launch {
-            runCatching {
-                if (entries.isEmpty()) return@runCatching
-                syncAdapter.delete(profileId = profileId, entries = entries)
-            }.onFailure { e ->
-                log.e(e) { "Failed to push watch progress delete" }
+            if (sameAccountForProgressUpload(profileId, generation, auth.userId)) {
+                flushPendingToServer(profileId)
             }
         }
     }
@@ -1553,17 +1716,26 @@ object WatchProgressRepository {
         )
     }
 
-    private fun persist() {
-        WatchProgressStorage.savePayload(
-            currentProfileId,
-            WatchProgressCodec.encodePayload(
-                entries = localEntriesSnapshot(),
+    private fun persist() = synchronized(persistenceLock) {
+        val (profileId, snapshot) = synchronized(entriesLock) {
+            currentProfileId to StoredWatchProgressPayload(
+                entries = entriesByProgressKey.values.toList(),
                 lastSuccessfulPushEpochMs = lastSuccessfulPushEpochMs,
                 deltaCursorEventId = deltaCursorEventId,
                 deltaInitialized = deltaInitialized,
-                dirtyProgressKeys = dirtyProgressKeysSnapshot(),
-            ),
+                dirtyProgressKeys = dirtyProgressKeys.toSet(),
+                pendingDeletes = pendingDeletesByProgressKey.values.toList(),
+            )
+        }
+        val payload = WatchProgressCodec.encodePayload(
+            entries = snapshot.entries,
+            lastSuccessfulPushEpochMs = snapshot.lastSuccessfulPushEpochMs,
+            deltaCursorEventId = snapshot.deltaCursorEventId,
+            deltaInitialized = snapshot.deltaInitialized,
+            dirtyProgressKeys = snapshot.dirtyProgressKeys,
+            pendingDeletes = snapshot.pendingDeletes,
         )
+        WatchProgressStorage.savePayload(profileId, payload)
     }
 
     private fun recordSuccessfulPush(
@@ -1608,9 +1780,9 @@ object WatchProgressRepository {
     private fun acknowledgeStoredProfilePush(
         profileId: Int,
         pushedEntries: Collection<WatchProgressEntry>,
-    ) {
+    ) = synchronized(persistenceLock) {
         val payload = WatchProgressStorage.loadPayload(profileId).orEmpty().trim()
-        if (payload.isEmpty()) return
+        if (payload.isEmpty()) return@synchronized
         val storedPayload = WatchProgressCodec.decodePayload(payload)
         val storedByKey = storedPayload.entries.newestByProgressKey()
         val acknowledgedKeys = pushedEntries.mapNotNullTo(mutableSetOf()) { pushed ->
@@ -1624,7 +1796,7 @@ object WatchProgressRepository {
             remainingDirtyKeys == storedPayload.dirtyProgressKeys &&
             latestPushed <= storedPayload.lastSuccessfulPushEpochMs
         ) {
-            return
+            return@synchronized
         }
         WatchProgressStorage.savePayload(
             profileId,
@@ -1634,6 +1806,7 @@ object WatchProgressRepository {
                 deltaCursorEventId = storedPayload.deltaCursorEventId,
                 deltaInitialized = storedPayload.deltaInitialized,
                 dirtyProgressKeys = remainingDirtyKeys,
+                pendingDeletes = storedPayload.pendingDeletes,
             ),
         )
     }
@@ -1663,6 +1836,30 @@ object WatchProgressRepository {
             dirtyProgressKeys.removeAll(keysToRemove.toSet())
             keysToRemove.mapNotNull(entriesByProgressKey::remove)
         }
+
+    private fun shouldQueueRemoteProgressDelete(): Boolean {
+        val auth = AuthRepository.state.value as? AuthState.Authenticated
+        return canQueueRemoteProgressDelete(
+            usesNativeProgress = activeSource.providerId == null,
+            isAuthenticated = auth != null,
+            isAnonymous = auth?.isAnonymous == true,
+        )
+    }
+
+    private fun removeLocalEntriesForProgressKeys(
+        keys: Collection<String>,
+        queueRemoteDeletes: Boolean,
+    ): List<WatchProgressEntry> = synchronized(entriesLock) {
+        val removed = keys.distinct().mapNotNull { key -> entriesByProgressKey.remove(key) }
+        dirtyProgressKeys.removeAll(keys.toSet())
+        if (queueRemoteDeletes) {
+            removed.forEach { entry ->
+                val marker = entry.asPendingDelete()
+                pendingDeletesByProgressKey[marker.progressKey] = marker
+            }
+        }
+        removed
+    }
 
     private fun currentEntries(): List<WatchProgressEntry> {
         val providerEntries = activeProgressProvider()
@@ -1700,6 +1897,7 @@ object WatchProgressRepository {
         synchronized(entriesLock) {
             entriesByProgressKey.clear()
             dirtyProgressKeys.clear()
+            pendingDeletesByProgressKey.clear()
         }
     }
 
@@ -1708,6 +1906,19 @@ object WatchProgressRepository {
             dirtyProgressKeys.toSet()
         }
 
+    private fun pendingDeletesSnapshot(): List<PendingWatchProgressDelete> =
+        synchronized(entriesLock) {
+            pendingDeletesByProgressKey.values.toList()
+        }
+
+    private fun replacePendingDeletes(deletes: Collection<PendingWatchProgressDelete>) {
+        synchronized(entriesLock) {
+            pendingDeletesByProgressKey = deletes
+                .normalizedPendingDeletes(entriesByProgressKey.values)
+                .associateByTo(linkedMapOf(), PendingWatchProgressDelete::progressKey)
+        }
+    }
+
     private fun replaceDirtyProgressKeys(keys: Collection<String>) {
         synchronized(entriesLock) {
             dirtyProgressKeys = keys
@@ -1715,9 +1926,13 @@ object WatchProgressRepository {
         }
     }
 
-    private fun markProgressDirty(entry: WatchProgressEntry) {
+    private fun upsertLocalEntryAndMarkDirty(entry: WatchProgressEntry) {
         synchronized(entriesLock) {
-            dirtyProgressKeys += entry.resolvedProgressKey()
+            val resolved = entry.withResolvedProgressKey()
+            val key = resolved.resolvedProgressKey()
+            entriesByProgressKey[key] = resolved
+            pendingDeletesByProgressKey.remove(key)
+            dirtyProgressKeys += key
         }
     }
 
@@ -1727,17 +1942,7 @@ object WatchProgressRepository {
         }
     }
 
-    private fun migrateDirtyProgressKeys(migrations: Map<String, String>) {
-        if (migrations.isEmpty()) return
-        synchronized(entriesLock) {
-            migrations.forEach { (oldKey, newKey) ->
-                if (dirtyProgressKeys.remove(oldKey)) {
-                    dirtyProgressKeys += newKey
-                }
-            }
-        }
-    }
-
+    /** Caller holds [entriesLock] while applying the snapshot. */
     private fun acknowledgeDirtyProgressFromSnapshot(
         serverEntries: Collection<ProgressSyncRecord>,
         localEntriesBeforeApply: Collection<WatchProgressEntry>,
@@ -1754,13 +1959,11 @@ object WatchProgressRepository {
                 remoteByKey[key] = candidate
             }
         }
-        synchronized(entriesLock) {
-            dirtyKeysBeforeApply.forEach { key ->
-                val local = localByKey[key]
-                val remote = remoteByKey[key]
-                if (remote != null && (local == null || !local.isFresherThan(remote))) {
-                    dirtyProgressKeys -= key
-                }
+        dirtyKeysBeforeApply.forEach { key ->
+            val local = localByKey[key]
+            val remote = remoteByKey[key]
+            if (remote != null && (local == null || !local.isFresherThan(remote))) {
+                dirtyProgressKeys -= key
             }
         }
     }
@@ -1768,12 +1971,6 @@ object WatchProgressRepository {
     private fun replaceLocalEntries(entries: Collection<WatchProgressEntry>) {
         synchronized(entriesLock) {
             entriesByProgressKey = entries.newestByProgressKey().toMutableMap()
-        }
-    }
-
-    private fun replaceLocalEntries(entries: Map<String, WatchProgressEntry>) {
-        synchronized(entriesLock) {
-            entriesByProgressKey = entries.values.newestByProgressKey().toMutableMap()
         }
     }
 
@@ -1793,6 +1990,7 @@ object WatchProgressRepository {
     private fun removeLocalEntriesForVideoIds(
         videoIds: Collection<String>,
         parentMetaId: String?,
+        queueRemoteDeletes: Boolean,
     ): List<WatchProgressEntry> =
         synchronized(entriesLock) {
             if (videoIds.isEmpty()) return@synchronized emptyList()
@@ -1805,7 +2003,14 @@ object WatchProgressRepository {
                 .keys
                 .toList()
             dirtyProgressKeys.removeAll(keysToRemove.toSet())
-            keysToRemove.mapNotNull(entriesByProgressKey::remove)
+            val removed = keysToRemove.mapNotNull(entriesByProgressKey::remove)
+            if (queueRemoteDeletes) {
+                removed.forEach { entry ->
+                    val marker = entry.asPendingDelete()
+                    pendingDeletesByProgressKey[marker.progressKey] = marker
+                }
+            }
+            removed
         }
 
     fun isDroppedShow(contentId: String): Boolean {

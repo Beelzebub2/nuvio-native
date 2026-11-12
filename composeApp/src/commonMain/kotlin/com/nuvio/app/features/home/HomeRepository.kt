@@ -8,7 +8,6 @@ import com.nuvio.app.features.catalog.CatalogPage
 import com.nuvio.app.features.catalog.fetchCatalogPage
 import com.nuvio.app.features.catalog.mergeCatalogItems
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
-import com.nuvio.app.core.poster.reapplyCustomPosterUrls
 import com.nuvio.app.core.poster.withCustomPosterUrls
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionRepository
@@ -45,6 +44,7 @@ object HomeRepository {
     private var currentRequestKey: String? = null
     private var currentDefinitions: List<HomeCatalogDefinition> = emptyList()
     private var cachedSections: Map<String, HomeCatalogSection> = emptyMap()
+    private val projectionCache = HomeCatalogProjectionCache()
     private var cachedCollectionHeroItems: List<MetaPreview> = emptyList()
     private var heroFallbackLoading = false
     private var collectionHeroJob: Job? = null
@@ -155,6 +155,7 @@ object HomeRepository {
         currentRequestKey = null
         currentDefinitions = emptyList()
         cachedSections = emptyMap()
+        projectionCache.clear()
         cachedCollectionHeroItems = emptyList()
         heroFallbackLoading = false
         collectionHeroJob?.cancel()
@@ -170,45 +171,19 @@ object HomeRepository {
         requestKey: String?,
     ) {
         val snapshot = HomeCatalogSettingsRepository.snapshot()
-        val preferences = snapshot.preferences
         val todayIsoDate = if (snapshot.hideUnreleasedContent) CurrentDateProvider.todayIsoDate() else null
         CustomPosterUrlRepository.ensureLoaded()
         val posterPattern = CustomPosterUrlRepository.patternForScreen(com.nuvio.app.core.poster.CustomPosterScreen.HOME)
-        fun HomeCatalogSection.withReleaseFilter(): HomeCatalogSection =
-            if (todayIsoDate == null) this else filterReleasedItems(todayIsoDate)
-        fun HomeCatalogSection.withPosterOverlay(): HomeCatalogSection =
-            copy(items = items.reapplyCustomPosterUrls(posterPattern))
-
-        val sections = currentDefinitions
-            .sortedBy { definition -> preferences[definition.key]?.order ?: Int.MAX_VALUE }
-            .mapNotNull { definition ->
-                val preference = preferences[definition.key]
-                if (preference?.enabled == false) return@mapNotNull null
-
-                val section = cachedSections[definition.cacheKey]
-                    ?.withPosterOverlay()
-                    ?.withReleaseFilter()
-                    ?: return@mapNotNull null
-                if (section.items.isEmpty()) return@mapNotNull null
-                val customTitle = preference?.customTitle.orEmpty()
-                section.copy(
-                    title = customTitle.ifBlank { definition.titleFor(snapshot.showCatalogType) },
-                )
-            }
-
-        val catalogHeroItems = if (snapshot.heroEnabled) {
-            val heroRandom = Random((requestKey?.hashCode() ?: 0).absoluteValue + 1)
-            currentDefinitions
-                .filter { definition -> preferences[definition.key]?.heroSourceEnabled != false }
-                .mapNotNull { definition -> cachedSections[definition.cacheKey] }
-                .map { section -> section.withPosterOverlay().withReleaseFilter() }
-                .flatMap { section -> section.items }
-                .distinctBy { item -> "${item.type}:${item.id}" }
-                .shuffled(heroRandom)
-                .take(HOME_HERO_ITEM_LIMIT)
-        } else {
-            emptyList()
-        }
+        val projection = projectionCache.project(
+            definitions = currentDefinitions,
+            sectionsByKey = cachedSections,
+            snapshot = snapshot,
+            posterPattern = posterPattern,
+            todayIsoDate = todayIsoDate,
+            requestKey = requestKey,
+        )
+        val sections = projection.sections
+        val catalogHeroItems = projection.catalogHeroItems
         lastPublishedCatalogHeroEmpty = snapshot.heroEnabled && catalogHeroItems.isEmpty()
         val heroItems = if (snapshot.heroEnabled) {
             catalogHeroItems.ifEmpty { cachedCollectionHeroItems }
@@ -492,7 +467,7 @@ object HomeRepository {
         source.catalogRouteKey()
 }
 
-private const val HOME_HERO_ITEM_LIMIT = 8
+internal const val HOME_HERO_ITEM_LIMIT = 8
 private const val HOME_COLLECTION_HERO_SOURCE_LIMIT = 6
 private const val HOME_COLLECTION_HERO_SOURCE_ITEM_LIMIT = 8
 private const val HOME_CATALOG_FETCH_BATCH_SIZE = 4

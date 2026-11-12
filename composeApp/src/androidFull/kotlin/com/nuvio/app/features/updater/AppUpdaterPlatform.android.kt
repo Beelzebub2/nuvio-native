@@ -7,6 +7,7 @@ actual object AppUpdaterPlatform {
     actual val isDebugBuild: Boolean
         get() = AndroidAppUpdaterPlatform.isDebugBuild()
     actual val hasSingleUpdateChannel: Boolean = false
+    actual val installsUpdatesInApp: Boolean = true
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
         owner = "Beelzebub2",
@@ -49,7 +50,7 @@ actual object AppUpdaterPlatform {
         assetName: String,
         expectedSha256: String?,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
-    ): Result<String> = AndroidAppUpdaterPlatform.downloadUpdateAsset(assetUrl, assetName, onProgress)
+    ): Result<String> = AndroidAppUpdaterPlatform.downloadUpdateAsset(assetUrl, assetName, expectedSha256, onProgress)
 
     actual fun canInstallDownloadedUpdate(): Boolean = AndroidAppUpdaterPlatform.canRequestPackageInstalls()
 

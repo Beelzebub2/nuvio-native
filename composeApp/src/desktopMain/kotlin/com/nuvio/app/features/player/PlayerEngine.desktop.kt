@@ -38,6 +38,7 @@ import com.nuvio.app.features.player.desktop.NativePlayerHost
 import com.nuvio.app.features.player.desktop.LinuxMprisService
 import com.nuvio.app.features.player.desktop.desktopFullscreenChanges
 import com.nuvio.app.features.settings.DiscordShareModeSettings
+import com.nuvio.app.features.settings.SurroundUpmixSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
@@ -142,6 +143,7 @@ private fun NativePlayerSurface(
     val nvidiaRtxSuperResolutionEnabled = playerSettings.nvidiaRtxSuperResolutionEnabled
     val discordShareEnabled by DiscordShareModeSettings.enabled.collectAsState()
     val discordShareShowWindow by DiscordShareModeSettings.showWindow.collectAsState()
+    val surroundUpmixEnabled by SurroundUpmixSettings.enabled.collectAsState()
 
     SideEffect {
         onControllerReady(controller)
@@ -186,6 +188,12 @@ private fun NativePlayerSurface(
         // block Compose rendering or the native player's video controls.
         withContext(Dispatchers.IO) {
             controller.setDiscordShareEnabled(discordShareEnabled, discordShareShowWindow)
+        }
+    }
+
+    LaunchedEffect(controller, surroundUpmixEnabled) {
+        withContext(Dispatchers.IO) {
+            controller.setSurroundUpmixEnabled(surroundUpmixEnabled)
         }
     }
 

@@ -1,0 +1,91 @@
+name: Samsung Tizen
+on:
+  pull_request:
+    paths: ['tizen/**', '.github/workflows/tizen.yml', 'composeApp/src/desktopMain/kotlin/com/nuvio/app/features/myanimelist/**']
+  push:
+    branches: [Dev]
+    tags: ['v*']
+    paths: ['tizen/**', '.github/workflows/tizen.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tizen-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tizen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tizen/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --prefix engine-runtime
+      - run: npm run build:engine
+      - run: npm test --prefix engine-runtime
+      - run: npm audit --audit-level=moderate
+      - run: npm run lint
+      - run: npm test
+      - name: Match native stable release version
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: node scripts/starlit-release-version.mjs "$RELEASE_TAG"
+      - run: npm run package:tizen
+      - run: npm run verify:package
+      - name: Verify reproducible unsigned package
+        run: |
+          cp artifacts/SHA256SUMS-Tizen /tmp/starlit-first-sums
+          npm run package:tizen
+          cmp /tmp/starlit-first-sums artifacts/SHA256SUMS-Tizen
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Starlit-Tizen-unsigned
+          path: tizen/artifacts/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Starlit-Tizen-browser-evidence
+          path: tizen/test-results/**
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8
+        with:
+          name: Starlit-Tizen-unsigned
+          path: tizen/artifacts
+      - name: Require exact physical-device acceptance before release publication
+        working-directory: tizen
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node scripts/starlit-release-version.mjs "$RELEASE_TAG"
+          node scripts/starlit-release-gate.mjs
+      - name: Attach verified TV package to the matching stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" tizen/artifacts/Starlit-Tizen-*.wgt tizen/artifacts/SHA256SUMS-Tizen tizen/artifacts/apps2samsung-feed.json --repo "${{ github.repository }}"

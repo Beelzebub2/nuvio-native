@@ -27,9 +27,19 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 @OptIn(ExperimentalTestApi::class)
 class UpdateBannerUiTest {
+    @Test
+    fun `manual update link is retained only when browser launch fails`() {
+        val url = "https://github.com/example/app/releases/tag/v1"
+        var openedUrl: String? = null
+        assertNull(failedReleaseLink(url) { openedUrl = it })
+        assertEquals(url, openedUrl)
+        assertEquals(url, failedReleaseLink(url) { throw IllegalStateException("No URL handler") })
+    }
+
     private val update = AppUpdate(
         tag = "v1.0.26",
         title = "Starlit 1.0.26",
@@ -136,5 +146,36 @@ class UpdateBannerUiTest {
             }
         }
         onNodeWithText("Update").assertIsNotEnabled()
+    }
+
+    @Test fun unsupportedInstallOffersReleasePageInsteadOfInstall() = runDesktopComposeUiTest(width = 1100, height = 240) {
+        val clicks = mutableListOf<String>()
+        setContent {
+            NuvioTheme {
+                val state = AppUpdaterUiState(
+                    update = update,
+                    isUpdateAvailable = true,
+                    showDialog = true,
+                    downloadedUpdatePath = "C:/old/stale-installer.msi",
+                )
+                AppUpdateBanner(
+                    state = state,
+                    update = update,
+                    primaryAction = primaryUpdateAction(
+                        state = state,
+                        onDownload = { clicks += "release" },
+                        onInstall = { clicks += "installer" },
+                        installsUpdatesInApp = false,
+                    ),
+                    onShowReleaseNotes = {},
+                    onDismiss = {},
+                    installsUpdatesInApp = false,
+                )
+            }
+        }
+        onNodeWithText("This installation needs an external update. Use your package manager or open the release page.")
+            .assertIsDisplayed()
+        onNodeWithText("Update").performClick()
+        runOnIdle { assertEquals(listOf("release"), clicks) }
     }
 }

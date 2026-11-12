@@ -268,7 +268,10 @@ internal object SubtitleLanguageMatching {
             return "ms"
         }
 
-        return LANGUAGE_OVERRIDES[code] ?: normalizedCode
+        LANGUAGE_OVERRIDES[code]?.let { return it }
+        val primary = normalizedCode.substringBefore('-')
+        val canonical = iso639Part1Code(primary) ?: return normalizedCode
+        return canonical + normalizedCode.removePrefix(primary)
     }
 
     fun matchesLanguageCode(language: String?, target: String): Boolean {

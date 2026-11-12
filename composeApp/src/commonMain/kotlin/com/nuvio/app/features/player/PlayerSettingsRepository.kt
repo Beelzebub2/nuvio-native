@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.player.skip.AutoSkipSegmentType
+import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.player.skip.NextEpisodeThresholdMode
 import com.nuvio.app.features.streams.StreamAutoPlayMode
 import com.nuvio.app.features.streams.StreamAutoPlaySource
@@ -41,6 +42,9 @@ data class PlayerSettingsUiState(
     val resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
     val holdToSpeedEnabled: Boolean = true,
     val holdToSpeedValue: Float = 2f,
+    val shortSeekSeconds: Int = DEFAULT_SHORT_SEEK_SECONDS,
+    val mediumSeekSeconds: Int = DEFAULT_MEDIUM_SEEK_SECONDS,
+    val longSeekSeconds: Int = DEFAULT_LONG_SEEK_SECONDS,
     val touchGesturesEnabled: Boolean = true,
     val externalPlayerEnabled: Boolean = false,
     val externalPlayerForwardSubtitles: Boolean = false,
@@ -76,8 +80,8 @@ data class PlayerSettingsUiState(
     val streamAutoPlayNextEpisodeFallbackEnabled: Boolean = true,
     val streamAutoPlayPreferBingeGroup: Boolean = true,
     val streamAutoPlayReuseBingeGroup: Boolean = false,
-    val nextEpisodeThresholdMode: NextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE,
-    val nextEpisodeThresholdPercent: Float = 99f,
+    val nextEpisodeThresholdMode: NextEpisodeThresholdMode = NextEpisodeThresholdMode.SMART,
+    val nextEpisodeThresholdPercent: Float = 95f,
     val nextEpisodeThresholdMinutesBeforeEnd: Float = 2f,
     val preloadNextEpisodeSources: Boolean = false,
     val useLibass: Boolean = false,
@@ -113,6 +117,9 @@ object PlayerSettingsRepository {
     private var resizeMode = PlayerResizeMode.Fit
     private var holdToSpeedEnabled = true
     private var holdToSpeedValue = 2f
+    private var shortSeekSeconds = DEFAULT_SHORT_SEEK_SECONDS
+    private var mediumSeekSeconds = DEFAULT_MEDIUM_SEEK_SECONDS
+    private var longSeekSeconds = DEFAULT_LONG_SEEK_SECONDS
     private var touchGesturesEnabled = true
     private var externalPlayerEnabled = false
     private var externalPlayerForwardSubtitles = false
@@ -148,8 +155,8 @@ object PlayerSettingsRepository {
     private var streamAutoPlayNextEpisodeFallbackEnabled = true
     private var streamAutoPlayPreferBingeGroup = true
     private var streamAutoPlayReuseBingeGroup = false
-    private var nextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE
-    private var nextEpisodeThresholdPercent = 99f
+    private var nextEpisodeThresholdMode = NextEpisodeThresholdMode.SMART
+    private var nextEpisodeThresholdPercent = 95f
     private var nextEpisodeThresholdMinutesBeforeEnd = 2f
     private var preloadNextEpisodeSources = false
     private var useLibass = false
@@ -190,6 +197,9 @@ object PlayerSettingsRepository {
         resizeMode = PlayerResizeMode.Fit
         holdToSpeedEnabled = true
         holdToSpeedValue = 2f
+        shortSeekSeconds = DEFAULT_SHORT_SEEK_SECONDS
+        mediumSeekSeconds = DEFAULT_MEDIUM_SEEK_SECONDS
+        longSeekSeconds = DEFAULT_LONG_SEEK_SECONDS
         touchGesturesEnabled = true
         externalPlayerEnabled = false
         externalPlayerForwardSubtitles = false
@@ -225,8 +235,8 @@ object PlayerSettingsRepository {
         streamAutoPlayNextEpisodeFallbackEnabled = true
         streamAutoPlayPreferBingeGroup = true
         streamAutoPlayReuseBingeGroup = false
-        nextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE
-        nextEpisodeThresholdPercent = 99f
+        nextEpisodeThresholdMode = NextEpisodeThresholdMode.SMART
+        nextEpisodeThresholdPercent = 95f
         nextEpisodeThresholdMinutesBeforeEnd = 2f
         preloadNextEpisodeSources = false
         useLibass = false
@@ -262,6 +272,15 @@ object PlayerSettingsRepository {
             ?: PlayerResizeMode.Fit
         holdToSpeedEnabled = PlayerSettingsStorage.loadHoldToSpeedEnabled() ?: true
         holdToSpeedValue = PlayerSettingsStorage.loadHoldToSpeedValue() ?: 2f
+        shortSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadShortSeekSeconds() ?: DEFAULT_SHORT_SEEK_SECONDS,
+        )
+        mediumSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadMediumSeekSeconds() ?: DEFAULT_MEDIUM_SEEK_SECONDS,
+        )
+        longSeekSeconds = normalizedSeekSeconds(
+            PlayerSettingsStorage.loadLongSeekSeconds() ?: DEFAULT_LONG_SEEK_SECONDS,
+        )
         touchGesturesEnabled = PlayerSettingsStorage.loadTouchGesturesEnabled() ?: true
         externalPlayerEnabled = if (AppFeaturePolicy.externalPlayerSupported) {
             PlayerSettingsStorage.loadExternalPlayerEnabled() ?: false
@@ -367,8 +386,8 @@ object PlayerSettingsRepository {
         streamAutoPlayReuseBingeGroup = PlayerSettingsStorage.loadStreamAutoPlayReuseBingeGroup() ?: false
         nextEpisodeThresholdMode = PlayerSettingsStorage.loadNextEpisodeThresholdMode()
             ?.let { runCatching { NextEpisodeThresholdMode.valueOf(it) }.getOrNull() }
-            ?: NextEpisodeThresholdMode.PERCENTAGE
-        nextEpisodeThresholdPercent = PlayerSettingsStorage.loadNextEpisodeThresholdPercent() ?: 99f
+            ?: NextEpisodeThresholdMode.SMART
+        nextEpisodeThresholdPercent = PlayerSettingsStorage.loadNextEpisodeThresholdPercent() ?: 95f
         nextEpisodeThresholdMinutesBeforeEnd = PlayerSettingsStorage.loadNextEpisodeThresholdMinutesBeforeEnd() ?: 2f
         preloadNextEpisodeSources = PlayerSettingsStorage.loadPreloadNextEpisodeSources() ?: false
         useLibass = PlayerSettingsStorage.loadUseLibass() ?: false
@@ -465,6 +484,33 @@ object PlayerSettingsRepository {
         holdToSpeedValue = normalized
         publish()
         PlayerSettingsStorage.saveHoldToSpeedValue(normalized)
+    }
+
+    fun setShortSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (shortSeekSeconds == normalized) return
+        shortSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveShortSeekSeconds(normalized)
+    }
+
+    fun setMediumSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (mediumSeekSeconds == normalized) return
+        mediumSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveMediumSeekSeconds(normalized)
+    }
+
+    fun setLongSeekSeconds(seconds: Int) {
+        ensureLoaded()
+        val normalized = normalizedSeekSeconds(seconds)
+        if (longSeekSeconds == normalized) return
+        longSeekSeconds = normalized
+        publish()
+        PlayerSettingsStorage.saveLongSeekSeconds(normalized)
     }
 
     fun setTouchGesturesEnabled(enabled: Boolean) {
@@ -705,6 +751,7 @@ object PlayerSettingsRepository {
         skipIntroEnabled = enabled
         publish()
         PlayerSettingsStorage.saveSkipIntroEnabled(enabled)
+        if (enabled) SkipIntroRepository.clearCache()
     }
 
     fun setAutoSkipSegmentTypeEnabled(segmentType: AutoSkipSegmentType, enabled: Boolean) {
@@ -722,6 +769,7 @@ object PlayerSettingsRepository {
         animeSkipEnabled = enabled
         publish()
         PlayerSettingsStorage.saveAnimeSkipEnabled(enabled)
+        SkipIntroRepository.clearCache()
     }
 
     fun setAnimeSkipClientId(clientId: String) {
@@ -730,6 +778,7 @@ object PlayerSettingsRepository {
         animeSkipClientId = clientId
         publish()
         PlayerSettingsStorage.saveAnimeSkipClientId(clientId)
+        SkipIntroRepository.clearCache()
     }
 
     fun setIntroDbApiKey(apiKey: String) {
@@ -790,10 +839,12 @@ object PlayerSettingsRepository {
 
     fun setNextEpisodeThresholdPercent(percent: Float) {
         ensureLoaded()
-        if (nextEpisodeThresholdPercent == percent) return
-        nextEpisodeThresholdPercent = percent
+        if (!percent.isFinite()) return
+        val clampedPercent = percent.coerceIn(85f, 100f)
+        if (nextEpisodeThresholdPercent == clampedPercent) return
+        nextEpisodeThresholdPercent = clampedPercent
         publish()
-        PlayerSettingsStorage.saveNextEpisodeThresholdPercent(percent)
+        PlayerSettingsStorage.saveNextEpisodeThresholdPercent(clampedPercent)
     }
 
     fun setNextEpisodeThresholdMinutesBeforeEnd(minutes: Float) {
@@ -1011,6 +1062,9 @@ object PlayerSettingsRepository {
             resizeMode = resizeMode,
             holdToSpeedEnabled = holdToSpeedEnabled,
             holdToSpeedValue = holdToSpeedValue,
+            shortSeekSeconds = shortSeekSeconds,
+            mediumSeekSeconds = mediumSeekSeconds,
+            longSeekSeconds = longSeekSeconds,
             touchGesturesEnabled = touchGesturesEnabled,
             externalPlayerEnabled = externalPlayerEnabled && AppFeaturePolicy.externalPlayerSupported,
             externalPlayerForwardSubtitles = externalPlayerForwardSubtitles && AppFeaturePolicy.externalPlayerSupported,
