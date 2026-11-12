@@ -1,0 +1,62 @@
+name: Check Windows virtual audio prototype
+
+on:
+  pull_request:
+    paths:
+      - 'drivers/starlit-virtual-audio/**'
+      - 'composeApp/src/desktopMain/native/windows/discord_share_safety.h'
+      - 'composeApp/src/desktopMain/native/windows/player_bridge.cpp'
+      - 'tests/native-discord-share-safety.test.cpp'
+      - '.github/workflows/virtual-audio-preview-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: virtual-audio-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prototype-safety:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse setup scripts without executing them
+        shell: pwsh
+        run: |
+          $scripts = @(
+            'drivers/starlit-virtual-audio/Build-StarlitVirtualAudioPreview.ps1',
+            'drivers/starlit-virtual-audio/Install-StarlitVirtualAudio.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell parse failed: $script"
+            }
+          }
+      - name: Verify virtual endpoint policy
+        shell: pwsh
+        run: |
+          $tool = Get-Command cl.exe -ErrorAction SilentlyContinue
+          if ($null -eq $tool) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+            if (-not (Test-Path -LiteralPath $vswhere)) { throw 'MSVC Build Tools not installed.' }
+            $vcvars = @(& $vswhere -latest -products '*' -find 'VC/Auxiliary/Build/vcvars64.bat')
+            if (-not $vcvars) { throw 'MSVC environment setup not found.' }
+            $c = 'call "' + $vcvars[0] + '" >NUL && cl.exe /nologo /std:c++17 /EHsc /W4 tests/native-discord-share-safety.test.cpp /Fe:' + '"' + "$env:RUNNER_TEMP\discord-share-safety.exe" + '" && "' + "$env:RUNNER_TEMP\discord-share-safety.exe" + '"'
+            cmd.exe /d /s /c $c
+          } else {
+            & cl.exe /nologo /std:c++17 /EHsc /W4 tests/native-discord-share-safety.test.cpp "/Fe:$env:RUNNER_TEMP\discord-share-safety.exe"
+            if ($LASTEXITCODE -ne 0) { throw 'Endpoint policy compile failed.' }
+            & "$env:RUNNER_TEMP\discord-share-safety.exe"
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Endpoint policy validation failed ($LASTEXITCODE)." }
