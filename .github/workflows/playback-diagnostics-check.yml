@@ -108,6 +108,7 @@ jobs:
           --tests '*NativePlayerStartupTest*' --tests '*NativePlayerControllerTeardownTest*'
           --tests '*PreferredAudioTrackTest*'
           --tests '*OpeningOverlayFullscreenTest*'
+          --tests '*PrivatePlaybackUiTest*' --tests '*PrivatePlaybackIndicatorUiTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
@@ -119,4 +120,12 @@ jobs:
         with:
           name: playback-diagnostics-test-results
           path: composeApp/build/reports/tests/desktopTest/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: private-playback-ui-proof
+          path: |
+            composeApp/build/reports/private-playback-ui/
+            build/reports/private-playback-ui/
           if-no-files-found: warn

@@ -55,13 +55,13 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     var playbackFailedReported by remember(activePlaybackKey) { mutableStateOf(false) }
     var torrentEngineFailureReported by remember(activePlaybackKey) { mutableStateOf(false) }
     LaunchedEffect(activePlaybackKey, playbackSnapshot.isPlaying) {
-        if (playbackSnapshot.isPlaying && !playbackReadyReported) {
+        if (!privatePlayback && playbackSnapshot.isPlaying && !playbackReadyReported) {
             playbackReadyReported = true
             UsageDiagnostics.track(UsageEvent.PlaybackReady)
         }
     }
     LaunchedEffect(activePlaybackKey, errorMessage) {
-        if (errorMessage != null && !playbackFailedReported) {
+        if (!privatePlayback && errorMessage != null && !playbackFailedReported) {
             playbackFailedReported = true
             UsageDiagnostics.track(UsageEvent.PlaybackFailed)
         }
@@ -70,7 +70,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     LaunchedEffect(activePlaybackKey, activeSourceUrl, activeTorrentInfoHash) {
         if (activeSourceUrl == null && activeTorrentInfoHash == null) return@LaunchedEffect
         delay(30_000)
-        if (!playbackReadyReported && !playbackFailedReported && errorMessage == null) {
+        if (!privatePlayback && !playbackReadyReported && !playbackFailedReported && errorMessage == null) {
             UsageDiagnostics.track(UsageEvent.PlaybackStartupSlow)
         }
     }
@@ -104,7 +104,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     // Key the coroutine by threshold eligibility, not the changing playback position:
     // otherwise Compose cancels the in-flight MAL request on every playback tick.
     val malRewatchAttempted = remember { mutableSetOf<String>() }
-    val eligibleForMalUpdate = isDesktop &&
+    val eligibleForMalUpdate = !privatePlayback && isDesktop &&
         playbackSnapshotKey == activePlaybackKey &&
         shouldUpdateMalAfterPlayback(
             positionMs = playbackSnapshot.positionMs,
@@ -139,7 +139,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
 
     LaunchedEffect(currentStreamBingeGroup, parentMetaId) {
         val bg = currentStreamBingeGroup
-        if (bg != null && parentMetaId.isNotBlank()) {
+        if (!privatePlayback && bg != null && parentMetaId.isNotBlank()) {
             BingeGroupCacheRepository.save(parentMetaId, bg)
         }
     }
@@ -226,7 +226,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         } catch (error: Exception) {
             if (!torrentEngineFailureReported) {
                 torrentEngineFailureReported = true
-                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+                if (!privatePlayback) UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
             }
             errorMessage = getString(
                 Res.string.player_error_failed_start_torrent,
@@ -243,7 +243,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         if (activeTorrentInfoHash != null && state is P2pStreamingState.Error) {
             if (!torrentEngineFailureReported) {
                 torrentEngineFailureReported = true
-                UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
+                if (!privatePlayback) UsageDiagnostics.track(UsageEvent.TorrentEngineFailed)
             }
             p2pRecoveryInProgress = false
             p2pResolvedSourceUrl = null
@@ -839,6 +839,8 @@ private fun firstNonBlankUrl(vararg values: String?): String? =
     values.firstOrNull { !it.isNullOrBlank() }?.trim()
 
 internal fun PlayerScreenRuntime.removeFailedStreamFromCache() {
+    // A private launch must not change reusable stream metadata for normal playback.
+    if (privatePlayback) return
     val currentVideoId = activeVideoId ?: return
     val cacheKey = StreamLinkCacheRepository.contentKey(
         type = contentType ?: parentMetaType,

@@ -28,6 +28,7 @@ internal fun PlayerLaunch.externalPlaybackSession(): WatchProgressPlaybackSessio
     lastStreamSubtitle = streamSubtitle,
     pauseDescription = pauseDescription,
     lastSourceUrl = sourceUrl,
+    privatePlayback = privatePlayback,
 )
 
 /** An external player can report EOF with a stale or missing final position. */
@@ -46,6 +47,8 @@ internal suspend fun recordExternalPlaybackProgress(
     fallbackSession: WatchProgressPlaybackSession?,
 ) {
     val session = result.playbackSession ?: fallbackSession ?: return
+    // Covers callbacks arriving after a private external player has exited or been recreated.
+    if (session.privatePlayback) return
     // A completed playback may carry no position at all (MX Player), so only drop position-less
     // results that were not reported as played to the end.
     if (result.positionMs <= 0L && result.endedByUser) return

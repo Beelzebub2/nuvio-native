@@ -77,7 +77,7 @@ internal fun PlayerScreenRuntime.removeUserLocalSubtitleFile() {
 internal fun PlayerScreenRuntime.updateTrackPreference(
     update: (PersistedPlayerTrackPreference) -> PersistedPlayerTrackPreference,
 ) {
-    if (parentMetaId.isBlank()) return
+    if (privatePlayback || parentMetaId.isBlank()) return
     val current = PlayerTrackPreferenceStorage.load(parentMetaId) ?: PersistedPlayerTrackPreference()
     PlayerTrackPreferenceStorage.save(parentMetaId, update(current))
 }

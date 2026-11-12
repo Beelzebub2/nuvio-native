@@ -1477,6 +1477,9 @@
     <string name="streams_active_scrapers">Scrapers ativos</string>
     <string name="streams_checking_more_addons">Verificando mais addons…</string>
     <string name="streams_copy_link">Copiar link da stream</string>
+    <string name="streams_play_privately">Reproduzir em modo privado</string>
+    <string name="player_private_mode_active">Reprodução privada</string>
+    <string name="player_private_external_unavailable">Não é possível abrir fontes externas durante a reprodução privada</string>
     <string name="streams_download_file">Baixar arquivo</string>
     <string name="streams_open_external_player">Abrir em player externo</string>
     <string name="streams_open_internal_player">Abrir em player interno</string>

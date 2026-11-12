@@ -70,6 +70,7 @@ internal class PlayerScreenRuntime(
 
     val title: String get() = args.title
     val profileId: Int get() = args.profileId
+    val privatePlayback: Boolean get() = args.privatePlayback
     val sourceUrl: String get() = args.sourceUrl
     val sourceAudioUrl: String? get() = args.sourceAudioUrl
     val sourceHeaders: Map<String, String> get() = args.sourceHeaders
