@@ -1625,7 +1625,7 @@
     <string name="settings_trakt_features">คุณสมบัติ</string>
     <string name="settings_trakt_finish_sign_in">เสร็จสิ้นการอนุมัติการเชื่อมต่อ</string>
     <string name="settings_trakt_intro_description">ซิงค์รายการเฝ้าดูของคุณ ดูความคืบหน้า ดูต่อ ขีดเขียน และรายการส่วนตัวด้วย Trakt</string>
-    <string name="settings_trakt_missing_credentials">ข้อมูลรับรอง Trakt หายไปใน local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET)</string>
+    <string name="settings_trakt_missing_credentials">ข้อมูลรับรอง Trakt หายไปใน local.properties (TRAKT_CLIENT_ID)</string>
     <string name="settings_trakt_open_activation">เปิด Trakt เปิดใช้งาน</string>
     <string name="settings_trakt_open_login">เปิด Trakt เข้าสู่ระบบ</string>
     <string name="settings_trakt_save_actions_description">ซิงค์รายการเฝ้าดูของคุณ ดูความคืบหน้า ดูต่อ ขีดเขียน และรายการส่วนตัวด้วย Trakt</string>

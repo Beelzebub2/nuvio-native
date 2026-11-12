@@ -1616,7 +1616,7 @@
     <string name="settings_trakt_features">ویژگی ها</string>
     <string name="settings_trakt_finish_sign_in">تأیید اتصال را تمام کنید</string>
     <string name="settings_trakt_intro_description">فهرست تماشا، پیشرفت تماشا، ادامه تماشا، اسکراب‌ها و فهرست‌های شخصی خود را با Trakt همگام‌سازی کنید.</string>
-    <string name="settings_trakt_missing_credentials">اعتبارنامه Trakt در local.properties وجود ندارد (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">اعتبارنامه Trakt در local.properties وجود ندارد (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">باز کردن Trakt فعال کردن</string>
     <string name="settings_trakt_open_login">ورود Trakt را باز کنید</string>
     <string name="settings_trakt_save_actions_description">فهرست تماشای خود، پیشرفت تماشا، ادامه تماشا، اسکراب‌ها و فهرست‌های شخصی خود را با Trakt همگام‌سازی کنید.</string>

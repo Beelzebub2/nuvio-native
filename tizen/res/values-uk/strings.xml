@@ -133,7 +133,7 @@
     <string name="trakt_error_network_retry">Помилка мережі, спробуйте ще раз</string>
     <string name="trakt_error_network_will_retry">Помилка мережі, повтор...</string>
     <string name="trakt_library_source_title">Джерело бібліотеки</string>
-    <string name="trakt_missing_credentials">Відсутні TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET у local.properties.</string>
+    <string name="trakt_missing_credentials">Відсутні TRAKT_CLIENT_ID у local.properties.</string>
     <string name="trakt_status_rate_limited_slowing_polling">Обмеження запитів, уповільнення опитування...</string>
     <string name="trakt_token_refreshes">Токен доступу Trakt оновиться через %1$s</string>
     <string name="trakt_login">Увійти</string>

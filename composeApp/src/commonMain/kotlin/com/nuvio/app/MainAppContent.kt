@@ -810,6 +810,9 @@ internal fun MainAppContent(
         }
 
         suspend fun openExternalPlayback(launch: PlayerLaunch): Boolean {
+            // External player apps may persist their own history independently of Starlit.
+            // Do not launch them from an opted-in private session.
+            if (launch.privatePlayback) return false
             if (!externalPlayerSupported) return false
 
             lastExternalPlayerLaunch = launch

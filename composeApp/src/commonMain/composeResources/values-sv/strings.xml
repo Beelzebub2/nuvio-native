@@ -1614,7 +1614,7 @@
     <string name="settings_trakt_features">FUNKTIONER</string>
     <string name="settings_trakt_finish_sign_in">Slutför anslutningsgodkännandet</string>
     <string name="settings_trakt_intro_description">Synkronisera din bevakningslista, titta på framsteg, fortsätt titta, scrobbles och personliga listor med Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Saknar Trakt autentiseringsuppgifter i local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Saknar Trakt autentiseringsuppgifter i local.properties (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Öppna Trakt Aktivera</string>
     <string name="settings_trakt_open_login">Öppna Trakt Logga in</string>
     <string name="settings_trakt_save_actions_description">Synkronisera din bevakningslista, titta på framsteg, fortsätt titta, scrobbles och personliga listor med Trakt.</string>

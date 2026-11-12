@@ -45,6 +45,8 @@ jobs:
     env:
       STARLIT_OFFICIAL_SUPABASE_URL: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_URL }}
       STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
+      TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
+      TRAKT_REDIRECT_URI: ${{ vars.TRAKT_REDIRECT_URI }}
     steps:
       - uses: actions/checkout@v6
         with:

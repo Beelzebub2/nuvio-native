@@ -1617,7 +1617,7 @@
     <string name="settings_trakt_features">ఫీచర్లు</string>
     <string name="settings_trakt_finish_sign_in">కనెక్షన్ ఆమోదాన్ని ముగించండి</string>
     <string name="settings_trakt_intro_description">మీ వీక్షణ జాబితాను సమకాలీకరించండి, పురోగతిని చూడండి, చూడటం కొనసాగించండి, స్క్రోబుల్‌లు మరియు వ్యక్తిగత జాబితాలను Traktతో చేయండి.</string>
-    <string name="settings_trakt_missing_credentials">local.propertiesలో Trakt ఆధారాలు లేవు (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">local.propertiesలో Trakt ఆధారాలు లేవు (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">తెరవండి Trakt యాక్టివేట్ చేయండి</string>
     <string name="settings_trakt_open_login">తెరవండి Trakt లాగిన్</string>
     <string name="settings_trakt_save_actions_description">మీ వీక్షణ జాబితాను సమకాలీకరించండి, పురోగతిని చూడండి, చూడటం కొనసాగించండి, స్క్రోబుల్‌లు మరియు వ్యక్తిగత జాబితాలను Traktతో చేయండి.</string>

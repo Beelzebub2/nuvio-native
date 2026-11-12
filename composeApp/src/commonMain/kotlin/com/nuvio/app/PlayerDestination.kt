@@ -29,12 +29,12 @@ internal fun PlayerDestination(
     onFindNextTitle: (String) -> Unit,
     onSystemBackHandlerChanged: (PlayerRoute, (() -> Unit)?) -> Unit,
 ) {
+    val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
     val popBack = rememberGuardedPopBackStack(
         navController = navController,
         route = route,
-        beforePop = ResumePromptRepository::markPlayerExitedNormally,
+        beforePop = { if (launch?.privatePlayback != true) ResumePromptRepository.markPlayerExitedNormally() },
     )
-    val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
     if (launch == null) {
         LaunchedEffect(route.launchId) {
             popBack()
@@ -47,7 +47,7 @@ internal fun PlayerDestination(
     val onBackBase = rememberGuardedPlayerPopBackStack(
         navController = navController,
         route = route,
-        beforePop = ResumePromptRepository::markPlayerExitedNormally,
+        beforePop = { if (!launch.privatePlayback) ResumePromptRepository.markPlayerExitedNormally() },
     )
     val onBack = remember(onBackBase, initialFullscreen, currentFullscreen) {
         { releaseBeforeBack: com.nuvio.app.features.player.PlayerReleaseBeforeBack ->
@@ -61,7 +61,7 @@ internal fun PlayerDestination(
         { handler: (() -> Unit)? -> onSystemBackHandlerChanged(route, handler) }
     }
     LaunchedEffect(launch.videoId) {
-        launch.videoId?.let { ResumePromptRepository.markPlayerEntered(it) }
+        if (!launch.privatePlayback) launch.videoId?.let { ResumePromptRepository.markPlayerEntered(it) }
     }
     PlayerScreen(
         profileId = launch.profileId,
@@ -97,9 +97,10 @@ internal fun PlayerDestination(
         initialProgressFraction = launch.initialProgressFraction,
         contentLanguage = launch.contentLanguage,
         launchId = route.launchId,
+        privatePlayback = launch.privatePlayback,
         onBack = onBack,
         onSystemBackHandlerChanged = registerSystemBack,
-        onOpenInExternalPlayer = if (externalPlayerSupported) { { request ->
+        onOpenInExternalPlayer = if (externalPlayerSupported && !launch.privatePlayback) { { request ->
             val playerLaunch = PlayerLaunch(
                 profileId = launch.profileId,
                 title = launch.title,
@@ -123,6 +124,7 @@ internal fun PlayerDestination(
                 parentMetaId = launch.parentMetaId,
                 parentMetaType = launch.parentMetaType,
                 initialPositionMs = request.resumePositionMs,
+                privatePlayback = request.playbackSession?.privatePlayback ?: launch.privatePlayback,
             )
             onExternalPlayerLaunch(playerLaunch)
             val intentResult = ExternalPlayerPlatform.buildIntent(
@@ -146,9 +148,7 @@ internal fun PlayerDestination(
                 }
             }
         } } else null,
-        onOpenExternalUrl = { url ->
-            openExternalStreamUrl(url)
-        },
+        onOpenExternalUrl = if (launch.privatePlayback) null else { url -> openExternalStreamUrl(url) },
         onFindNextTitle = onFindNextTitle,
         modifier = Modifier.fillMaxSize(),
     )

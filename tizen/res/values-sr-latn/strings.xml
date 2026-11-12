@@ -179,7 +179,7 @@
     <string name="trakt_error_network_retry">Mrežna greška, pokušajte ponovo</string>
     <string name="trakt_error_network_will_retry">Mrežna greška, pokušaće se ponovo</string>
     <string name="trakt_library_source_title">Izvor biblioteke</string>
-    <string name="trakt_missing_credentials">Nedostaje TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET u local.properties.</string>
+    <string name="trakt_missing_credentials">Nedostaje TRAKT_CLIENT_ID u local.properties.</string>
     <string name="trakt_status_rate_limited_slowing_polling">Brzina je ograničena, usporava se provera...</string>
     <string name="trakt_token_refreshes">Trakt pristupni token se osvežava za %1$s</string>
     <string name="action_back">Nazad</string>

@@ -1624,7 +1624,7 @@
     <string name="settings_trakt_features">特點</string>
     <string name="settings_trakt_finish_sign_in">完成連線批准</string>
     <string name="settings_trakt_intro_description">使用 Trakt 同步您的觀看清單、觀看進度、繼續觀看、塗鴉和個人清單。</string>
-    <string name="settings_trakt_missing_credentials">local.properties 中缺少 Trakt 憑證（TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET）。</string>
+    <string name="settings_trakt_missing_credentials">local.properties 中缺少 Trakt 憑證（TRAKT_CLIENT_ID）。</string>
     <string name="settings_trakt_open_activation">開啟 Trakt 激活</string>
     <string name="settings_trakt_open_login">開啟 Trakt 登入</string>
     <string name="settings_trakt_save_actions_description">使用 Trakt 同步您的觀看清單、觀看進度、繼續觀看、塗鴉和個人清單。</string>

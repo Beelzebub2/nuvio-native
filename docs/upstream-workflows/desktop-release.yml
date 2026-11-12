@@ -223,7 +223,6 @@ jobs:
             NUVIO_SUPABASE_URL
             NUVIO_SUPABASE_ANON_KEY
             TRAKT_CLIENT_ID
-            TRAKT_CLIENT_SECRET
           )
           for property_name in "${required_properties[@]}"; do
             if ! grep -Eq "^${property_name}=.+" local.properties; then
@@ -443,7 +442,6 @@ jobs:
             NUVIO_SUPABASE_URL
             NUVIO_SUPABASE_ANON_KEY
             TRAKT_CLIENT_ID
-            TRAKT_CLIENT_SECRET
           )
           for property_name in "${required_properties[@]}"; do
             if ! grep -Eq "^${property_name}=.+" local.properties; then

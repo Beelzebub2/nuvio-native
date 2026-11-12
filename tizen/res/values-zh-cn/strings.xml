@@ -977,7 +977,7 @@
     <string name="trakt_code_expires">代码将在 %1$s 后过期</string>
     <string name="trakt_token_refreshes">Trakt 访问令牌将在 %1$s 后刷新</string>
     <string name="trakt_login_instruction">点击登录开始 Trakt 设备认证。此处将显示二维码。</string>
-    <string name="trakt_missing_credentials">local.properties 中缺少 TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET。</string>
+    <string name="trakt_missing_credentials">local.properties 中缺少 TRAKT_CLIENT_ID。</string>
     <string name="trakt_watch_progress_title">观看进度</string>
     <string name="trakt_watch_progress_subtitle">选择继续观看和恢复播放使用哪个进度源</string>
     <string name="trakt_watch_progress_dialog_title">观看进度</string>

@@ -1614,7 +1614,7 @@
     <string name="settings_trakt_features">OMINAISUUDET</string>
     <string name="settings_trakt_finish_sign_in">Viimeistele yhteyden hyväksyntä</string>
     <string name="settings_trakt_intro_description">Synkronoi tarkkailulistasi, katselun edistyminen, jatka katselua, scrobble ja henkilökohtaiset luettelot Trakt:n kanssa.</string>
-    <string name="settings_trakt_missing_credentials">Trakt-kirjautumistiedot puuttuvat local.propertiesissa (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Trakt-kirjautumistiedot puuttuvat local.propertiesissa (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Avaa Trakt Aktivoi</string>
     <string name="settings_trakt_open_login">Avaa Trakt Kirjaudu sisään</string>
     <string name="settings_trakt_save_actions_description">Synkronoi tarkkailuluettelosi, katselun edistyminen, jatka katselua, scrobble ja henkilökohtaiset luettelot Trakt:n kanssa.</string>

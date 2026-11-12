@@ -55,6 +55,16 @@ class InfusePlaybackTest {
     }
 
     @Test
+    fun privatePlaybackFlagIsPreservedAcrossStoredExternalCallbacks() {
+        val privateSession = session.copy(privatePlayback = true)
+        val launch = Url(callbacks().prepare(request.copy(playbackSession = privateSession)))
+        val restored = callbacks()
+        assertTrue(restored.handleUrl(success(launch, "1800")))
+        assertTrue(assertNotNull(restored.results.value?.playbackResult()).playbackSession?.privatePlayback == true)
+        assertFalse(session.privatePlayback)
+    }
+
+    @Test
     fun knownDurationUsesExistingCompletionThreshold() {
         val callbacks = callbacks()
         val launch = Url(callbacks.prepare(request))

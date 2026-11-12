@@ -1326,7 +1326,7 @@
     <string name="settings_trakt_features">FUNCIONALIDADES</string>
     <string name="settings_trakt_finish_sign_in">Conclui o início de sessão do Trakt no teu navegador</string>
     <string name="settings_trakt_intro_description">Sincroniza a tua lista de conteúdos, o progresso de visualização, o Continuar a Ver, os scrobbles e as listas pessoais com o Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Faltam as credenciais do Trakt no local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">O início de sessão do Trakt não está configurado nesta versão (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_login">Abrir início de sessão do Trakt</string>
     <string name="settings_trakt_save_actions_description">As ações de Guardar podem agora utilizar a lista de conteúdos do Trakt e as tuas listas pessoais.</string>
     <string name="settings_trakt_sign_in_description">Inicia sessão com o Trakt para ativares a gravação em listas e o modo de biblioteca do Trakt.</string>
@@ -1608,6 +1608,9 @@
     <string name="streams_active_scrapers">Scrapers ativos</string>
     <string name="streams_checking_more_addons">A verificar mais addons…</string>
     <string name="streams_copy_link">Copiar link do stream</string>
+    <string name="streams_play_privately">Reproduzir em privado</string>
+    <string name="player_private_mode_active">Reprodução privada</string>
+    <string name="player_private_external_unavailable">Não é possível abrir fontes externas durante a reprodução privada</string>
     <string name="streams_download_file">Transferir ficheiro</string>
     <string name="streams_open_external_player">Abrir num leitor externo</string>
     <string name="streams_open_internal_player">Abrir no leitor interno</string>
