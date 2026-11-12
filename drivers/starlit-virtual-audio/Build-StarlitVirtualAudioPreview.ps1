@@ -1,18 +1,32 @@
 #Requires -Version 5.1
 <#
-Build-only prototype from pinned Microsoft SimpleAudioSample source.
-Not installable on stock Windows until validated and Microsoft-signed.
+Build a render-only Windows audio device from a pinned Microsoft sample.
+No driver installation or signature policy changes are performed here.
 #>
 [CmdletBinding()]
 param(
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot 'unsigned-preview'),
-    [switch]$KeepBuildTree
+    [string]$OutputDirectory = '',
+    [switch]$KeepBuildTree,
+    [switch]$PrepareOnly,
+    [string]$ScratchRoot = '',
+    [ValidateSet('10.0.26100.6584', '10.0.28000.2526')]
+    [string]$KitVersion = '10.0.26100.6584'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $OutputDirectory = Join-Path $PSScriptRoot 'unsigned-preview'
+}
+if ([string]::IsNullOrWhiteSpace($ScratchRoot)) {
+    $ScratchRoot = [IO.Path]::GetTempPath()
+}
+$ScratchRoot = [IO.Path]::GetFullPath($ScratchRoot)
+if (-not (Test-Path -LiteralPath $ScratchRoot -PathType Container)) {
+    throw "Scratch root must already exist: $ScratchRoot"
+}
 $upstream = 'https://github.com/microsoft/Windows-driver-samples.git'
 $pin = 'd49bb7d72f3651952b2b6e4ad28d14fe2247eb69'
-$work = Join-Path ([IO.Path]::GetTempPath()) ('starlit-virtual-audio-' + [guid]::NewGuid().ToString('N'))
+$work = Join-Path $ScratchRoot ('starlit-virtual-audio-' + [guid]::NewGuid().ToString('N'))
 $source = Join-Path $work 'Windows-driver-samples'
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 
@@ -25,6 +39,11 @@ function Invoke-Checked([string]$program, [string[]]$arguments) {
 function Replace-ExactlyOnce([string]$from, [string]$to) {
     $count = [regex]::Matches($script:inxText, [regex]::Escape($from)).Count
     if ($count -ne 1) { throw "Unexpected upstream INF layout: $from ($count matches)" }
+    $script:inxText = $script:inxText.Replace($from, $to)
+}
+function Replace-Count([string]$from, [string]$to, [int]$expected) {
+    $count = [regex]::Matches($script:inxText, [regex]::Escape($from)).Count
+    if ($count -ne $expected) { throw "Unexpected INF occurrence count: $from ($count instead of $expected)" }
     $script:inxText = $script:inxText.Replace($from, $to)
 }
 
@@ -53,6 +72,12 @@ try {
     Replace-ExactlyOnce 'SIMPLEAUDIOSAMPLE_SA.DeviceDesc="Virtual Audio Device (WDM) - Simple Audio Sample"' 'SIMPLEAUDIOSAMPLE_SA.DeviceDesc="Starlit Virtual Audio"'
     Replace-ExactlyOnce 'SimpleAudioSample.SvcDesc="Virtual Audio Device (WDM) - Simple Audio Sample Driver"' 'SimpleAudioSample.SvcDesc="Starlit Virtual Audio Driver"'
     Replace-ExactlyOnce 'SIMPLEAUDIOSAMPLE.WaveSpeaker.szPname="Simple Audio Sample Wave Speaker"' 'SIMPLEAUDIOSAMPLE.WaveSpeaker.szPname="Starlit Virtual Audio"'
+    Replace-Count 'simpleaudiosample.sys' 'StarlitVirtualAudio.sys' 5
+    Replace-ExactlyOnce 'AddService=SimpleAudioSample,0x00000002,SimpleAudioSample_Service_Inst' 'AddService=StarlitVirtualAudio,0x00000002,StarlitVirtualAudio_Service_Inst'
+    Replace-ExactlyOnce '[SimpleAudioSample_Service_Inst]' '[StarlitVirtualAudio_Service_Inst]'
+    Replace-ExactlyOnce 'SimpleAudioSample.SvcDesc=' 'StarlitVirtualAudio.SvcDesc='
+    Replace-ExactlyOnce 'DisplayName=%SimpleAudioSample.SvcDesc%' 'DisplayName=%StarlitVirtualAudio.SvcDesc%'
+    Replace-ExactlyOnce 'KmdfService = SimpleAudioSample,' 'KmdfService = StarlitVirtualAudio,'
 
     # Expose only the render interface, not the sample virtual microphone.
     $lines = [regex]::Split($script:inxText, "\r?\n")
@@ -62,6 +87,63 @@ try {
         $_ -notmatch '^\s*AddInterface\s*=.*MicArray1'
     }) -join [Environment]::NewLine)
     [IO.File]::WriteAllText($inx, $script:inxText, [Text.Encoding]::ASCII)
+
+    # A unique service/binary identity prevents collisions with any Microsoft
+    # development sample installation and permits independent upgrades.
+    $vcx = Join-Path $driverRoot 'Source/Main/Main.vcxproj'
+    $project = [IO.File]::ReadAllText($vcx)
+    if ([regex]::Matches($project, '<TargetName>SimpleAudioSample</TargetName>').Count -ne 4) {
+        throw 'Unexpected output-target layout in upstream project.'
+    }
+    $project = $project.Replace('<TargetName>SimpleAudioSample</TargetName>',
+        '<TargetName>StarlitVirtualAudio</TargetName>')
+    [IO.File]::WriteAllText($vcx, $project)
+
+    # The device is a dedicated render sink: never register the sample's
+    # fake microphone, synthesize capture tones or write media to files.
+    $adapter = Join-Path $driverRoot 'Source/Main/adapter.cpp'
+    $adapterText = [IO.File]::ReadAllText($adapter)
+    $captureInstall = 'ntStatus = InstallAllCaptureFilters(DeviceObject, Irp, pAdapterCommon);'
+    if ([regex]::Matches($adapterText, [regex]::Escape($captureInstall)).Count -ne 1) {
+        throw 'Unexpected sample capture install path.'
+    }
+    $adapterText = $adapterText.Replace($captureInstall,
+        'ntStatus = STATUS_SUCCESS; // Render-only; no capture endpoints installed.')
+    # Enforce privacy even when a registry value attempts to enable file dumps.
+    $registryAnchor = 'DPF(D_VERBOSE, ("DoNotCreateDataFiles: %u", g_DoNotCreateDataFiles));'
+    if ([regex]::Matches($adapterText, [regex]::Escape($registryAnchor)).Count -ne 1) {
+        throw 'Unexpected sample registry settings path.'
+    }
+    $adapterText = $adapterText.Replace($registryAnchor,
+        ('g_DoNotCreateDataFiles = 1; g_DisableToneGenerator = 1;' + [Environment]::NewLine +
+        '    ' + $registryAnchor))
+    [IO.File]::WriteAllText($adapter, $adapterText)
+
+    # Official 2026 WDK NuGet restores require a version matching VS/WDK.
+    # VS2022 uses 26100; VS2026 uses 28000. Do not edit user-installed kits.
+    if ($KitVersion -ne '10.0.28000.2526') {
+        foreach ($file in @('packages.config', 'Directory.Build.props')) {
+            $path = Join-Path $source $file
+            $text = [IO.File]::ReadAllText($path)
+            if (-not $text.Contains('10.0.28000.2526')) {
+                throw "Unexpected WDK version file: $path"
+            }
+            [IO.File]::WriteAllText($path, $text.Replace('10.0.28000.2526', $KitVersion))
+        }
+    }
+    # Only restore packages used by an x64 build. Keeping ARM64 NuGet packages
+    # is unnecessary and dramatically increases CI download time.
+    $packageConfig = Join-Path $source 'packages.config'
+    $packageText = [IO.File]::ReadAllText($packageConfig)
+    $packageText = [regex]::Replace($packageText,
+        '(?m)^.*<package\s+id="Microsoft\.Windows\.(?:WDK|SDK\.CPP)\.arm64"[^>]+/>\s*\r?\n',
+        '')
+    [IO.File]::WriteAllText($packageConfig, $packageText)
+    if ($PrepareOnly) {
+        Write-Output "Prepared pinned driver source: $driverRoot"
+        Write-Output "Use NuGet restore and MSBuild to validate; no device was installed."
+        return
+    }
 
     $msbuild = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
     if ($null -ne $msbuild) {
@@ -76,19 +158,26 @@ try {
         if ($found.Count -eq 0) { throw 'MSBuild was not found.' }
         $msbuildPath = $found[0]
     }
+    # WDK packages are sourced through a pinned NuGet restore, not downloaded
+    # as an unverified standalone executable or installed machine-wide.
+    if (-not (Get-Command nuget.exe -ErrorAction SilentlyContinue)) {
+        throw 'NuGet CLI is required for restoring Microsoft WDK/SDK packages.'
+    }
+    Invoke-Checked 'nuget.exe' @('restore', (Join-Path $source 'packages.config'),
+        '-PackagesDirectory', (Join-Path $source 'packages'), '-NonInteractive')
     Invoke-Checked $msbuildPath @((Join-Path $driverRoot 'SimpleAudioSample.sln'),
         '/m', '/t:Build', '/p:Configuration=Release', '/p:Platform=x64', '/v:minimal')
 
     $packages = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'SimpleAudioSample.inf' -File -Recurse |
         Where-Object {
-            (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'SimpleAudioSample.sys')) -and
+            (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'StarlitVirtualAudio.sys')) -and
             (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'SimpleAudioSample.cat'))
         })
     if ($packages.Count -ne 1) {
         throw "Expected one complete x64 package, found $($packages.Count)."
     }
     [IO.Directory]::CreateDirectory($output) | Out-Null
-    foreach ($file in @('SimpleAudioSample.inf', 'SimpleAudioSample.sys', 'SimpleAudioSample.cat')) {
+    foreach ($file in @('SimpleAudioSample.inf', 'StarlitVirtualAudio.sys', 'SimpleAudioSample.cat')) {
         Copy-Item -LiteralPath (Join-Path $packages[0].DirectoryName $file) -Destination $output
     }
     Copy-Item -LiteralPath (Join-Path $source 'LICENSE') -Destination (Join-Path $output 'MICROSOFT-SAMPLE-LICENSE.txt')
@@ -97,7 +186,7 @@ try {
 } finally {
     # The build tree is a GUID-named scratch folder created by this call.
     # Never remove the caller-controlled output directory.
-    if ($KeepBuildTree) {
+    if ($KeepBuildTree -or $PrepareOnly) {
         Write-Output "Build tree retained: $work"
     } elseif (Test-Path -LiteralPath $work -PathType Container) {
         Remove-Item -LiteralPath $work -Recurse -Force

@@ -28,6 +28,7 @@ jobs:
         run: |
           $scripts = @(
             'drivers/starlit-virtual-audio/Build-StarlitVirtualAudioPreview.ps1',
+            'drivers/starlit-virtual-audio/Build-StarlitDeviceSetup.ps1',
             'drivers/starlit-virtual-audio/Install-StarlitVirtualAudio.ps1'
           )
           foreach ($script in $scripts) {
@@ -60,3 +61,53 @@ jobs:
             & "$env:RUNNER_TEMP\discord-share-safety.exe"
           }
           if ($LASTEXITCODE -ne 0) { throw "Endpoint policy validation failed ($LASTEXITCODE)." }
+      - name: Build root-device helper and run read-only discovery
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:RUNNER_TEMP 'StarlitDeviceSetup.exe'
+          ./drivers/starlit-virtual-audio/Build-StarlitDeviceSetup.ps1 `
+            -OutputPath $binary -ScratchRoot $env:RUNNER_TEMP
+          & $binary status
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Starlit root-device helper was not safe to query.'
+          }
+          if (Get-PnpDevice -Class Media -ErrorAction Stop | Where-Object {
+              $_.InstanceId -like 'ROOT\STARLITVIRTUALAUDIO\*'
+          }) {
+            throw 'CI must not install a kernel device.'
+          }
+
+  driver-build:
+    # A successful driver build is not proof of safe installation, signing or
+    # Discord capture. No kernel driver is installed on the runner.
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build x64 render-only driver with pinned Microsoft WDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command nuget.exe -ErrorAction SilentlyContinue)) {
+            throw 'NuGet CLI is unavailable on the Windows runner.'
+          }
+          $out = Join-Path $env:RUNNER_TEMP 'starlit-virtual-audio-package'
+          & ./drivers/starlit-virtual-audio/Build-StarlitVirtualAudioPreview.ps1 `
+              -KitVersion '10.0.26100.6584' -ScratchRoot $env:RUNNER_TEMP `
+              -OutputDirectory $out
+          if ($LASTEXITCODE -ne 0) { throw 'Driver build failed.' }
+          foreach ($name in @('SimpleAudioSample.inf', 'StarlitVirtualAudio.sys', 'SimpleAudioSample.cat')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $out $name) -PathType Leaf)) {
+              throw "Driver package missing $name"
+            }
+          }
+          $inf = [IO.File]::ReadAllText((Join-Path $out 'SimpleAudioSample.inf'))
+          if (-not $inf.Contains('ROOT\StarlitVirtualAudio') -or
+              -not $inf.Contains('StarlitVirtualAudio.sys') -or
+              $inf -match '(?m)^\s*AddInterface=.*MicArray1') {
+            throw 'Built driver INF failed identity or render-only checks.'
+          }
+          $sys = Get-Item (Join-Path $out 'StarlitVirtualAudio.sys')
+          Write-Output ("Built x64 Starlit render driver: {0} bytes" -f $sys.Length)
+          Write-Warning 'Unsigned/test package only; not installed or published.'

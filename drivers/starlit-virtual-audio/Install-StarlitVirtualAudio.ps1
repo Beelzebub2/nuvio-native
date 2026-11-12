@@ -8,11 +8,18 @@ Only install a Microsoft-signed, separately qualified production package.
 param(
     [ValidateSet('Status', 'Install', 'Remove')]
     [string]$Action = 'Status',
-    [string]$PackageDirectory = (Join-Path $PSScriptRoot 'signed-package')
+    [string]$PackageDirectory = '',
+    [string]$SetupHelperPath = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($PackageDirectory)) {
+    $PackageDirectory = Join-Path $PSScriptRoot 'signed-package'
+}
+if ([string]::IsNullOrWhiteSpace($SetupHelperPath)) {
+    $SetupHelperPath = Join-Path $PSScriptRoot 'StarlitDeviceSetup.exe'
+}
 $hardwareId = 'ROOT\StarlitVirtualAudio'
 
 function Get-StarlitDevice {
@@ -33,7 +40,7 @@ function Assert-SignedPackage([string]$directory) {
     $folder = [IO.Path]::GetFullPath($directory)
     $inf = Join-Path $folder 'SimpleAudioSample.inf'
     $cat = Join-Path $folder 'SimpleAudioSample.cat'
-    $sys = Join-Path $folder 'SimpleAudioSample.sys'
+    $sys = Join-Path $folder 'StarlitVirtualAudio.sys'
     foreach ($candidate in @($inf, $cat, $sys)) {
         if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
             throw "Driver package incomplete: $candidate"
@@ -49,6 +56,19 @@ function Assert-SignedPackage([string]$directory) {
         $signature.SignerCertificate.Subject -notmatch 'Microsoft Windows Hardware Compatibility Publisher') {
         throw 'A valid Microsoft Windows hardware-signed catalog is required. Test certificates are refused.'
     }
+    # A valid but unrelated catalog must not be accepted as a package signature.
+    # DevCon requires the Windows Driver Kit; SignTool is supplied by the SDK.
+    $signtool = Get-Command 'signtool.exe' -ErrorAction SilentlyContinue
+    if ($null -ne $signtool) {
+        foreach ($file in @($inf, $sys)) {
+            & $signtool.Source verify /pa /c $cat $file | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Signed catalog does not validate the packaged file: $file"
+            }
+        }
+    }
+    # PnPUtil always validates the catalog against INF, SYS and current driver
+    # policy during installation, even when SignTool is not present.
     return $inf
 }
 
@@ -68,17 +88,35 @@ switch ($Action) {
             throw 'Starlit Virtual Audio is already registered. Remove it explicitly before reinstalling.'
         }
         $inf = Assert-SignedPackage $PackageDirectory
-        $devcon = Get-Command 'devcon.exe' -ErrorAction SilentlyContinue
-        if ($null -eq $devcon) {
-            throw 'The Microsoft WDK devcon.exe tool is required for creating the root-enumerated device.'
+        if (-not (Test-Path -LiteralPath $SetupHelperPath -PathType Leaf)) {
+            throw 'StarlitDeviceSetup.exe is required; it is built from the reviewed Starlit source.'
         }
-        & $devcon.Source install $inf $hardwareId
+        $result = @(& $SetupHelperPath create $inf)
         if ($LASTEXITCODE -ne 0) {
-            throw "The signed driver was rejected (devcon exit code $LASTEXITCODE)."
+            throw "Starlit root-device registration failed ($LASTEXITCODE)."
         }
-        $devices = @(Get-StarlitDevice)
-        if ($devices.Count -ne 1 -or $devices[0].Status -ne 'OK') {
-            throw 'Driver installation did not create one healthy Starlit device.'
+        $created = @($result | Where-Object {
+            $_ -match '^CREATED_INSTANCE_ID=ROOT\\STARLITVIRTUALAUDIO\\[^\\\r\n]+$'
+        })
+        if ($created.Count -ne 1) {
+            throw 'Starlit root-device helper did not return an unambiguous instance ID.'
+        }
+        $instanceId = ($created[0] -split '=', 2)[1]
+        try {
+            & pnputil.exe /add-driver $inf /install
+            if ($LASTEXITCODE -ne 0) {
+                throw "The signed driver was rejected by Windows PnP ($LASTEXITCODE)."
+            }
+            $devices = @(Get-StarlitDevice)
+            if ($devices.Count -ne 1 -or $devices[0].Status -ne 'OK' -or
+                $devices[0].InstanceId -ne $instanceId) {
+                throw 'Driver installation did not produce one healthy Starlit device.'
+            }
+        } catch {
+            # Only the exact root instance created by this call may be removed.
+            # Do not touch pre-existing, default or unrelated sound devices.
+            & pnputil.exe /remove-device $instanceId | Out-Null
+            throw
         }
         Write-Output 'Starlit Virtual Audio installed. Windows default outputs were not changed.'
         break
