@@ -1614,7 +1614,7 @@
     <string name="settings_trakt_features">특징</string>
     <string name="settings_trakt_finish_sign_in">연결 승인 완료</string>
     <string name="settings_trakt_intro_description">Trakt을 사용하여 관심 목록, 진행 상황 보기, 계속 보기, 스크롤 및 개인 목록을 동기화하세요.</string>
-    <string name="settings_trakt_missing_credentials">local.properties(TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET)에 Trakt 자격 증명이 없습니다.</string>
+    <string name="settings_trakt_missing_credentials">local.properties(TRAKT_CLIENT_ID)에 Trakt 자격 증명이 없습니다.</string>
     <string name="settings_trakt_open_activation">열기 Trakt 활성화</string>
     <string name="settings_trakt_open_login">열기 Trakt 로그인</string>
     <string name="settings_trakt_save_actions_description">Trakt을 사용하여 관심 목록, 진행 상황 보기, 계속 보기, 스크롤 및 개인 목록을 동기화하세요.</string>

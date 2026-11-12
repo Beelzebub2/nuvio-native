@@ -133,7 +133,7 @@
     <string name="trakt_error_network_retry">Мрежова грешка, моля опитай отново</string>
     <string name="trakt_error_network_will_retry">Мрежова грешка, ще се опита отново</string>
     <string name="trakt_library_source_title">Източник на библиотека</string>
-    <string name="trakt_missing_credentials">Липсват TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET в local.properties.</string>
+    <string name="trakt_missing_credentials">Липсват TRAKT_CLIENT_ID в local.properties.</string>
     <string name="trakt_status_rate_limited_slowing_polling">Rate limited, забавяне на polling...</string>
     <string name="trakt_token_refreshes">Trakt access token се обновява след %1$s</string>
     <string name="trakt_login">Вписване</string>

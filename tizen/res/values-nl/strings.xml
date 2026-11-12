@@ -425,7 +425,7 @@
     <string name="trakt_code_expires">Code verloopt over %1$s</string>
     <string name="trakt_token_refreshes">Trakt-toegangstoken wordt vernieuwd over %1$s</string>
     <string name="trakt_login_instruction">Druk op Login om Trakt apparaat-authenticatie te starten. Hier verschijnt een QR-code.</string>
-    <string name="trakt_missing_credentials">TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET ontbreken in local.properties.</string>
+    <string name="trakt_missing_credentials">TRAKT_CLIENT_ID ontbreken in local.properties.</string>
     <string name="trakt_continue_watching_window">Verder kijken-venster</string>
     <string name="trakt_continue_watching_subtitle">Trakt-geschiedenis die wordt meegenomen voor Verder kijken</string>
     <string name="trakt_unaired_next_up">Nog niet uitgezonden Next Up-afleveringen</string>

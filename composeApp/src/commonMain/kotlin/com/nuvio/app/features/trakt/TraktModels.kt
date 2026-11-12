@@ -13,6 +13,8 @@ data class TraktAuthState(
     val userSlug: String? = null,
     val pendingAuthorizationState: String? = null,
     val pendingAuthorizationStartedAtMillis: Long? = null,
+    /** Encrypted with the other profile-scoped auth state; never placed in an authorization URL. */
+    val pendingCodeVerifier: String? = null,
     val pendingDeviceCode: String? = null,
     val pendingDeviceUserCode: String? = null,
     val pendingDeviceVerificationUrl: String? = null,

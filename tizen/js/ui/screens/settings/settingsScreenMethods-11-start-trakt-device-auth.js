@@ -292,7 +292,7 @@ export function createSettingsScreenMethods11() {
                   ${this.registerAction("trakt:login", !trakt.credentialsConfigured || trakt.isLoading ? () => {} : this.actionMap.get("trakt:login"))}>
             ${escapeHtml(t("trakt_login", {}, "Login"))}
           </button>
-          ${!trakt.credentialsConfigured ? `<p class="settings-trakt-warning">${escapeHtml(t("trakt_missing_credentials", {}, "Missing TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET in local.properties."))}</p>` : ""}
+          ${!trakt.credentialsConfigured ? `<p class="settings-trakt-warning">${escapeHtml(t("trakt_missing_credentials", {}, "Trakt is not configured in this build (TRAKT_CLIENT_ID)."))}</p>` : ""}
         `;
     },
     renderTraktConnected(auth, tokenRemainingMs, trakt) {

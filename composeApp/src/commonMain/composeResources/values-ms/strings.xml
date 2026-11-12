@@ -1633,7 +1633,7 @@ Kekunci</string>
     <string name="settings_trakt_features">CIRI-CIRI</string>
     <string name="settings_trakt_finish_sign_in">Selesaikan kelulusan sambungan</string>
     <string name="settings_trakt_intro_description">Segerakkan senarai pantau anda, tonton kemajuan, teruskan menonton, coretan dan senarai peribadi dengan Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Bukti kelayakan Trakt tiada dalam local.properties (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET).</string>
+    <string name="settings_trakt_missing_credentials">Bukti kelayakan Trakt tiada dalam local.properties (TRAKT_CLIENT_ID).</string>
     <string name="settings_trakt_open_activation">Buka Trakt Aktifkan</string>
     <string name="settings_trakt_open_login">Buka Trakt Log Masuk</string>
     <string name="settings_trakt_save_actions_description">Segerakkan senarai pantau anda, tonton kemajuan, teruskan menonton, scrobble dan senarai peribadi dengan Trakt.</string>

@@ -610,7 +610,7 @@
     <string name="trailer_close">סגור טריילר</string>
     <string name="continue_watching_up_next">הפרק הבא</string>
     <string name="media_movie">סרט</string>
-    <string name="trakt_missing_credentials">חסר TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET ב-local.properties.</string>
+    <string name="trakt_missing_credentials">חסר TRAKT_CLIENT_ID ב-local.properties.</string>
     <string name="trakt_user_fallback">משתמש Trakt</string>
     <string name="trakt_error_rate_limit_reached">הגעת למגבלת הקצב של Trakt</string>
     <string name="date_month_february">פברואר</string>

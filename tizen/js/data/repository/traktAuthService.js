@@ -1,20 +1,17 @@
 import { ProfileManager } from "../../core/profile/profileManager.js";
 import {
   TRAKT_API_URL,
-  TRAKT_CLIENT_ID,
-  TRAKT_CLIENT_SECRET,
-  TRAKT_REDIRECT_URI
+  TRAKT_CLIENT_ID
 } from "../../config.js";
 import { AuthManager } from "../../core/auth/authManager.js";
 import { trackSessionRequest } from "../../core/auth/sessionLifecycle.js";
 import { TraktAuthStore } from "../local/traktAuthStore.js";
 import { detailWatchedEnrichmentService } from "./detailWatchedEnrichmentService.js";
 import { createTraktAuthServiceMethods01 } from "./traktAuthServiceMethods-01-get-current-auth-state.js";
+import { hasTraktClientId } from "./traktPublicOAuthRequests.js";
 export {
   TRAKT_API_URL,
   TRAKT_CLIENT_ID,
-  TRAKT_CLIENT_SECRET,
-  TRAKT_REDIRECT_URI,
   AuthManager,
   trackSessionRequest,
   TraktAuthStore,
@@ -53,7 +50,7 @@ function apiBaseUrl() {
   return String(TRAKT_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
 }
 function hasRequiredCredentials() {
-  return Boolean(TRAKT_CLIENT_ID && TRAKT_CLIENT_SECRET);
+  return hasTraktClientId(TRAKT_CLIENT_ID);
 }
 function normalizeAuthErrorMessage(payload, fallback) {
   if (payload && typeof payload === "object") {
