@@ -51,17 +51,17 @@ jobs:
       - name: Fetch pinned native Windows runtimes
         shell: pwsh
         run: |
-          # Read the original public LFS store; a private clone need not duplicate its storage.
-          # The rewritten fork history may not contain this upstream commit for LFS to scan.
-          git fetch --no-tags --depth=1 https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime commit fetch failed.' }
-          git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/**,composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
-          if ($LASTEXITCODE -ne 0) { throw 'Native runtime fetch failed.' }
+          # Fetch the exact LFS objects recorded by this release tag from this
+          # repository, not from an upstream account with independent LFS quotas.
+          # Both binaries are independently checked against their pinned SHA-256.
+          git lfs fetch origin "refs/tags/$env:RELEASE_TAG" --include='composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll,composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe' --exclude=''
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned native runtimes are unavailable from the release repository.' }
           git lfs checkout
+          if ($LASTEXITCODE -ne 0) { throw 'Native runtime checkout failed.' }
           $mpv = Get-Item composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll
-          if ($mpv.Length -lt 1000000) { throw 'libmpv was not materialized.' }
+          if ($mpv.Length -ne 115320296 -or (Get-FileHash $mpv.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne '07c68bb211f23a218ded0a36eb12207dc3aeb44e5318ffca6ce9dcc7c3173906') { throw 'Pinned libmpv checksum or size mismatch.' }
           $torrent = 'composeApp/src/desktopMain/resources/torrserver/windows-amd64/TorrServer.exe'
-          if ((Get-FileHash $torrent -Algorithm SHA256).Hash.ToLowerInvariant() -ne '13031185a54abe0f729f9f3bdb7271a349a89ac8c559327d773c66007ed604f4') { throw 'Torrent engine checksum mismatch.' }
+          if ((Get-Item $torrent).Length -ne 58025472 -or (Get-FileHash $torrent -Algorithm SHA256).Hash.ToLowerInvariant() -ne '13031185a54abe0f729f9f3bdb7271a349a89ac8c559327d773c66007ed604f4') { throw 'Pinned torrent engine checksum or size mismatch.' }
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
