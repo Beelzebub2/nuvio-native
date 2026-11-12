@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
@@ -179,7 +180,10 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
-    val activeDetail = activeDesktop?.name?.let { stringResource(Res.string.remote_pc_connected_to, it) }
+    val activeDetail = activeDesktop?.name?.let {
+        stringResource(if (activeDesktop?.vpn == true) Res.string.remote_vpn_connected_to
+            else Res.string.remote_pc_connected_to, it)
+    }
     val tokens = MaterialTheme.nuvio
     // Searching or connecting: other ways to connect wait until it ends.
     val busy = scanning || connecting
@@ -237,12 +241,12 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RemoteSectionHeader(stringResource(Res.string.remote_pc_found_devices))
             desktops.forEach { desktop ->
-                key(desktop.bluetooth, desktop.address) {
-                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
+                key(desktop.bluetooth, desktop.vpn, desktop.address) {
+                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth, desktop.vpn)
                     RemoteDeviceRow(
                         name = desktop.name,
                         detail = desktop.address,
-                        icon = Icons.Rounded.Computer,
+                        icon = if (desktop.vpn) Icons.Rounded.VpnKey else Icons.Rounded.Computer,
                         enabled = !connecting,
                         active = active,
                         onClick = { DesktopRemote.transport.connect(desktop) },
@@ -275,11 +279,11 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
             savedPcs.forEach { saved ->
                 // Pairing updates move a saved PC to the top. Preserve its own menu
                 // and Wake-on-LAN editor instead of moving that UI onto another row.
-                key(saved.bluetooth, saved.address) {
+                key(saved.bluetooth, saved.vpn, saved.address) {
                     SavedPcRow(
                         saved = saved,
                         enabled = !busy,
-                        active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth),
+                        active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth, saved.vpn),
                         onDisconnect = onDisconnect,
                     )
                 }
@@ -295,6 +299,8 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
 private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
     var manualIp by rememberSaveable { mutableStateOf("") }
     var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var vpnEndpoint by rememberSaveable { mutableStateOf("") }
+    var vpnOpen by rememberSaveable { mutableStateOf(false) }
     var qrError by remember { mutableStateOf(false) }
     val qrScanner = rememberRemoteQrScanner { payload ->
         val address = payload?.let(::parseRemotePairingQr)
@@ -351,6 +357,17 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                 onClick = { manualOpen = !manualOpen },
             )
         }
+        add { modifier ->
+            RemoteActionTile(
+                icon = Icons.Rounded.VpnKey,
+                label = stringResource(Res.string.remote_vpn_tile),
+                caption = stringResource(Res.string.remote_vpn_tile_caption),
+                selected = vpnOpen,
+                enabled = !busy,
+                modifier = modifier.testTag("desktop-remote-enter-vpn"),
+                onClick = { vpnOpen = !vpnOpen },
+            )
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         RemoteSectionHeader(stringResource(Res.string.remote_pc_ways_to_connect))
@@ -380,6 +397,30 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                 )
             }
         }
+        AnimatedVisibility(visible = vpnOpen) {
+            RemoteCard {
+                Text(stringResource(Res.string.remote_vpn_tile),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.nuvio.colors.textPrimary)
+                DialogHint(stringResource(Res.string.remote_vpn_phone_hint))
+                DialogTextField(
+                    value = vpnEndpoint,
+                    onValueChange = { vpnEndpoint = it.take(253) },
+                    label = stringResource(Res.string.remote_vpn_address_label),
+                    placeholder = "100.101.42.18",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth().testTag("desktop-remote-vpn-address"),
+                )
+                NuvioCompactActionButton(
+                    label = stringResource(Res.string.remote_vpn_check),
+                    icon = Icons.Rounded.VpnKey,
+                    tone = NuvioCompactActionTone.Primary,
+                    enabled = !busy && vpnEndpoint.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().testTag("desktop-remote-vpn-connect"),
+                    onClick = { DesktopRemote.transport.discoverVpn(vpnEndpoint.trim(), connect = true) },
+                )
+            }
+        }
     }
 }
 
@@ -400,7 +441,8 @@ private fun SavedPcRow(
         RemoteDeviceRow(
             name = saved.name,
             detail = saved.address,
-            icon = if (saved.bluetooth) Icons.AutoMirrored.Rounded.BluetoothSearching else Icons.Rounded.History,
+            icon = if (saved.bluetooth) Icons.AutoMirrored.Rounded.BluetoothSearching
+                else if (saved.vpn) Icons.Rounded.VpnKey else Icons.Rounded.History,
             enabled = enabled,
             active = active,
             modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
@@ -425,7 +467,7 @@ private fun SavedPcRow(
                         enabled = enabled,
                         onClick = { menuOpen = false; if (active) onDisconnect() else connect() },
                     )
-                    if (!saved.bluetooth) {
+                    if (!saved.bluetooth && !saved.vpn) {
                         MenuItem(
                             text = stringResource(Res.string.remote_pc_set_wake_mac),
                             selected = editingWake,
@@ -439,7 +481,7 @@ private fun SavedPcRow(
                 }
             }
         }
-        if (!saved.bluetooth && !active) {
+        if (!saved.bluetooth && !saved.vpn && !active) {
             // Keep the wake action readable on narrow phones instead of
             // squeezing the PC name/address into an already crowded row.
             NuvioCompactActionButton(

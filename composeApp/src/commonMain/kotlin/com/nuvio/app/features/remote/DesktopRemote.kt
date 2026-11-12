@@ -99,6 +99,9 @@ internal data class RemoteDesktop(
     val port: Int,
     val name: String,
     val bluetooth: Boolean = false,
+    val vpn: Boolean = false,
+    /** DNS is a reconnect hint, never a trusted peer identity. */
+    val vpnHost: String? = null,
 )
 
 /** A connected LAN endpoint and a Bluetooth endpoint are distinct, even if their PC names match. */
@@ -107,8 +110,10 @@ internal fun isActiveRemoteDesktop(
     active: RemoteDesktop?,
     address: String,
     bluetooth: Boolean,
+    vpn: Boolean = false,
 ): Boolean = connected && active != null && active.bluetooth == bluetooth &&
-    active.address.equals(address, ignoreCase = bluetooth)
+    active.vpn == vpn &&
+    (active.address.equals(address, ignoreCase = bluetooth) || (vpn && active.vpnHost == address))
 
 internal data class RemotePairing(val code: String, val peer: String)
 internal data class RemoteAccount(val userId: String, val server: String, val publishableKey: String)
@@ -122,6 +127,7 @@ internal interface RemoteFullscreenActions {
 internal interface DesktopRemoteTransport {
     val supported: Boolean
     val bluetoothSupported: Boolean get() = false
+    val vpnHostSupported: Boolean get() = false
     val retainWhenUiDetached: Boolean get() = false
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
@@ -130,6 +136,11 @@ internal interface DesktopRemoteTransport {
      * With [connect], a PC found at [localIp] is connected to straight away (a scanned QR code).
      */
     fun discover(localIp: String? = null, deepScan: Boolean = false, connect: Boolean = false)
+    /** Explicit, user-entered private-network endpoint; never scans whole VPN address ranges. */
+    fun discoverVpn(endpoint: String, connect: Boolean = false) {}
+    fun vpnInterfaces(): List<String> = emptyList()
+    fun approvedVpnAddress(): String? = null
+    fun approveVpnAddress(address: String?): Boolean = false
     fun discoverBluetooth() {}
     fun localAddresses(): List<String> = emptyList()
     fun wake(address: String, mac: String) {}
@@ -194,7 +205,8 @@ internal object DesktopRemote {
     ) {
         if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
         val list = rememberRemoteDevice(
-            remembered.value, desktop.name, desktop.address, nowEpochMs, desktop.bluetooth, trustedId,
+            remembered.value, desktop.name, desktop.vpnHost ?: desktop.address,
+            nowEpochMs, desktop.bluetooth, trustedId, desktop.vpn,
         )
         RememberedRemoteDeviceStore.write(account, list)
         remembered.value = list
@@ -202,9 +214,12 @@ internal object DesktopRemote {
 
     fun forget(address: String) {
         val current = activeAccount ?: return
+        val lanIds = remembered.value.filter { it.address == address && !it.bluetooth }
+            .mapNotNull { it.trustedId }.distinct()
         val isCurrentPc = remembered.value.any { device ->
-            device.address == address && isActiveRemoteDesktop(
-                connected.value, activeDesktop.value, device.address, device.bluetooth,
+            (device.address == address || device.trustedId != null && device.trustedId in lanIds) &&
+                isActiveRemoteDesktop(
+                connected.value, activeDesktop.value, device.address, device.bluetooth, device.vpn,
             )
         }
         if (remembered.value.any { it.address == address && it.bluetooth }) {
@@ -214,19 +229,17 @@ internal object DesktopRemote {
             }
         }
         // Forget must also erase the encrypted LAN credential, never just the visible row.
-        val lanIds = remembered.value.filter { it.address == address && !it.bluetooth }
-            .mapNotNull { it.trustedId }.distinct()
         if (lanIds.any { !transport.forgetLanTrust(current, it) }) {
             status.value = "Could not forget this Wi-Fi PC securely. Please try again."
             return
         }
-        val next = remembered.value.filterNot { it.address == address }
+        val next = remembered.value.filterNot { it.address == address || (it.trustedId != null && it.trustedId in lanIds) }
         RememberedRemoteDeviceStore.write(current, next)
         remembered.value = next
         // Forgetting a trusted PC must also revoke its *active* remote session.
         if (isCurrentPc) {
             transport.disconnect()
-            status.value = "Disconnected. Search the local network to pair again."
+            status.value = "Disconnected. Pair this PC again before using remote control."
         }
     }
 
