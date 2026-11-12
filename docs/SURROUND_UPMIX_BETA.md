@@ -39,7 +39,9 @@ master and should not be described as native multichannel content.
   and run deterministic speaker-mask and source-format classification tests.
 - Run `py -3 tests/surround-upmix-libmpv-probe.windows.py` to check the
   bundled DLL can add/remove the real FFmpeg filter using synthetic audio and
-  an audio-null sink. This is a software test, not speaker verification.
+  an audio-null sink; the same test renders a six-channel WAVEFORMATEXTENSIBLE
+  float PCM file through mpv's PCM sink and checks non-silent front, centre and
+  surround samples with silent LFE. This does not play through real speakers.
 - Perform a real-hardware speaker-identification test before treating this as
   production-ready. Compare original stereo with upmix, then test actual
   native 5.1 and 7.1 sources, device unplugging, HDMI/USB audio, mute,
