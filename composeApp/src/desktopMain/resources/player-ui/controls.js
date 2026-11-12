@@ -28,6 +28,7 @@ const nextEpisodeButtonLabel = document.getElementById("nextEpisodeButtonLabel")
 const autoSkipIntroButton = document.getElementById("autoSkipIntroButton");
 const autoNextEpisodeButton = document.getElementById("autoNextEpisodeButton");
 const discordShareButton = document.getElementById("discordShareButton");
+const surroundUpmixButton = document.getElementById("surroundUpmixButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const pipButton = document.getElementById("pipButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
@@ -397,6 +398,9 @@ let state = {
   autoNextEpisodeEnabled: false,
   showDiscordShare: false,
   discordShareEnabled: false,
+  showSurroundUpmix: false,
+  surroundUpmixEnabled: false,
+  surroundUpmixStatus: 0,
 };
 let isScrubbing = false;
 let scrubPositionMs = 0;
@@ -898,6 +902,14 @@ const autoToggles = [
     icon: "icon-auto-next-episode",
   },
   {
+    button: surroundUpmixButton,
+    command: "setSurroundUpmixEnabled",
+    stateKey: "surroundUpmixEnabled",
+    visibleKey: "showSurroundUpmix",
+    fallbackLabel: "5.1",
+    icon: "icon-audio",
+  },
+  {
     button: discordShareButton,
     command: "setDiscordShareEnabled",
     stateKey: "discordShareEnabled",
@@ -921,6 +933,22 @@ const syncAutoToggleButtons = () => {
     toggle.button.setAttribute("title", `${label}: ${autoToggleStateLabel(enabled)}`);
     const text = toggle.button.querySelector("span");
     if (text) text.textContent = label;
+    if (toggle.button === surroundUpmixButton) {
+      const status = Number(state.surroundUpmixStatus);
+      const active = enabled && status === 2;
+      const failed = enabled && status === -1;
+      const description = !enabled
+        ? "Original audio · upmix off"
+        : active
+          ? "Stereo upmixed to 5.1 PCM"
+          : failed
+            ? "Upmix unavailable · audio output rejected the filter"
+            : "Upmix not active · requires a Windows output configured for 5.1 PCM";
+      toggle.button.setAttribute("title", description);
+      toggle.button.setAttribute("aria-label", description);
+      toggle.button.setAttribute("data-upmix-status", active ? "active" : failed ? "failed" : enabled ? "waiting" : "off");
+      if (text) text.textContent = active ? "5.1 ✓" : failed ? "5.1 !" : enabled ? "5.1…" : "5.1";
+    }
   });
 };
 

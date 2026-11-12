@@ -5,6 +5,7 @@
 #include <windowsx.h>
 #include <dwmapi.h>
 #include <mmdeviceapi.h>
+#include <audioclient.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <shlobj.h>
 #include <wrl.h>
@@ -13,6 +14,7 @@
 #include "windows_media_session.h"
 #include "discord_share_protocol.h"
 #include "discord_share_safety.h"
+#include "surround_upmix_policy.h"
 
 #include <algorithm>
 #include <atomic>
@@ -690,6 +692,62 @@ std::string discordShareAudioDevice() {
     return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }
 
+struct DefaultSurroundOutput {
+    starlit_surround::Layout layout = starlit_surround::Layout::unsupported;
+    std::wstring endpointId;
+};
+
+// Inspect the configured Windows shared-mode speaker layout. A sink that merely
+// accepts six channels is not sufficient: the actual speaker mask must match.
+DefaultSurroundOutput defaultSurroundOutput() {
+    DefaultSurroundOutput output;
+    const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return output;
+    struct ApartmentGuard {
+        bool uninitialize;
+        ~ApartmentGuard() { if (uninitialize) CoUninitialize(); }
+    } guard{SUCCEEDED(apartment)};
+
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&enumerator)))) return output;
+    ComPtr<IMMDevice> mediaDevice;
+    ComPtr<IMMDevice> consoleDevice;
+    if (FAILED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &mediaDevice)) ||
+        FAILED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &consoleDevice))) {
+        return output;
+    }
+    LPWSTR mediaId = nullptr;
+    LPWSTR consoleId = nullptr;
+    const HRESULT mediaResult = mediaDevice->GetId(&mediaId);
+    const HRESULT consoleResult = consoleDevice->GetId(&consoleId);
+    if (SUCCEEDED(mediaResult) && SUCCEEDED(consoleResult) && mediaId && consoleId &&
+        wcscmp(mediaId, consoleId) == 0) {
+        output.endpointId = mediaId;
+    }
+    if (mediaId) CoTaskMemFree(mediaId);
+    if (consoleId) CoTaskMemFree(consoleId);
+    if (output.endpointId.empty()) return output; // Ambiguous default route.
+
+    ComPtr<IAudioClient> audioClient;
+    if (FAILED(mediaDevice->Activate(__uuidof(IAudioClient), CLSCTX_INPROC_SERVER,
+                                     nullptr, &audioClient))) return output;
+    WAVEFORMATEX *format = nullptr;
+    if (FAILED(audioClient->GetMixFormat(&format)) || !format) return output;
+    if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+        format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) {
+        const auto *extended = reinterpret_cast<const WAVEFORMATEXTENSIBLE *>(format);
+        // PCM and IEEE-float are the only formats supported by this DSP path.
+        if (extended->SubFormat.Data1 == WAVE_FORMAT_PCM ||
+            extended->SubFormat.Data1 == WAVE_FORMAT_IEEE_FLOAT) {
+            output.layout = starlit_surround::configuredLayout(
+                format->nChannels, extended->dwChannelMask);
+        }
+    }
+    CoTaskMemFree(format);
+    return output;
+}
+
 class WindowsMpvWebPlayer;
 LRESULT CALLBACK messageWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK containerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -1070,6 +1128,7 @@ public:
 
     void onTimer() {
         if (shuttingDown.load()) return;
+        syncSurroundUpmix();
         layoutNativeSubviews();
         syncSystemMediaSession();
         syncControls();
@@ -1244,6 +1303,15 @@ public:
         mpvApi().setProperty(mpv, "pause", MPV_FORMAT_FLAG, &flag);
     }
 
+    bool setSurroundUpmixEnabled(bool enabled) {
+        if (shuttingDown.load() || stopping.load()) return false;
+        surroundRequested.store(enabled);
+        postUiTask([self = shared_from_this()]() {
+            if (!self->shuttingDown.load()) self->syncSurroundUpmix();
+        });
+        return true; // An opt-in, not a claim that surround output is active.
+    }
+
     // Compare the actual frame path, without changing the saved playback preference
     // or recreating the video/stream. mpv reconfigures its video filter at runtime.
     // Success only means that mpv accepted the change, not that the GPU driver
@@ -1378,6 +1446,11 @@ public:
     void selectAudioTrackId(int trackId) {
         std::lock_guard<std::mutex> lock(mpvMutex);
         if (!mpv) return;
+        // Never apply a stereo-only filter to the previous track during a
+        // switch to a native multichannel track.
+        if (!removeSurroundFilterLocked()) return;
+        surroundRejectedKey.clear();
+        surroundOutputMismatchCount = 0;
         int64_t id = trackId;
         mpvApi().setProperty(mpv, "aid", MPV_FORMAT_INT64, &id);
     }
@@ -1544,6 +1617,12 @@ private:
     std::atomic_bool stopping = false;
     std::atomic_bool shuttingDown = false;
     std::atomic_bool hwdecLogged = false;  // one-shot log for hwdec-current
+    std::atomic_bool surroundRequested = false;
+    std::atomic<int> surroundReportedStatus{0};
+    std::atomic_bool surroundFilterInstalled = false;
+    starlit_surround::Layout surroundFilterLayout = starlit_surround::Layout::unsupported;
+    std::string surroundRejectedKey;
+    int surroundOutputMismatchCount = 0;
 
     // Independent process and audio device: the primary mpv output is never
     // reconfigured or downmixed when Discord sharing is enabled.
@@ -1577,6 +1656,99 @@ private:
     void syncSystemMediaSession() {
         if (shuttingDown.load()) return;
         systemMediaSession.sync(durationMs(), positionMs(), isPaused(), isLoading(), isEnded());
+    }
+
+    // Caller must own mpvMutex. A failed removal must not silently transition
+    // the player to a new multichannel track with a stereo-only filter active.
+    bool removeSurroundFilterLocked() {
+        if (!surroundFilterInstalled) return true;
+        const char *remove[] = {"af", "remove", starlit_surround::kFilterLabel, nullptr};
+        const int result = mpvApi().command(mpv, remove);
+        if (result < 0) {
+            char *filters = nullptr;
+            const int propertyResult =
+                mpvApi().getProperty(mpv, "af", MPV_FORMAT_STRING, &filters);
+            if (propertyResult < 0 || !filters) return false;
+            const bool stillInstalled =
+                std::string_view(filters).find(starlit_surround::kFilterLabel) !=
+                std::string_view::npos;
+            mpvApi().freeValue(filters);
+            if (stillInstalled) return false;
+        }
+        surroundFilterInstalled = false;
+        surroundFilterLayout = starlit_surround::Layout::unsupported;
+        surroundOutputMismatchCount = 0;
+        return true;
+    }
+
+    void syncSurroundUpmix() {
+        // Called on the native player UI thread, which owns the COM apartment.
+        // Do not probe device routing if the user has not opted in.
+        if (!surroundRequested.load() && !surroundFilterInstalled.load()) {
+            if (surroundReportedStatus.exchange(0) != 0) {
+                sendPlayerEvent("surroundUpmixStatus", 0.0);
+            }
+            return;
+        }
+        const auto output = surroundRequested.load() ? defaultSurroundOutput() : DefaultSurroundOutput{};
+        int nextStatus = surroundRequested.load() ? 1 : 0;
+        {
+            std::lock_guard<std::mutex> lock(mpvMutex);
+            if (!mpv) return;
+            auto getString = [this](const char *name) -> std::string {
+                char *value = nullptr;
+                if (mpvApi().getProperty(mpv, name, MPV_FORMAT_STRING, &value) < 0 || !value) return {};
+                std::string result(value);
+                mpvApi().freeValue(value);
+                return result;
+            };
+            const std::string decodedLayout = getString("audio-params/channels");
+            const std::string audioDevice = getString("audio-device");
+            const std::string outputFormat = getString("audio-out-params/format");
+            const auto layout = output.layout;
+            const bool supported = surroundRequested.load() &&
+                layout != starlit_surround::Layout::unsupported &&
+                starlit_surround::acceptsStereoInput(decodedLayout) &&
+                (audioDevice == "auto" || audioDevice == "wasapi/default") &&
+                !outputFormat.empty() && outputFormat.rfind("spdif", 0) != 0;
+            const std::string key = toUtf8(output.endpointId) + "|" +
+                getString("aid") + "|" + std::string(starlit_surround::mpvOutputLayout(layout));
+            if (supported && key == surroundRejectedKey && !surroundFilterInstalled) {
+                nextStatus = -1; // Keep the rejection visible until the route/request changes.
+            }
+            if (!surroundRequested.load()) surroundRejectedKey.clear();
+            if (surroundFilterInstalled &&
+                (!supported || layout != surroundFilterLayout ||
+                 getString("af").find(starlit_surround::kFilterLabel) == std::string::npos)) {
+                if (!removeSurroundFilterLocked()) nextStatus = -1;
+            }
+            if (supported && !surroundFilterInstalled && key != surroundRejectedKey) {
+                const char *filter = starlit_surround::mpvFilter(layout);
+                const char *add[] = {"af", "add", filter, nullptr};
+                if (filter && mpvApi().command(mpv, add) >= 0 &&
+                    getString("af").find(starlit_surround::kFilterLabel) != std::string::npos) {
+                    surroundFilterInstalled = true;
+                    surroundFilterLayout = layout;
+                    surroundOutputMismatchCount = 0;
+                } else {
+                    surroundRejectedKey = key;
+                    nextStatus = -1;
+                }
+            }
+            if (nextStatus != -1 && supported && surroundFilterInstalled) {
+                if (getString("audio-out-params/channels") ==
+                    starlit_surround::mpvOutputLayout(layout)) {
+                    nextStatus = 2;
+                    surroundOutputMismatchCount = 0;
+                } else if (++surroundOutputMismatchCount >= 3) {
+                    if (removeSurroundFilterLocked()) surroundRejectedKey = key;
+                    nextStatus = -1;
+                }
+            }
+        }
+        if (surroundReportedStatus.exchange(nextStatus) != nextStatus) {
+            sendPlayerEvent("surroundUpmixStatus", static_cast<double>(nextStatus));
+        }
     }
 
     std::atomic_bool controlsWebReady = false;
@@ -3178,6 +3350,14 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setPaused(JNIEnv *, jobject, jlong handle, jboolean paused) {
     auto player = playerFromHandle(handle);
     if (player) player->setPaused(paused == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setSurroundUpmixEnabled(
+    JNIEnv *, jobject, jlong handle, jboolean enabled
+) {
+    auto player = playerFromHandle(handle);
+    return player && player->setSurroundUpmixEnabled(enabled == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

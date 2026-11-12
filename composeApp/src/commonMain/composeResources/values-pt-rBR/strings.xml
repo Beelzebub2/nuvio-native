@@ -1125,6 +1125,9 @@
     <string name="settings_playback_section_stream_auto_play">REPRODUÇÃO AUTOMÁTICA DE STREAM</string>
     <string name="settings_playback_section_stream_selection">SELEÇÃO DE STREAM</string>
     <string name="settings_playback_section_subtitle_audio">LEGENDA E ÁUDIO</string>
+    <string name="settings_playback_surround_section">ÁUDIO SURROUND · EXPERIMENTAL</string>
+    <string name="settings_playback_surround_upmix">Converter estéreo em surround 5.1</string>
+    <string name="settings_playback_surround_upmix_description">Converte áudio estéreo quando a saída padrão do Windows está configurada para caixas PCM 5.1. Faixas 5.1/7.1 nativas permanecem intactas. Saídas incompatíveis usam o áudio original. Desativado por padrão.</string>
     <string name="settings_playback_section_subtitle_rendering">RENDERIZAÇÃO DE LEGENDA</string>
     <string name="settings_playback_selected_count">%1$d selecionado(s)</string>
     <string name="settings_playback_show_loading_overlay">Overlay de Carregamento</string>
