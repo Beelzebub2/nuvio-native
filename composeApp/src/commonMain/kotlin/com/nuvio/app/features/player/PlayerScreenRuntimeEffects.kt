@@ -839,6 +839,8 @@ private fun firstNonBlankUrl(vararg values: String?): String? =
     values.firstOrNull { !it.isNullOrBlank() }?.trim()
 
 internal fun PlayerScreenRuntime.removeFailedStreamFromCache() {
+    // A private launch must not change reusable stream metadata for normal playback.
+    if (privatePlayback) return
     val currentVideoId = activeVideoId ?: return
     val cacheKey = StreamLinkCacheRepository.contentKey(
         type = contentType ?: parentMetaType,

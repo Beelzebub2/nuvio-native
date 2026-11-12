@@ -2,8 +2,11 @@ package com.nuvio.app.features.player
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.ui.Modifier
 import com.nuvio.app.disposeRouteResources
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.streams.StreamLinkCacheRepository
+import com.nuvio.app.features.streams.StreamLinkCacheStorage
 import com.nuvio.app.features.tracking.TrackingMediaKind
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
@@ -25,6 +28,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -101,6 +105,69 @@ class PrivatePlaybackSessionTest {
         } finally {
             PlayerLaunchStore.remove(privateId)
         }
+    }
+
+    @Test
+    fun privateFailureDoesNotEvictTheNormalStreamReuseCache() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("nuvio_stream_link_cache", Context.MODE_PRIVATE).edit().clear().commit()
+        StreamLinkCacheStorage.initialize(context)
+        val contentId = "shared-cache-movie"
+        val cacheKey = StreamLinkCacheRepository.contentKey(type = "movie", videoId = contentId)
+        StreamLinkCacheRepository.save(
+            contentKey = cacheKey,
+            url = "https://example.com/stable-video.mp4",
+            streamName = "Example stream",
+            addonName = "Example provider",
+            addonId = "example-provider",
+        )
+        assertNotNull(StreamLinkCacheRepository.getValid(cacheKey, maxAgeMs = 60_000L))
+
+        fun runtime(privatePlayback: Boolean) = PlayerScreenRuntime(
+            PlayerScreenArgs(
+                profileId = profile,
+                title = "Example Movie",
+                sourceUrl = "https://example.com/stable-video.mp4",
+                sourceAudioUrl = null,
+                sourceHeaders = emptyMap(),
+                sourceResponseHeaders = emptyMap(),
+                streamType = null,
+                providerName = "Example provider",
+                streamTitle = "Example stream",
+                streamSubtitle = null,
+                initialBingeGroup = null,
+                pauseDescription = null,
+                onBack = {},
+                onOpenInExternalPlayer = null,
+                onOpenExternalUrl = null,
+                modifier = Modifier,
+                logo = null,
+                poster = null,
+                background = null,
+                seasonNumber = null,
+                episodeNumber = null,
+                episodeTitle = null,
+                episodeThumbnail = null,
+                contentType = "movie",
+                videoId = contentId,
+                parentMetaId = contentId,
+                parentMetaType = "movie",
+                providerAddonId = null,
+                torrentInfoHash = null,
+                torrentFileIdx = null,
+                torrentFilename = null,
+                torrentTrackers = emptyList(),
+                initialPositionMs = 0L,
+                initialProgressFraction = null,
+                privatePlayback = privatePlayback,
+            ),
+        ).also { it.activeVideoId = contentId }
+
+        runtime(privatePlayback = true).removeFailedStreamFromCache()
+        assertNotNull(StreamLinkCacheRepository.getValid(cacheKey, maxAgeMs = 60_000L))
+
+        runtime(privatePlayback = false).removeFailedStreamFromCache()
+        assertNull(StreamLinkCacheRepository.getValid(cacheKey, maxAgeMs = 60_000L))
     }
 
     @Test
