@@ -24,6 +24,7 @@ data class NextEpisodeInfo(
 )
 
 enum class NextEpisodeThresholdMode {
+    SMART,
     PERCENTAGE,
     MINUTES_BEFORE_END,
 }

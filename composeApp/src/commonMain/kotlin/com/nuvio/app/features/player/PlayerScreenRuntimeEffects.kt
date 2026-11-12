@@ -763,15 +763,6 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         } else null
     }
 
-    LaunchedEffect(playbackSnapshot.isEnded) {
-        if (playbackSnapshot.isEnded && nextEpisodeCardDismissed &&
-            playerSettingsUiState.streamAutoPlayNextEpisodeEnabled &&
-            nextEpisodeInfo?.hasAired == true
-        ) {
-            nextEpisodeCardDismissed = false
-        }
-    }
-
     LaunchedEffect(
         activePlaybackKey,
         playbackSnapshot,
@@ -788,18 +779,22 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         nextEpisodeCardDismissed,
     ) {
         val shouldShow = nextEpisodeInfo != null && !nextEpisodeCardDismissed && isAtNextEpisodeThreshold()
+        val shouldAutoPlay = shouldShow && isAtNextEpisodeAutoPlayThreshold()
         if (nextEpisodeAutoPlayAutomatic &&
-            (!shouldShow || !playerSettingsUiState.streamAutoPlayNextEpisodeEnabled)
+            (!shouldAutoPlay || !playerSettingsUiState.streamAutoPlayNextEpisodeEnabled)
         ) {
             cancelNextEpisodeAutoPlay()
         }
         if (shouldShow && !showNextEpisodeCard) {
             showNextEpisodeCard = true
-            if (playerSettingsUiState.streamAutoPlayNextEpisodeEnabled && nextEpisodeInfo?.hasAired == true) {
-                playNextEpisode(automatic = true)
-            }
         } else if (!shouldShow) {
             showNextEpisodeCard = false
+        }
+        if (shouldAutoPlay && playerSettingsUiState.streamAutoPlayNextEpisodeEnabled &&
+            nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlayAutomatic &&
+            !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null
+        ) {
+            playNextEpisode(automatic = true)
         }
     }
 }
