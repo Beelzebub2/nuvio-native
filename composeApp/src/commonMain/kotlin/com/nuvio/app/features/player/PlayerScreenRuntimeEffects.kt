@@ -570,6 +570,8 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         parentMetaType,
         contentType,
         playerSettingsUiState.skipIntroEnabled,
+        playerSettingsUiState.animeSkipEnabled,
+        playerSettingsUiState.animeSkipClientId,
         playerMeta?.imdbId,
         metaUiState.meta?.imdbId,
     ) {
