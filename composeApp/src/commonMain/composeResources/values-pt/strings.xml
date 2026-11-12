@@ -1168,7 +1168,7 @@
     <string name="settings_playback_map_dv7_to_hevc">Alternativa DV7 para HEVC</string>
     <string name="settings_playback_map_dv7_to_hevc_description">Mapeia o Dolby Vision Profile 7 para HEVC standard em dispositivos sem suporte de hardware para DV</string>
     <string name="settings_playback_minutes_before_end">Minutos de tolerância</string>
-    <string name="settings_playback_minutes_before_end_description">Alternativa quando não existe uma marca de tempo para o final.</string>
+    <string name="settings_playback_minutes_before_end_description">Mostra quando faltar este tempo; os créditos podem ativar mais cedo.</string>
     <string name="settings_playback_minutes_value">%1$s min</string>
     <string name="settings_playback_no_items_available">Nenhum item disponível</string>
     <string name="settings_playback_not_set">Não definido</string>
@@ -1273,8 +1273,10 @@
     <string name="settings_playback_threshold_mode">Modo de tolerância do próximo episódio</string>
     <string name="settings_playback_threshold_mode_minutes_before_end">Minutos antes do fim</string>
     <string name="settings_playback_threshold_mode_percentage">Percentagem</string>
+    <string name="settings_playback_threshold_mode_smart">Inteligente (recomendado)</string>
+    <string name="settings_playback_threshold_smart_description">Sugere o episódio seguinte nos créditos detetados ou 45–90 segundos antes do fim. A reprodução automática aguarda pelo final.</string>
     <string name="settings_playback_threshold_percentage">Percentagem de tolerância</string>
-    <string name="settings_playback_threshold_percentage_description">Alternativa quando não existe uma marca de tempo para o final.</string>
+    <string name="settings_playback_threshold_percentage_description">Mostra após esta percentagem vista; os créditos podem ativar mais cedo.</string>
     <string name="settings_playback_threshold_percentage_value">%1$s%%</string>
     <string name="settings_playback_timeout_instant">Instantâneo</string>
     <string name="settings_playback_timeout_seconds">%1$ss</string>

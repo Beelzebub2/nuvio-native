@@ -1065,7 +1065,7 @@
     <string name="settings_playback_map_dv7_to_hevc">DV7 - Fallback HEVC</string>
     <string name="settings_playback_map_dv7_to_hevc_description">Mapear Dolby Vision Profile 7 para HEVC padrão em dispositivos sem suporte de hardware para DV</string>
     <string name="settings_playback_minutes_before_end">Minutos de Limite</string>
-    <string name="settings_playback_minutes_before_end_description">Fallback quando não houver timestamp de encerramento.</string>
+    <string name="settings_playback_minutes_before_end_description">Mostra quando faltar esse tempo; os créditos podem antecipar.</string>
     <string name="settings_playback_minutes_value">%1$s min</string>
     <string name="settings_playback_no_items_available">Nenhum item disponível</string>
     <string name="settings_playback_not_set">Não definido</string>
@@ -1156,8 +1156,10 @@
     <string name="settings_playback_threshold_mode">Modo de Limite para Próximo Episódio</string>
     <string name="settings_playback_threshold_mode_minutes_before_end">Minutos antes do fim</string>
     <string name="settings_playback_threshold_mode_percentage">Porcentagem</string>
+    <string name="settings_playback_threshold_mode_smart">Inteligente (recomendado)</string>
+    <string name="settings_playback_threshold_smart_description">Sugere o próximo episódio nos créditos detectados ou de 45 a 90 segundos antes do fim. A reprodução automática espera o final.</string>
     <string name="settings_playback_threshold_percentage">Porcentagem de Limite</string>
-    <string name="settings_playback_threshold_percentage_description">Fallback quando não houver timestamp de encerramento.</string>
+    <string name="settings_playback_threshold_percentage_description">Mostra após essa porcentagem assistida; os créditos podem antecipar.</string>
     <string name="settings_playback_threshold_percentage_value">%1$s%</string>
     <string name="settings_playback_timeout_instant">Instantâneo</string>
     <string name="settings_playback_timeout_seconds">%1$ss</string>
