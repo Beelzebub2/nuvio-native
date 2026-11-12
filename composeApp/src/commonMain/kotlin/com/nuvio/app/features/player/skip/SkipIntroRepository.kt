@@ -58,13 +58,15 @@ object SkipIntroRepository {
             return getMovieSkipIntervals(contentId, videoId, requireSkipIntroEnabled, metadataImdbId)
         }
         if (requireSkipIntroEnabled && !PlayerSettingsRepository.uiState.value.skipIntroEnabled) return emptyList()
-        val direct = resolveSkipIntervalLookup(videoId, season, episode)
+        val direct = resolveContentSkipIntervalLookup(videoId, contentId, season, episode)
         val imdbId = if (direct is SkipIntervalLookup.Imdb) direct.imdbId else resolveContentSkipImdbId(
             contentId, videoId, metadataImdbId,
             resolveTmdb = { TmdbService.tmdbToImdb(it, "series") },
             resolveAnime = { source, id -> SimklIdResolver.resolveIds(source, id)?.imdb },
         )
-        return when (val lookup = direct ?: resolveSkipIntervalLookup(videoId, season, episode, imdbId)) {
+        return when (val lookup = direct ?: resolveContentSkipIntervalLookup(
+            videoId, contentId, season, episode, imdbId,
+        )) {
             is SkipIntervalLookup.Imdb -> getSkipIntervals(
                 lookup.imdbId, lookup.season, lookup.episode, requireSkipIntroEnabled,
             )
@@ -191,7 +193,9 @@ object SkipIntroRepository {
 
         val simklIdsDeferred = async { SimklIdResolver.resolveIds("kitsu", kitsuId) }
         val simklIds = simklIdsDeferred.await()
-        val malIdStr = simklIds?.mal
+        // The public Kitsu mapping works without Simkl credentials, which
+        // are not guaranteed to be present in every app build.
+        val malIdStr = simklIds?.mal ?: AnimeIdResolver.resolveKitsuMalId(kitsuId)
         val resolvedImdbId = imdbId ?: simklIds?.imdb
 
         val aniSkipDeferred = async {

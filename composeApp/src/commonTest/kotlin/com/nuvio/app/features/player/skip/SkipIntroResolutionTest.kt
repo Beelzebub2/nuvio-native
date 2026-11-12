@@ -18,6 +18,16 @@ class SkipIntroResolutionTest {
     }
 
     @Test
+    fun resolvesPublicKitsuMalMappingWithoutAcceptingAmbiguousOrUnsafeIds() {
+        val tvdb = """{"attributes":{"externalSite":"thetvdb/series","externalId":"9000"}}"""
+        val mal = """{"attributes":{"externalSite":"myanimelist/anime","externalId":"123456"}}"""
+        assertEquals("123456", parseKitsuMalId("""{"data":[$tvdb,$mal]}"""))
+        assertNull(parseKitsuMalId("""{"data":[$tvdb]}"""))
+        assertNull(parseKitsuMalId("""{"data":[$mal,{"attributes":{"externalSite":"myanimelist/anime","externalId":"654321"}}]}"""))
+        assertNull(parseKitsuMalId("""{"data":[{"attributes":{"externalSite":"myanimelist/anime","externalId":"../../invalid"}}]}"""))
+    }
+
+    @Test
     fun usesAnimeOpeningWhilePreservingIntroDbRecapAndEnding() {
         val coldOpen = SkipInterval(0.0, 107.02, "intro", "introdb")
         val recap = SkipInterval(0.0, 10.0, "recap", "introdb")
