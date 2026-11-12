@@ -1,5 +1,9 @@
 package com.nuvio.app.features.streams
 
+import androidx.compose.material.icons.rounded.SearchOff
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.NuvioEmptyBlock
+import com.nuvio.app.core.ui.NuvioSurfaceCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -551,10 +555,14 @@ private fun MobileStreamsLayout(
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
                     )
+                    val filteredSourceCount = remember(uiState.filteredGroups, sourceFilters) {
+                        filterStreamGroups(uiState.filteredGroups, sourceFilters).sumOf { it.streams.size }
+                    }
                     SourceResultsFilterControls(
                         filters = sourceFilters,
                         availability = filterAvailability,
                         onFiltersChange = { sourceFilters = it },
+                        resultCount = filteredSourceCount,
                     )
 
                     StreamList(
@@ -568,6 +576,7 @@ private fun MobileStreamsLayout(
                         resumeProgressFraction = resumeProgressFraction,
                         modifier = Modifier.weight(1f),
                         sourceFilters = sourceFilters,
+                        onClearFilters = { sourceFilters = SourceResultsFilters() },
                     )
                 }
             }
@@ -824,6 +833,8 @@ internal fun StreamList(
     qualityFilter: StreamQuality? = null,
     excludedStream: StreamItem? = null,
     sourceFilters: SourceResultsFilters = SourceResultsFilters(),
+    /** Shown as a button under "No matching sources" when the caller owns the filters. */
+    onClearFilters: (() -> Unit)? = null,
 ) {
     val originalGroups = uiState.filteredGroups
     val effectiveFilters = if (qualityFilter != null) sourceFilters.copy(quality = qualityFilter) else sourceFilters
@@ -873,22 +884,24 @@ internal fun StreamList(
                         key = "streams_filtered_empty",
                         contentType = STREAM_CONTENT_TYPE_EMPTY,
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        NuvioSurfaceCard(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            outlined = true,
+                            contentPadding = 24.dp,
                         ) {
-                            Text(
-                                stringResource(Res.string.source_filter_no_matches),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                stringResource(Res.string.source_filter_adjust),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
+                            NuvioEmptyBlock(
+                                icon = Icons.Rounded.SearchOff,
+                                title = stringResource(Res.string.source_filter_no_matches),
+                                message = stringResource(Res.string.source_filter_adjust),
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            ) {
+                                if (onClearFilters != null) {
+                                    DialogButton(
+                                        text = stringResource(Res.string.source_filter_clear),
+                                        onClick = onClearFilters,
+                                    )
+                                }
+                            }
                         }
                     }
                 }

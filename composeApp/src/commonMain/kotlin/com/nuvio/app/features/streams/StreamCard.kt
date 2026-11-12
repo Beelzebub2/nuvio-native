@@ -1,5 +1,10 @@
 package com.nuvio.app.features.streams
 
+import androidx.compose.ui.graphics.compositeOver
+import com.nuvio.app.core.ui.NuvioTag
+import com.nuvio.app.core.ui.NuvioTagStyle
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
@@ -73,6 +78,7 @@ internal fun StreamCard(
     dense: Boolean = false,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
+    val tokens = MaterialTheme.nuvio
     val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
     val hasBadges = !dense && (badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null))
     var cardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -80,30 +86,19 @@ internal fun StreamCard(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = if (dense) 44.dp else 68.dp)
-            .shadow(
-                elevation = 2.dp,
-                shape = cardShape,
-                ambientColor = Color.Black.copy(alpha = 0.04f),
-                spotColor = Color.Black.copy(alpha = 0.04f),
-            )
             .clip(cardShape)
             .background(
                 if (isCurrent) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    tokens.colors.accent.copy(alpha = tokens.opacity.subtle).compositeOver(tokens.colors.surface)
                 } else {
-                    Color.White.copy(alpha = 0.05f)
+                    tokens.colors.surface
                 },
             )
-            .then(
-                if (isCurrent) {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.52f),
-                        shape = cardShape,
-                    )
-                } else {
-                    Modifier
-                },
+            // The current (or best-match) source carries the selection outline; the rest a hairline.
+            .border(
+                width = tokens.borders.thin,
+                color = if (isCurrent) tokens.colors.borderSelected else tokens.colors.borderSubtle,
+                shape = cardShape,
             )
             .then(
                 if (isDesktop) {
@@ -156,11 +151,8 @@ internal fun StreamCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (compact || inlineMetadata) subtitle.lineSequence().joinToString(" · ") { it.trim() } else subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.nuvioTypeScale.bodySm.copy(fontFeatureSettings = "tnum"),
+                    color = tokens.colors.textMuted,
                     maxLines = if (compact) 2 else Int.MAX_VALUE,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -195,8 +187,8 @@ internal fun StreamCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stream.addonName,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.nuvioTypeScale.labelXs.copy(fontWeight = FontWeight.Normal),
+                    color = tokens.colors.textMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -212,7 +204,12 @@ internal fun StreamCardSkeleton(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .heightIn(min = 68.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.nuvio.colors.surface)
+            .border(
+                MaterialTheme.nuvio.borders.thin,
+                MaterialTheme.nuvio.colors.borderSubtle,
+                RoundedCornerShape(12.dp),
+            )
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
@@ -256,7 +253,7 @@ private fun StreamNameWithInstantService(
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
         fontSize = 14.sp,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         lineHeight = 20.sp,
         letterSpacing = 0.sp,
     )
@@ -279,7 +276,7 @@ private fun StreamNameWithInstantService(
             text = if (compact || inlineMetadata) stream.streamLabel.lineSequence().joinToString(" · ") { it.trim() } else stream.streamLabel,
             modifier = Modifier.weight(1f, fill = false),
             style = nameStyle,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.nuvio.colors.textPrimary,
             maxLines = if (compact) 1 else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis,
         )
@@ -300,7 +297,7 @@ private fun StreamNameWithInstantService(
             Text(
                 text = " ${instantLabel.orEmpty()}",
                 style = nameStyle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.nuvio.colors.textPrimary,
             )
         }
         trailingContent()
@@ -309,21 +306,7 @@ private fun StreamNameWithInstantService(
 
 @Composable
 private fun CurrentStreamBadge(label: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    NuvioTag(text = label, style = NuvioTagStyle.Accent)
 }
 
 private fun StreamItem.instantServiceLabel(): String? {

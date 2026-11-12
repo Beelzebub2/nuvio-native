@@ -17,6 +17,8 @@
     <string name="action_reset">Setelan Bawaan</string>
     <string name="action_resume">Lanjutkan</string>
     <string name="action_retry">Coba Lagi</string>
+    <string name="cd_decrease_value">Kurangi %1$s</string>
+    <string name="cd_increase_value">Tambah %1$s</string>
     <string name="action_save">Simpan</string>
     <string name="action_saving">Sedang menyimpan…</string>
     <string name="action_validate">Validasi</string>
@@ -368,6 +370,8 @@
     <string name="compose_player_subtitle_delay">Jeda Terjemahan</string>
     <string name="compose_player_subtitles">Subtitle</string>
     <string name="compose_player_text_opacity">Transparansi Teks</string>
+    <string name="compose_player_timing">Waktu</string>
+    <string name="compose_player_text">Teks</string>
     <string name="compose_player_brightness_level">Kecerahan %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Dibisukan</string>

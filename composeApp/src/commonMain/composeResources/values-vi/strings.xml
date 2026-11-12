@@ -32,6 +32,9 @@
     <string name="action_reset">Đặt lại mặc định</string>
     <string name="action_resume">Xem tiếp</string>
     <string name="action_retry">Thử lại</string>
+    <string name="cd_decrease_value">Giảm %1$s</string>
+    <string name="cd_increase_value">Tăng %1$s</string>
+    <string name="action_refresh">Làm mới</string>
     <string name="action_save">Lưu</string>
     <string name="action_saving">Đang lưu…</string>
     <string name="action_switch">Chuyển</string>
@@ -472,6 +475,8 @@
     <string name="compose_player_subtitle_delay">Độ trễ phụ đề</string>
     <string name="compose_player_subtitles">Phụ đề</string>
     <string name="compose_player_text_opacity">Độ mờ chữ</string>
+    <string name="compose_player_timing">Thời gian</string>
+    <string name="compose_player_text">Chữ</string>
     <string name="compose_player_brightness_level">Độ sáng %1$s</string>
     <string name="compose_player_volume_level">Âm lượng %1$s</string>
     <string name="compose_player_muted">Đã tắt tiếng</string>
@@ -1920,6 +1925,7 @@
     <string name="cloud_library_play_not_connected">Chưa kết nối dịch vụ đám mây</string>
     <string name="cloud_library_play_provider_not_connected">Chưa kết nối %1$s</string>
     <string name="cloud_library_playable_file_count">%1$d tệp phát được</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d tệp</string>
     <string name="cloud_library_provider_all">Tất cả</string>
     <string name="cloud_library_refresh">Làm mới thư viện đám mây</string>
     <string name="cloud_library_search_label">Tìm kiếm thư viện đám mây</string>
@@ -2361,6 +2367,8 @@
     <string name="layout_random_episode_sub">Phát ngẫu nhiên các tập từ bất kỳ loạt phim nào. Tắt tùy chọn này sẽ tạm dừng phát ngẫu nhiên.</string>
     <string name="random_episode_unwatched">Tập chưa xem</string>
     <string name="random_episode_include_watched">Tất cả tập</string>
+    <string name="shuffle_pool_episode_count">%1$d tập</string>
+    <string name="shuffle_pool_episode_count_all">%1$d tập, gồm cả tập đã xem</string>
     <string name="random_episode_empty_subtitle">Không có tập nào để phát ngẫu nhiên.</string>
     <string name="random_episode_caught_up">Bạn đã xem hết mọi tập phim. Chọn Tất cả tập để xem lại.</string>
     <string name="random_episode_loading">Đang tải các tập phim…</string>

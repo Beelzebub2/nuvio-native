@@ -18,6 +18,9 @@
     <string name="action_reset">Obnovit výchozí</string>
     <string name="action_resume">Pokračovat</string>
     <string name="action_retry">Zkusit znovu</string>
+    <string name="cd_decrease_value">Snížit %1$s</string>
+    <string name="cd_increase_value">Zvýšit %1$s</string>
+    <string name="action_refresh">Obnovit</string>
     <string name="action_save">Uložit</string>
     <string name="action_saving">Ukládání…</string>
     <string name="action_switch">Přepnout</string>
@@ -390,6 +393,8 @@
     <string name="compose_player_subtitle_delay">Zpoždění titulků</string>
     <string name="compose_player_subtitles">Titulky</string>
     <string name="compose_player_text_opacity">Průhlednost textu</string>
+    <string name="compose_player_timing">Časování</string>
+    <string name="compose_player_text">Text</string>
     <string name="compose_player_brightness_level">Jas %1$s</string>
     <string name="compose_player_volume_level">Hlasitost %1$s</string>
     <string name="compose_player_muted">Ztlumeno</string>
@@ -1560,6 +1565,7 @@
     <string name="cloud_library_play_not_connected">Cloudová služba není připojena.</string>
     <string name="cloud_library_play_provider_not_connected">Služba %1$s není připojena.</string>
     <string name="cloud_library_playable_file_count">%1$d přehrávatelných souborů</string>
+    <string name="cloud_library_provider_file_count">%1$s · souborů: %2$d</string>
     <string name="cloud_library_provider_all">Vše</string>
     <string name="cloud_library_refresh">Obnovit cloudovou knihovnu</string>
     <string name="cloud_library_select_provider">Vybrat poskytovatele</string>

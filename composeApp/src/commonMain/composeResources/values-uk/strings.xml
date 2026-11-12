@@ -34,6 +34,9 @@
     <string name="action_reset">Скидання до замовчування</string>
     <string name="action_resume">Резюме</string>
     <string name="action_retry">Повторити</string>
+    <string name="cd_decrease_value">Зменшити: %1$s</string>
+    <string name="cd_increase_value">Збільшити: %1$s</string>
+    <string name="action_refresh">Оновити</string>
     <string name="action_save">Зберегти</string>
     <string name="action_saving">Збереження…</string>
     <string name="action_switch">Перемикач</string>
@@ -546,6 +549,8 @@
     <string name="compose_player_subtitle_delay">Затримка субтитрів</string>
     <string name="compose_player_subtitles">Субтитри</string>
     <string name="compose_player_text_opacity">Непрозорість тексту</string>
+    <string name="compose_player_timing">Синхронізація</string>
+    <string name="compose_player_text">Текст</string>
     <string name="compose_player_brightness_level">Яскравість %1$s</string>
     <string name="compose_player_volume_level">Том %1$s</string>
     <string name="compose_player_muted">Вимкнено</string>
@@ -859,6 +864,9 @@
     <string name="remote_pc_check_ip">Знайдіть ПК за цією адресою</string>
     <string name="remote_pc_desktop_addresses">Локальна адреса ПК: %1$s</string>
     <string name="remote_pc_saved_devices">Попередньо сполучені ПК</string>
+    <string name="remote_pc_hero_hint">Відкрийте «Дистанційне керування телефоном» на ПК. Використовуйте той самий обліковий запис і мережу.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · без коду</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · потрібне підтвердження</string>
     <string name="remote_pc_saved_notice">Збережені ПК готові до повторного підключення. Раніше схвалені Bluetooth ПК не потребують іншого коду, якщо обидва пристрої все ще мають свої захищені ключі сполучення. Підключення до локальної мережі потребують підтвердження.</string>
     <string name="remote_pc_forget">Забудь</string>
     <string name="remote_pc_wake">Вивести ПК з режиму сну</string>
@@ -931,6 +939,9 @@
     <string name="remote_window_status_connected">Телефон підключено</string>
     <string name="remote_window_status_offline">Не готовий</string>
     <string name="remote_window_other_ways">Інші способи підключення</string>
+    <string name="remote_window_local_address">Локальна адреса ПК</string>
+    <string name="remote_window_copy_address">Копіювати адресу</string>
+    <string name="remote_window_trouble_caption">Правила брандмауера, тип мережі та порти</string>
     <string name="remote_window_network_section">Мережа</string>
     <string name="remote_firewall_checking">Перевірка брандмауера Windows…</string>
     <string name="remote_discovery_unavailable">Автоматичне виявлення UDP недоступне. Ви можете створити пару, відсканувавши код QR або ввівши IP-адресу цього ПК.</string>
@@ -2311,6 +2322,7 @@
     <string name="cloud_library_play_not_connected">Хмарна служба не підключена.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s не підключено.</string>
     <string name="cloud_library_playable_file_count">%1$d відтворювані файли</string>
+    <string name="cloud_library_provider_file_count">%1$s · файлів: %2$d</string>
     <string name="cloud_library_provider_all">Усі</string>
     <string name="cloud_library_refresh">Оновити хмарну бібліотеку</string>
     <string name="cloud_library_search_label">Пошук у хмарній бібліотеці</string>
@@ -2720,6 +2732,8 @@
     <string name="layout_random_episode_sub">Перемішайте епізоди з будь-яких серій. Вимкнення призупиняє перемішування.</string>
     <string name="random_episode_unwatched">Непереглянуті серії</string>
     <string name="random_episode_include_watched">Усі епізоди</string>
+    <string name="shuffle_pool_episode_count">Епізодів: %1$d</string>
+    <string name="shuffle_pool_episode_count_all">Епізодів: %1$d, включно з переглянутими</string>
     <string name="random_episode_empty_subtitle">Немає серій, доступних для перемішування.</string>
     <string name="random_episode_caught_up">Ви переглянули всі серії. Виберіть Усі серії, щоб переглянути ще раз.</string>
     <string name="random_episode_loading">Завантаження епізодів…</string>
@@ -2852,7 +2866,10 @@
     <string name="account_credentials_password_step2">Введіть код зі своєї електронної пошти, а потім виберіть новий пароль. Термін дії коду закінчується автоматично.</string>
     <string name="account_credentials_email_step">Підтвердьте свій поточний пароль, щоб отримати новий електронний лист. Ви повинні підтвердити посилання, надіслані на обидві адреси електронної пошти.</string>
     <string name="account_credentials_current_password">Поточний пароль</string>
+    <string name="cd_show_password">Показати пароль</string>
+    <string name="cd_hide_password">Сховати пароль</string>
     <string name="account_credentials_verification_code">Код підтвердження електронної пошти</string>
+    <string name="account_credentials_code_placeholder">6-значний код</string>
     <string name="account_credentials_new_password">Новий пароль</string>
     <string name="account_credentials_confirm_password">Підтвердьте новий пароль</string>
     <string name="account_credentials_new_email">Нова електронна адреса</string>
@@ -3096,4 +3113,5 @@
     <string name="changelog_view_github">Переглянути на GitHub</string>
     <string name="updates_whats_new">Що нового</string>
     <string name="updates_download_size">%1$s завантажити</string>
+    <string name="source_filter_result_count">%1$d з %2$d джерел</string>
 </resources>

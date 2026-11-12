@@ -34,6 +34,9 @@
     <string name="action_reset">Weka Upya hadi Chaguomsingi</string>
     <string name="action_resume">Endelea</string>
     <string name="action_retry">Jaribu tena</string>
+    <string name="cd_decrease_value">Punguza %1$s</string>
+    <string name="cd_increase_value">Ongeza %1$s</string>
+    <string name="action_refresh">Onyesha upya</string>
     <string name="action_save">Hifadhi</string>
     <string name="action_saving">Inahifadhi...</string>
     <string name="action_switch">Badili</string>
@@ -542,6 +545,8 @@
     <string name="compose_player_subtitle_delay">Kuchelewa kwa Manukuu</string>
     <string name="compose_player_subtitles">Manukuu</string>
     <string name="compose_player_text_opacity">Uwazi wa Maandishi</string>
+    <string name="compose_player_timing">Muda</string>
+    <string name="compose_player_text">Maandishi</string>
     <string name="compose_player_brightness_level">Mwangaza %1$s</string>
     <string name="compose_player_volume_level">Juzuu %1$s</string>
     <string name="compose_player_muted">Imenyamazishwa</string>
@@ -854,6 +859,9 @@
     <string name="remote_pc_check_ip">Tafuta Kompyuta katika anwani hii</string>
     <string name="remote_pc_desktop_addresses">Anwani ya Kompyuta ya ndani: %1$s</string>
     <string name="remote_pc_saved_devices">Kompyuta zilizounganishwa hapo awali</string>
+    <string name="remote_pc_hero_hint">Fungua Kidhibiti cha mbali cha simu kwenye kompyuta. Tumia akaunti na mtandao uleule.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · hakuna nambari inayohitajika</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · huomba uthibitisho</string>
     <string name="remote_pc_saved_notice">Kompyuta za Kompyuta zilizohifadhiwa ziko tayari kuunganishwa tena. Kompyuta zilizoidhinishwa awali Bluetooth Kompyuta hazihitaji msimbo mwingine wakati vifaa vyote viwili bado vina funguo zao za kuoanisha zilizolindwa. Miunganisho ya LAN bado inahitaji uthibitisho.</string>
     <string name="remote_pc_forget">Sahau</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -926,6 +934,9 @@
     <string name="remote_window_status_connected">Simu imeunganishwa</string>
     <string name="remote_window_status_offline">Si tayari</string>
     <string name="remote_window_other_ways">Njia zingine za kuunganisha</string>
+    <string name="remote_window_local_address">Anwani ya ndani ya kompyuta</string>
+    <string name="remote_window_copy_address">Nakili anwani</string>
+    <string name="remote_window_trouble_caption">Sheria za ngome, aina ya mtandao na milango</string>
     <string name="remote_window_network_section">Mtandao</string>
     <string name="remote_firewall_checking">Inakagua Windows Firewall...</string>
     <string name="remote_discovery_unavailable">Ugunduzi otomatiki wa UDP haupatikani. Bado unaweza kuoanisha kwa kuchanganua msimbo wa QR au kuweka anwani ya IP ya Kompyuta hii.</string>
@@ -2285,6 +2296,7 @@
     <string name="cloud_library_play_not_connected">Huduma ya wingu haijaunganishwa.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s haijaunganishwa.</string>
     <string name="cloud_library_playable_file_count">%1$d faili zinazoweza kuchezwa</string>
+    <string name="cloud_library_provider_file_count">%1$s · faili %2$d</string>
     <string name="cloud_library_provider_all">Zote</string>
     <string name="cloud_library_refresh">Onyesha upya maktaba ya wingu</string>
     <string name="cloud_library_search_label">Tafuta maktaba ya wingu</string>
@@ -2685,6 +2697,8 @@
     <string name="layout_random_episode_sub">Changanya vipindi kutoka kwa mfululizo wowote. Kuzima hii husitisha kuchanganya.</string>
     <string name="random_episode_unwatched">Vipindi visivyotazamwa</string>
     <string name="random_episode_include_watched">Vipindi vyote</string>
+    <string name="shuffle_pool_episode_count">Vipindi %1$d</string>
+    <string name="shuffle_pool_episode_count_all">Vipindi %1$d, pamoja na vilivyotazamwa</string>
     <string name="random_episode_empty_subtitle">Hakuna vipindi vinavyopatikana vya kuchanganua.</string>
     <string name="random_episode_caught_up">Umetazama kila kipindi. Chagua Vipindi Vyote ili kutazama tena.</string>
     <string name="random_episode_loading">Inapakia vipindi...</string>
@@ -2817,7 +2831,10 @@
     <string name="account_credentials_password_step2">Ingiza msimbo kutoka kwa barua pepe yako, kisha uchague nenosiri jipya. Nambari hiyo inaisha muda kiotomatiki.</string>
     <string name="account_credentials_email_step">Thibitisha nenosiri lako la sasa ili kuomba barua pepe mpya. Lazima uidhinishe viungo vilivyotumwa kwa anwani zote mbili za barua pepe.</string>
     <string name="account_credentials_current_password">Nenosiri la sasa</string>
+    <string name="cd_show_password">Onyesha nenosiri</string>
+    <string name="cd_hide_password">Ficha nenosiri</string>
     <string name="account_credentials_verification_code">Nambari ya uthibitishaji ya barua pepe</string>
+    <string name="account_credentials_code_placeholder">Nambari ya tarakimu 6</string>
     <string name="account_credentials_new_password">Nenosiri jipya</string>
     <string name="account_credentials_confirm_password">Thibitisha nenosiri jipya</string>
     <string name="account_credentials_new_email">Anwani mpya ya barua pepe</string>
@@ -3056,4 +3073,5 @@
     <string name="changelog_view_github">Tazama kwenye GitHub</string>
     <string name="updates_whats_new">Nini kipya</string>
     <string name="updates_download_size">%1$s pakua</string>
+    <string name="source_filter_result_count">Vyanzo %1$d kati ya %2$d</string>
 </resources>

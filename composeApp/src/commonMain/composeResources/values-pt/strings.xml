@@ -107,6 +107,8 @@
     <string name="action_reset">Repor predefinições</string>
     <string name="action_resume">Retomar</string>
     <string name="action_retry">Tentar novamente</string>
+    <string name="cd_decrease_value">Diminuir %1$s</string>
+    <string name="cd_increase_value">Aumentar %1$s</string>
     <string name="action_save">Guardar</string>
     <string name="action_saving">A guardar…</string>
     <string name="action_validate">Validar</string>
@@ -489,6 +491,8 @@
     <string name="player_local_subtitle_failed">Não foi possível abrir o seletor de ficheiros. Tenta novamente.</string>
     <string name="player_local_subtitle_player_not_ready">O leitor ainda não está pronto para carregar legendas.</string>
     <string name="compose_player_text_opacity">Opacidade do texto</string>
+    <string name="compose_player_timing">Sincronização</string>
+    <string name="compose_player_text">Texto</string>
     <string name="compose_player_brightness_level">Brilho %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Sem som</string>
@@ -1639,6 +1643,7 @@
     <string name="source_filter_size_two">Até 2 GiB</string>
     <string name="source_filter_size_five">Até 5 GiB</string>
     <string name="source_filter_clear">Limpar filtros</string>
+    <string name="source_filter_result_count">%1$d de %2$d fontes</string>
     <string name="source_filter_no_matches">Nenhuma fonte correspondente</string>
     <string name="source_filter_adjust">Experimenta outra pesquisa ou remove alguns filtros.</string>
     <string name="streams_resume_from_percent">Retomar a partir de %1$d%%</string>
@@ -2257,7 +2262,10 @@
     <string name="account_credentials_password_step2">Introduz o código recebido por email e escolhe uma nova palavra-passe. O código expira automaticamente.</string>
     <string name="account_credentials_email_step">Confirma a palavra-passe atual para alterares o email. Terás de aprovar as ligações enviadas para ambos os endereços.</string>
     <string name="account_credentials_current_password">Palavra-passe atual</string>
+    <string name="cd_show_password">Mostrar palavra-passe</string>
+    <string name="cd_hide_password">Ocultar palavra-passe</string>
     <string name="account_credentials_verification_code">Código de verificação por email</string>
+    <string name="account_credentials_code_placeholder">Código de 6 dígitos</string>
     <string name="account_credentials_new_password">Nova palavra-passe</string>
     <string name="account_credentials_confirm_password">Confirmar nova palavra-passe</string>
     <string name="account_credentials_new_email">Novo endereço de email</string>

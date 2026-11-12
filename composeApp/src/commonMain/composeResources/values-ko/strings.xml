@@ -34,6 +34,9 @@
     <string name="action_reset">기본값으로 재설정</string>
     <string name="action_resume">이력서</string>
     <string name="action_retry">재시도</string>
+    <string name="cd_decrease_value">%1$s 줄이기</string>
+    <string name="cd_increase_value">%1$s 늘리기</string>
+    <string name="action_refresh">새로고침</string>
     <string name="action_save">저장</string>
     <string name="action_saving">저장 중…</string>
     <string name="action_switch">스위치</string>
@@ -542,6 +545,8 @@
     <string name="compose_player_subtitle_delay">자막 지연</string>
     <string name="compose_player_subtitles">자막</string>
     <string name="compose_player_text_opacity">텍스트 불투명도</string>
+    <string name="compose_player_timing">타이밍</string>
+    <string name="compose_player_text">텍스트</string>
     <string name="compose_player_brightness_level">밝기 %1$s</string>
     <string name="compose_player_volume_level">볼륨 %1$s</string>
     <string name="compose_player_muted">음소거됨</string>
@@ -854,6 +859,9 @@
     <string name="remote_pc_check_ip">이 주소에서 PC를 찾아보세요</string>
     <string name="remote_pc_desktop_addresses">로컬 PC 주소 : %1$s</string>
     <string name="remote_pc_saved_devices">이전에 페어링된 PC</string>
+    <string name="remote_pc_hero_hint">PC에서 휴대폰리모컨을 여세요. 같은 계정과 네트워크를 사용하세요.</string>
+    <string name="remote_pc_saved_bluetooth">블루투스 · 코드 불필요</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · 확인 필요</string>
     <string name="remote_pc_saved_notice">저장된 PC가 다시 연결될 준비가 되었습니다. 이전에 승인된 Bluetooth PC에는 두 장치 모두 보호된 페어링 키가 있는 경우 다른 코드가 필요하지 않습니다. LAN 연결에는 여전히 확인이 필요합니다.</string>
     <string name="remote_pc_forget">잊어버리세요</string>
     <string name="remote_pc_wake">PC 깨우기</string>
@@ -926,6 +934,9 @@
     <string name="remote_window_status_connected">전화 연결됨</string>
     <string name="remote_window_status_offline">준비 안됨</string>
     <string name="remote_window_other_ways">다른 연결 방법</string>
+    <string name="remote_window_local_address">PC 로컬 주소</string>
+    <string name="remote_window_copy_address">주소 복사</string>
+    <string name="remote_window_trouble_caption">방화벽 규칙, 네트워크 유형 및 포트</string>
     <string name="remote_window_network_section">네트워크</string>
     <string name="remote_firewall_checking">Windows 방화벽을 확인하는 중…</string>
     <string name="remote_discovery_unavailable">자동 UDP 검색을 사용할 수 없습니다. QR 코드를 스캔하거나 이 PC의 IP 주소를 입력하여 페어링할 수 있습니다.</string>
@@ -2285,6 +2296,7 @@
     <string name="cloud_library_play_not_connected">클라우드 서비스가 연결되지 않았습니다.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s이 연결되지 않았습니다.</string>
     <string name="cloud_library_playable_file_count">%1$d 재생 가능한 파일</string>
+    <string name="cloud_library_provider_file_count">%1$s · 파일 %2$d개</string>
     <string name="cloud_library_provider_all">모두</string>
     <string name="cloud_library_refresh">클라우드 라이브러리 새로고침</string>
     <string name="cloud_library_search_label">클라우드 라이브러리 검색</string>
@@ -2685,6 +2697,8 @@
     <string name="layout_random_episode_sub">모든 시리즈의 에피소드를 섞습니다. 이 기능을 끄면 셔플이 일시중지됩니다.</string>
     <string name="random_episode_unwatched">시청하지 않은 에피소드</string>
     <string name="random_episode_include_watched">전편</string>
+    <string name="shuffle_pool_episode_count">에피소드 %1$d개</string>
+    <string name="shuffle_pool_episode_count_all">에피소드 %1$d개, 시청한 에피소드 포함</string>
     <string name="random_episode_empty_subtitle">셔플할 수 있는 에피소드가 없습니다.</string>
     <string name="random_episode_caught_up">모든 회차를 시청하셨습니다. 다시 시청하려면 모든 에피소드를 선택하세요.</string>
     <string name="random_episode_loading">에피소드 로드 중…</string>
@@ -2817,7 +2831,10 @@
     <string name="account_credentials_password_step2">이메일에 있는 코드를 입력한 후 새 비밀번호를 선택하세요. 코드는 자동으로 만료됩니다.</string>
     <string name="account_credentials_email_step">새 이메일을 요청하려면 현재 비밀번호를 확인하세요. 두 이메일 주소 모두로 전송된 링크를 승인해야 합니다.</string>
     <string name="account_credentials_current_password">현재 비밀번호</string>
+    <string name="cd_show_password">비밀번호 표시</string>
+    <string name="cd_hide_password">비밀번호 숨기기</string>
     <string name="account_credentials_verification_code">이메일 인증번호</string>
+    <string name="account_credentials_code_placeholder">6자리 코드</string>
     <string name="account_credentials_new_password">새로운 비밀번호</string>
     <string name="account_credentials_confirm_password">새로운 비밀번호를 확인하세요</string>
     <string name="account_credentials_new_email">새로운 이메일 주소</string>
@@ -3056,4 +3073,5 @@
     <string name="changelog_view_github">GitHub에서 보기</string>
     <string name="updates_whats_new">새로운 소식</string>
     <string name="updates_download_size">%1$s 다운로드</string>
+    <string name="source_filter_result_count">소스 %2$d개 중 %1$d개</string>
 </resources>

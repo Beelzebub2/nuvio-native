@@ -30,6 +30,9 @@
     <string name="action_reset">Сбросить настройки по умолчанию</string>
     <string name="action_resume">Продолжить</string>
     <string name="action_retry">Повторить попытку</string>
+    <string name="cd_decrease_value">Уменьшить: %1$s</string>
+    <string name="cd_increase_value">Увеличить: %1$s</string>
+    <string name="action_refresh">Обновить</string>
     <string name="action_save">Сохранить</string>
     <string name="action_saving">Сохранение…</string>
     <string name="action_switch">Переключить</string>
@@ -468,6 +471,8 @@
     <string name="compose_player_subtitle_delay">Задержка субтитров</string>
     <string name="compose_player_subtitles">Субтитры</string>
     <string name="compose_player_text_opacity">Непрозрачность текста</string>
+    <string name="compose_player_timing">Синхронизация</string>
+    <string name="compose_player_text">Текст</string>
     <string name="compose_player_brightness_level">Яркость %1$s</string>
     <string name="compose_player_volume_level">Громкость %1$s</string>
     <string name="compose_player_muted">Без звука</string>
@@ -1835,6 +1840,7 @@
     <string name="cloud_library_play_not_connected">Облачный сервис не подключен.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s не подключен.</string>
     <string name="cloud_library_playable_file_count">Воспроизводимые файлы %1$d</string>
+    <string name="cloud_library_provider_file_count">%1$s · файлов: %2$d</string>
     <string name="cloud_library_provider_all">Все</string>
     <string name="cloud_library_refresh">Обновить облачную библиотеку</string>
     <string name="cloud_library_search_label">Поиск в облачной библиотеке</string>
