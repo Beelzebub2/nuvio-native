@@ -9,6 +9,7 @@ const source = readFileSync(new URL("controls.js", root), "utf8");
 const html = readFileSync(new URL("controls.html", root), "utf8");
 const css = readFileSync(new URL("controls.css", root), "utf8");
 assert.match(html, /id="discordShareButton"[^>]+data-command="setDiscordShareEnabled"[^>]+aria-pressed="false"/);
+assert.match(html, /id="surroundUpmixButton"[^>]+data-command="setSurroundUpmixEnabled"[^>]+aria-pressed="false"/);
 assert.match(html, /<symbol id="icon-discord"[^>]*>[\s\S]*?fill="currentColor"/);
 assert.ok(html.indexOf('data-command="audio"') < html.indexOf('id="discordShareButton"'));
 assert.ok(css.includes(".action.toggle-action[aria-pressed=\"true\"]::after"));
@@ -25,8 +26,16 @@ const button = () => ({
 const sent = [];
 const toasts = [];
 const context = {
-  autoSkipIntroButton: button(), autoNextEpisodeButton: button(), discordShareButton: button(),
-  state: { showAutoToggles: false, showDiscordShare: false, discordShareEnabled: false },
+  autoSkipIntroButton: button(), autoNextEpisodeButton: button(),
+  discordShareButton: button(), surroundUpmixButton: button(),
+  state: {
+    showAutoToggles: false,
+    showDiscordShare: false,
+    discordShareEnabled: false,
+    showSurroundUpmix: false,
+    surroundUpmixEnabled: false,
+    surroundUpmixStatus: 0,
+  },
   setVisible(element, visible) { element.hidden = !visible; },
   showPlayerToast(message) { toasts.push(message); },
   send(command, value) { sent.push([command, value]); },
@@ -58,4 +67,27 @@ assert.equal(context.discordShareButton.attributes.title, "Discord audio: Off");
 assert.equal(vm.runInContext('toggleAutoSetting("setDiscordShareEnabled")', context), true);
 assert.equal(vm.runInContext('toggleAutoSetting("setDiscordShareEnabled")', context), true);
 assert.deepEqual(sent.at(-1), ["setDiscordShareEnabled", 0]);
+
+// Upmix status is separate from the saved opt-in. A requested but incompatible
+// 5.1 route must not be advertised as actually outputting surround.
+assert.equal(context.surroundUpmixButton.hidden, true);
+context.state.showSurroundUpmix = true;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.hidden, false);
+assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "off");
+assert.equal(vm.runInContext('toggleAutoSetting("setSurroundUpmixEnabled")', context), true);
+assert.deepEqual(sent.at(-1), ["setSurroundUpmixEnabled", 1]);
+assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "waiting");
+assert.match(context.surroundUpmixButton.attributes.title, /requires a Windows output/);
+context.state.surroundUpmixStatus = 2;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "active");
+assert.match(context.surroundUpmixButton.attributes.title, /Stereo upmixed to 5.1 PCM/);
+context.state.surroundUpmixStatus = -1;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "failed");
+context.state.surroundUpmixEnabled = false;
+context.state.surroundUpmixStatus = 0;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "off");
 console.log("Discord player button: visibility, on/off commands, and state re-sync passed.");
