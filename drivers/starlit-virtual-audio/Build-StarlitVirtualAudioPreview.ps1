@@ -174,9 +174,13 @@ try {
     }
     $toolDirectories = @()
     foreach ($utility in @('stampinf.exe', 'inf2cat.exe', 'tracewpp.exe')) {
-        $foundTools = @(Get-ChildItem -LiteralPath $wdkPackage -Recurse -File -Filter $utility)
+        # NuGet's x64 WDK archive ALSO contains ARM64 and x86 versions.
+        # Never put ARM64 ahead of x64: file-tracker can find it by name but
+        # cannot execute it on a Windows x64 runner (TRK0002).
+        $foundTools = @(Get-ChildItem -LiteralPath $wdkPackage -Recurse -File -Filter $utility |
+            Where-Object { $_.DirectoryName -match '[\\/](?:x64|amd64)$' })
         if ($utility -eq 'stampinf.exe' -and $foundTools.Count -eq 0) {
-            throw 'The restored WDK NuGet package does not contain stampinf.exe.'
+            throw 'The restored WDK NuGet package does not contain an x64 stampinf.exe.'
         }
         foreach ($entry in $foundTools) {
             if ($entry.DirectoryName -notin $toolDirectories) {
