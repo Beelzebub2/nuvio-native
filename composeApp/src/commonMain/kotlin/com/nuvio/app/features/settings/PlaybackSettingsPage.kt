@@ -31,6 +31,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -1050,6 +1051,24 @@ private fun PlaybackSettingsSection(
         }
 
         if (isWindows) {
+            var rtxEnvironment by remember { mutableStateOf<NvidiaRtxVideoEnvironment?>(null) }
+            var rtxAppOpenFailed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                rtxEnvironment = NvidiaRtxVideoPlatform.inspect()
+            }
+            val gpuStatus = when (rtxEnvironment?.gpuSupport) {
+                null -> stringResource(Res.string.settings_playback_nvidia_rtx_checking)
+                NvidiaRtxGpuSupport.DETECTED -> stringResource(
+                    Res.string.settings_playback_nvidia_rtx_detected,
+                    rtxEnvironment?.gpuName.orEmpty(),
+                )
+                NvidiaRtxGpuSupport.NOT_DETECTED ->
+                    stringResource(Res.string.settings_playback_nvidia_rtx_not_detected)
+                NvidiaRtxGpuSupport.UNKNOWN ->
+                    stringResource(Res.string.settings_playback_nvidia_rtx_unknown)
+            }
+            val rtxEnabled = autoPlayPlayerSettings.nvidiaRtxSuperResolutionEnabled
+            val appInstalled = rtxEnvironment?.nvidiaAppInstalled == true
             SettingsSection(
                 title = stringResource(Res.string.settings_playback_nvidia_rtx_video_section),
                 isTablet = isTablet,
@@ -1058,10 +1077,58 @@ private fun PlaybackSettingsSection(
                     SettingsSwitchRow(
                         title = stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution),
                         description = stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution_desc),
-                        checked = autoPlayPlayerSettings.nvidiaRtxSuperResolutionEnabled,
+                        checked = rtxEnabled,
                         isTablet = isTablet,
                         onCheckedChange = PlayerSettingsRepository::setNvidiaRtxSuperResolutionEnabled,
                     )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_nvidia_rtx_hardware),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = gpuStatus,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (rtxEnvironment != null) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(
+                                if (appInstalled) Res.string.settings_playback_nvidia_rtx_open_app
+                                else Res.string.settings_playback_nvidia_rtx_get_app,
+                            ),
+                            description = stringResource(
+                                if (appInstalled) Res.string.settings_playback_nvidia_rtx_setup_desc
+                                else Res.string.settings_playback_nvidia_rtx_get_app_desc,
+                            ),
+                            isTablet = isTablet,
+                            onClick = {
+                                rtxAppOpenFailed = !(if (appInstalled) {
+                                    NvidiaRtxVideoPlatform.openNvidiaApp()
+                                } else {
+                                    NvidiaRtxVideoPlatform.openNvidiaAppDownload()
+                                })
+                            },
+                        )
+                    }
+                    if (rtxAppOpenFailed) {
+                        Text(
+                            text = stringResource(Res.string.settings_playback_nvidia_rtx_open_failed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 8.dp),
+                        )
+                    }
                 }
             }
         }
