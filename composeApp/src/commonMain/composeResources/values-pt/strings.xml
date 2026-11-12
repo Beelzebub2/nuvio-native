@@ -2312,4 +2312,17 @@
     <string name="watch_order_chronology_unverified">Ainda não foi verificada uma ordem cronológica para esta franquia. Experimenta a ordem recomendada.</string>
     <string name="watch_order_explanation">Só os títulos identificados com segurança aparecem como vistos. Seleciona outro título para procurar nos teus add-ons; a reprodução não começa automaticamente.</string>
     <string name="watch_order_dismiss">Agora não</string>
+    <string name="settings_playback_nvidia_rtx_video_section">Vídeo NVIDIA RTX</string>
+    <string name="settings_playback_nvidia_rtx_super_resolution">RTX Video Super Resolution</string>
+    <string name="settings_playback_nvidia_rtx_super_resolution_desc">Solicita a melhoria de imagem NVIDIA RTX ao iniciar um vídeo. Mantém premido «Original» no leitor Windows para comparar. Confirma a ativação na NVIDIA App > Sistema > Vídeo.</string>
+    <string name="settings_playback_nvidia_rtx_hardware">Placa gráfica</string>
+    <string name="settings_playback_nvidia_rtx_checking">A verificar se existe uma GPU NVIDIA RTX…</string>
+    <string name="settings_playback_nvidia_rtx_detected">GPU RTX detetada: %1$s. Isto não confirma que a melhoria de imagem esteja ativa.</string>
+    <string name="settings_playback_nvidia_rtx_not_detected">Não foi detetada uma GPU RTX neste PC. O RTX Video Super Resolution requer uma GPU compatível.</string>
+    <string name="settings_playback_nvidia_rtx_unknown">Não foi possível verificar a GPU. A compatibilidade RTX e a ativação pelo controlador não estão confirmadas.</string>
+    <string name="settings_playback_nvidia_rtx_open_app">Abrir NVIDIA App</string>
+    <string name="settings_playback_nvidia_rtx_get_app">Obter NVIDIA App</string>
+    <string name="settings_playback_nvidia_rtx_setup_desc">Em Sistema > Vídeo, ativa Super Resolution e escolhe Auto. Confirma se está ativo na NVIDIA App ou no indicador opcional durante a reprodução.</string>
+    <string name="settings_playback_nvidia_rtx_get_app_desc">Instala a NVIDIA App para configurar o RTX Video Super Resolution e verificar se está ativo.</string>
+    <string name="settings_playback_nvidia_rtx_open_failed">Não foi possível abrir a NVIDIA App ou a página de transferência. Abre a NVIDIA App manualmente e acede a Sistema > Vídeo.</string>
 </resources>

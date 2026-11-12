@@ -49,6 +49,7 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.isDesktop
 import org.jetbrains.compose.resources.StringResource
 import com.nuvio.app.isIos
+import com.nuvio.app.isWindows
 import com.nuvio.app.supportsPosterNavigationMotion
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -742,6 +743,26 @@ internal fun settingsSearchEntries(
                     add(PlaybackSearchRow("libass-render", stringResource(Res.string.settings_playback_render_type)))
                 }
             },
+        )
+    }
+    if (isWindows) {
+        addPlaybackRows(
+            addRow = ::addRow,
+            pageLabel = playbackPage,
+            section = stringResource(Res.string.settings_playback_nvidia_rtx_video_section),
+            icon = Icons.Rounded.PlayArrow,
+            rows = listOf(
+                PlaybackSearchRow(
+                    "rtx-vsr",
+                    stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution),
+                    stringResource(Res.string.settings_playback_nvidia_rtx_super_resolution_desc),
+                ),
+                PlaybackSearchRow(
+                    "rtx-setup",
+                    stringResource(Res.string.settings_playback_nvidia_rtx_open_app),
+                    stringResource(Res.string.settings_playback_nvidia_rtx_setup_desc),
+                ),
+            ),
         )
     }
     addPlaybackRows(
