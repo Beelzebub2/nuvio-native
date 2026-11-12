@@ -18,6 +18,7 @@ namespace {
 
 constexpr wchar_t kHardwareId[] = L"ROOT\\StarlitVirtualAudio";
 constexpr wchar_t kInstancePrefix[] = L"ROOT\\STARLITVIRTUALAUDIO\\";
+constexpr wchar_t kRootDeviceName[] = L"StarlitVirtualAudio";
 
 class DeviceSet {
 public:
@@ -74,7 +75,10 @@ bool createRootDevice(const std::wstring& inf, std::wstring& created) {
     if (!devices) return false;
 
     SP_DEVINFO_DATA info = {sizeof(info)};
-    if (!SetupDiCreateDeviceInfoW(devices.get(), className, &classGuid,
+    // With DICD_GENERATE_ID, DeviceName becomes ROOT\\<DeviceName>\\0000.
+    // Using the INF class name ("MEDIA") would create ROOT\\MEDIA instead,
+    // which cannot be uniquely identified or safely rolled back.
+    if (!SetupDiCreateDeviceInfoW(devices.get(), kRootDeviceName, &classGuid,
                                   nullptr, nullptr, DICD_GENERATE_ID, &info)) {
         std::wcerr << L"Could not create Starlit device node: " << GetLastError() << L"\n";
         return false;

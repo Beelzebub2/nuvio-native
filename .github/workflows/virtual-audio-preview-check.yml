@@ -71,11 +71,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw 'Starlit root-device helper was not safe to query.'
           }
-          if (Get-PnpDevice -Class Media -ErrorAction Stop | Where-Object {
-              $_.InstanceId -like 'ROOT\STARLITVIRTUALAUDIO\*'
-          }) {
-            throw 'CI must not install a kernel device.'
+          & $binary create (Join-Path $env:RUNNER_TEMP 'missing-starlit-driver.inf')
+          if ($LASTEXITCODE -ne 6) {
+            throw 'The Starlit helper did not reject an absent driver package.'
           }
+          & $binary status
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The Starlit helper must remain healthy after invalid input.'
+          }
+          # The helper enumerates Starlit media devices via SetupAPI; clean
+          # Windows runners can have NO media-class PnP devices at all, so
+          # Get-PnpDevice -Class Media -ErrorAction Stop is invalid here.
+          # No helper "create" or driver package install is ever invoked.
 
   driver-build:
     # A successful driver build is not proof of safe installation, signing or

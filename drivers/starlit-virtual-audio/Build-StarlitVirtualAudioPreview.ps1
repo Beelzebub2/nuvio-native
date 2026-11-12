@@ -165,8 +165,32 @@ try {
     }
     Invoke-Checked 'nuget.exe' @('restore', (Join-Path $source 'packages.config'),
         '-PackagesDirectory', (Join-Path $source 'packages'), '-NonInteractive')
+    # WDK-as-NuGet imports MSBuild targets, but standalone utilities (e.g.
+    # stampinf.exe) may not land on PATH on a clean CI runner. Expose only
+    # the executables from this exact, pinned Microsoft package.
+    $wdkPackage = Join-Path $source ('packages/Microsoft.Windows.WDK.x64.' + $KitVersion)
+    if (-not (Test-Path -LiteralPath $wdkPackage -PathType Container)) {
+        throw "Pinned Microsoft x64 WDK package was not restored: $wdkPackage"
+    }
+    $toolDirectories = @()
+    foreach ($utility in @('stampinf.exe', 'inf2cat.exe', 'tracewpp.exe')) {
+        $foundTools = @(Get-ChildItem -LiteralPath $wdkPackage -Recurse -File -Filter $utility)
+        if ($utility -eq 'stampinf.exe' -and $foundTools.Count -eq 0) {
+            throw 'The restored WDK NuGet package does not contain stampinf.exe.'
+        }
+        foreach ($entry in $foundTools) {
+            if ($entry.DirectoryName -notin $toolDirectories) {
+                $toolDirectories += $entry.DirectoryName
+            }
+        }
+    }
+    if ($toolDirectories.Count -gt 0) {
+        $env:PATH = ($toolDirectories -join ';') + ';' + $env:PATH
+        Write-Output ("Available WDK tool directories: " + ($toolDirectories -join ', '))
+    }
     Invoke-Checked $msbuildPath @((Join-Path $driverRoot 'SimpleAudioSample.sln'),
-        '/m', '/t:Build', '/p:Configuration=Release', '/p:Platform=x64', '/v:minimal')
+        '/m', '/nr:false', '/t:Build', '/p:Configuration=Release',
+        '/p:Platform=x64', '/v:minimal')
 
     $packages = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'SimpleAudioSample.inf' -File -Recurse |
         Where-Object {
@@ -189,6 +213,13 @@ try {
     if ($KeepBuildTree -or $PrepareOnly) {
         Write-Output "Build tree retained: $work"
     } elseif (Test-Path -LiteralPath $work -PathType Container) {
-        Remove-Item -LiteralPath $work -Recurse -Force
+        try {
+            Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop
+        } catch {
+            # MSBuild may retain WDK build-task assemblies until its process
+            # exits. Never hide an earlier compiler result with cleanup failure
+            # or forcefully close handles belonging to another process.
+            Write-Warning "WDK tools still hold temporary build files; preserved $work"
+        }
     }
 }
