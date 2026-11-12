@@ -157,6 +157,16 @@ class DesktopSettingsUiTest {
             open("Playback")
             onNodeWithText("RTX Video Super Resolution").performScrollTo().assertIsDisplayed()
             onNodeWithText("Graphics hardware").performScrollTo().assertIsDisplayed()
+            waitUntil(timeoutMillis = 15_000) {
+                onAllNodesWithText("Open NVIDIA App").fetchSemanticsNodes().isNotEmpty() ||
+                    onAllNodesWithText("Get NVIDIA App").fetchSemanticsNodes().isNotEmpty()
+            }
+            val setupAction = if (onAllNodesWithText("Open NVIDIA App").fetchSemanticsNodes().isNotEmpty()) {
+                "Open NVIDIA App"
+            } else {
+                "Get NVIDIA App"
+            }
+            onNodeWithText(setupAction).performScrollTo().assertIsDisplayed()
             capture("07-rtx-hardware-status")
         }
     }
