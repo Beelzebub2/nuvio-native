@@ -2327,4 +2327,10 @@
     <string name="settings_playback_nvidia_rtx_setup_desc">Em Sistema > Vídeo, ativa Super Resolution e escolhe Auto. Confirma se está ativo na NVIDIA App ou no indicador opcional durante a reprodução.</string>
     <string name="settings_playback_nvidia_rtx_get_app_desc">Instala a NVIDIA App para configurar o RTX Video Super Resolution e verificar se está ativo.</string>
     <string name="settings_playback_nvidia_rtx_open_failed">Não foi possível abrir a NVIDIA App ou a página de transferência. Abre a NVIDIA App manualmente e acede a Sistema > Vídeo.</string>
+
+    <string name="settings_advanced_discord_audio_share">Diálogos na partilha de ecrã do Discord (experimental)</string>
+    <string name="settings_advanced_discord_audio_share_description">Na partilha do ecrã inteiro, mantém o som surround original e envia apenas o canal central de fontes 5.1/7.1. Requer um dispositivo Starlit Virtual Audio instalado separadamente ou Steam Streaming Speakers como alternativa. O dispositivo não pode ser a saída de som predefinida. Confirma o resultado com alguém na chamada.</string>
+    <string name="settings_advanced_discord_audio_share_unavailable">Não foi possível iniciar o áudio para o Discord. Verifica se Starlit Virtual Audio ou Steam Streaming Speakers está instalado e ativo, sem ser a saída de som predefinida.</string>
+    <string name="settings_advanced_discord_audio_share_window">Mostrar uma janela separada com som estéreo completo</string>
+    <string name="settings_advanced_discord_audio_share_window_description">Desligado para ecrã inteiro: a ajuda de áudio envia apenas o diálogo central. Ligado: partilha apenas a janela “Starlit - Discord Share” no Discord, para evitar som duplicado.</string>
 </resources>
