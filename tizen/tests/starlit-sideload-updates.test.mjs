@@ -206,3 +206,26 @@ test("an app started while the package downloads blocks the pending installation
   assert.equal(appQueries, 2);
   assert.equal(cliWasCalled, false);
 });
+
+test("unknown TV activity blocks both the initial and preinstall checks", async () => {
+  for (const query of [1, 2]) {
+    for (const activity of [{}, { running: null, visible: false },
+      { running: "true", visible: false }, { running: false, visible: "false" }]) {
+      const fixture = fetchFixture();
+      let appQueries = 0, installs = 0;
+      const result = await updateSideloadedTv({
+        tvIp: TV_IP, install: true,
+        fetchImpl: (url, options) => {
+          if (url.includes("/api/v2/applications/") && ++appQueries === query) {
+            return response({ id: "StarlitTV1.StarlitTV", version: "1.30.0", ...activity });
+          }
+          return fixture.fetchImpl(url, options);
+        },
+        sdbReadyImpl: async () => true,
+        runCliImpl: async () => { installs++; }
+      });
+      assert.equal(result.reason, "TV_OFFLINE_OR_UNVERIFIED");
+      assert.equal(installs, 0);
+    }
+  }
+});
