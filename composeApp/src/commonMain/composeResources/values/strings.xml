@@ -660,8 +660,10 @@
     <string name="settings_advanced_discord_rich_presence">Discord Rich Presence</string>
     <string name="settings_advanced_discord_rich_presence_description">Show what you're browsing or watching on your Discord profile. Off by default.</string>
     <string name="settings_advanced_discord_audio_share">Discord fullscreen dialogue support (experimental)</string>
-    <string name="settings_advanced_discord_audio_share_description">For Discord Entire Screen: keeps your original surround audio and adds only the front-centre dialogue channel from 5.1/7.1 media. The helper runs hidden and never repeats the left/right music channels. No Discord plugin required. Needs an unused Steam Streaming Speakers output. Some mixes contain music in the centre too; verify with a listener.</string>
-    <string name="settings_advanced_discord_audio_share_unavailable">Discord-compatible audio could not start. Check that Steam Streaming Speakers is available and is not your default sound output.</string>
+    <string name="settings_advanced_discord_audio_share_description">For Discord Entire Screen: keeps original surround playback and sends only the front-centre channel from 5.1/7.1 to an unused VB-CABLE Input (preferred) or Steam Streaming Speakers. VB-CABLE is installed separately. Discord capture of non-default devices can vary; verify with a listener.</string>
+    <string name="settings_advanced_discord_audio_share_unavailable">Discord audio helper could not start. Install VB-CABLE (CABLE Input) or use Steam Streaming Speakers. The virtual output must be active and must not be a Windows default output.</string>
+    <string name="settings_advanced_discord_audio_share_setup">Set up VB-CABLE (official website)</string>
+    <string name="settings_advanced_discord_audio_share_setup_description">Optional VB-Audio donationware. Install manually as administrator and restart Windows. Starlit never installs drivers or changes system audio defaults automatically.</string>
     <string name="settings_advanced_discord_audio_share_window">Show a separate full-stereo sharing window</string>
     <string name="settings_advanced_discord_audio_share_window_description">Off (recommended for Entire Screen): only missing centre dialogue is sent by a hidden helper. On: the helper outputs full stereo and shows “Starlit - Discord Share”; share ONLY that application window in Discord or the sound may double.</string>
     <string name="sentry_enable_dialog_title">Turn on crash reports?</string>

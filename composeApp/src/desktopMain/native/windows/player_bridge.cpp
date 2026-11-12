@@ -640,7 +640,9 @@ MpvApi &mpvApi() {
 
 // A spare virtual render endpoint is required. Never route the companion to
 // the user's default headphones/speakers: that would change what they hear.
-// Windows process-loopback capture can still capture the child on this endpoint.
+// Prefer a separately installed VB-CABLE input and retain Steam as fallback.
+// Whether Discord captures an alternate render endpoint depends on the screen
+// share mode and must be confirmed with a listener.
 std::string discordShareAudioDevice() {
     const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return {};
@@ -681,13 +683,14 @@ std::string discordShareAudioDevice() {
         std::wstring friendly = SUCCEEDED(nameResult) && name.vt == VT_LPWSTR && name.pwszVal
             ? std::wstring(name.pwszVal) : std::wstring();
         PropVariantClear(&name);
-        if (!discord_share::isSteamStreamingSpeakers(friendly)) continue;
+        if (!discord_share::isVbCableInput(friendly) &&
+            !discord_share::isSteamStreamingSpeakers(friendly)) continue;
         LPWSTR deviceId = nullptr;
         if (FAILED(device->GetId(&deviceId)) || !deviceId) return {};
         active.push_back({deviceId, std::move(friendly)});
         CoTaskMemFree(deviceId);
     }
-    const std::wstring candidate = discord_share::uniqueUnusedSteamEndpoint(
+    const std::wstring candidate = discord_share::uniqueUnusedDiscordEndpoint(
         active, defaults[0], defaults[1], defaults[2]);
     return candidate.empty() ? std::string() : "wasapi/" + toUtf8(candidate);
 }

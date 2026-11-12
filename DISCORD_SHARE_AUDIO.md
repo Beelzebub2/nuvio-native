@@ -1,10 +1,11 @@
 # Windows Discord share audio (experimental)
 
-Starlit supports **Entire Screen** sharing without Discord plugins, while
-keeping the normal Starlit window and its original surround output.
-When enabled, a **hidden** companion sends only the 5.1/7.1 **front-centre
-(FC) dialogue channel**, not a second copy of the soundtrack's left/right
-music. Discord captures the original audio plus this centre-only supplement.
+Starlit provides an **experimental** Discord Entire Screen audio companion
+without Discord plugins, while keeping the normal Starlit window and its
+original surround output. When enabled, a **hidden** companion renders only
+the 5.1/7.1 **front-centre (FC) channel**, not a second copy of the soundtrack's
+left/right music. **Whether Discord includes this supplementary audio in a
+given Entire Screen share still needs to be verified with a listener.**
 The optional visible **Starlit - Discord Share** window uses a full stereo
 mix for **application-window-only** sharing instead.
 
@@ -47,13 +48,17 @@ mix for **application-window-only** sharing instead.
   Off by default.
   Older full-stereo whole-screen preferences are not inherited; the helper
   is not re-enabled automatically in hidden mode after restarting Starlit.
-- Currently requires an **unused Steam Streaming Speakers** virtual audio
-  endpoint. It must be active, uniquely identified and different from the
-  Windows console, multimedia and communications defaults. Starlit rechecks
-  eligibility when sharing starts and periodically while playing; a device
-  change that makes it unsafe stops only the auxiliary process. The feature
-  does **not** install a virtual driver or change global Windows audio settings.
-  Wider endpoint support is not implemented.
+- Prefers the separately installed **VB-CABLE** virtual playback endpoint
+  **CABLE Input (VB-Audio Virtual Cable)**. The **Steam Streaming Speakers**
+  endpoint remains a compatibility fallback when VB-CABLE is absent; Steam
+  itself is not required. The CABLE **Output** recording endpoint, additional
+  paid A/B/C/D cable variants and partial-name matches are not selected.
+  The render device must be active, uniquely identified and different from
+  Windows' console, multimedia and communications default outputs.
+  An ambiguous or default VB-CABLE output fails closed instead of switching
+  to Steam. Starlit rechecks eligibility during sharing and stops only the
+  auxiliary process on device changes. It does **not** install drivers or
+  change any Windows audio default.
 - When using the **stereo window**, do not minimize the original
   Starlit window: DWM thumbnails may stop refreshing while it is minimized.
 - The second audio decoder uses additional CPU/network resources and can take
@@ -69,7 +74,51 @@ mix for **application-window-only** sharing instead.
   an Entire Screen share; this is not a real-media listener verification of
   the newer hidden centre-only mode, which still needs the checks below.
 
+## VB-CABLE installation and Discord verification
+
+1. From Starlit's **Advanced > Discord > Set up VB-CABLE**, open the official
+   [VB-Audio download page](https://vb-audio.com/Cable/index.htm). Install
+   the original **VB-CABLE** package as administrator, then reboot Windows.
+   Installation and removal require administrator privileges; Starlit will
+   never install the package silently or change Windows Secure Boot settings.
+2. Confirm that **CABLE Input** appears as an active Windows *output* device,
+   and **CABLE Output** as an *input* device. Leave the physical headphones or
+   speakers as the Windows default for **all three playback roles**. The
+   capture/recording device is not the desired render endpoint and should
+   **not** be selected as the Discord microphone for this feature.
+3. Enable Starlit's experimental Discord dialogue option and select a 5.1/7.1
+   source. For **Entire Screen**, keep the separate stereo window OFF and
+   ensure Discord's stream audio is enabled. Ask a listener to confirm that
+   dialogue is audible without doubling music or sound effects.
+4. If Entire Screen fails to capture the non-default output, try the
+   optional **Starlit - Discord Share** full-stereo application window and
+   share **that application only** with audio. Do not combine its full-stereo
+   mode with Entire Screen. This alternative has a separate video mirror,
+   which also requires real-playback validation.
+
+**Important:** VB-CABLE reliably forwards render audio to its own recording
+endpoint, but that does **not** mean Discord automatically uses its recording
+endpoint. Discord documents capturing an application's process tree, but does
+not guarantee that **Entire Screen** captures non-default virtual rendering
+devices on every client or capture mode. This integration is therefore opt-in,
+not a verified replacement for every Discord setup.
+
+**Licensing:** VB-CABLE is third-party donationware from VB-Audio Software.
+The original driver is **not bundled** with Starlit. VB-Audio invites users
+to install it from the official website; professional and redistribution uses
+may require paid licenses. See
+[VB-Audio licensing](https://vb-audio.com/Services/licensing.htm).
+
 ## Acceptance checklist
+
+- [x] Starlit endpoint safety tests prefer the unique active VB-CABLE render
+  input over the legacy Steam endpoint, reject defaults/duplicates/recording
+  endpoints, and preserve the existing fallback.
+- [ ] Install and reboot with an authentic signed VB-CABLE package; verify
+  that the expected device name is exposed by the current Windows driver.
+- [ ] Verify real PCM output to VB-CABLE and capture from its CABLE Output.
+- [ ] Verify Discord Entire Screen audio from the non-default VB-CABLE render
+  device with a separate listener, including 5.1/7.1 centre-only dialogue.
 
 - [x] On a stereo Windows render endpoint, the bundled `libmpv` retains a 5.1
   layout for a 5.1 source when not overridden.

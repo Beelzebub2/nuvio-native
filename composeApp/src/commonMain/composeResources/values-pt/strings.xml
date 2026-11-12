@@ -2330,4 +2330,8 @@
     <string name="settings_playback_nvidia_rtx_setup_desc">Em Sistema > Vídeo, ativa Super Resolution e escolhe Auto. Confirma se está ativo na NVIDIA App ou no indicador opcional durante a reprodução.</string>
     <string name="settings_playback_nvidia_rtx_get_app_desc">Instala a NVIDIA App para configurar o RTX Video Super Resolution e verificar se está ativo.</string>
     <string name="settings_playback_nvidia_rtx_open_failed">Não foi possível abrir a NVIDIA App ou a página de transferência. Abre a NVIDIA App manualmente e acede a Sistema > Vídeo.</string>
+    <string name="settings_advanced_discord_audio_share_description">Na partilha do ecrã inteiro no Discord, mantém o som surround original e envia apenas o canal central de fontes 5.1/7.1 para o VB-CABLE Input (preferido) ou Steam Streaming Speakers. O VB-CABLE é instalado à parte. A captação de dispositivos virtuais pode variar; confirma com alguém na chamada.</string>
+    <string name="settings_advanced_discord_audio_share_unavailable">Não foi possível iniciar o áudio auxiliar do Discord. Instala o VB-CABLE (CABLE Input) ou usa Steam Streaming Speakers. A saída virtual tem de estar ativa e não pode ser uma saída de som predefinida.</string>
+    <string name="settings_advanced_discord_audio_share_setup">Configurar o VB-CABLE (site oficial)</string>
+    <string name="settings_advanced_discord_audio_share_setup_description">Software de doação opcional da VB-Audio. Instala manualmente como administrador e reinicia o Windows. A Starlit não instala controladores nem altera o som predefinido.</string>
 </resources>
