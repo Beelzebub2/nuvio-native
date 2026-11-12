@@ -192,9 +192,22 @@ try {
         $env:PATH = ($toolDirectories -join ';') + ';' + $env:PATH
         Write-Output ("Available WDK tool directories: " + ($toolDirectories -join ', '))
     }
-    Invoke-Checked $msbuildPath @((Join-Path $driverRoot 'SimpleAudioSample.sln'),
-        '/m', '/nr:false', '/t:Build', '/p:Configuration=Release',
-        '/p:Platform=x64', '/v:minimal')
+    # The NuGet WDK InfVerif MSBuild task loads x86\InfVerif.dll relative
+    # to its process working directory rather than by an absolute path.
+    # Launch MSBuild from the directory containing x86 and x64 tools, without
+    # copying WDK binaries into the global toolchain or bypassing validation.
+    $wdkBin = @(Get-ChildItem -LiteralPath (Join-Path $wdkPackage 'c/bin') -Directory)
+    if ($wdkBin.Count -ne 1 -or -not (Test-Path -LiteralPath (Join-Path $wdkBin[0].FullName 'x86') -PathType Container)) {
+        throw 'Expected exactly one WDK tools directory with x86 and x64 validators.'
+    }
+    Push-Location -LiteralPath $wdkBin[0].FullName
+    try {
+        Invoke-Checked $msbuildPath @((Join-Path $driverRoot 'SimpleAudioSample.sln'),
+            '/m', '/nr:false', '/t:Build', '/p:Configuration=Release',
+            '/p:Platform=x64', '/v:minimal')
+    } finally {
+        Pop-Location
+    }
 
     $packages = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'SimpleAudioSample.inf' -File -Recurse |
         Where-Object {
