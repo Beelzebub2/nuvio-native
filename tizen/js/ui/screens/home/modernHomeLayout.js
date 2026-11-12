@@ -1,4 +1,5 @@
 import { LayoutPreferences } from "../../../data/local/layoutPreferences.js";
+import { getHeroTypeLabel } from "./homeHeroEyebrow.js";
 export const MODERN_HOME_CONSTANTS = {
   heroFocusDelayMs: 450,
   heroRapidNavThresholdMs: 130,
@@ -17,7 +18,9 @@ export const MODERN_HOME_CONSTANTS = {
   springScrollStiffness: 180,
   springScrollDampingRatio: 0.95,
   rowFocusInset: 40,
-  trackEdgePadding: 104,
+  // Mirrors --home-content-start: the rail is 128 px and rows start on the
+  // 176 px keyline.
+  trackEdgePadding: 48,
   verticalFastScrollVelocityPxPerSec: 6400,
   verticalFastScrollEndTimeoutMs: 160,
   verticalFastScrollMaxFrameMs: 48
@@ -295,6 +298,7 @@ function renderModernHeroMarkup({
           <div class="home-hero-trailer-layer"></div>
         </div>
         <div class="home-hero-copy home-modern-hero-copy">
+          <div class="home-hero-eyebrow" data-type-label="${escapeAttribute(getHeroTypeLabel(heroItem?.type || heroItem?.apiType))}"></div>
           <div class="home-hero-brand">
             ${display.logo ? `<img class="home-hero-logo" src="${escapeAttribute(display.logo)}" alt="${escapeAttribute(display.title)}" decoding="async" fetchpriority="high" />` : ""}
             <h1 class="home-hero-title-text${display.logo ? " is-hidden" : ""}">${escapeHtml(display.title)}</h1>

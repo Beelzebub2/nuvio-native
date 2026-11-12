@@ -23,6 +23,7 @@ import { ProfileSyncService } from "./core/profile/profileSyncService.js";
 import { StartupSyncService } from "./core/profile/startupSyncService.js";
 import { ProviderCredentialSyncService } from "./core/profile/providerCredentialSyncService.js";
 import { ThemeManager } from "./ui/theme/themeManager.js";
+import { DisplayManager } from "./ui/theme/displayManager.js";
 import { renderAppShell } from "./bootstrap/renderAppShell.js";
 import { renderAddonRemotePage } from "./bootstrap/renderAddonRemotePage.js";
 import { preloadStreamBadgeImages } from "./ui/screens/stream/streamScreen.js";
@@ -629,6 +630,8 @@ async function bootstrapApp() {
   appShellRendered = true;
   markBootStage("Initializing TV platform");
   Platform.init();
+  // Size the app canvas before anything is measured or painted.
+  DisplayManager.init();
   installLocalServiceFetch();
   setupPluginServiceLifecycle();
   if (shouldDisableTizenPluginSupport()) {

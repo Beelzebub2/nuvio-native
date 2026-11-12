@@ -160,6 +160,11 @@ export function createPlayerScreenMethods68() {
         this.onDismissStillWatchingPrompt();
         return;
       }
+      if (action === "seekBack10" || action === "seekForward10") {
+        this.quickSeekBy(action === "seekBack10" ? -10 : 10);
+        this.resetControlsAutoHide?.();
+        return;
+      }
       if (action === "subtitleDialog") {
         if (this.subtitleDialogVisible) {
           this.closeSubtitleDialog();

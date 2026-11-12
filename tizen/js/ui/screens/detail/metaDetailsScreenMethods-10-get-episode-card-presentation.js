@@ -65,7 +65,7 @@ export function createMetaDetailsScreenMethods10() {
               ${presentation.isUnavailable ? `<div class="series-episode-unavailable">${escapeHtml(t("episodes_unavailable", {}, "Unavailable").toUpperCase())}</div>` : ""}
               <div class="series-episode-copy">
                 <div class="series-episode-badge">${escapeHtml(t("episodes_episode", {}, "Episode").toUpperCase())} ${Number(episode.episode || 0)}</div>
-              <div class="series-episode-title" dir="${contentTextDirection(presentation.title)}"><span class="series-episode-title-text">${escapeHtml(presentation.title)}</span></div>
+              <div class="series-episode-title" dir="${contentTextDirection(presentation.title)}"><span class="series-episode-number">${Number(episode.episode || 0)}. </span><span class="series-episode-title-text">${escapeHtml(presentation.title)}</span></div>
                 <div class="series-episode-overview" dir="${contentTextDirection(presentation.overview)}">${escapeHtml(presentation.overview)}</div>
                 ${presentation.metaParts ? `<div class="series-episode-meta">${presentation.metaParts}</div>` : ""}
               </div>
