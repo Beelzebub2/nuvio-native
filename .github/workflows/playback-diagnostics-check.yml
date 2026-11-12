@@ -9,6 +9,7 @@ on:
       - 'composeApp/src/desktopTest/js/discord-share-toggle.test.mjs'
       - 'tests/native-discord-share-safety.test.cpp'
       - 'tests/native-play*.test.*'
+      - 'tests/surround-upmix-libmpv-probe.windows.py'
       - '.github/workflows/playback-diagnostics-check.yml'
   workflow_dispatch:
 
@@ -71,10 +72,26 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
+      - name: Materialize pinned native Windows audio runtime
+        shell: pwsh
+        run: |
+          # The DLL is tracked through LFS and a regular checkout only contains
+          # the 134-byte pointer. Use the same pinned source as Windows releases.
+          git fetch --no-tags --depth=1 https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned native runtime commit fetch failed.' }
+          git lfs fetch https://github.com/NuvioMedia/NuvioDesktop.git 25390defed025a871f6a3239427b4507f2fafb35 --include='composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll' --exclude=''
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned libmpv LFS fetch failed.' }
+          git lfs checkout
+          if ((Get-Item 'composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll').Length -lt 1000000) {
+            throw 'libmpv is still an LFS pointer.'
+          }
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - uses: gradle/actions/setup-gradle@v6
       - name: Install WebView2 build SDK
         shell: pwsh
@@ -94,6 +111,9 @@ jobs:
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
           '-Pkotlin.daemon.jvmargs=-Xmx3072m'
           --max-workers=2 --no-configuration-cache --no-daemon --console=plain
+      - name: Verify real 5.1 PCM output from bundled audio engine
+        shell: pwsh
+        run: python tests/surround-upmix-libmpv-probe.windows.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -1556,6 +1556,9 @@
     <string name="settings_playback_section_stream_auto_play">STREAM AUTO-PLAY</string>
     <string name="settings_playback_section_stream_selection">STREAM SELECTION</string>
     <string name="settings_playback_section_subtitle_audio">SUBTITLE AND AUDIO</string>
+    <string name="settings_playback_surround_section">SURROUND AUDIO · EXPERIMENTAL</string>
+    <string name="settings_playback_surround_upmix">Stereo to 5.1 surround</string>
+    <string name="settings_playback_surround_upmix_description">Upmix stereo when the Windows default output is configured for 5.1 PCM speakers. Real 5.1/7.1 tracks stay unchanged. Unsupported outputs keep their original audio. Off by default.</string>
     <string name="settings_playback_section_subtitle_rendering">SUBTITLE RENDERING</string>
     <string name="settings_playback_selected_count">%1$d selected</string>
     <string name="settings_playback_show_loading_overlay">Loading Overlay</string>
