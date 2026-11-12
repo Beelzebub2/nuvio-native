@@ -9,6 +9,7 @@ import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
 import java.awt.Window
 import java.awt.event.KeyEvent
+import java.util.IdentityHashMap
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,7 +78,7 @@ internal val desktopFullscreenChanges: StateFlow<Int>
 internal class DesktopAppFullscreenController {
     private var restoreWindowPlacement = WindowPlacement.Floating
     private var windowsFullscreenState: WindowsFullscreenState? = null
-    private var waylandRestoreExtendedState: Int? = null
+    private val waylandFrameStates = WaylandFullscreenFrameStates()
 
     fun toggle(window: Window, windowState: WindowState) {
         if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
@@ -129,20 +130,9 @@ internal class DesktopAppFullscreenController {
         val frame = window as? Frame ?: return
         val apply: () -> Unit = {
             runCatching {
-                if (entering) {
-                    if (waylandRestoreExtendedState == null) {
-                        waylandRestoreExtendedState = frame.extendedState
-                    }
-                    if (frame.extendedState != Frame.MAXIMIZED_BOTH) {
-                        frame.extendedState = Frame.MAXIMIZED_BOTH
-                    }
-                } else {
-                    waylandRestoreExtendedState?.let { restore ->
-                        waylandRestoreExtendedState = null
-                        if (frame.extendedState != restore) {
-                            frame.extendedState = restore
-                        }
-                    }
+                val nextState = waylandFrameStates.nextExtendedState(frame, frame.extendedState, entering)
+                if (nextState != null) {
+                    frame.extendedState = nextState
                 }
             }
             Unit
@@ -293,6 +283,21 @@ internal class DesktopAppFullscreenController {
         val windowHwnd: Long,
         val wasMaximized: Boolean,
     )
+}
+
+/** Tracks the pre-fullscreen state per frame, not per controller invocation. */
+internal class WaylandFullscreenFrameStates {
+    private val restoreStates = IdentityHashMap<Any, Int>()
+
+    fun nextExtendedState(frame: Any, currentState: Int, entering: Boolean): Int? {
+        if (entering) {
+            if (!restoreStates.containsKey(frame)) {
+                restoreStates[frame] = currentState
+            }
+            return Frame.MAXIMIZED_BOTH.takeUnless { it == currentState }
+        }
+        return restoreStates.remove(frame)?.takeUnless { it == currentState }
+    }
 }
 
 /**

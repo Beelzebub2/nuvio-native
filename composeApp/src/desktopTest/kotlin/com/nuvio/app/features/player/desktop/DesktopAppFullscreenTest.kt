@@ -1,12 +1,45 @@
 package com.nuvio.app.features.player.desktop
 
 import androidx.compose.ui.window.WindowPlacement
+import java.awt.Frame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DesktopAppFullscreenTest {
+    @Test
+    fun `Wayland temporarily maximizes a floating frame and restores it once`() {
+        val states = WaylandFullscreenFrameStates()
+        val frame = Any()
+
+        assertEquals(Frame.MAXIMIZED_BOTH, states.nextExtendedState(frame, Frame.NORMAL, true))
+        assertEquals(null, states.nextExtendedState(frame, Frame.MAXIMIZED_BOTH, true))
+        assertEquals(Frame.NORMAL, states.nextExtendedState(frame, Frame.MAXIMIZED_BOTH, false))
+        assertEquals(null, states.nextExtendedState(frame, Frame.NORMAL, false))
+    }
+
+    @Test
+    fun `Wayland preserves a frame that was already maximized`() {
+        val states = WaylandFullscreenFrameStates()
+        val frame = Any()
+
+        assertEquals(null, states.nextExtendedState(frame, Frame.MAXIMIZED_BOTH, true))
+        assertEquals(null, states.nextExtendedState(frame, Frame.MAXIMIZED_BOTH, false))
+    }
+
+    @Test
+    fun `Wayland keeps restoration state scoped to the original frame`() {
+        val states = WaylandFullscreenFrameStates()
+        val first = Any()
+        val second = Any()
+
+        assertEquals(Frame.MAXIMIZED_BOTH, states.nextExtendedState(first, Frame.NORMAL, true))
+        assertEquals(Frame.MAXIMIZED_BOTH, states.nextExtendedState(second, Frame.MAXIMIZED_VERT, true))
+        assertEquals(Frame.MAXIMIZED_VERT, states.nextExtendedState(second, Frame.MAXIMIZED_BOTH, false))
+        assertEquals(Frame.NORMAL, states.nextExtendedState(first, Frame.MAXIMIZED_BOTH, false))
+    }
+
     @Test
     fun `Wayland is detected from either session environment variable`() {
         assertTrue(isWaylandDesktopSession("wayland-0", null))
