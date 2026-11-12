@@ -2446,6 +2446,16 @@
     <string name="settings_playback_nvidia_rtx_video_section">NVIDIA RTX Video</string>
     <string name="settings_playback_nvidia_rtx_super_resolution">RTX Video Super Resolution</string>
     <string name="settings_playback_nvidia_rtx_super_resolution_desc">Request NVIDIA RTX upscaling for newly started videos. Hold "Original" in the Windows player to compare. For actual driver activity, check NVIDIA App > System > Video.</string>
+    <string name="settings_playback_nvidia_rtx_hardware">Graphics hardware</string>
+    <string name="settings_playback_nvidia_rtx_checking">Checking for an NVIDIA RTX GPU…</string>
+    <string name="settings_playback_nvidia_rtx_detected">RTX GPU detected: %1$s. This does not confirm that upscaling is active.</string>
+    <string name="settings_playback_nvidia_rtx_not_detected">No RTX GPU was detected on this PC. RTX Video Super Resolution is unavailable without one.</string>
+    <string name="settings_playback_nvidia_rtx_unknown">Could not check your GPU. RTX compatibility and driver activation are unverified.</string>
+    <string name="settings_playback_nvidia_rtx_open_app">Open NVIDIA App</string>
+    <string name="settings_playback_nvidia_rtx_get_app">Get NVIDIA App</string>
+    <string name="settings_playback_nvidia_rtx_setup_desc">Under System > Video, enable Super Resolution and choose Auto. Check NVIDIA App or its optional on-screen indicator during playback to confirm activity.</string>
+    <string name="settings_playback_nvidia_rtx_get_app_desc">Install NVIDIA App to configure RTX Video Super Resolution and check its activity.</string>
+    <string name="settings_playback_nvidia_rtx_open_failed">Could not open NVIDIA App or its download page. Open NVIDIA App manually and go to System > Video.</string>
     <!-- Playback settings iOS video output -->
     <string name="settings_playback_ios_video_output">iOS VIDEO OUTPUT</string>
     <string name="settings_playback_ios_hardware_decoder">Hardware decoder</string>

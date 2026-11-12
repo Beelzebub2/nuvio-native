@@ -150,6 +150,28 @@ class DesktopSettingsUiTest {
     }
 
     @Test
+    fun windowsRtxSettingsExposeHardwareStatusAndSetupGuidance() {
+        if (!System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) return
+        runDesktopComposeUiTest(width = 1440, height = 900) {
+            showSettings()
+            open("Playback")
+            onNodeWithText("RTX Video Super Resolution").performScrollTo().assertIsDisplayed()
+            onNodeWithText("Graphics hardware").performScrollTo().assertIsDisplayed()
+            waitUntil(timeoutMillis = 15_000) {
+                onAllNodesWithText("Open NVIDIA App").fetchSemanticsNodes().isNotEmpty() ||
+                    onAllNodesWithText("Get NVIDIA App").fetchSemanticsNodes().isNotEmpty()
+            }
+            val setupAction = if (onAllNodesWithText("Open NVIDIA App").fetchSemanticsNodes().isNotEmpty()) {
+                "Open NVIDIA App"
+            } else {
+                "Get NVIDIA App"
+            }
+            onNodeWithText(setupAction).performScrollTo().assertIsDisplayed()
+            capture("07-rtx-hardware-status")
+        }
+    }
+
+    @Test
     fun searchShowsResultsAndClearingReturnsToThePreviousPage() = runDesktopComposeUiTest(width = 1100, height = 760) {
         showSettings()
         open("Playback")
