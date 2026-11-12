@@ -23,11 +23,11 @@ import javax.imageio.ImageIO
 class PrivatePlaybackIndicatorUiTest {
     @Test
     fun privateIndicatorRemainsVisibleAndNormalSessionsHaveNoBadge() = runDesktopComposeUiTest(width = 880, height = 640) {
-        val private = mutableStateOf(true)
+        val privatePlayback = mutableStateOf(true)
         setContent {
             NuvioTheme {
                 Box(Modifier.fillMaxSize().background(Color.DarkGray)) {
-                    PrivatePlaybackIndicator(privatePlayback = private.value)
+                    PrivatePlaybackIndicator(privatePlayback = privatePlayback.value)
                 }
             }
         }
@@ -35,7 +35,7 @@ class PrivatePlaybackIndicatorUiTest {
         val proof = File("build/reports/private-playback-ui").apply { mkdirs() }
         ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(proof, "desktop-private-indicator.png"))
 
-        runOnIdle { private.value = false }
+        runOnIdle { privatePlayback.value = false }
         onNodeWithText("Private playback").assertDoesNotExist()
     }
 }

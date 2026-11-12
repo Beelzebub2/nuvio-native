@@ -44,7 +44,7 @@ class PrivatePlaybackUiTest {
                         onDismiss = {},
                         onCopyLink = {},
                         onDownload = {},
-                        onOpen = { _, external, private -> chosen = external to private },
+                        onOpen = { _, external, isPrivate -> chosen = external to isPrivate },
                     )
                 }
             }
@@ -94,7 +94,7 @@ class PrivatePlaybackUiTest {
                         onDismiss = {},
                         onCopyLink = {},
                         onDownload = {},
-                        onOpen = { _, external, private -> chosen = external to private },
+                        onOpen = { _, external, isPrivate -> chosen = external to isPrivate },
                     )
                 }
             }
