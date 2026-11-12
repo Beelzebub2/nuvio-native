@@ -47,13 +47,16 @@ mix for **application-window-only** sharing instead.
   Off by default.
   Older full-stereo whole-screen preferences are not inherited; the helper
   is not re-enabled automatically in hidden mode after restarting Starlit.
-- Currently requires an **unused Steam Streaming Speakers** virtual audio
-  endpoint. It must be active, uniquely identified and different from the
-  Windows console, multimedia and communications defaults. Starlit rechecks
-  eligibility when sharing starts and periodically while playing; a device
-  change that makes it unsafe stops only the auxiliary process. The feature
-  does **not** install a virtual driver or change global Windows audio settings.
-  Wider endpoint support is not implemented.
+- Prefer a unique, active **Starlit Virtual Audio** virtual speaker
+  endpoint if installed separately; otherwise the existing **Steam Streaming
+  Speakers** device remains a compatibility fallback. Both routes require an
+  unused render endpoint, different from every Windows console, multimedia
+  and communications default. An unsafe or ambiguous Starlit endpoint rejects
+  capture rather than falling back to Steam. Starlit rechecks endpoint
+  eligibility during sharing and stops only the auxiliary process on changes.
+  The app does **not** change global audio settings or automatically install
+  a driver. Its dedicated device is a [build-only preview](drivers/starlit-virtual-audio/README.md)
+  pending a production-signed package and real audio capture validation.
 - When using the **stereo window**, do not minimize the original
   Starlit window: DWM thumbnails may stop refreshing while it is minimized.
 - The second audio decoder uses additional CPU/network resources and can take
@@ -128,6 +131,11 @@ mix for **application-window-only** sharing instead.
 - [ ] During a real share, change the Windows default audio role to or from
   Steam Streaming Speakers and confirm the auxiliary audio stops safely,
   without changing the original player's output.
+- [ ] On an isolated Windows test machine, verify the future Starlit driver
+  supplies actual PCM render/loopback audio rather than the upstream sample's
+  synthetic loopback tone, and validates under normal Secure Boot and signing.
+- [ ] Verify the dedicated device's exact friendly name, package install/removal,
+  device-disconnect failure mode and Discord capture on real 5.1/7.1 material.
 
 Until the unchecked items pass, treat the option as a local experimental
 feature; normal playback remains the supported default.
