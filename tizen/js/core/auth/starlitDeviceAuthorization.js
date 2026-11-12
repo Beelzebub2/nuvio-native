@@ -21,6 +21,7 @@ export function createDeviceAuthorizationClient({ endpoints, fetchImpl = globalT
   let approved = null;
   let nextPollAt = 0;
   let interval = 5;
+  let generation = 0;
   async function request(endpoint, body, signal, bearer) {
     const response = await fetchImpl(endpoint, {
       method: "POST", credentials: "omit", cache: "no-store", redirect: "error", signal,
@@ -36,8 +37,10 @@ export function createDeviceAuthorizationClient({ endpoints, fetchImpl = globalT
   }
   return {
     async start(deviceName, signal) {
+      const operation = ++generation;
       challenge = null; approved = null;
       const row = await request(endpoints.start_endpoint, { device_name: deviceName }, signal);
+      if (operation !== generation || signal?.aborted) return null;
       const uri = new URL(row.verification_uri_complete);
       if (uri.protocol !== "https:" || uri.username || uri.password || uri.search || uri.hash !== `#code=${row.user_code}` || /access_token|refresh_token|device_code/i.test(uri.href)) {
         throw new Error("Unsafe verification URL");
@@ -56,7 +59,11 @@ export function createDeviceAuthorizationClient({ endpoints, fetchImpl = globalT
       if (!challenge || code !== challenge.code || now() >= challenge.expiresAt) return { status: "expired" };
       if (now() < nextPollAt) return { status: "pending", pollIntervalSeconds: interval };
       nextPollAt = now() + interval * 1000;
+      const operation = generation;
+      const polledChallenge = challenge;
       const row = await request(endpoints.poll_endpoint, { device_code: code }, signal);
+      if (operation !== generation || challenge !== polledChallenge || signal?.aborted) return { status: "cancelled" };
+      if (now() >= polledChallenge.expiresAt) return { status: "expired" };
       if (row.status === "slow_down") interval = Math.min(60, Math.max(interval + 5, Number(row.interval) || 0));
       nextPollAt = now() + interval * 1000;
       if (row.status === "approved") {
@@ -68,9 +75,9 @@ export function createDeviceAuthorizationClient({ endpoints, fetchImpl = globalT
     },
     takeSession(code) {
       if (!approved || approved.code !== code) return null;
-      const result = approved; approved = null; challenge = null;
+      const result = approved; approved = null; challenge = null; generation++;
       return result;
     },
-    cancel() { challenge = null; approved = null; }
+    cancel() { generation++; challenge = null; approved = null; }
   };
 }

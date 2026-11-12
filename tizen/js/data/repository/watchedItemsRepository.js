@@ -771,7 +771,7 @@ class WatchedItemsRepository {
       }
     }
     if (!isCurrent()) return false;
-    await deleteWatchedItemsFromCloud(removedItems, pid);
+    await deleteWatchedItemsFromCloud(targets, pid);
     queueWatchedItemsCloudSync(pid);
     return targets.every((item) => manualWatchedCurrent(operation, item));
   }

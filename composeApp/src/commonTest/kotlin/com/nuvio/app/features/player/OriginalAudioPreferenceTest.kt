@@ -509,6 +509,47 @@ class OriginalAudioPreferenceTest {
         assertEquals(listOf(subtitle.url), controller.subtitleUrls)
     }
 
+    @Test
+    fun lateEmbeddedSubtitleReplacesAutomaticOffUsingTheEngineTrackIndex() {
+        val controller = RecordingController(audioTracks())
+        val runtime = runtime(controller)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        runtime.refreshTracks()
+        assertEquals(-1, runtime.selectedSubtitleIndex)
+
+        controller.subtitles = listOf(SubtitleTrack(7, "s7", "Norwegian", "nob"))
+        repeat(3) { runtime.refreshTracks() }
+
+        assertEquals(7, runtime.selectedSubtitleIndex)
+        assertEquals(listOf(7), controller.subtitleSelections)
+    }
+
+    @Test
+    fun latePrimaryEmbeddedSubtitleUpgradesSecondaryOnlyOnce() {
+        val controller = RecordingController(audioTracks())
+        controller.subtitles = listOf(SubtitleTrack(0, "s1", "Spanish", "spa", isSelected = true))
+        val runtime = runtime(controller)
+        runtime.playerSettingsUiState = runtime.playerSettingsUiState.copy(
+            preferredAudioLanguage = AudioLanguageOption.DEFAULT,
+            preferredSubtitleLanguage = "no",
+            secondaryPreferredSubtitleLanguage = "es",
+        )
+        runtime.preferredSubtitleSelectionApplied = false
+        runtime.refreshTracks()
+        assertEquals(0, runtime.selectedSubtitleIndex)
+        assertTrue(controller.subtitleSelections.isEmpty())
+        controller.subtitles += SubtitleTrack(1, "s2", "Norwegian", "nob")
+
+        repeat(3) { runtime.refreshTracks() }
+
+        assertEquals(1, runtime.selectedSubtitleIndex)
+        assertEquals(listOf(1), controller.subtitleSelections)
+    }
+
     private fun addonSubtitle(id: String, language: String) = AddonSubtitle(
         id = id,
         url = "https://example.com/subtitles/$id.srt",
