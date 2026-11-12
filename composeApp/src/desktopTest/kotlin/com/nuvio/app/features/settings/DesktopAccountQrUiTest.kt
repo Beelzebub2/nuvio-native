@@ -227,12 +227,15 @@ class DesktopAccountQrUiTest {
                 runOnIdle { addresses = listOf("192.168.1.50") }
                 onNodeWithText("Connect phone").performClick()
                 onNodeWithContentDescription("Desktop pairing QR code for 192.168.1.50").assertIsDisplayed()
-                onNodeWithText("Local PC address: 192.168.1.50").assertIsDisplayed()
+                // The redesigned QR card renders the address label and value separately.
+                onNodeWithText("Local PC address").assertIsDisplayed()
+                onNodeWithText("192.168.1.50").assertIsDisplayed()
                 onNodeWithContentDescription("Close").performClick()
                 runOnIdle { addresses = listOf("10.0.0.2") }
                 onNodeWithText("Connect phone").performClick()
                 onNodeWithContentDescription("Desktop pairing QR code for 10.0.0.2").assertIsDisplayed()
-                onNodeWithText("Local PC address: 10.0.0.2").assertIsDisplayed()
+                onNodeWithText("Local PC address").assertIsDisplayed()
+                onNodeWithText("10.0.0.2").assertIsDisplayed()
             } finally {
                 DesktopRemote.visible.value = false
                 DesktopRemote.hostReady.value = previousReady
