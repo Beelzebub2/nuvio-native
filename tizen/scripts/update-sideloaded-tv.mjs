@@ -97,7 +97,8 @@ export async function readTvAppStatus(tvIp, fetchImpl = globalThis.fetch) {
   const response = await fetchWithTimeout(fetchImpl,
     `http://${tvIp}:8001/api/v2/applications/${APP_ID}`);
   const app = await response.json();
-  if (app?.id !== APP_ID || !/^\d+\.\d+\.\d+$/.test(String(app.version || ""))) {
+  if (app?.id !== APP_ID || !/^\d+\.\d+\.\d+$/.test(String(app.version || "")) ||
+      typeof app.running !== "boolean" || typeof app.visible !== "boolean") {
     throw new Error("Cannot verify installed Starlit TV identity and version");
   }
   return { version: app.version, running: app.running === true, visible: app.visible === true };
