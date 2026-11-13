@@ -5,6 +5,7 @@ export function createTizenStreamingServerResolverMethods01() {
     Platform,
     TizenEngineFsService,
     TizenCapabilities,
+    trustedEngineFsControlHeaders,
     TIZEN_STREAMING_KIND,
     removeRequestsByInfoHash,
     logTizenP2pDebug,
@@ -94,7 +95,8 @@ export function createTizenStreamingServerResolverMethods01() {
             const response = await withTimeout(
               fetch(`${candidateBaseUrl}/${encodeURIComponent(normalizedHash)}/remove`, {
                 method: "POST",
-                cache: "no-cache"
+                cache: "no-cache",
+                headers: trustedEngineFsControlHeaders(candidateBaseUrl)
               }),
               timeoutMs,
               "Tizen EngineFS remove request timed out"

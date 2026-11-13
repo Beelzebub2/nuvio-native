@@ -3,6 +3,22 @@ const localPorts = new Map();
 const inFlight = new Map();
 export function getLocalControlToken(port) { return tokens.get(String(port)) || ""; }
 export function clearLocalControlTokens() { tokens.clear(); }
+// Control requests must carry a trusted MessagePort-issued token. Explicitly
+// add it at the call site as well as in the global fetch compatibility wrapper
+// so that replacing fetch on older TV engines cannot silently drop the token.
+// Never allow the token on another localhost port or a non-loopback origin.
+export function trustedEngineFsControlHeaders(baseUrl, extra = {}) {
+  const url = new URL(String(baseUrl || ""));
+  const host = url.hostname.toLowerCase();
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(host) || url.port !== "2710") {
+    throw new Error("Untrusted Tizen streaming service address");
+  }
+  const token = getLocalControlToken(url.port);
+  if (!/^[a-f0-9]{64}$/.test(token)) {
+    throw new Error("Tizen streaming service authorization unavailable; reopen Starlit TV and retry");
+  }
+  return { ...extra, "X-Starlit-Local": "1", "X-Starlit-Token": token };
+}
 export async function connectLocalControl(serviceId, port, runtime = globalThis) {
   const key=`${serviceId}:${port}`;
   if(inFlight.has(key))return inFlight.get(key);
