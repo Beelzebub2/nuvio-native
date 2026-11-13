@@ -24,6 +24,7 @@ function splash(inner) {
 }
 export async function prepareWebOsArtwork() {
   const { Resvg } = await import("@resvg/resvg-js");
+  const { PNG } = await import("pngjs");
   const inner = innerSvg(await readFile(markPath, "utf8"));
   const artwork = [
     ["icon.png", smallIcon(inner), 80],
@@ -32,8 +33,12 @@ export async function prepareWebOsArtwork() {
   ];
   await mkdir(output, { recursive: true });
   for (const [name, svg, width] of artwork) {
-    const png = new Resvg(svg, { fitTo: { mode: "width", value: width } }).render().asPng();
-    await writeFile(path.join(output, name), png);
+    const renderedPng = new Resvg(svg, { fitTo: { mode: "width", value: width } }).render().asPng();
+    const image = PNG.sync.read(renderedPng);
+    // LG requires an opaque PNG (RGB color type 2). Resvg emits RGBA (type 6).
+    const opaquePng = PNG.sync.write(image, { colorType: 2 });
+    if (opaquePng.readUInt8(25) !== 2) throw new Error(`LG icon ${name} must be encoded as RGB`);
+    await writeFile(path.join(output, name), opaquePng);
   }
   return output;
 }
