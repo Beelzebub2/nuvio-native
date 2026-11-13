@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Starlit TV Installer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="renderer.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="starlit-mark.svg" alt="" class="brand-mark" width="44" height="44">
+      <div><strong>Starlit</strong><span>TV Installer</span></div>
+    </div>
+    <span class="platform-badge">LG webOS 5+</span>
+  </header>
+  <main class="shell">
+    <aside class="setup">
+      <div class="intro">
+        <h1>Bring Starlit<br>to your TV.</h1>
+        <p>Pair an LG television on your local network, then install Starlit without replacing your existing TV apps.</p>
+      </div>
+      <div class="guide">
+        <h2>Before you connect</h2>
+        <ol>
+          <li>Open the <strong>Developer Mode</strong> app on your LG TV.</li>
+          <li>Enable <strong>Dev Mode Status</strong> and <strong>Key Server</strong>.</li>
+          <li>Find the TV's IP address and one-time passphrase.</li>
+        </ol>
+      </div>
+      <form id="tv-form" class="form-stack">
+        <div class="field">
+          <label for="tv-ip">Television IP address</label>
+          <input id="tv-ip" name="ip" inputmode="decimal" spellcheck="false" autocomplete="off" placeholder="192.168.1.100" required>
+        </div>
+        <div class="field">
+          <label for="tv-name">Saved device name</label>
+          <input id="tv-name" name="deviceName" spellcheck="false" autocomplete="off" value="starlit-lg-tv" required>
+          <small>Keep this name for future updates.</small>
+        </div>
+        <div class="field">
+          <label for="tv-passphrase">Developer Mode passphrase</label>
+          <input id="tv-passphrase" name="passphrase" type="password" autocomplete="off" placeholder="Enter the TV's passphrase">
+          <small>Only needed when pairing or renewing the TV's SSH key.</small>
+        </div>
+        <button type="button" id="btn-pair" class="secondary primary-outline">Pair with LG TV</button>
+      </form>
+      <div id="connection-status" class="connection" role="status"><span class="connection-dot"></span><span>No TV paired in this session</span></div>
+    </aside>
+    <section class="workspace" aria-labelledby="installer-heading">
+      <div class="workspace-header">
+        <span class="screen-label">LG webOS</span>
+        <h2 id="installer-heading">Install Starlit TV</h2>
+        <p>Choose the source for your LG package. Updates install over the existing Starlit app; your other TV apps are unaffected.</p>
+      </div>
+      <fieldset class="sources" id="package-sources">
+        <legend>Installation source</legend>
+        <label class="source-choice selected" id="source-local-choice">
+          <input name="source" type="radio" value="local" checked>
+          <span class="source-copy"><strong>Local IPK file</strong><small>Best for testing a development build</small></span>
+          <span class="source-selector" aria-hidden="true"></span>
+        </label>
+        <label class="source-choice" id="source-release-choice">
+          <input name="source" type="radio" value="release">
+          <span class="source-copy"><strong>Latest stable release</strong><small>Download after real-TV acceptance</small></span>
+          <span class="source-selector" aria-hidden="true"></span>
+        </label>
+      </fieldset>
+      <div class="package-panel" id="local-panel">
+        <div><strong>Selected package</strong><p id="selected-file">No IPK selected</p></div>
+        <button id="btn-browse" class="secondary" type="button">Choose IPK</button>
+      </div>
+      <p class="release-help" id="release-panel" hidden>Only accepted stable GitHub Releases with a matching SHA-256 file are used. If none is available, install a local development IPK instead.</p>
+      <button type="button" class="install-button" id="btn-install"><span>Install or update Starlit</span><span aria-hidden="true">↗</span></button>
+      <div class="actions">
+        <button id="btn-launch" class="secondary" type="button">Launch Starlit on TV</button>
+        <button id="btn-uninstall" class="danger" type="button">Uninstall</button>
+      </div>
+      <section class="activity" aria-labelledby="activity-heading">
+        <div class="activity-title"><h3 id="activity-heading">Activity</h3><span id="task-state" role="status">Ready to pair</span></div>
+        <div id="log" class="log" role="log" aria-live="polite" aria-relevant="additions text">
+          <p class="entry muted">Choose your TV and pair it using Developer Mode.</p>
+        </div>
+      </section>
+      <p class="support-note">Installation uses LG's Developer Mode tools. The app won't uninstall anything unless you explicitly choose Uninstall.</p>
+    </section>
+  </main>
+</body>
+</html>
