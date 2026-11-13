@@ -3,13 +3,16 @@ package com.nuvio.app.features.settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -24,6 +27,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.nuvio
 import kotlinx.coroutines.delay
@@ -89,6 +93,10 @@ internal fun SettingsSearchLazyListFocus(page: SettingsPage, listState: LazyList
             if (SettingsSearchFocus.pending != request || SettingsSearchFocus.isClaimed(request)) break
             listState.scrollToItem(index)
             withFrameNanos { }
+            // Composition, positioning, and the target's LaunchedEffect can span
+            // separate frames; don't skip an entire section before it can claim.
+            withFrameNanos { }
+            delay(40)
             index++
         }
     }
@@ -111,10 +119,15 @@ private val LocalSettingsSearchPage = compositionLocalOf<SettingsPage?> { null }
 @Composable
 internal fun SettingsSearchPageScope(page: SettingsPage, content: @Composable () -> Unit) {
     val request = SettingsSearchFocus.pending
+    DisposableEffect(page, request?.id) {
+        onDispose {
+            if (request?.page == page) SettingsSearchFocus.complete(request)
+        }
+    }
     LaunchedEffect(page, request?.id) {
         if (request?.page == page) {
-            // A hidden, unavailable, or no-longer-rendered control must not keep stale focus.
-            delay(5000)
+            // Allow slow-loaded settings to appear without retaining a stale request forever.
+            delay(15000)
             SettingsSearchFocus.complete(request)
         }
     }
@@ -125,8 +138,14 @@ internal fun SettingsSearchPageScope(page: SettingsPage, content: @Composable ()
 @Composable
 internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): Modifier {
     val request = SettingsSearchFocus.pending ?: return this
-    if (request.page != LocalSettingsSearchPage.current || request.title != title) return this
-    if (key != null && request.key != key) return this
+    if (request.page != LocalSettingsSearchPage.current) return this
+    // A stable key takes precedence over the visible label, which can change with
+    // catalog state, locale, or a provider's connection state.
+    if (key != null) {
+        if (request.key != key) return this
+    } else if (request.title != title) {
+        return this
+    }
 
     val requester = remember { BringIntoViewRequester() }
     var highlighted by remember(request.id) { mutableStateOf(false) }
@@ -143,7 +162,7 @@ internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): 
         try {
             requester.bringIntoView()
             highlighted = true
-            delay(1800)
+            delay(2800)
         } finally {
             highlighted = false
             SettingsSearchFocus.complete(request)
@@ -156,5 +175,9 @@ internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): 
             positioned = coordinates.isAttached && coordinates.size.height > 0
         }
         .background(highlightColor, RectangleShape)
+        .then(
+            if (highlighted) Modifier.border(2.dp, accent, RoundedCornerShape(8.dp))
+            else Modifier
+        )
         .then(if (highlighted) Modifier.testTag("settings-search-focused") else Modifier)
 }

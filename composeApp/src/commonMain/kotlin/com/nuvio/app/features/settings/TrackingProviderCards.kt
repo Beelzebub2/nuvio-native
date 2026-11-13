@@ -118,6 +118,9 @@ import nuvio.composeapp.generated.resources.settings_trakt_device_finish_sign_in
 import nuvio.composeapp.generated.resources.settings_trakt_device_instructions
 import nuvio.composeapp.generated.resources.settings_trakt_save_actions_description
 import nuvio.composeapp.generated.resources.settings_trakt_sign_in_description
+import nuvio.composeapp.generated.resources.trakt_library_source_trakt
+import nuvio.composeapp.generated.resources.tracking_source_simkl
+import nuvio.composeapp.generated.resources.tracking_source_mdblist
 import org.jetbrains.compose.resources.stringResource
 
 internal enum class TrackingBrand(val displayName: String) {
@@ -370,6 +373,18 @@ internal fun TrackingProviderCard(
     onDisconnect: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
+    val searchTitle = when (brand) {
+        TrackingBrand.TRAKT -> stringResource(Res.string.trakt_library_source_trakt)
+        TrackingBrand.SIMKL -> stringResource(Res.string.tracking_source_simkl)
+        TrackingBrand.MDBLIST -> stringResource(Res.string.tracking_source_mdblist)
+        else -> brand.displayName
+    }
+    val searchKey = when (brand) {
+        TrackingBrand.TRAKT -> "trakt-authentication"
+        TrackingBrand.SIMKL -> "simkl-authentication"
+        TrackingBrand.MDBLIST -> "mdblist-authentication"
+        else -> null
+    }
     val clipboardManager = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
     val actionScope = rememberCoroutineScope()
@@ -390,6 +405,7 @@ internal fun TrackingProviderCard(
         modifier = modifier
             .clip(tokens.shapes.card)
             .background(brand.cardBrush(), tokens.shapes.card)
+            .settingsSearchTarget(searchTitle, searchKey)
             .border(
                 width = tokens.borders.hairline,
                 color = Color.White.copy(alpha = 0.2f),

@@ -193,6 +193,7 @@ internal fun LazyListScope.homescreenSettingsContent(
             SettingsSection(
                 title = sectionTitle,
                 isTablet = isTablet,
+                searchKey = "home-catalogs",
                 actions = {
                     NuvioActionLabel(
                         text = stringResource(Res.string.action_reset),
