@@ -30,7 +30,7 @@ jobs:
           cache: npm
           cache-dependency-path: tizen/package-lock.json
       - run: npm ci --ignore-scripts
-      - run: npm install --no-save --ignore-scripts --no-audit @webos-tools/cli@3.2.4 @resvg/resvg-js@2.6.2
+      - run: npm install --no-save --ignore-scripts --no-audit @webos-tools/cli@3.2.4 @resvg/resvg-js@2.6.2 pngjs@7.0.0
       - run: npm run lint
       - run: npm test
       - run: npm run test:webos
