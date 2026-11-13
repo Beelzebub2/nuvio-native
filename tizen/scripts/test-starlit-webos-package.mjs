@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { verifyArPackage } from "./starlit-webos-artifacts.mjs";
 function member(name, body) {
   const header = Buffer.from(
@@ -26,4 +27,19 @@ test("webOS service IDs and installer match Starlit", async () => {
   assert.match(packageScript, /const appId = "app\.starlit\.webos"/);
   assert.equal(config.webos.appId, "app.starlit.webos");
   assert.equal(config.githubRepo, "Beelzebub2/nuvio-native");
+});
+
+test("webOS packaging tools are locked for clean installs", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const require = createRequire(import.meta.url);
+  for (const [name, version] of [
+    ["@resvg/resvg-js", "2.6.2"],
+    ["@webos-tools/cli", "3.2.6"],
+    ["pngjs", "7.0.0"]
+  ]) {
+    assert.equal(manifest.devDependencies[name], version);
+    assert.equal(lock.packages[""].devDependencies[name], version);
+    assert.ok(require.resolve(name), name + " must be installed by npm ci");
+  }
 });
