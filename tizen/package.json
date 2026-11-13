@@ -21,7 +21,8 @@
     "verify:package:webos": "node scripts/starlit-webos-artifacts.mjs --verify",
     "install:webos": "node scripts/ares-install-webos.mjs",
     "inspect:webos": "node scripts/ares-inspect-webos.mjs",
-    "verify:release:webos": "node scripts/starlit-webos-release-gate.mjs"
+    "verify:release:webos": "node scripts/starlit-webos-release-gate.mjs",
+    "test:webos": "node --test scripts/test-starlit-webos-package.mjs"
   },
   "devDependencies": {
     "@csstools/postcss-global-data": "^4.0.0",
