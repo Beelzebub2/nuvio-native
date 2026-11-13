@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,9 +16,15 @@ export function findExecutable(command) {
   return executablePath;
 }
 export function resolveWebOsToolsBinary(binaryName) {
-  const require = createRequire(import.meta.url);
-  const packageJsonPath = require.resolve("@webos-tools/cli/package.json");
-  const packageJson = JSON.parse(require("fs").readFileSync(packageJsonPath, "utf8"));
+  // Reuse the installer's locked CLI dependencies without exposing them to the
+  // TV application dependency audit.
+  const packageJsonPath = path.resolve(
+    rootDir, "..", "tv-installer", "node_modules", "@webos-tools", "cli", "package.json"
+  );
+  if (!existsSync(packageJsonPath)) {
+    throw new Error("webOS tools unavailable. Run npm ci --omit=dev --prefix ../tv-installer.");
+  }
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   const binPath = packageJson.bin?.[binaryName];
   if (!binPath) {
     throw new Error(`Binary ${binaryName} not found in @webos-tools/cli`);

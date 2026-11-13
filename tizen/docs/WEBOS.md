@@ -6,11 +6,11 @@ Starlit has a separately identified LG webOS TV package built from the shared St
 
 ## Build a webOS package
 
-Install Node 24, Git and the webOS CLI. From `tizen/`:
+Install Node 24 and Git. From `tizen/` install the app toolchain and the separately locked webOS CLI:
 
 ```sh
 npm ci --ignore-scripts
-npm install --no-save --ignore-scripts @webos-tools/cli@3.2.4 @resvg/resvg-js@2.6.2 pngjs@7.0.0
+npm ci --omit=dev --ignore-scripts --prefix ../tv-installer
 npm run lint
 npm test
 npm run test:webos

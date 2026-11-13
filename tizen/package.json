@@ -29,7 +29,6 @@
     "@eslint/js": "^9.39.4",
     "@playwright/test": "1.65.0",
     "@resvg/resvg-js": "2.6.2",
-    "@webos-tools/cli": "3.2.6",
     "autoprefixer": "^10.6.1",
     "core-js": "3.50.0",
     "core-js-compat": "3.50.0",

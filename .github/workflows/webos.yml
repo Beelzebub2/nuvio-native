@@ -30,6 +30,7 @@ jobs:
           cache: npm
           cache-dependency-path: tizen/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: npm ci --omit=dev --ignore-scripts --prefix ../tv-installer
       - run: npm run lint
       - run: npm test
       - run: npm run test:webos

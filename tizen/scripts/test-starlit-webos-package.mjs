@@ -35,11 +35,16 @@ test("webOS packaging tools are locked for clean installs", async () => {
   const require = createRequire(import.meta.url);
   for (const [name, version] of [
     ["@resvg/resvg-js", "2.6.2"],
-    ["@webos-tools/cli", "3.2.6"],
     ["pngjs", "7.0.0"]
   ]) {
     assert.equal(manifest.devDependencies[name], version);
     assert.equal(lock.packages[""].devDependencies[name], version);
     assert.ok(require.resolve(name), name + " must be installed by npm ci");
   }
+  const installer = JSON.parse(await readFile(new URL("../../tv-installer/package.json", import.meta.url), "utf8"));
+  const installerLock = JSON.parse(await readFile(new URL("../../tv-installer/package-lock.json", import.meta.url), "utf8"));
+  assert.equal(installer.dependencies["@webos-tools/cli"], "3.2.6");
+  assert.equal(installerLock.packages[""].dependencies["@webos-tools/cli"], "3.2.6");
+  const installerRequire = createRequire(new URL("../../tv-installer/package.json", import.meta.url));
+  assert.ok(installerRequire.resolve("@webos-tools/cli/package.json"));
 });
