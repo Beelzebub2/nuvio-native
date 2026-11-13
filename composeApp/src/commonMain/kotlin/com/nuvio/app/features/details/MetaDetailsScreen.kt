@@ -2813,17 +2813,23 @@ private fun ConfiguredMetaSections(
                 )
             }
             MetaScreenSectionKey.OVERVIEW -> {
-                DetailMetaInfo(
-                    meta = meta,
-                    showOverallRatings = settings.showOverallRatings,
-                    isMdbListActive = isMdbListActive,
-                    horizontalScrollPadding = horizontalScrollPadding,
-                )
-                WatchOrderSection(
-                    meta = meta,
-                    currentTitleCompleted = isWatched,
-                    onFindTitle = onFindAnimeTitle,
-                    onOpenFullOrder = onOpenWatchOrder,
+                DetailOverviewStack(
+                    overview = {
+                        DetailMetaInfo(
+                            meta = meta,
+                            showOverallRatings = settings.showOverallRatings,
+                            isMdbListActive = isMdbListActive,
+                            horizontalScrollPadding = horizontalScrollPadding,
+                        )
+                    },
+                    watchOrder = {
+                        WatchOrderSection(
+                            meta = meta,
+                            currentTitleCompleted = isWatched,
+                            onFindTitle = onFindAnimeTitle,
+                            onOpenFullOrder = onOpenWatchOrder,
+                        )
+                    },
                 )
             }
             MetaScreenSectionKey.PRODUCTION -> {
@@ -2959,6 +2965,21 @@ private fun ConfiguredMetaSections(
             }
             // else: already processed as part of group, skip
         }
+    }
+}
+
+/** Keep independently measured overview content and watch-order rows out of the parent's Box overlay. */
+@Composable
+internal fun DetailOverviewStack(
+    overview: @Composable () -> Unit,
+    watchOrder: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        overview()
+        watchOrder()
     }
 }
 

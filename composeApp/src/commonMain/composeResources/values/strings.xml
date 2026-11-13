@@ -913,14 +913,14 @@
     <string name="remote_playback_find_subtitles">Find add-on subtitles</string>
     <string name="remote_playback_sources">Episode sources</string>
     <string name="remote_source_picker_title">Choose a source for PC</string>
-    <string name="remote_source_picker_device">Playing on %1$s</string>
+    <string name="remote_source_picker_device">Connected to %1$s</string>
     <string name="remote_source_picker_searching">Searching sources on the PC…</string>
     <string name="remote_source_picker_preparing">Opening your source on the PC…</string>
     <string name="remote_source_picker_playing">The PC player is ready. Use your phone to control it.</string>
     <string name="remote_source_picker_disconnected">The PC disconnected. Reconnect to try again.</string>
     <string name="remote_source_picker_empty">No playable sources found on this PC. Check its add-ons and P2P settings.</string>
     <string name="remote_source_picker_error">Could not load sources. Try again from the content page.</string>
-    <string name="remote_source_picker_timeout">The PC did not respond. Close this panel and try again.</string>
+    <string name="remote_source_picker_timeout">PC source search timed out. Check the PC's add-ons and connection, then retry.</string>
     <string name="remote_source_picker_controller">Open PC controller</string>
     <string name="remote_source_quality_stars">Resolution quality: %1$d out of 5 stars</string>
     <string name="remote_source_quality_hint">Stars reflect resolution, not viewer reviews or streaming reliability.</string>
@@ -3019,6 +3019,7 @@
     <string name="watch_order_attribution">Franchise data: Junban (ODbL)</string>
     <string name="watch_order_view_all">View full order</string>
     <string name="watch_order_summary">%1$d installments</string>
+    <string name="watch_order_summary_one">1 installment</string>
     <string name="watch_order_no_mapping">No confirmed anime ID is available for this title yet.</string>
     <string name="watch_order_partial">Partial order · relationships unavailable</string>
     <string name="watch_order_choose_mode">Viewing order</string>
