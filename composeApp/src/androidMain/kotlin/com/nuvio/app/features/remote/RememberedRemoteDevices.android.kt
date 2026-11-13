@@ -33,11 +33,20 @@ internal actual object RememberedRemoteDeviceStore {
                 trustedId = it.trustedId?.takeIf { id ->
                     !it.bluetooth && id.matches(Regex("[0-9a-f]{32}"))
                 },
+                pcId = it.pcId?.takeIf { id -> id.matches(Regex("[0-9a-f]{32}")) }
+                    ?: it.trustedId?.takeIf { id -> !it.bluetooth && id.matches(Regex("[0-9a-f]{32}")) },
             ) }
             .distinctBy { it.bluetooth to it.address }.take(10).toList()
     }.getOrDefault(emptyList())
 
     actual fun write(account: RemoteAccount, devices: List<RememberedRemoteDevice>) {
         prefs()?.edit()?.putString(key(account), json.encodeToString(devices.take(10)))?.apply()
+    }
+
+    actual fun autoReconnectEnabled(account: RemoteAccount): Boolean =
+        prefs()?.getBoolean("reconnect_${key(account)}", false) == true
+
+    actual fun setAutoReconnectEnabled(account: RemoteAccount, enabled: Boolean) {
+        prefs()?.edit()?.putBoolean("reconnect_${key(account)}", enabled)?.apply()
     }
 }
