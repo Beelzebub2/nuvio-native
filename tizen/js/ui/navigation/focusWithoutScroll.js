@@ -4,8 +4,10 @@
 // positioning: one D-pad move produced two scrolls and a visible jitter (#1250).
 //
 // This helper feature-detects the option once and, where it is missing, snapshots the scroll
-// offsets of the element's scrollable ancestors before focus() and restores any that moved,
-// synchronously in the same task, so no frame ever paints the native jump.
+// offsets of the element's ancestors before focus() and restores any that moved,
+// synchronously in the same task, so no frame ever paints the native jump. Do not read
+// scrollWidth/clientWidth to decide which ancestors scroll: those measurements force a
+// synchronous layout on every remote press on older TV Chromium runtimes.
 const MAX_ANCESTOR_WALK = 256;
 // null = not detected yet, true/false once known.
 let preventScrollSupport = null;
@@ -38,31 +40,23 @@ function detectPreventScrollSupport() {
   }
   return supported;
 }
-function isScrollable(node) {
-  return (
-    toFiniteNumber(node.scrollWidth, 0) > toFiniteNumber(node.clientWidth, 0) ||
-    toFiniteNumber(node.scrollHeight, 0) > toFiniteNumber(node.clientHeight, 0)
-  );
-}
 function viewportScroll(win) {
   return {
     x: toFiniteNumber(win.scrollX, toFiniteNumber(win.pageXOffset, 0)),
     y: toFiniteNumber(win.scrollY, toFiniteNumber(win.pageYOffset, 0))
   };
 }
-// Only scrollable ancestors can move when the engine reveals the element, so only those are
-// recorded. The walk ends naturally at documentElement (its parentElement is null), which also
-// covers document.scrollingElement in both standards and quirks mode; the window offsets are
-// kept separately because the viewport may scroll through either.
+// Reading element dimensions here forces layout on legacy TV Chromium. Snapshot the cheap
+// scroll offsets instead, including non-scrollable ancestors (which stay at zero). This is
+// bounded by DOM depth and still restores every ancestor that the browser actually scrolls.
+// The viewport is saved separately because it can scroll through either document root.
 function captureScrollState(element) {
   const ancestors = [];
   let node = element.parentElement || null;
   let steps = 0;
   while (node && steps < MAX_ANCESTOR_WALK) {
     steps += 1;
-    if (isScrollable(node)) {
-      ancestors.push({ node, top: node.scrollTop, left: node.scrollLeft });
-    }
+    ancestors.push({ node, top: node.scrollTop, left: node.scrollLeft });
     node = node.parentElement || null;
   }
   const win = typeof window !== "undefined" && window ? window : null;
@@ -106,6 +100,11 @@ function restoreScrollState(state) {
 // forwarded where the engine understands them. Never throws; falls back to a plain focus().
 export function focusWithoutScroll(element, options = {}) {
   if (!element || typeof element.focus !== "function") {
+    return undefined;
+  }
+  // Re-focusing the current input/remote target cannot change its focus state.
+  // Avoid both the legacy scroll snapshot and an unnecessary browser focus cycle.
+  if (typeof document !== "undefined" && document.activeElement === element) {
     return undefined;
   }
   try {

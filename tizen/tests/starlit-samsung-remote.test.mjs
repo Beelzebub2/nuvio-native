@@ -140,3 +140,41 @@ test("Samsung Back dispatches once per press and does not swallow subsequent rem
     FocusEngine.lastBackHandledAt = 0;
   }
 });
+
+test("queued stale Samsung D-pad repeats are discarded without delaying new presses or OK", () => {
+  const previousDocument = globalThis.document;
+  const previousPlatform = Platform.current;
+  const originalGetCurrentScreen = Router.getCurrentScreen;
+  const originalPerformance = globalThis.performance;
+  const received = [];
+  const cancelled = [];
+  try {
+    Platform.current = tizenAdapter;
+    globalThis.document = { contains: () => true, body: { classList: { contains: () => false } } };
+    globalThis.performance = { now: () => 3_000 };
+    Router.getCurrentScreen = () => ({ onKeyDown(event) { received.push(event.keyCode); } });
+    const key = (keyCode, repeat, timeStamp) => ({
+      keyCode,
+      repeat,
+      timeStamp,
+      target: { tagName: "DIV" },
+      preventDefault() { cancelled.push("default"); },
+      stopImmediatePropagation() { cancelled.push("propagation"); }
+    });
+    FocusEngine.handleKey(key(40, true, 2_000));
+    FocusEngine.handleKey(key(40, true, 2_900));
+    FocusEngine.handleKey(key(39, false, 2_000));
+    FocusEngine.handleKey(key(13, true, 2_000));
+    assert.deepEqual(received, [40, 39, 13]);
+    assert.deepEqual(cancelled, ["default", "propagation"]);
+  } finally {
+    Platform.current = previousPlatform;
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (originalPerformance === undefined) delete globalThis.performance;
+    else globalThis.performance = originalPerformance;
+    Router.getCurrentScreen = originalGetCurrentScreen;
+    FocusEngine.activeKeyDownStartedAt.clear();
+    FocusEngine.activeBackKeyIdentities.clear();
+  }
+});
