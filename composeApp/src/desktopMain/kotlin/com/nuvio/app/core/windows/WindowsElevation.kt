@@ -1,6 +1,8 @@
 package com.nuvio.app.core.windows
 
 import com.nuvio.app.features.remote.allowPhoneRemoteThroughWindowsFirewall
+import com.nuvio.app.features.remote.allowPrivateVpnRemoteThroughWindowsFirewall
+import com.nuvio.app.features.remote.removePrivateVpnRemoteThroughWindowsFirewall
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
@@ -14,6 +16,8 @@ import java.util.Locale
 internal const val ELEVATED_TASK_ARGUMENT = "--starlit-elevated-task"
 internal const val PHONE_REMOTE_FIREWALL_TASK = "phone-remote-firewall"
 internal const val PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK = "phone-remote-public-ethernet-firewall"
+internal const val PHONE_REMOTE_VPN_FIREWALL_TASK = "phone-remote-private-vpn-firewall"
+internal const val PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK = "phone-remote-private-vpn-firewall-remove"
 
 private const val EXIT_OK = 0
 private const val EXIT_FAILED = 2
@@ -26,12 +30,18 @@ private const val EXIT_UNKNOWN_TASK = 64
  */
 internal fun runElevatedHelperTask(args: Array<String>): Int? {
     if (args.firstOrNull() != ELEVATED_TASK_ARGUMENT) return null
-    if (args.size != 2 || !System.getProperty("os.name", "").startsWith("Windows")) return EXIT_UNKNOWN_TASK
+    if (args.size !in 2..3 || !System.getProperty("os.name", "").startsWith("Windows")) return EXIT_UNKNOWN_TASK
     return when (args[1]) {
         PHONE_REMOTE_FIREWALL_TASK ->
-            if (runCatching { allowPhoneRemoteThroughWindowsFirewall() }.isSuccess) EXIT_OK else EXIT_FAILED
+            if (args.size == 2 && runCatching { allowPhoneRemoteThroughWindowsFirewall() }.isSuccess) EXIT_OK else EXIT_FAILED
         PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK ->
-            if (runCatching { allowPhoneRemoteThroughWindowsFirewall(publicEthernet = true) }.isSuccess) EXIT_OK else EXIT_FAILED
+            if (args.size == 2 && runCatching { allowPhoneRemoteThroughWindowsFirewall(publicEthernet = true) }.isSuccess) EXIT_OK else EXIT_FAILED
+        PHONE_REMOTE_VPN_FIREWALL_TASK ->
+            if (args.size == 3 && runCatching { allowPrivateVpnRemoteThroughWindowsFirewall(args[2]) }.isSuccess)
+                EXIT_OK else EXIT_FAILED
+        PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK ->
+            if (args.size == 2 && runCatching { removePrivateVpnRemoteThroughWindowsFirewall() }.isSuccess)
+                EXIT_OK else EXIT_FAILED
         else -> EXIT_UNKNOWN_TASK
     }
 }

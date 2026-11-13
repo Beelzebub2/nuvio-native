@@ -1553,8 +1553,9 @@ public:
         bool stripSdh
     ) {
         double size = std::max(18.0, std::min(96.0, fontSize));
-        int64_t position = std::max(0, std::min(150, subPos));
-        double scale = useLibass ? size / 54.0 : 1.0;
+        int64_t position = useLibass ? 100 : std::max(0, std::min(150, subPos));
+        // Original ASS/SSA rendering must not inherit the custom font-size scale.
+        double scale = 1.0;
         double outline = std::max(0.0, std::min(8.0, outlineSize));
         std::string resolvedTextColor = textColor.empty() ? "#FFFFFFFF" : textColor;
         std::string resolvedBackgroundColor = backgroundColor.empty() ? "#00000000" : backgroundColor;
@@ -1573,7 +1574,7 @@ public:
         bool stripSdhChanged = !hasAppliedSubtitleStyle || appliedSubtitleStripSdh != stripSdh;
 
         if (modeChanged) {
-            setStringProperty("sub-ass-override", useLibass ? "scale" : "force");
+            setStringProperty("sub-ass-override", useLibass ? "no" : "force");
         }
         if (modeChanged || (!useLibass && boldChanged)) {
             std::lock_guard<std::mutex> lock(mpvMutex);

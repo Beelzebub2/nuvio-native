@@ -47,10 +47,15 @@ jobs:
       STARLIT_OFFICIAL_SUPABASE_ANON_KEY: ${{ secrets.STARLIT_OFFICIAL_SUPABASE_ANON_KEY }}
       TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
       TRAKT_REDIRECT_URI: ${{ vars.TRAKT_REDIRECT_URI }}
+      SIMKL_CLIENT_ID: ${{ vars.SIMKL_CLIENT_ID }}
+      MDBLIST_CLIENT_ID: ${{ vars.MDBLIST_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+      - name: Require all tracking providers in release packages
+        if: github.event_name != 'pull_request'
+        run: node .github/tracking-provider-config.mjs --require-release
       - name: Verify release source version
         shell: bash
         run: |

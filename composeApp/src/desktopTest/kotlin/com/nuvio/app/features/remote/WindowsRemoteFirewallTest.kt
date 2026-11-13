@@ -624,4 +624,27 @@ class WindowsRemoteFirewallTest {
         assertEquals(RemoteFirewallState.Allowed, parseWindowsFirewallState(
             windowsFirewallSnapshotJson(publicRecords, WindowsFirewallCom.NET_FW_PROFILE2_PUBLIC, allProfilesOn), program))
     }
+
+    @Test
+    fun vpnRuleIsTcpOnlyBoundToOneLocalOverlayAddressAndAnInstalledLauncher() {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+        val program = """C:\Program Files\Starlit\Starlit.exe"""
+        val record = WindowsCom.withApartment {
+            WindowsFirewallCom.withPrivateVpnRule(program, "100.92.3.10", WindowsFirewallCom::recordOf)
+        }
+        assertEquals(program, record.applicationName.getOrThrow())
+        assertEquals(WindowsFirewallCom.NET_FW_IP_PROTOCOL_TCP, record.protocol.getOrThrow())
+        assertEquals("47789", record.localPorts.getOrThrow())
+        assertTrue(WindowsFirewallCom.vpnFirewallLocalAddressMatches(
+            record.localAddresses.getOrThrow(), "100.92.3.10",
+        ))
+        assertTrue(WindowsFirewallCom.vpnFirewallRemoteAddressesMatch(record.remoteAddresses.getOrThrow()))
+        assertTrue(!WindowsFirewallCom.vpnFirewallRemoteAddressesMatch("0.0.0.0/0"))
+        assertTrue(!WindowsFirewallCom.vpnFirewallRemoteAddressesMatch("Any"))
+        assertEquals(WindowsFirewallCom.NET_FW_PROFILE2_ALL, record.profiles.getOrThrow())
+        WindowsFirewallCom.requireDedicatedPublicEthernetLauncher(program)
+        assertFailsWith<IllegalArgumentException> {
+            WindowsFirewallCom.requireDedicatedPublicEthernetLauncher("C:\\tools\\java.exe")
+        }
+    }
 }

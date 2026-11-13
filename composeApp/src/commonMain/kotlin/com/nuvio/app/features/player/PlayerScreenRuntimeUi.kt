@@ -500,12 +500,42 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val gestureCallbacks = rememberSurfaceGestureCallbacks()
     val playbackGesturesEnabled = !isDesktop && !isInPip && initialLoadCompleted && errorMessage == null
     val enableSurfaceGestures = !isDesktop && !isInPip
+    val localDropUnsupported = stringResource(Res.string.player_local_subtitle_unsupported)
+    val localDropUnreadable = stringResource(Res.string.player_local_subtitle_unreadable)
+    val localDropOversized = stringResource(Res.string.player_local_subtitle_oversized)
+    val localDropMultiple = stringResource(Res.string.player_local_subtitle_multiple_files)
+    val localDropNotReady = stringResource(Res.string.player_local_subtitle_player_not_ready)
+    val onLocalSubtitleDropResult: (LocalSubtitleFileResult) -> Unit = { result ->
+        when (result) {
+            is LocalSubtitleFileResult.Selected -> {
+                if (!selectUserLocalSubtitleFile(result)) {
+                    NuvioToastController.show(localDropNotReady)
+                }
+            }
+            is LocalSubtitleFileResult.Rejected -> {
+                NuvioToastController.show(
+                    when (result.reason) {
+                        LocalSubtitleFileError.UNSUPPORTED_FORMAT -> localDropUnsupported
+                        LocalSubtitleFileError.UNREADABLE -> localDropUnreadable
+                        LocalSubtitleFileError.TOO_LARGE -> localDropOversized
+                        LocalSubtitleFileError.MULTIPLE_FILES -> localDropMultiple
+                        LocalSubtitleFileError.PICKER_FAILED -> localDropUnreadable
+                    },
+                )
+            }
+            LocalSubtitleFileResult.Cancelled -> Unit
+        }
+    }
 
     BindRemotePlayback(playerControlsState)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .localSubtitleDropTarget(
+                enabled = playerController != null && !isChoosingLocalSubtitle,
+                onResult = onLocalSubtitleDropResult,
+            )
             .onSizeChanged { layoutSize = it }
             .then(
                 if (enableSurfaceGestures) {
@@ -606,6 +636,11 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                         controlsVisible = !playerControlsLocked
                         removeFailedStreamFromCache()
                     }
+                },
+                onLocalSubtitleDrop = if (playerController != null && !isChoosingLocalSubtitle) {
+                    onLocalSubtitleDropResult
+                } else {
+                    null
                 },
             )
         }
@@ -2017,6 +2052,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
     val unsupportedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unsupported)
     val unreadableLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_unreadable)
     val oversizedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_oversized)
+    val multipleLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_multiple_files)
     val failedLocalSubtitleMessage = stringResource(Res.string.player_local_subtitle_failed)
     val playerNotReadyMessage = stringResource(Res.string.player_local_subtitle_player_not_ready)
     PlayerScreenModalHosts(
@@ -2079,6 +2115,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
                                     LocalSubtitleFileError.UNSUPPORTED_FORMAT -> unsupportedLocalSubtitleMessage
                                     LocalSubtitleFileError.UNREADABLE -> unreadableLocalSubtitleMessage
                                     LocalSubtitleFileError.TOO_LARGE -> oversizedLocalSubtitleMessage
+                                    LocalSubtitleFileError.MULTIPLE_FILES -> multipleLocalSubtitleMessage
                                     LocalSubtitleFileError.PICKER_FAILED -> failedLocalSubtitleMessage
                                 }
                                 NuvioToastController.show(message)

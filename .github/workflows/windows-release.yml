@@ -17,6 +17,8 @@ env:
   RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
   # Public OAuth app identity; never place a Trakt client secret in shipped binaries.
   TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
+  SIMKL_CLIENT_ID: ${{ vars.SIMKL_CLIENT_ID }}
+  MDBLIST_CLIENT_ID: ${{ vars.MDBLIST_CLIENT_ID }}
   # Set only after an HTTPS Universal Link / verified App Link is deployed.
   TRAKT_REDIRECT_URI: ${{ vars.TRAKT_REDIRECT_URI }}
 
@@ -40,6 +42,8 @@ jobs:
         run: |
           node .github/security-check.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Public source and Git history security check failed.' }
+          node .github/tracking-provider-config.mjs --require-release
+          if ($LASTEXITCODE -ne 0) { throw 'Required tracking provider configuration is missing or invalid.' }
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Release requires a vMAJOR.MINOR.PATCH tag.' }
           node --test .github/release-policy.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Release version policy tests failed.' }
@@ -144,6 +148,7 @@ jobs:
           ref: refs/tags/${{ env.RELEASE_TAG }}
       - name: Validate version tag
         run: |
+          node .github/tracking-provider-config.mjs --require-release
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo '::error::Release requires a vMAJOR.MINOR.PATCH tag'; exit 1; fi
           version=$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
           code=$(sed -n 's/^VERSION_CODE=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
@@ -202,6 +207,7 @@ jobs:
           ref: refs/tags/${{ env.RELEASE_TAG }}
       - name: Validate version tag
         run: |
+          node .github/tracking-provider-config.mjs --require-release
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo '::error::Release requires a vMAJOR.MINOR.PATCH tag'; exit 1; fi
           version=$(sed -n 's/^VERSION_NAME=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')
           code=$(sed -n 's/^VERSION_CODE=//p' composeApp/Configuration/DesktopVersion.properties | tr -d '\r')

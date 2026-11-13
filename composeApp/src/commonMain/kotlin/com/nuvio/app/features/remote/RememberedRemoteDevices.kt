@@ -14,12 +14,15 @@ internal data class RememberedRemoteDevice(
     val wakeMac: String? = null,
     val bluetooth: Boolean = false,
     val trustedId: String? = null,
+    val vpn: Boolean = false,
 )
 
 /** A saved LAN entry is an explicit reconnect request, not just another discovery scan. */
 internal fun connectRememberedRemoteDevice(transport: DesktopRemoteTransport, saved: RememberedRemoteDevice) {
     if (saved.bluetooth) {
         transport.connect(RemoteDesktop(saved.address, 0, saved.name, bluetooth = true))
+    } else if (saved.vpn) {
+        transport.discoverVpn(saved.address, connect = true)
     } else {
         transport.discover(saved.address, connect = true)
     }
@@ -43,22 +46,50 @@ internal fun rememberRemoteDevice(
     nowEpochMs: Long,
     bluetooth: Boolean = false,
     trustedId: String? = null,
+    vpn: Boolean = false,
 ): List<RememberedRemoteDevice> {
-    val safeAddress = normalizeRememberedRemoteAddress(address, bluetooth) ?: return existing
+    val safeAddress = (if (vpn && !bluetooth) normalizePrivateVpnAddress(address)
+        else normalizeRememberedRemoteAddress(address, bluetooth)) ?: return existing
     val safeName = name.trim().replace('|', ' ').take(80).ifBlank { "Starlit PC" }
     val safeId = trustedId?.takeIf { !bluetooth && it.matches(Regex("[0-9a-f]{32}")) }
-    val prior = existing.firstOrNull { !it.bluetooth && safeId != null && it.trustedId == safeId }
-        ?: existing.firstOrNull { it.bluetooth == bluetooth && it.address == safeAddress }
+    val prior = existing.firstOrNull { !it.bluetooth && !bluetooth && it.vpn == vpn && safeId != null && it.trustedId == safeId }
+        ?: existing.firstOrNull { it.bluetooth == bluetooth && it.vpn == vpn && it.address == safeAddress }
     val latest = RememberedRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
         wakeMac = if (bluetooth) null else prior?.wakeMac,
         bluetooth = bluetooth,
         trustedId = if (bluetooth) null else safeId,
+        vpn = vpn && !bluetooth,
     )
     return (listOf(latest) + existing.filterNot {
-        it.bluetooth == bluetooth && (it.address == safeAddress ||
+        it.bluetooth == bluetooth && it.vpn == vpn && (it.address == safeAddress ||
             (!bluetooth && safeId != null && it.trustedId == safeId))
     }).take(10)
+}
+
+/** A saved private endpoint never authorizes a session; only existing cryptographic trust can. */
+internal fun normalizePrivateVpnAddress(value: String): String? {
+    val parts = value.trim().split('.')
+    if (parts.size == 4 && parts.all { part ->
+            part.isNotEmpty() && part.length <= 3 && part.all { it in '0'..'9' }
+        }) {
+        val bytes = parts.map { it.toIntOrNull()?.takeIf { n -> n in 0..255 } ?: return null }
+        return when {
+            bytes[0] == 10 || bytes[0] == 172 && bytes[1] in 16..31 ||
+                bytes[0] == 192 && bytes[1] == 168 || bytes[0] == 100 && bytes[1] in 64..127 ->
+                    bytes.joinToString(".")
+            else -> null
+        }
+    }
+    // Hostnames must resolve to an allowed private IP before a socket is opened.
+    val host = value.trim().lowercase()
+    val labels = host.split('.')
+    if (host.length !in 4..253 || labels.size < 2 || labels.last().length < 2 ||
+        labels.last().any { it !in 'a'..'z' } || labels.any {
+            it.length !in 1..63 || it.first() == '-' || it.last() == '-' ||
+                it.any { ch -> ch !in 'a'..'z' && ch !in '0'..'9' && ch != '-' }
+        }) return null
+    return host
 }
 
 /** Validate saved discovery hints without accepting DNS names, URLs or arbitrary routes. */

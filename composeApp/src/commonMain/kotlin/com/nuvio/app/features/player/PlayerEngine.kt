@@ -445,4 +445,5 @@ expect fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
     sourceAvailable: Boolean = true,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)? = null,
 )
