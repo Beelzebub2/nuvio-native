@@ -3,6 +3,8 @@ package com.nuvio.app.features.remote
 import com.nuvio.app.core.windows.ELEVATED_TASK_ARGUMENT
 import com.nuvio.app.core.windows.PHONE_REMOTE_FIREWALL_TASK
 import com.nuvio.app.core.windows.PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK
+import com.nuvio.app.core.windows.PHONE_REMOTE_VPN_FIREWALL_TASK
+import com.nuvio.app.core.windows.PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK
 import com.nuvio.app.core.windows.WindowsElevation
 import co.touchlab.kermit.Logger
 import java.nio.file.Paths
@@ -31,6 +33,7 @@ internal const val FIREWALL_TCP_RULE = "Starlit phone remote TCP"
 internal const val FIREWALL_UDP_RULE = "Starlit phone remote UDP"
 internal const val FIREWALL_PUBLIC_ETHERNET_TCP_RULE = "Starlit phone remote TCP (public Ethernet)"
 internal const val FIREWALL_PUBLIC_ETHERNET_UDP_RULE = "Starlit phone remote UDP (public Ethernet)"
+internal const val FIREWALL_PRIVATE_VPN_TCP_RULE = "Starlit phone remote TCP (private VPN)"
 internal const val FIREWALL_DISCOVERY_PORT = 47788
 internal const val FIREWALL_SESSION_PORT = 47789
 
@@ -166,6 +169,19 @@ internal fun allowPhoneRemoteThroughWindowsFirewall(publicEthernet: Boolean = fa
     val executable = ProcessHandle.current().info().command().orElse(null)
     check(!executable.isNullOrBlank()) { "Unknown Starlit executable" }
     WindowsFirewallCom.allowPhoneRemote(executable, publicEthernet)
+}
+
+/** Executes only in the user-approved elevated Starlit launcher. */
+internal fun allowPrivateVpnRemoteThroughWindowsFirewall(address: String) {
+    val executable = ProcessHandle.current().info().command().orElse(null)
+    check(!executable.isNullOrBlank()) { "Unknown Starlit executable" }
+    WindowsFirewallCom.allowPrivateVpnRemote(executable, address)
+}
+
+internal fun removePrivateVpnRemoteThroughWindowsFirewall() {
+    val executable = ProcessHandle.current().info().command().orElse(null)
+    check(!executable.isNullOrBlank()) { "Unknown Starlit executable" }
+    WindowsFirewallCom.removePrivateVpnRemote(executable)
 }
 
 private data class FirewallRule(
@@ -386,6 +402,9 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
     private val lock = Any()
     private val mutableState = MutableStateFlow(RemoteFirewallState.Checking)
     override val state: StateFlow<RemoteFirewallState> = mutableState.asStateFlow()
+    private val mutableVpnState = MutableStateFlow(RemoteFirewallState.NotNeeded)
+    override val vpnState: StateFlow<RemoteFirewallState> = mutableVpnState.asStateFlow()
+    private var vpnGeneration = 0L
     private var generation = 0L
 
     override fun refresh() = scheduleRefresh()
@@ -414,6 +433,76 @@ internal object WindowsRemoteFirewall : RemoteFirewallAccess {
     override fun requestAccess() = requestFirewallAccess(publicEthernet = false)
 
     override fun requestPublicEthernetAccess() = requestFirewallAccess(publicEthernet = true)
+
+    override fun refreshPrivateVpnAccess(address: String?) {
+        val ticket = synchronized(lock) {
+            vpnGeneration += 1
+            mutableVpnState.value = if (address == null) RemoteFirewallState.NotNeeded else RemoteFirewallState.Checking
+            vpnGeneration
+        }
+        if (address == null) return
+        scope.launch {
+            val configured = runCatching {
+                val executable = ProcessHandle.current().info().command().orElse(null)
+                    ?: return@runCatching false
+                WindowsFirewallCom.privateVpnRuleConfigured(executable, address)
+            }.getOrDefault(false)
+            synchronized(lock) {
+                if (vpnGeneration == ticket) mutableVpnState.value =
+                    if (configured) RemoteFirewallState.Allowed else RemoteFirewallState.Blocked
+            }
+        }
+    }
+
+    override fun requestPrivateVpnAccess(address: String) {
+        if (WindowsRemoteVpnAccess.approvedAddress() != address ||
+            WindowsRemoteVpnAccess.interfaces().none { it.address == address }) {
+            mutableVpnState.value = RemoteFirewallState.Failed
+            return
+        }
+        val ticket = synchronized(lock) {
+            if (mutableVpnState.value == RemoteFirewallState.Requesting) return
+            vpnGeneration += 1
+            mutableVpnState.value = RemoteFirewallState.Requesting
+            vpnGeneration
+        }
+        scope.launch {
+            val owner = runCatching { withContext(Dispatchers.Swing) { WindowsElevation.activeWindowHandle() } }.getOrNull()
+            val succeeded = runCatching {
+                WindowsElevation.runSelf(
+                    listOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_VPN_FIREWALL_TASK, address), 180, owner,
+                )
+            }.getOrDefault(false)
+            if (succeeded) refreshPrivateVpnAccess(address)
+            else synchronized(lock) {
+                if (vpnGeneration == ticket) mutableVpnState.value = RemoteFirewallState.Failed
+            }
+        }
+    }
+
+    override fun removePrivateVpnAccess() {
+        if (WindowsRemoteVpnAccess.approvedAddress() != null) {
+            mutableVpnState.value = RemoteFirewallState.Failed
+            return
+        }
+        val ticket = synchronized(lock) {
+            vpnGeneration += 1
+            mutableVpnState.value = RemoteFirewallState.Requesting
+            vpnGeneration
+        }
+        scope.launch {
+            val owner = runCatching { withContext(Dispatchers.Swing) { WindowsElevation.activeWindowHandle() } }.getOrNull()
+            val succeeded = runCatching {
+                WindowsElevation.runSelf(
+                    listOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK), 180, owner,
+                )
+            }.getOrDefault(false)
+            synchronized(lock) {
+                if (vpnGeneration == ticket) mutableVpnState.value =
+                    if (succeeded) RemoteFirewallState.NotNeeded else RemoteFirewallState.Failed
+            }
+        }
+    }
 
     private fun requestFirewallAccess(publicEthernet: Boolean) {
         val ticket = synchronized(lock) {

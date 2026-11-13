@@ -15,4 +15,7 @@ internal actual fun createDesktopRemoteTransport(): DesktopRemoteTransport =
         connectionLifetime = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
             WindowsRemoteSleepGuard()
         else NoopRemoteConnectionLifetime,
+        vpnHostAccess = if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true))
+            WindowsRemoteVpnAccess
+        else null,
     )

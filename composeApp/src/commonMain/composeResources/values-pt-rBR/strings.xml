@@ -1811,4 +1811,23 @@
     <string name="settings_playback_nvidia_rtx_setup_desc">Em Sistema > Vídeo, ative Super Resolution e escolha Auto. Confira se está ativo no NVIDIA App ou no indicador opcional durante a reprodução.</string>
     <string name="settings_playback_nvidia_rtx_get_app_desc">Instale o NVIDIA App para configurar o RTX Video Super Resolution e verificar se está ativo.</string>
     <string name="settings_playback_nvidia_rtx_open_failed">Não foi possível abrir o NVIDIA App ou a página de download. Abra o aplicativo manualmente e acesse Sistema > Vídeo.</string>
+    <string name="remote_vpn_tile">VPN privada</string>
+    <string name="remote_vpn_tile_caption">Conectar de outra rede</string>
+    <string name="remote_vpn_connected_to">Conexão VPN com %1$s</string>
+    <string name="remote_vpn_phone_hint">Conecte ambos os dispositivos à mesma VPN privada (como o Tailscale). No PC, ative o acesso VPN no controle pelo celular e insira o endereço IPv4 VPN ou nome DNS privado do PC. O primeiro pareamento precisa de confirmação nos dois dispositivos.</string>
+    <string name="remote_vpn_address_label">Endereço VPN ou nome do PC</string>
+    <string name="remote_vpn_check">Conectar pela VPN</string>
+    <string name="remote_vpn_pc_title">Acesso remoto por VPN privada</string>
+    <string name="remote_vpn_pc_desc">Permite que um celular pareado controle o Starlit em outras redes. Desativado por padrão; selecione uma interface VPN detectada. Ambos os dispositivos precisam de uma VPN privada ativa.</string>
+    <string name="remote_vpn_pc_enabled">Acesso VPN ativado em %1$s</string>
+    <string name="remote_vpn_pc_not_found">Nenhum adaptador VPN compatível ativo. Conecte Tailscale, WireGuard, NetBird ou ZeroTier e atualize.</string>
+    <string name="remote_vpn_enable">Ativar em %1$s</string>
+    <string name="remote_vpn_disable">Desativar acesso VPN</string>
+    <string name="remote_vpn_refresh">Atualizar adaptadores VPN</string>
+    <string name="remote_vpn_pc_error">Não foi possível alterar o acesso VPN. Verifique o adaptador e a conta e tente novamente.</string>
+    <string name="remote_vpn_pc_firewall">O Firewall do Windows pode exigir uma regra TCP de entrada na porta 47789, limitada à interface e ao endereço VPN selecionados. Não abra portas no roteador nem permita acesso público geral.</string>
+    <string name="remote_vpn_firewall_ready">A regra de firewall VPN do Starlit está instalada para este endereço. A conexão também depende das rotas VPN e das políticas dos dispositivos.</string>
+    <string name="remote_vpn_firewall_checking">Verificando o Firewall do Windows ou aguardando autorização de administrador…</string>
+    <string name="remote_vpn_firewall_allow">Permitir VPN no Firewall do Windows</string>
+    <string name="remote_vpn_firewall_failed">A alteração no Firewall do Windows falhou ou foi cancelada. O acesso VPN continua sujeito à configuração do Starlit; tente novamente se necessário.</string>
 </resources>

@@ -3025,4 +3025,23 @@
     <string name="watch_order_chronology_unverified">A chronological order has not been verified for this franchise. Try the recommended order instead.</string>
     <string name="watch_order_explanation">Only confirmed title matches appear as watched. Select another installment to search your available add-ons; this never starts playback automatically.</string>
     <string name="watch_order_dismiss">Not now</string>
+    <string name="remote_vpn_tile">Private VPN</string>
+    <string name="remote_vpn_tile_caption">Connect from another network</string>
+    <string name="remote_vpn_connected_to">VPN connection to %1$s</string>
+    <string name="remote_vpn_phone_hint">Connect both devices to the same private VPN (such as Tailscale). On the PC, enable VPN access in Phone remote, then enter its VPN IPv4 address or private DNS hostname. First pairing requires approval on both devices.</string>
+    <string name="remote_vpn_address_label">PC VPN address or hostname</string>
+    <string name="remote_vpn_check">Connect over VPN</string>
+    <string name="remote_vpn_pc_title">Private VPN remote access</string>
+    <string name="remote_vpn_pc_desc">Allow a paired phone to control Starlit across networks. Off by default; choose a detected VPN interface. Private VPN software must be installed and connected on both devices.</string>
+    <string name="remote_vpn_pc_enabled">VPN access enabled on %1$s</string>
+    <string name="remote_vpn_pc_not_found">No supported active VPN adapter found. Connect Tailscale, WireGuard, NetBird or ZeroTier, then refresh.</string>
+    <string name="remote_vpn_enable">Enable on %1$s</string>
+    <string name="remote_vpn_disable">Disable VPN access</string>
+    <string name="remote_vpn_refresh">Refresh VPN adapters</string>
+    <string name="remote_vpn_pc_error">Could not change VPN access. Check the active adapter and account, then try again.</string>
+    <string name="remote_vpn_pc_firewall">Windows Firewall may require a separate inbound TCP 47789 rule restricted to the selected VPN interface and address. Do not open the router port or enable broad public-network access.</string>
+    <string name="remote_vpn_firewall_ready">Starlit's VPN firewall rule is installed for this address. Reachability still depends on VPN routing and device policies.</string>
+    <string name="remote_vpn_firewall_checking">Checking Windows Firewall or waiting for administrator approval…</string>
+    <string name="remote_vpn_firewall_allow">Allow VPN through Windows Firewall</string>
+    <string name="remote_vpn_firewall_failed">Windows Firewall update failed or was cancelled. VPN access is still controlled by Starlit's setting; retry the firewall step if needed.</string>
 </resources>

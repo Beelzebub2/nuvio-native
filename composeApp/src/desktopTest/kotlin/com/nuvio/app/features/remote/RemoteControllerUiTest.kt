@@ -150,6 +150,19 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun savedVpnUsesConnectNotWakeAndPrivateEndpointRemainsEditable() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.remembered.value = listOf(
+            RememberedRemoteDevice("VPN PC", "100.101.42.18", 0L, vpn = true),
+        )
+        show(desktopLayout = false)
+        onNodeWithTag("remote-saved-pc-100.101.42.18").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("remote-wake-pc-100.101.42.18").assertDoesNotExist()
+        onNodeWithTag("desktop-remote-enter-vpn").performScrollTo().performClick()
+        onNodeWithTag("desktop-remote-vpn-address").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("desktop-remote-vpn-connect").assertIsNotEnabled()
+    }
+
+    @Test
     fun phoneControllerShowsConnectionProgressAndHoldsOtherOptions() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.connecting.value = true
         DesktopRemote.status.value = "Connecting to Living room PC…"
