@@ -2,7 +2,7 @@
   "name": "Starlit TV",
   "description": "TV streaming with Starlit account sync and user-supplied add-ons, adapted from NuvioTVSmart.",
   "category": "media",
-  "repo": "Beelzebub2/nuvio-native",
+  "repo": "Beelzebub2/starlit",
   "source": "release",
   "branch": "Dev",
   "enabled": false,

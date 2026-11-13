@@ -112,6 +112,7 @@ static constexpr double kMaxVolumePercent = 200.0;
 - (long long)durationMs;
 - (long long)positionMs;
 - (long long)bufferedPositionMs;
+- (long long)videoDimensions;
 - (BOOL)isLoading;
 - (BOOL)isEnded;
 - (NSString *)audioTracksJson;
@@ -2164,6 +2165,13 @@ static void nuvioMpvWakeup(void *ctx) {
     return (long long)llround(fmax(bufferedPosition, 0.0) * 1000.0);
 }
 
+- (long long)videoDimensions {
+    auto width = [self int64Property:"video-params/w" fallback:0];
+    auto height = [self int64Property:"video-params/h" fallback:0];
+    if (width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+    return (long long)(((uint64_t)width << 32) | (uint64_t)height);
+}
+
 - (BOOL)isLoading {
     return _cachedLoading.load();
 }
@@ -3242,6 +3250,15 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_bufferedPositionMs
     if (handle == 0) return 0;
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     return [player bufferedPositionMs];
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_videoDimensions(
+    JNIEnv * /* env */, jobject /* bridge */, jlong handle
+) {
+    if (handle == 0) return 0;
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
+    return [player videoDimensions];
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

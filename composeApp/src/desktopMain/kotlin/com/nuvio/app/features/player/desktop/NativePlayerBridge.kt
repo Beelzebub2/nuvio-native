@@ -79,6 +79,8 @@ internal object NativePlayerBridge {
     external fun durationMs(handle: Long): Long
     external fun positionMs(handle: Long): Long
     external fun bufferedPositionMs(handle: Long): Long
+    /** Packed video-params/w and video-params/h; zero if unknown. */
+    external fun videoDimensions(handle: Long): Long
     external fun isLoading(handle: Long): Boolean
     external fun isEnded(handle: Long): Boolean
     external fun isPaused(handle: Long): Boolean

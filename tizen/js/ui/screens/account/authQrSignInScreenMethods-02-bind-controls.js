@@ -40,7 +40,7 @@ export function createAuthQrSignInScreenMethods02() {
       this.container.querySelector("[data-action='cancel-signout']")?.addEventListener("click", () => this.dismissSignOutConfirmation());
       this.container.querySelector("[data-action='confirm-signout']")?.addEventListener("click", () => void this.handleSignOut());
       this.container.querySelector("[data-action='terms']")?.addEventListener("click", () => {
-        window.open?.("https://github.com/Beelzebub2/nuvio-native/blob/Dev/LICENSE", "_blank");
+        window.open?.("https://github.com/Beelzebub2/starlit/blob/Dev/LICENSE", "_blank");
       });
       const emailInput = this.container.querySelector("#auth-email-input");
       const passwordInput = this.container.querySelector("#auth-password-input");

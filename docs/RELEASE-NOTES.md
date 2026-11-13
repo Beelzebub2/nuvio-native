@@ -1,3 +1,68 @@
+## Starlit 1.25.0
+
+### Desktop player interface
+
+- **Redesigned playback controls:** Place the title and episode details in a clearer header, group transport, volume and media actions, and adapt the controls to compact player windows with a More menu.
+- **Playback options together:** Access automatic intro skipping, next-episode playback, surround upmix, Discord audio, RTX original comparison and video settings from a single options panel when those capabilities are available.
+- **More useful timeline:** Show known recap, intro and credits segments along the seek bar, buffered playback progress, hover time and seek shortcuts; use a continuous timeline when segment data is unavailable.
+- **Playback at a glance:** Display available resolution, HDR, RTX and audio status indicators; indicate adjusted speed and volume above 100% without obscuring playback.
+- **Clearer interaction:** Improve accessible action labels, keyboard shortcut hints, skip prompts and next-episode overlays.
+
+### Compatibility and verification
+
+- Desktop native players on Windows, Linux and macOS report video dimensions to the controls when available; older native libraries safely omit this optional information.
+- Android phone and Android TV playback controls are unchanged by this desktop-specific interface update. Samsung Tizen and LG webOS distribution remains separate from the published desktop/Android packages.
+- Stable installers are published only after Windows, signed Android and TV, Linux packaging, checksum and release-provenance gates pass. Live playback and hardware-specific controls still require testing on representative devices.
+
+## Starlit 1.24.1
+
+### Playback and subtitles
+
+- **Optional 5.1/7.1 headset routing:** Improve opt-in device-supported multi-channel PCM on Windows with safe output fallbacks; stereo playback does not become discrete surround without compatible hardware.
+- **Local subtitles:** Accept validated subtitle file drops and preserve authored ASS/SSA subtitle styling in the desktop player.
+
+### Navigation, accounts and remote control
+
+- **Settings search:** Navigate to and highlight the exact requested control.
+- **Details and phone-to-PC handoff:** Prevent overlapping panels and provide bounded source-search timeouts with retry.
+- **Private-network remote:** Add opt-in private VPN remote access and reject malformed elevated firewall-task arguments before executing any privileged Windows operation.
+- **Tracking sign-in:** Bundle configured public OAuth IDs safely and support the updated Simkl device sign-in and refresh flow.
+
+### Update and platform compatibility
+
+- **GitHub repository rename preparation:** Keep Windows, Android and Samsung Tizen update discovery compatible with the old and replacement official repository paths. Preserve installed application identities and user data.
+- **Safe release recovery:** The v1.24.0 tag did not publish installers because a Windows security regression test failed. This release includes its merged improvements and the corrected elevated-task argument validation.
+
+### Verification and limitations
+
+- Stable installers require the tagged Windows, signed Android and Android TV, Linux, provenance and checksum release gates to pass.
+- Samsung Tizen and LG webOS packages remain developer previews requiring same-certificate/physical-device acceptance before public release. Real hardware checks for surround audio, VPN remote control and tracking authorization remain outstanding.
+
+## Starlit 1.24.0
+
+### Playback, audio and subtitles
+
+- **Optional virtual 7.1 headset output on Windows:** Expose a device-supported multi-channel PCM route for compatible hardware, with a safe fallback for unsupported output devices. This does not claim a stereo headset becomes true discrete surround.
+- **Local subtitle files:** Accept validated subtitle file drops on the desktop player without replacing the current media source or accepting arbitrary file types.
+- **ASS/SSA subtitle styling:** Keep authored subtitle styling on the desktop and avoid unexpected subtitle selection resets.
+
+### Controls, navigation and authentication
+
+- **Precise settings search:** Open and highlight the matching setting rather than stopping at its containing page.
+- **Details and remote reliability:** Prevent overview panels from overlapping and give phone-to-PC source searches a bounded timeout and explicit retry.
+- **Opt-in private-network remote control:** Permit compatible private VPN routes without opening remote control to the public internet.
+- **Tracking account sign-in:** Include public OAuth provider IDs in release builds and support the updated Simkl device-authorization and refresh flow without embedding confidential client secrets.
+
+### Release and TV compatibility
+
+- **Samsung TV GitHub repository migration support:** Discover signed-off TV release assets using either official repository name after GitHub moves the project. Validate QR and PC-assisted update URLs against those two names and keep checksum verification. This does not provide a signed public Tizen package.
+- **App release migration:** Preserve existing Windows, Android and Linux update and installation identities while preparing for the public source repository rename. The GitHub repository name does not change as part of this release.
+
+### Verification and limitations
+
+- Stable installers are published only after the tagged release pipeline passes Windows installer and uninstall tests, signed Android and Android TV builds, Linux package integrity checks and release provenance validation.
+- Samsung Tizen installations remain developer previews requiring matching certificate and physical-device acceptance. No new public Samsung Tizen WGT or LG webOS package is included. Real-device verification of headset spatial output, VPN remote control, and tracking sign-in remains outstanding. Experimental draft changes are excluded.
+
 ## Starlit 1.23.0
 
 ### Interface and navigation

@@ -873,6 +873,8 @@ internal class NativePlayerController(
         return runCatching {
             val isLoading = NativePlayerBridge.isLoading(current)
             val isEnded = NativePlayerBridge.isEnded(current)
+            // Older bundled native bridges do not expose dimensions yet.
+            val packedDimensions = runCatching { NativePlayerBridge.videoDimensions(current) }.getOrDefault(0L)
             PlayerPlaybackSnapshot(
                 isLoading = isLoading,
                 isPlaying = !NativePlayerBridge.isPaused(current) && !isLoading && !isEnded,
@@ -880,6 +882,8 @@ internal class NativePlayerController(
                 durationMs = NativePlayerBridge.durationMs(current),
                 positionMs = NativePlayerBridge.positionMs(current),
                 bufferedPositionMs = NativePlayerBridge.bufferedPositionMs(current),
+                videoWidth = (packedDimensions ushr 32).toInt().coerceAtLeast(0),
+                videoHeight = packedDimensions.toInt().coerceAtLeast(0),
                 playbackSpeed = NativePlayerBridge.speed(current),
             )
         }.getOrDefault(PlayerPlaybackSnapshot(isLoading = true))
@@ -1479,18 +1483,18 @@ private data class NativeControlsStructureKey(
     val surroundUpmixStatus: Int,
 )
 
-private fun PlayerControlsState.toControlsJson(
-    isFullscreen: Boolean,
-    rtxComparisonAvailable: Boolean,
-    rtxShowingOriginal: Boolean,
-    rtxComparisonFailed: Boolean,
-    showDiscordShare: Boolean,
-    discordShareEnabled: Boolean,
-    showSurroundUpmix: Boolean,
-    surroundUpmixEnabled: Boolean,
-    surroundUpmixLabel: String,
-    surroundUpmixHeadsetMode: Boolean,
-    surroundUpmixStatus: Int,
+internal fun PlayerControlsState.toControlsJson(
+    isFullscreen: Boolean = false,
+    rtxComparisonAvailable: Boolean = false,
+    rtxShowingOriginal: Boolean = false,
+    rtxComparisonFailed: Boolean = false,
+    showDiscordShare: Boolean = false,
+    discordShareEnabled: Boolean = false,
+    showSurroundUpmix: Boolean = false,
+    surroundUpmixEnabled: Boolean = false,
+    surroundUpmixLabel: String = "",
+    surroundUpmixHeadsetMode: Boolean = false,
+    surroundUpmixStatus: Int = 0,
 ): String =
     buildString {
         append('{')
@@ -1531,6 +1535,8 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("rtxShowingOriginal", rtxShowingOriginal)
         append(',')
         appendJsonField("rtxComparisonFailed", rtxComparisonFailed)
+        append(',')
+        appendJsonField("rtxSuperResolutionActive", rtxComparisonAvailable && !rtxShowingOriginal && !rtxComparisonFailed)
         append(',')
         appendJsonField("volumeLevel", volumeLevel)
         append(',')
@@ -1779,6 +1785,22 @@ private fun PlayerControlsState.toControlsJson(
         append(',')
         appendJsonField("skipPromptEndMs", skipPromptEndMs)
         append(',')
+        appendJsonField("bufferedPositionMs", bufferedPositionMs.coerceAtLeast(0L))
+        append(',')
+        appendJsonField("videoWidth", videoWidth.coerceAtLeast(0))
+        append(',')
+        appendJsonField("videoHeight", videoHeight.coerceAtLeast(0))
+        append(',')
+        appendJsonArrayField("skipSegments", skipSegments) { segment ->
+            append('{')
+            appendJsonField("type", segment.type)
+            append(',')
+            appendJsonField("startMs", segment.startMs)
+            append(',')
+            appendJsonField("endMs", segment.endMs)
+            append('}')
+        }
+        append(',')
         appendJsonField("skipPromptDismissed", skipPromptDismissed)
         append(',')
         appendJsonField("nextEpisodeVisible", nextEpisodeVisible)
@@ -1925,6 +1947,9 @@ private fun PlayerControlsState.nativeControlsStructureKey(): PlayerControlsStat
         isLoading = false,
         durationMs = 0L,
         positionMs = 0L,
+        // Every key change re-sends the whole controls JSON (and re-renders open panels),
+        // so the buffered range only needs coarse steps; 10 s is a few pixels on the seek bar.
+        bufferedPositionMs = (bufferedPositionMs / 10_000L) * 10_000L,
     )
 
 private fun StringBuilder.appendJsonField(name: String, value: String) {

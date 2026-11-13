@@ -412,6 +412,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         showExternalPlayer = args.onOpenInExternalPlayer != null,
         durationMs = playbackSnapshot.durationMs,
         positionMs = displayedPositionMs,
+        bufferedPositionMs = playbackSnapshot.bufferedPositionMs.coerceAtLeast(0L),
+        videoWidth = playbackSnapshot.videoWidth.coerceAtLeast(0),
+        videoHeight = playbackSnapshot.videoHeight.coerceAtLeast(0),
         sourceIsLoading = sourceStreamsState.isAnyLoading,
         sourceFilters = sourceFilters,
         sourceItems = sourceItems,
@@ -471,6 +474,23 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         },
         skipPromptStartMs = ((nativeSkipInterval?.startTime ?: 0.0) * 1000).toLong().coerceAtLeast(0L),
         skipPromptEndMs = nativeSkipAction?.targetMs?.coerceAtLeast(0L) ?: 0L,
+        skipSegments = skipIntervals.mapNotNull { interval ->
+            val segmentType = when (com.nuvio.app.features.player.skip.AutoSkipSegmentType.fromSkipIntervalType(interval.type)) {
+                com.nuvio.app.features.player.skip.AutoSkipSegmentType.INTRO -> "intro"
+                com.nuvio.app.features.player.skip.AutoSkipSegmentType.RECAP -> "recap"
+                com.nuvio.app.features.player.skip.AutoSkipSegmentType.OUTRO,
+                com.nuvio.app.features.player.skip.AutoSkipSegmentType.MOVIE_CREDITS -> "outro"
+                null -> return@mapNotNull null
+            }
+            if (!interval.startTime.isFinite() || !interval.endTime.isFinite() ||
+                interval.startTime < 0 || interval.endTime <= interval.startTime
+            ) return@mapNotNull null
+            PlayerControlSkipSegment(
+                type = segmentType,
+                startMs = (interval.startTime * 1000).toLong(),
+                endMs = (interval.endTime * 1000).toLong(),
+            )
+        }.sortedBy { it.startMs },
         skipPromptDismissed = skipIntervalDismissed,
         nextEpisodeVisible = nextEpisodeForControls != null && !playerControlsLocked,
         nextEpisodeHeaderLabel = stringResource(Res.string.player_next_episode),
