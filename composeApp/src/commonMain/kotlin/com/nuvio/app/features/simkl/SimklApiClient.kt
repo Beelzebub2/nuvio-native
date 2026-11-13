@@ -69,13 +69,17 @@ internal class SimklApiClient(
     private val nowEpochMs: () -> Long = SimklPlatformClock::nowEpochMs,
     private val sleep: suspend (Long) -> Unit = { delayMs -> delay(delayMs) },
     private val retryJitterMs: () -> Long = { Random.nextLong(RETRY_JITTER_BOUND_MS + 1L) },
+    private val beforeAuthenticatedRequest: suspend () -> Unit = {},
 ) {
     private val requestMutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
     private var nextGetAtEpochMs = 0L
     private var nextPostAtEpochMs = 0L
 
-    suspend fun execute(request: SimklApiRequest): SimklApiResponse = requestMutex.withLock {
+    suspend fun execute(request: SimklApiRequest): SimklApiResponse {
+        // Refresh outside requestMutex: refresh itself uses this client for an unauthenticated POST.
+        if (request.requiresAuthentication) beforeAuthenticatedRequest()
+        return requestMutex.withLock {
         val token = if (request.requiresAuthentication) {
             accessToken()?.takeIf(String::isNotBlank)
                 ?: throw SimklApiException(
@@ -164,6 +168,7 @@ internal class SimklApiClient(
         }
 
         error("Simkl request loop completed without a response")
+        }
     }
 
     private suspend fun <T> executeRateLimited(
@@ -244,6 +249,7 @@ internal object SimklApi {
             },
             accessToken = SimklAuthRepository::authorizedAccessToken,
             onUnauthorized = SimklAuthRepository::onUnauthorizedResponse,
+            beforeAuthenticatedRequest = SimklAuthRepository::refreshAccessTokenIfNeeded,
         )
     }
 }

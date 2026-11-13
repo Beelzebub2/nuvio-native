@@ -12,8 +12,11 @@ Register applications with the official provider developer portals:
 - Trakt: https://developer.trakt.tv/docs/create-an-app — use a Production
   application Client ID for public distribution. Production authorization may
   require provider approval. Device-code sign-in does not embed a secret.
-- Simkl: https://simkl.com/settings/developer/new/ — register the app and use
-  its Client ID for the supported PIN device flow.
+- Simkl: https://simkl.com/settings/developer/new/ — register an **AUTH V2**
+  app of type **TV, devices & command line**. Starlit uses
+  `POST /oauth2/device` followed by `POST /oauth2/token`, with the requested
+  `media:read media:write` scopes. Do not register a legacy AUTH V1 client:
+  V2 client IDs cannot authenticate against V1 `/oauth/pin` endpoints.
 - MDBList: https://mdblist.com/developer/ — register an OAuth application and
   verify that the provider supports the device authorization flow selected by
   Starlit before publishing.
@@ -24,6 +27,14 @@ IDs. The build system also accepts the same names through environment
 variables or an untracked `local.properties` file for local development.
 These IDs are public OAuth application identifiers and will appear in the
 compiled client; **never provide a client secret** to a public client build.
+
+Simkl's V2 API request allowance is **per authenticated Simkl user**, shared
+between that user's connected applications, rather than pooled against the
+Starlit developer's account. Users connect their own accounts through PIN
+sign-in; they do not register developer apps or supply Client IDs. Starlit
+stores each account's access and refresh tokens per local profile. Existing
+AUTH V1 sessions may need to reconnect to authorize the new V2 application.
+This allocation does not waive Simkl's separate commercial licensing terms.
 
 The Windows, Android, Android TV and Linux release jobs fail early when an ID
 is missing or malformed. A passing preflight checks only basic configuration:
