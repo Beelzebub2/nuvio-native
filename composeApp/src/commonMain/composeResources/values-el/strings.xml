@@ -23,6 +23,9 @@
     <string name="action_reset">Επαναφορά</string>
     <string name="action_resume">Συνέχεια</string>
     <string name="action_retry">Επανάληψη</string>
+    <string name="cd_decrease_value">Μείωση: %1$s</string>
+    <string name="cd_increase_value">Αύξηση: %1$s</string>
+    <string name="action_refresh">Ανανέωση</string>
     <string name="action_save">Αποθήκευση</string>
     <string name="addon_installing">Γίνεται εγκατάσταση</string>
     <string name="addon_title">Πρόσθετα</string>
@@ -1403,6 +1406,7 @@
     <string name="cloud_library_play_not_connected">Η υπηρεσία Cloud δεν είναι συνδεδεμένη.</string>
     <string name="cloud_library_play_provider_not_connected">Το %1$s δεν είναι συνδεδεμένο.</string>
     <string name="cloud_library_playable_file_count">%1$d αναπαίξιμα αρχεία</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d αρχεία</string>
     <string name="cloud_library_playback_disabled">Η βιβλιοθήκη Cloud είναι απενεργοποιημένη.</string>
     <string name="cloud_library_provider_all">Όλα</string>
     <string name="cloud_library_provider_unavailable">Η βιβλιοθήκη Cloud δεν είναι διαθέσιμη για %1$s.</string>
@@ -1677,6 +1681,8 @@
     <string name="compose_player_subtitle_delay">Καθυστέρηση υποτίτλων</string>
     <string name="compose_player_subtitle_lines_load_error">Δεν ήταν δυνατή η φόρτωση των γραμμών υποτίτλων</string>
     <string name="compose_player_text_opacity">Διαφάνεια κειμένου</string>
+    <string name="compose_player_timing">Χρονισμός</string>
+    <string name="compose_player_text">Κείμενο</string>
     <string name="compose_settings_page_advanced">Για προχωρημένους</string>
     <string name="compose_settings_page_debrid">Συνδεδεμένες υπηρεσίες</string>
     <string name="compose_settings_page_licenses_attributions">Άδειες και αποδόσεις</string>
@@ -2330,6 +2336,8 @@
     <string name="layout_random_episode_sub">Ανακάτεμα επεισοδίων από οποιαδήποτε σειρά. Η απενεργοποίηση παύει το ανακάτεμα.</string>
     <string name="random_episode_unwatched">Μη παρακολουθημένα επεισόδια</string>
     <string name="random_episode_include_watched">Όλα τα επεισόδια</string>
+    <string name="shuffle_pool_episode_count">%1$d επεισόδια</string>
+    <string name="shuffle_pool_episode_count_all">%1$d επεισόδια, μαζί με όσα έχετε δει</string>
     <string name="random_episode_empty_subtitle">Δεν υπάρχουν διαθέσιμα επεισόδια για ανακάτεμα.</string>
     <string name="random_episode_caught_up">Έχετε παρακολουθήσει όλα τα επεισόδια. Επιλέξτε «Όλα τα επεισόδια» για να ξαναδείτε.</string>
     <string name="random_episode_loading">Φόρτωση επεισοδίων…</string>

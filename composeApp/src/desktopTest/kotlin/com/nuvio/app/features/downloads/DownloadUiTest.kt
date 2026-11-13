@@ -202,7 +202,7 @@ class DownloadUiTest {
             scrollToText("Remove selected (0)").assertIsNotEnabled()
             // Keep the existing one-item delete path usable alongside selection.
             scrollToSelection("Select Movie").assertIsOff()
-            compose.onAllNodesWithContentDescription("Delete")[0].performClick()
+            compose.onAllNodesWithContentDescription("Delete")[0].performScrollTo().performClick()
             compose.onNodeWithText("Delete?").assertExists()
             compose.onNodeWithText("No").performClick()
         } finally {

@@ -34,6 +34,9 @@
     <string name="action_reset">รีเซ็ตเป็นค่าเริ่มต้น</string>
     <string name="action_resume">ดำเนินการต่อ</string>
     <string name="action_retry">ลองอีกครั้ง</string>
+    <string name="cd_decrease_value">ลด%1$s</string>
+    <string name="cd_increase_value">เพิ่ม%1$s</string>
+    <string name="action_refresh">รีเฟรช</string>
     <string name="action_save">บันทึก</string>
     <string name="action_saving">กำลังบันทึก...</string>
     <string name="action_switch">สวิตซ์</string>
@@ -542,6 +545,8 @@
     <string name="compose_player_subtitle_delay">คำบรรยายล่าช้า</string>
     <string name="compose_player_subtitles">คำบรรยาย</string>
     <string name="compose_player_text_opacity">ความทึบของข้อความ</string>
+    <string name="compose_player_timing">จังหวะเวลา</string>
+    <string name="compose_player_text">ข้อความ</string>
     <string name="compose_player_brightness_level">ความสว่าง %1$s</string>
     <string name="compose_player_volume_level">ระดับเสียง %1$s</string>
     <string name="compose_player_muted">ปิดเสียง</string>
@@ -855,6 +860,9 @@
     <string name="remote_pc_check_ip">ค้นหา PC ตามที่อยู่นี้</string>
     <string name="remote_pc_desktop_addresses">ที่อยู่พีซีในเครื่อง: %1$s</string>
     <string name="remote_pc_saved_devices">พีซีที่จับคู่ก่อนหน้านี้</string>
+    <string name="remote_pc_hero_hint">เปิดรีโมทโทรศัพท์บนพีซี ใช้บัญชีและเครือข่ายเดียวกัน</string>
+    <string name="remote_pc_saved_bluetooth">บลูทูธ · ไม่ต้องใช้รหัส</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · ขอการยืนยัน</string>
     <string name="remote_pc_saved_notice">พีซีที่บันทึกไว้พร้อมที่จะเชื่อมต่อใหม่แล้ว พีซี Bluetooth ที่ได้รับการอนุมัติก่อนหน้านี้ไม่จำเป็นต้องใช้รหัสอื่นเมื่ออุปกรณ์ทั้งสองยังคงมีคีย์การจับคู่ที่ได้รับการป้องกัน การเชื่อมต่อ LAN ยังคงต้องมีการยืนยัน</string>
     <string name="remote_pc_forget">ลืมไปซะ</string>
     <string name="remote_pc_wake">ปลุกพีซี</string>
@@ -927,6 +935,9 @@
     <string name="remote_window_status_connected">เชื่อมต่อโทรศัพท์แล้ว</string>
     <string name="remote_window_status_offline">ยังไม่พร้อม</string>
     <string name="remote_window_other_ways">วิธีอื่นในการเชื่อมต่อ</string>
+    <string name="remote_window_local_address">ที่อยู่ภายในของพีซี</string>
+    <string name="remote_window_copy_address">คัดลอกที่อยู่</string>
+    <string name="remote_window_trouble_caption">กฎไฟร์วอลล์ ประเภทเครือข่าย และพอร์ต</string>
     <string name="remote_window_network_section">เครือข่าย</string>
     <string name="remote_firewall_checking">กำลังตรวจสอบไฟร์วอลล์ Windows...</string>
     <string name="remote_discovery_unavailable">การค้นหา UDP อัตโนมัติไม่พร้อมใช้งาน คุณยังคงสามารถจับคู่ได้โดยการสแกนรหัส QR หรือป้อนที่อยู่ IP ของพีซีเครื่องนี้</string>
@@ -2305,6 +2316,7 @@
     <string name="cloud_library_play_not_connected">ไม่ได้เชื่อมต่อบริการคลาวด์</string>
     <string name="cloud_library_play_provider_not_connected">%1$s ไม่ได้เชื่อมต่ออยู่</string>
     <string name="cloud_library_playable_file_count">%1$d ไฟล์ที่สามารถเล่นได้</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d ไฟล์</string>
     <string name="cloud_library_provider_all">ทั้งหมด</string>
     <string name="cloud_library_refresh">รีเฟรชไลบรารี่คลาวด์</string>
     <string name="cloud_library_search_label">ค้นหาห้องสมุดคลาวด์</string>
@@ -2711,6 +2723,8 @@
     <string name="layout_random_episode_sub">สุ่มตอนจากซีรีย์ใดก็ได้ การปิดฟีเจอร์นี้จะเป็นการหยุดการสุ่มเพลงชั่วคราว</string>
     <string name="random_episode_unwatched">ตอนที่ยังไม่ได้ดู</string>
     <string name="random_episode_include_watched">ทุกตอน</string>
+    <string name="shuffle_pool_episode_count">%1$d ตอน</string>
+    <string name="shuffle_pool_episode_count_all">%1$d ตอน รวมตอนที่ดูแล้ว</string>
     <string name="random_episode_empty_subtitle">ไม่มีตอนให้เลือกสุ่ม</string>
     <string name="random_episode_caught_up">ดูครบทุกตอนแล้ว เลือกตอนทั้งหมดเพื่อดูอีกครั้ง</string>
     <string name="random_episode_loading">กำลังโหลดตอน...</string>
@@ -2843,7 +2857,10 @@
     <string name="account_credentials_password_step2">ใส่รหัสจากอีเมลของคุณ จากนั้นเลือกรหัสผ่านใหม่ รหัสจะหมดอายุโดยอัตโนมัติ</string>
     <string name="account_credentials_email_step">ยืนยันรหัสผ่านปัจจุบันของคุณเพื่อขออีเมลใหม่ คุณต้องอนุมัติลิงก์ที่ส่งไปยังที่อยู่อีเมลทั้งสอง</string>
     <string name="account_credentials_current_password">รหัสผ่านปัจจุบัน</string>
+    <string name="cd_show_password">แสดงรหัสผ่าน</string>
+    <string name="cd_hide_password">ซ่อนรหัสผ่าน</string>
     <string name="account_credentials_verification_code">รหัสยืนยันอีเมล</string>
+    <string name="account_credentials_code_placeholder">รหัส 6 หลัก</string>
     <string name="account_credentials_new_password">รหัสผ่านใหม่</string>
     <string name="account_credentials_confirm_password">ยืนยันรหัสผ่านใหม่</string>
     <string name="account_credentials_new_email">ที่อยู่อีเมลใหม่</string>
@@ -3083,4 +3100,5 @@
     <string name="changelog_view_github">ดูบน GitHub</string>
     <string name="updates_whats_new">มีอะไรใหม่</string>
     <string name="updates_download_size">%1$s ดาวน์โหลด</string>
+    <string name="source_filter_result_count">%1$d จาก %2$d แหล่ง</string>
 </resources>

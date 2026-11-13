@@ -34,6 +34,9 @@
     <string name="action_reset">I-reset sa Default</string>
     <string name="action_resume">Ipagpatuloy</string>
     <string name="action_retry">Subukan muli</string>
+    <string name="cd_decrease_value">Bawasan ang %1$s</string>
+    <string name="cd_increase_value">Dagdagan ang %1$s</string>
+    <string name="action_refresh">I-refresh</string>
     <string name="action_save">I-save</string>
     <string name="action_saving">Sine-save…</string>
     <string name="action_switch">Lumipat</string>
@@ -544,6 +547,8 @@ Ang</string>
     <string name="compose_player_subtitle_delay">Pagkaantala ng Subtitle</string>
     <string name="compose_player_subtitles">Mga Subtitle</string>
     <string name="compose_player_text_opacity">Text Opacity</string>
+    <string name="compose_player_timing">Timing</string>
+    <string name="compose_player_text">Teksto</string>
     <string name="compose_player_brightness_level">Liwanag %1$s</string>
     <string name="compose_player_volume_level">Dami %1$s</string>
     <string name="compose_player_muted">Naka-mute</string>
@@ -867,6 +872,9 @@ logo ng</string>
     <string name="remote_pc_check_ip">Maghanap ng PC sa address na ito</string>
     <string name="remote_pc_desktop_addresses">Lokal na PC address: %1$s</string>
     <string name="remote_pc_saved_devices">Mga dating ipinares na PC</string>
+    <string name="remote_pc_hero_hint">Buksan ang Remote ng telepono sa PC. Gamitin ang parehong account at network.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · walang code</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · hihingi ng kumpirmasyon</string>
     <string name="remote_pc_saved_notice">Ang mga naka-save na PC ay handang kumonekta muli. Ang mga dati nang naaprubahang Bluetooth na mga PC ay hindi nangangailangan ng isa pang code kapag ang parehong mga aparato ay mayroon pa ring protektadong mga key ng pagpapares. Ang mga koneksyon sa LAN ay nangangailangan pa rin ng kumpirmasyon.</string>
     <string name="remote_pc_forget">Kalimutan</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -939,6 +947,9 @@ logo ng</string>
     <string name="remote_window_status_connected">Nakakonekta ang telepono</string>
     <string name="remote_window_status_offline">Hindi handa</string>
     <string name="remote_window_other_ways">Iba pang mga paraan para kumonekta</string>
+    <string name="remote_window_local_address">Lokal na address ng PC</string>
+    <string name="remote_window_copy_address">Kopyahin ang address</string>
+    <string name="remote_window_trouble_caption">Mga firewall rule, uri ng network at mga port</string>
     <string name="remote_window_network_section">Network</string>
     <string name="remote_firewall_checking">Sinusuri ang Windows Firewall...</string>
     <string name="remote_discovery_unavailable">Hindi available ang awtomatikong pagtuklas ng UDP. Maaari ka pa ring magpares sa pamamagitan ng pag-scan sa QR code o pagpasok ng IP address ng PC na ito.</string>
@@ -2318,6 +2329,7 @@ Ang</string>
     <string name="cloud_library_play_not_connected">Hindi nakakonekta ang serbisyo sa cloud.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s ay hindi konektado.</string>
     <string name="cloud_library_playable_file_count">%1$d puwedeng laruin na mga file</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d file</string>
     <string name="cloud_library_provider_all">Lahat</string>
     <string name="cloud_library_refresh">I-refresh ang cloud library</string>
     <string name="cloud_library_search_label">Maghanap sa cloud library</string>
@@ -2725,6 +2737,8 @@ Kasalukuyang ginagamit ang</string>
     <string name="layout_random_episode_sub">I-shuffle ang mga episode mula sa anumang serye. Kapag na-off ito, na-pause ang shuffle.</string>
     <string name="random_episode_unwatched">Mga hindi napapanood na episode</string>
     <string name="random_episode_include_watched">Lahat ng episode</string>
+    <string name="shuffle_pool_episode_count">%1$d episode</string>
+    <string name="shuffle_pool_episode_count_all">%1$d episode, kasama ang mga napanood na</string>
     <string name="random_episode_empty_subtitle">Walang mga episode na magagamit upang i-shuffle.</string>
     <string name="random_episode_caught_up">Napanood mo na ang bawat episode. Piliin ang Lahat ng mga episode upang panoorin muli.</string>
     <string name="random_episode_loading">Naglo-load ng mga episode…</string>
@@ -2857,7 +2871,10 @@ Kasalukuyang ginagamit ang</string>
     <string name="account_credentials_password_step2">Ilagay ang code mula sa iyong email, pagkatapos ay pumili ng bagong password. Awtomatikong mag-e-expire ang code.</string>
     <string name="account_credentials_email_step">Kumpirmahin ang iyong kasalukuyang password para humiling ng bagong email. Dapat mong aprubahan ang mga link na ipinadala sa parehong email address.</string>
     <string name="account_credentials_current_password">Kasalukuyang password</string>
+    <string name="cd_show_password">Ipakita ang password</string>
+    <string name="cd_hide_password">Itago ang password</string>
     <string name="account_credentials_verification_code">Email verification code</string>
+    <string name="account_credentials_code_placeholder">6-digit na code</string>
     <string name="account_credentials_new_password">Bagong password</string>
     <string name="account_credentials_confirm_password">Kumpirmahin ang bagong password</string>
     <string name="account_credentials_new_email">Bagong email address</string>
@@ -3100,4 +3117,5 @@ Nagbalik ang</string>
     <string name="changelog_view_github">Tingnan sa GitHub</string>
     <string name="updates_whats_new">Ano ang bago</string>
     <string name="updates_download_size">%1$s download</string>
+    <string name="source_filter_result_count">%1$d sa %2$d source</string>
 </resources>

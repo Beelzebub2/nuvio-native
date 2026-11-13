@@ -1,5 +1,13 @@
 package com.nuvio.app.core.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +26,8 @@ fun Chip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    showSelectedCheck: Boolean = false,
+    icon: ImageVector? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     Surface(
@@ -41,15 +51,24 @@ fun Chip(
             },
         ),
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.padding(
                 horizontal = NuvioTokens.Space.s12,
                 vertical = tokens.components.chipVerticalPadding,
             ),
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val leading = if (showSelectedCheck && selected) Icons.Rounded.Check else icon
+            if (leading != null) {
+                Icon(leading, contentDescription = null, modifier = Modifier.size(NuvioTokens.Space.s14))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

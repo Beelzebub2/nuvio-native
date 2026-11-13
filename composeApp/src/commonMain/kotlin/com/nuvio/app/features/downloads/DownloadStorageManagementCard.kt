@@ -1,5 +1,10 @@
 package com.nuvio.app.features.downloads
 
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioPillButton
+import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.tabular
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -101,38 +106,24 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
     val noTargetLabel = stringResource(Res.string.downloads_storage_no_target)
     fun targetLabel(bytes: Long?) = bytes?.let { "${it / Gib} GiB" } ?: noTargetLabel
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(tokens.shapes.compactCard)
-            .background(tokens.colors.textPrimary.copy(alpha = 0.04f))
-            .border(1.dp, tokens.colors.borderSubtle, tokens.shapes.compactCard)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(48.dp).clip(CircleShape).background(tokens.colors.accent.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.Storage, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(24.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            NuvioIconChip(Icons.Rounded.Storage, size = 48.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     stringResource(Res.string.downloads_storage_heading),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleLarge,
                     color = tokens.colors.textPrimary,
                 )
                 Text(
                     stringResource(Res.string.downloads_storage_recorded, formatDownloadBytes(usage)),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium.tabular,
                     color = tokens.colors.textMuted,
                 )
                 available?.let {
                     Text(
                         stringResource(Res.string.downloads_storage_available, formatDownloadBytes(it)),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium.tabular,
                         color = tokens.colors.textMuted,
                     )
                 }
@@ -140,11 +131,10 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
         }
         // With a target set, a bar shows how much of it the downloads use; it turns red past the target.
         target?.takeIf { it > 0L }?.let { limit ->
-            LinearProgressIndicator(
-                progress = { (usage.toDouble() / limit).toFloat().coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-                color = if (overTarget) tokens.colors.danger else tokens.colors.accent,
-                trackColor = tokens.colors.textPrimary.copy(alpha = 0.08f),
+            NuvioProgressBar(
+                progress = (usage.toDouble() / limit).toFloat().coerceIn(0f, 1f),
+                trackColor = tokens.colors.textPrimary.copy(alpha = tokens.opacity.hover),
+                fillColor = if (overTarget) tokens.colors.danger else tokens.colors.accent,
             )
         }
         if (overTarget) DialogHint(stringResource(Res.string.downloads_storage_above_target), isError = true)
@@ -160,11 +150,9 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box {
-                NuvioCompactActionButton(
-                    label = stringResource(Res.string.downloads_storage_target_button, targetLabel(target)),
+                NuvioPillButton(
+                    text = stringResource(Res.string.downloads_storage_target_button, targetLabel(target)),
                     icon = Icons.Rounded.DataUsage,
-                    trailingIcon = Icons.Rounded.ExpandMore,
-                    size = NuvioActionSize.Small,
                     onClick = { showTargetMenu = true },
                 )
                 Menu(expanded = showTargetMenu, onDismissRequest = { showTargetMenu = false }) {
@@ -190,14 +178,13 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                 }
             }
             if (target != null) {
-                NuvioCompactActionButton(
-                    label = stringResource(if (hardLimitEnabled) {
+                NuvioPillButton(
+                    text = stringResource(if (hardLimitEnabled) {
                         Res.string.downloads_storage_enforce_disable
                     } else {
                         Res.string.downloads_storage_enforce_enable
                     }),
                     icon = Icons.Rounded.DataUsage,
-                    size = NuvioActionSize.Small,
                     onClick = {
                         val enabled = !hardLimitEnabled
                         runCatching {
@@ -212,20 +199,18 @@ internal fun DownloadStorageManagementCard(items: List<DownloadItem>, profileId:
                     },
                 )
             }
-            NuvioCompactActionButton(
-                label = stringResource(Res.string.downloads_storage_review),
+            NuvioPillButton(
+                text = stringResource(Res.string.downloads_storage_review),
                 icon = Icons.Rounded.CleaningServices,
-                size = NuvioActionSize.Small,
                 onClick = {
                     watchedOnly = false
                     selectedIds = emptySet()
                     showPreview = true
                 },
             )
-            NuvioCompactActionButton(
-                label = stringResource(Res.string.downloads_storage_remove_watched),
+            NuvioPillButton(
+                text = stringResource(Res.string.downloads_storage_remove_watched),
                 icon = Icons.Rounded.DoneAll,
-                size = NuvioActionSize.Small,
                 enabled = watchedEpisodeIds.isNotEmpty(),
                 onClick = {
                     // The preview will further restrict this snapshot to verified,

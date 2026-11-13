@@ -1,6 +1,7 @@
 package com.nuvio.app.core.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RippleConfiguration
@@ -13,12 +14,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.sp
 import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.jetbrains_sans_bold
@@ -46,23 +49,50 @@ val MaterialTheme.appTheme: AppTheme
 private fun contentColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color(0xFF111111) else Color(0xFFF5F7F8)
 
-private fun buildColorScheme(palette: ThemeColorPalette, amoled: Boolean = false) = darkColorScheme(
-    primary = palette.secondary,
-    onPrimary = palette.onSecondary,
-    primaryContainer = palette.focusBackground,
-    onPrimaryContainer = contentColorFor(palette.focusBackground),
-    secondary = palette.secondaryVariant,
-    onSecondary = palette.onSecondaryVariant,
-    background = if (amoled) Color.Black else palette.background,
-    onBackground = Color(0xFFF5F7F8),
-    surface = palette.backgroundElevated,
-    onSurface = Color(0xFFF5F7F8),
-    surfaceVariant = palette.backgroundCard,
-    onSurfaceVariant = Color(0xFF969CA3),
-    outline = Color(0xFF252A2A),
-    error = Color(0xFFE36A8A),
-    onError = Color(0xFFFCE5EC),
-)
+private fun buildColorScheme(palette: ThemeColorPalette, amoled: Boolean = false): ColorScheme {
+    val background = if (amoled) Color.Black else palette.background
+    val border = Color(0xFF252A2A)
+    // Every role is set so no screen falls back to Material's purple-grey baseline palette.
+    return darkColorScheme(
+        primary = palette.secondary,
+        onPrimary = palette.onSecondary,
+        primaryContainer = palette.focusBackground,
+        onPrimaryContainer = contentColorFor(palette.focusBackground),
+        secondary = palette.secondaryVariant,
+        onSecondary = palette.onSecondaryVariant,
+        secondaryContainer = palette.focusBackground,
+        onSecondaryContainer = contentColorFor(palette.focusBackground),
+        tertiary = palette.secondaryVariant,
+        onTertiary = palette.onSecondaryVariant,
+        tertiaryContainer = palette.focusBackground,
+        onTertiaryContainer = contentColorFor(palette.focusBackground),
+        background = background,
+        onBackground = Color(0xFFF5F7F8),
+        surface = palette.backgroundElevated,
+        onSurface = Color(0xFFF5F7F8),
+        surfaceVariant = palette.backgroundCard,
+        onSurfaceVariant = Color(0xFF969CA3),
+        surfaceDim = background,
+        surfaceBright = palette.backgroundCard,
+        surfaceContainerLowest = background,
+        surfaceContainerLow = palette.backgroundElevated,
+        surfaceContainer = palette.backgroundElevated,
+        surfaceContainerHigh = palette.backgroundCard,
+        surfaceContainerHighest = palette.backgroundCard,
+        // Themed surfaces already separate by colour; Material's tonal tint would shift them.
+        surfaceTint = Color.Transparent,
+        outline = border,
+        outlineVariant = border.copy(alpha = 0.55f),
+        inverseSurface = Color(0xFFF5F7F8),
+        inverseOnSurface = Color(0xFF111111),
+        inversePrimary = palette.secondaryVariant,
+        error = Color(0xFFE36A8A),
+        onError = Color(0xFFFCE5EC),
+        errorContainer = Color(0xFFE36A8A).copy(alpha = 0.16f).compositeOver(palette.backgroundElevated),
+        onErrorContainer = Color(0xFFFCE5EC),
+        scrim = Color.Black,
+    )
+}
 
 private val JetBrainsSans: FontFamily
     @Composable
@@ -125,6 +155,32 @@ private val NuvioTypography: Typography
             lineHeight = NuvioTokens.LineHeight.labelXs,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = NuvioTokens.LetterSpacing.label,
+        ),
+        // The roles below used to fall back to the platform font with Material's tracking.
+        // They keep Material's sizes so existing layouts do not shift.
+        displayMedium = TextStyle(fontFamily = JetBrainsSans, fontSize = 45.sp, lineHeight = 52.sp, fontWeight = FontWeight.Normal),
+        displaySmall = TextStyle(fontFamily = JetBrainsSans, fontSize = 36.sp, lineHeight = 44.sp, fontWeight = FontWeight.Normal),
+        headlineMedium = TextStyle(fontFamily = JetBrainsSans, fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.Normal),
+        headlineSmall = TextStyle(fontFamily = JetBrainsSans, fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Normal),
+        titleSmall = TextStyle(
+            fontFamily = JetBrainsSans,
+            fontSize = NuvioTokens.Type.bodyMd,
+            lineHeight = NuvioTokens.LineHeight.bodyMd,
+            fontWeight = FontWeight.Medium,
+        ),
+        bodySmall = TextStyle(
+            fontFamily = JetBrainsSans,
+            fontSize = NuvioTokens.Type.labelSm,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Normal,
+            letterSpacing = 0.1.sp,
+        ),
+        labelSmall = TextStyle(
+            fontFamily = JetBrainsSans,
+            fontSize = NuvioTokens.Type.labelXs,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.3.sp,
         ),
     )
 

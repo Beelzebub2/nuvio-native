@@ -34,6 +34,9 @@
     <string name="action_reset">డిఫాల్ట్‌కి రీసెట్ చేయండి</string>
     <string name="action_resume">పునఃప్రారంభం</string>
     <string name="action_retry">మళ్లీ ప్రయత్నించండి</string>
+    <string name="cd_decrease_value">%1$s తగ్గించు</string>
+    <string name="cd_increase_value">%1$s పెంచు</string>
+    <string name="action_refresh">రిఫ్రెష్ చేయండి</string>
     <string name="action_save">సేవ్ చేయండి</string>
     <string name="action_saving">సేవ్ చేస్తోంది…</string>
     <string name="action_switch">మారండి</string>
@@ -543,6 +546,8 @@
     <string name="compose_player_subtitle_delay">ఉపశీర్షిక ఆలస్యం</string>
     <string name="compose_player_subtitles">ఉపశీర్షికలు</string>
     <string name="compose_player_text_opacity">టెక్స్ట్ అస్పష్టత</string>
+    <string name="compose_player_timing">సమయం</string>
+    <string name="compose_player_text">టెక్స్ట్</string>
     <string name="compose_player_brightness_level">ప్రకాశం %1$s</string>
     <string name="compose_player_volume_level">వాల్యూమ్ %1$s</string>
     <string name="compose_player_muted">మ్యూట్ చేయబడింది</string>
@@ -855,6 +860,9 @@
     <string name="remote_pc_check_ip">ఈ చిరునామాలో PCని కనుగొనండి</string>
     <string name="remote_pc_desktop_addresses">స్థానిక PC చిరునామా: %1$s</string>
     <string name="remote_pc_saved_devices">గతంలో జత చేసిన PCలు</string>
+    <string name="remote_pc_hero_hint">PCలో ఫోన్ రిమోట్‌ను తెరవండి. అదే ఖాతా మరియు నెట్‌వర్క్‌ను ఉపయోగించండి.</string>
+    <string name="remote_pc_saved_bluetooth">బ్లూటూత్ · కోడ్ అవసరం లేదు</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · నిర్ధారణ అడుగుతుంది</string>
     <string name="remote_pc_saved_notice">సేవ్ చేయబడిన PCలు మళ్లీ కనెక్ట్ చేయడానికి సిద్ధంగా ఉన్నాయి. మునుపు ఆమోదించబడిన Bluetooth రెండు పరికరాలు ఇప్పటికీ వాటి రక్షిత జత కీలను కలిగి ఉన్నప్పుడు PCలకు మరొక కోడ్ అవసరం లేదు. LAN కనెక్షన్‌లకు ఇప్పటికీ నిర్ధారణ అవసరం.</string>
     <string name="remote_pc_forget">మర్చిపో</string>
     <string name="remote_pc_wake">వేక్ PC</string>
@@ -927,6 +935,9 @@
     <string name="remote_window_status_connected">ఫోన్ కనెక్ట్ చేయబడింది</string>
     <string name="remote_window_status_offline">సిద్ధంగా లేదు</string>
     <string name="remote_window_other_ways">కనెక్ట్ చేయడానికి ఇతర మార్గాలు</string>
+    <string name="remote_window_local_address">PC స్థానిక చిరునామా</string>
+    <string name="remote_window_copy_address">చిరునామాను కాపీ చేయండి</string>
+    <string name="remote_window_trouble_caption">ఫైర్‌వాల్ నియమాలు, నెట్‌వర్క్ రకం మరియు పోర్ట్‌లు</string>
     <string name="remote_window_network_section">నెట్‌వర్క్</string>
     <string name="remote_firewall_checking">Windows ఫైర్‌వాల్‌ని తనిఖీ చేస్తోంది…</string>
     <string name="remote_discovery_unavailable">ఆటోమేటిక్ UDP ఆవిష్కరణ అందుబాటులో లేదు. మీరు ఇప్పటికీ QR కోడ్‌ని స్కాన్ చేయడం ద్వారా లేదా ఈ PC యొక్క IP చిరునామాను నమోదు చేయడం ద్వారా జత చేయవచ్చు.</string>
@@ -2288,6 +2299,7 @@
     <string name="cloud_library_play_not_connected">క్లౌడ్ సేవ కనెక్ట్ చేయబడలేదు.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s కనెక్ట్ చేయబడలేదు.</string>
     <string name="cloud_library_playable_file_count">%1$d ప్లే చేయగల ఫైల్‌లు</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d ఫైల్‌లు</string>
     <string name="cloud_library_provider_all">అన్నీ</string>
     <string name="cloud_library_refresh">క్లౌడ్ లైబ్రరీని రిఫ్రెష్ చేయండి</string>
     <string name="cloud_library_search_label">క్లౌడ్ లైబ్రరీని శోధించండి</string>
@@ -2688,6 +2700,8 @@
     <string name="layout_random_episode_sub">ఏదైనా సిరీస్ నుండి ఎపిసోడ్‌లను షఫుల్ చేయండి. దీన్ని ఆఫ్ చేయడం వలన షఫుల్ పాజ్ అవుతుంది.</string>
     <string name="random_episode_unwatched">చూడని ఎపిసోడ్‌లు</string>
     <string name="random_episode_include_watched">అన్ని ఎపిసోడ్‌లు</string>
+    <string name="shuffle_pool_episode_count">%1$d ఎపిసోడ్‌లు</string>
+    <string name="shuffle_pool_episode_count_all">%1$d ఎపిసోడ్‌లు, చూసినవి కలిపి</string>
     <string name="random_episode_empty_subtitle">షఫుల్ చేయడానికి ఎపిసోడ్‌లు ఏవీ అందుబాటులో లేవు.</string>
     <string name="random_episode_caught_up">మీరు ప్రతి ఎపిసోడ్‌ని వీక్షించారు. మళ్లీ చూడటానికి అన్ని ఎపిసోడ్‌లను ఎంచుకోండి.</string>
     <string name="random_episode_loading">ఎపిసోడ్‌లను లోడ్ చేస్తోంది…</string>
@@ -2821,7 +2835,10 @@
     <string name="account_credentials_password_step2">మీ ఇమెయిల్ నుండి కోడ్‌ను నమోదు చేసి, ఆపై కొత్త పాస్‌వర్డ్‌ను ఎంచుకోండి. కోడ్ స్వయంచాలకంగా గడువు ముగుస్తుంది.</string>
     <string name="account_credentials_email_step">కొత్త ఇమెయిల్‌ను అభ్యర్థించడానికి మీ ప్రస్తుత పాస్‌వర్డ్‌ను నిర్ధారించండి. మీరు రెండు ఇమెయిల్ చిరునామాలకు పంపిన లింక్‌లను తప్పనిసరిగా ఆమోదించాలి.</string>
     <string name="account_credentials_current_password">ప్రస్తుత పాస్‌వర్డ్</string>
+    <string name="cd_show_password">పాస్‌వర్డ్‌ను చూపించు</string>
+    <string name="cd_hide_password">పాస్‌వర్డ్‌ను దాచు</string>
     <string name="account_credentials_verification_code">ఇమెయిల్ ధృవీకరణ కోడ్</string>
+    <string name="account_credentials_code_placeholder">6-అంకెల కోడ్</string>
     <string name="account_credentials_new_password">కొత్త పాస్‌వర్డ్</string>
     <string name="account_credentials_confirm_password">కొత్త పాస్‌వర్డ్‌ను నిర్ధారించండి</string>
     <string name="account_credentials_new_email">కొత్త ఇమెయిల్ చిరునామా</string>
@@ -3060,4 +3077,5 @@
     <string name="changelog_view_github">GitHubలో వీక్షించండి</string>
     <string name="updates_whats_new">కొత్తవి ఏమిటి</string>
     <string name="updates_download_size">%1$s డౌన్‌లోడ్</string>
+    <string name="source_filter_result_count">%2$d మూలాలలో %1$d</string>
 </resources>

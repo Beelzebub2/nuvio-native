@@ -17,6 +17,8 @@
     <string name="action_reset">デフォルトに戻す</string>
     <string name="action_resume">再開</string>
     <string name="action_retry">再試行</string>
+    <string name="cd_decrease_value">%1$sを下げる</string>
+    <string name="cd_increase_value">%1$sを上げる</string>
     <string name="action_save">保存</string>
     <string name="action_saving">保存中…</string>
     <string name="action_switch">切り替え</string>
@@ -389,6 +391,8 @@
     <string name="compose_player_subtitle_delay">字幕ディレイ</string>
     <string name="compose_player_subtitles">字幕</string>
     <string name="compose_player_text_opacity">テキストの不透明度</string>
+    <string name="compose_player_timing">タイミング</string>
+    <string name="compose_player_text">テキスト</string>
     <string name="compose_player_brightness_level">明るさ %1$s</string>
     <string name="compose_player_volume_level">音量 %1$s</string>
     <string name="compose_player_muted">ミュート中</string>

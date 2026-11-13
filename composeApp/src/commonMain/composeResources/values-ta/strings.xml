@@ -34,6 +34,9 @@
     <string name="action_reset">இயல்புநிலைக்கு மீட்டமைக்கவும்</string>
     <string name="action_resume">ரெஸ்யூம்</string>
     <string name="action_retry">மீண்டும் முயற்சிக்கவும்</string>
+    <string name="cd_decrease_value">%1$s குறை</string>
+    <string name="cd_increase_value">%1$s கூட்டு</string>
+    <string name="action_refresh">புதுப்பி</string>
     <string name="action_save">சேமி</string>
     <string name="action_saving">சேமிக்கிறது…</string>
     <string name="action_switch">மாறவும்</string>
@@ -545,6 +548,8 @@
     <string name="compose_player_subtitle_delay">வசன தாமதம்</string>
     <string name="compose_player_subtitles">வசனங்கள்</string>
     <string name="compose_player_text_opacity">உரை ஒளிபுகாநிலை</string>
+    <string name="compose_player_timing">நேரம்</string>
+    <string name="compose_player_text">உரை</string>
     <string name="compose_player_brightness_level">பிரகாசம் %1$s</string>
     <string name="compose_player_volume_level">தொகுதி %1$s</string>
     <string name="compose_player_muted">முடக்கப்பட்டது</string>
@@ -857,6 +862,9 @@
     <string name="remote_pc_check_ip">இந்த முகவரியில் கணினியைக் கண்டறியவும்</string>
     <string name="remote_pc_desktop_addresses">உள்ளூர் PC முகவரி: %1$s</string>
     <string name="remote_pc_saved_devices">முன்பு இணைக்கப்பட்ட பிசிக்கள்</string>
+    <string name="remote_pc_hero_hint">கணினியில் ஃபோன் ரிமோட்டைத் திறக்கவும். ஒரே கணக்கு மற்றும் நெட்வொர்க்கைப் பயன்படுத்தவும்.</string>
+    <string name="remote_pc_saved_bluetooth">புளூடூத் · குறியீடு தேவையில்லை</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · உறுதிப்படுத்தக் கேட்கும்</string>
     <string name="remote_pc_saved_notice">சேமித்த பிசிக்கள் மீண்டும் இணைக்க தயாராக உள்ளன. முன்னர் அங்கீகரிக்கப்பட்ட Bluetooth இரண்டு சாதனங்களிலும் இன்னும் பாதுகாக்கப்பட்ட இணைத்தல் விசைகள் இருக்கும் போது PCகளுக்கு மற்றொரு குறியீடு தேவையில்லை. LAN இணைப்புகளுக்கு இன்னும் உறுதிப்படுத்தல் தேவைப்படுகிறது.</string>
     <string name="remote_pc_forget">மறந்துவிடு</string>
     <string name="remote_pc_wake">வேக் பிசி</string>
@@ -929,6 +937,9 @@
     <string name="remote_window_status_connected">ஃபோன் இணைக்கப்பட்டது</string>
     <string name="remote_window_status_offline">தயாராக இல்லை</string>
     <string name="remote_window_other_ways">இணைப்பதற்கான பிற வழிகள்</string>
+    <string name="remote_window_local_address">கணினியின் உள்ளூர் முகவரி</string>
+    <string name="remote_window_copy_address">முகவரியை நகலெடு</string>
+    <string name="remote_window_trouble_caption">ஃபயர்வால் விதிகள், நெட்வொர்க் வகை மற்றும் போர்ட்கள்</string>
     <string name="remote_window_network_section">நெட்வொர்க்</string>
     <string name="remote_firewall_checking">விண்டோஸ் ஃபயர்வாலைச் சரிபார்க்கிறது…</string>
     <string name="remote_discovery_unavailable">தானியங்கி UDP கண்டுபிடிப்பு கிடைக்கவில்லை. QR குறியீட்டை ஸ்கேன் செய்வதன் மூலம் அல்லது இந்த கணினியின் IP முகவரியை உள்ளிடுவதன் மூலம் நீங்கள் இன்னும் இணைக்கலாம்.</string>
@@ -2290,6 +2301,7 @@
     <string name="cloud_library_play_not_connected">கிளவுட் சேவை இணைக்கப்படவில்லை.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s இணைக்கப்படவில்லை.</string>
     <string name="cloud_library_playable_file_count">%1$d இயக்கக்கூடிய கோப்புகள்</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d கோப்புகள்</string>
     <string name="cloud_library_provider_all">அனைத்தும்</string>
     <string name="cloud_library_refresh">கிளவுட் லைப்ரரியைப் புதுப்பிக்கவும்</string>
     <string name="cloud_library_search_label">கிளவுட் லைப்ரரியில் தேடவும்</string>
@@ -2690,6 +2702,8 @@
     <string name="layout_random_episode_sub">எந்தத் தொடரிலிருந்தும் எபிசோட்களைக் கலக்கவும். இதை முடக்குவது கலப்பை இடைநிறுத்துகிறது.</string>
     <string name="random_episode_unwatched">பார்க்கப்படாத அத்தியாயங்கள்</string>
     <string name="random_episode_include_watched">அனைத்து அத்தியாயங்களும்</string>
+    <string name="shuffle_pool_episode_count">%1$d அத்தியாயங்கள்</string>
+    <string name="shuffle_pool_episode_count_all">%1$d அத்தியாயங்கள், பார்த்தவை உட்பட</string>
     <string name="random_episode_empty_subtitle">மாற்றுவதற்கு எபிசோடுகள் எதுவும் இல்லை.</string>
     <string name="random_episode_caught_up">நீங்கள் ஒவ்வொரு அத்தியாயத்தையும் பார்த்திருக்கிறீர்கள். மீண்டும் பார்க்க அனைத்து அத்தியாயங்களையும் தேர்வு செய்யவும்.</string>
     <string name="random_episode_loading">எபிசோடுகளை ஏற்றுகிறது…</string>
@@ -2823,7 +2837,10 @@
     <string name="account_credentials_password_step2">உங்கள் மின்னஞ்சலில் உள்ள குறியீட்டை உள்ளிட்டு, புதிய கடவுச்சொல்லைத் தேர்ந்தெடுக்கவும். குறியீடு தானாகவே காலாவதியாகும்.</string>
     <string name="account_credentials_email_step">புதிய மின்னஞ்சலைக் கோர உங்கள் தற்போதைய கடவுச்சொல்லை உறுதிப்படுத்தவும். இரண்டு மின்னஞ்சல் முகவரிகளுக்கும் அனுப்பப்பட்ட இணைப்புகளை நீங்கள் அங்கீகரிக்க வேண்டும்.</string>
     <string name="account_credentials_current_password">தற்போதைய கடவுச்சொல்</string>
+    <string name="cd_show_password">கடவுச்சொல்லைக் காட்டு</string>
+    <string name="cd_hide_password">கடவுச்சொல்லை மறை</string>
     <string name="account_credentials_verification_code">மின்னஞ்சல் சரிபார்ப்புக் குறியீடு</string>
+    <string name="account_credentials_code_placeholder">6-இலக்கக் குறியீடு</string>
     <string name="account_credentials_new_password">புதிய கடவுச்சொல்</string>
     <string name="account_credentials_confirm_password">புதிய கடவுச்சொல்லை உறுதிப்படுத்தவும்</string>
     <string name="account_credentials_new_email">புதிய மின்னஞ்சல் முகவரி</string>
@@ -3063,4 +3080,5 @@
     <string name="changelog_view_github">GitHub இல் காண்க</string>
     <string name="updates_whats_new">புதியது என்ன</string>
     <string name="updates_download_size">%1$s பதிவிறக்கவும்</string>
+    <string name="source_filter_result_count">%2$d மூலங்களில் %1$d</string>
 </resources>

@@ -18,6 +18,8 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.features.search.SearchPrefill
@@ -89,14 +91,19 @@ class WatchOrderLayoutUiTest {
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    sampleSteps.forEachIndexed { index, step ->
-                                        WatchOrderStepRow(
-                                            step = step,
-                                            position = index + 1,
-                                            isCurrent = index == 0,
-                                            isCompleted = index == 0,
-                                            onFindTitle = searched::add,
-                                        )
+                                    WatchOrderConfidenceBadge("verified")
+                                    // Rows sit in one group, as on the details page.
+                                    NuvioGroup {
+                                        sampleSteps.forEachIndexed { index, step ->
+                                            if (index > 0) NuvioGroupDivider()
+                                            WatchOrderStepRow(
+                                                step = step,
+                                                position = index + 1,
+                                                isCurrent = index == 1,
+                                                isCompleted = index == 0,
+                                                onFindTitle = searched::add,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -105,8 +112,11 @@ class WatchOrderLayoutUiTest {
                 }
                 waitForIdle()
                 onNodeWithText("Watch order").assertExists()
+                // The current installment is not a search target; the others are.
                 onNodeWithText(sampleSteps[1].title).performClick()
-                runOnIdle { assertEquals(listOf(sampleSteps[1].title), searched) }
+                runOnIdle { assertEquals(emptyList<String>(), searched) }
+                onNodeWithText(sampleSteps[2].title).performClick()
+                runOnIdle { assertEquals(listOf(sampleSteps[2].title), searched) }
                 val output = File("build/watch-order-capture").apply { mkdirs() }
                 ImageIO.write(
                     onRoot().captureToImage().toAwtImage(), "png",

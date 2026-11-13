@@ -17,6 +17,8 @@
   <string name="action_reset">Reset</string>
   <string name="action_resume">Riprendi</string>
   <string name="action_retry">Riprova</string>
+    <string name="cd_decrease_value">Riduci %1$s</string>
+    <string name="cd_increase_value">Aumenta %1$s</string>
   <string name="action_save">Salva</string>
   <string name="addon_installing">Installando</string>
   <string name="addon_title">Addons</string>
@@ -202,6 +204,8 @@
   <string name="compose_player_subtitle_delay">Ritardo sottotitoli</string>
   <string name="compose_player_subtitles">Sottotitoli</string>
   <string name="compose_player_text_opacity">Opacità testo</string>
+    <string name="compose_player_timing">Sincronizzazione</string>
+    <string name="compose_player_text">Testo</string>
   <string name="compose_player_brightness_level">Luminosità %1$s</string>
   <string name="compose_player_volume_level">Volume %1$s</string>
   <string name="compose_player_muted">Muto</string>

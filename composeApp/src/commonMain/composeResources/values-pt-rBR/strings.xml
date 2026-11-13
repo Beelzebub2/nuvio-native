@@ -1508,6 +1508,7 @@
     <string name="source_filter_size_two">Até 2 GiB</string>
     <string name="source_filter_size_five">Até 5 GiB</string>
     <string name="source_filter_clear">Limpar filtros</string>
+    <string name="source_filter_result_count">%1$d de %2$d fontes</string>
     <string name="source_filter_no_matches">Nenhuma fonte correspondente</string>
     <string name="source_filter_adjust">Experimente outra busca ou remova alguns filtros.</string>
     <string name="streams_resume_from_percent">Retomar de %1$d%</string>

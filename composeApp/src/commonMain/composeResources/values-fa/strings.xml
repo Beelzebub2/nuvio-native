@@ -34,6 +34,9 @@
     <string name="action_reset">بازنشانی به پیش‌فرض</string>
     <string name="action_resume">رزومه</string>
     <string name="action_retry">دوباره امتحان کنید</string>
+    <string name="cd_decrease_value">کاهش %1$s</string>
+    <string name="cd_increase_value">افزایش %1$s</string>
+    <string name="action_refresh">بازخوانی</string>
     <string name="action_save">ذخیره کنید</string>
     <string name="action_saving">در حال ذخیره…</string>
     <string name="action_switch">سوئیچ</string>
@@ -544,6 +547,8 @@
     <string name="compose_player_subtitle_delay">تاخیر در زیرنویس</string>
     <string name="compose_player_subtitles">زیرنویس</string>
     <string name="compose_player_text_opacity">کدورت متن</string>
+    <string name="compose_player_timing">زمان‌بندی</string>
+    <string name="compose_player_text">متن</string>
     <string name="compose_player_brightness_level">روشنایی %1$s</string>
     <string name="compose_player_volume_level">حجم %1$s</string>
     <string name="compose_player_muted">بی‌صدا</string>
@@ -856,6 +861,9 @@
     <string name="remote_pc_check_ip">رایانه شخصی را در این آدرس پیدا کنید</string>
     <string name="remote_pc_desktop_addresses">آدرس رایانه محلی: %1$s</string>
     <string name="remote_pc_saved_devices">رایانه‌های شخصی جفت‌شده قبلی</string>
+    <string name="remote_pc_hero_hint">«کنترل از راه دور تلفن» را روی رایانه باز کنید. از همان حساب و شبکه استفاده کنید.</string>
+    <string name="remote_pc_saved_bluetooth">بلوتوث · بدون نیاز به کد</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · درخواست تأیید</string>
     <string name="remote_pc_saved_notice">رایانه های شخصی ذخیره شده آماده اتصال مجدد هستند. رایانه‌های شخصی Bluetooth تأیید شده قبلی، زمانی که هر دو دستگاه همچنان کلیدهای جفت‌سازی محافظت شده خود را دارند، به کد دیگری نیاز ندارند. اتصالات LAN همچنان نیاز به تأیید دارند.</string>
     <string name="remote_pc_forget">فراموش کن</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -928,6 +936,9 @@
     <string name="remote_window_status_connected">تلفن وصل شد</string>
     <string name="remote_window_status_offline">آماده نیست</string>
     <string name="remote_window_other_ways">راه‌های دیگر برای اتصال</string>
+    <string name="remote_window_local_address">آدرس محلی رایانه</string>
+    <string name="remote_window_copy_address">کپی آدرس</string>
+    <string name="remote_window_trouble_caption">قوانین فایروال، نوع شبکه و پورت‌ها</string>
     <string name="remote_window_network_section">شبکه</string>
     <string name="remote_firewall_checking">بررسی فایروال ویندوز…</string>
     <string name="remote_discovery_unavailable">کشف خودکار UDP در دسترس نیست. همچنان می‌توانید با اسکن کردن کد QR یا وارد کردن آدرس IP این رایانه شخصی، جفت‌سازی کنید.</string>
@@ -2288,6 +2299,7 @@
     <string name="cloud_library_play_not_connected">سرویس ابری متصل نیست.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s متصل نیست.</string>
     <string name="cloud_library_playable_file_count">%1$d فایل‌های قابل پخش</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d فایل</string>
     <string name="cloud_library_provider_all">همه</string>
     <string name="cloud_library_refresh">بازخوانی کتابخانه ابری</string>
     <string name="cloud_library_search_label">جستجوی کتابخانه ابری</string>
@@ -2688,6 +2700,8 @@
     <string name="layout_random_episode_sub">قسمت‌های هر سریالی را به هم بزنید. غیرفعال کردن این حالت، زدن را متوقف می کند.</string>
     <string name="random_episode_unwatched">قسمت‌های تماشا نشده</string>
     <string name="random_episode_include_watched">همه قسمت ها</string>
+    <string name="shuffle_pool_episode_count">%1$d قسمت</string>
+    <string name="shuffle_pool_episode_count_all">%1$d قسمت، همراه با قسمت‌های دیده‌شده</string>
     <string name="random_episode_empty_subtitle">هیچ قسمتی برای به هم زدن در دسترس نیست.</string>
     <string name="random_episode_caught_up">شما هر قسمت را تماشا کرده اید. همه قسمت‌ها را برای تماشای دوباره انتخاب کنید.</string>
     <string name="random_episode_loading">در حال بارگیری قسمت‌ها…</string>
@@ -2820,7 +2834,10 @@
     <string name="account_credentials_password_step2">کد را از ایمیل خود وارد کنید، سپس یک رمز عبور جدید انتخاب کنید. کد به طور خودکار منقضی می شود.</string>
     <string name="account_credentials_email_step">رمز عبور فعلی خود را برای درخواست ایمیل جدید تأیید کنید. شما باید پیوندهای ارسال شده به هر دو آدرس ایمیل را تأیید کنید.</string>
     <string name="account_credentials_current_password">رمز عبور فعلی</string>
+    <string name="cd_show_password">نمایش رمز عبور</string>
+    <string name="cd_hide_password">پنهان کردن رمز عبور</string>
     <string name="account_credentials_verification_code">کد تأیید ایمیل</string>
+    <string name="account_credentials_code_placeholder">کد ۶ رقمی</string>
     <string name="account_credentials_new_password">رمز عبور جدید</string>
     <string name="account_credentials_confirm_password">رمز عبور جدید را تأیید کنید</string>
     <string name="account_credentials_new_email">آدرس ایمیل جدید</string>
@@ -3060,4 +3077,5 @@
     <string name="changelog_view_github">مشاهده در GitHub</string>
     <string name="updates_whats_new">موارد جدید</string>
     <string name="updates_download_size">%1$s دانلود</string>
+    <string name="source_filter_result_count">%1$d از %2$d منبع</string>
 </resources>
