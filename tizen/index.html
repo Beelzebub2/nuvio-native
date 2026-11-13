@@ -38,9 +38,21 @@
           viewport.name = "viewport";
           document.head.appendChild(viewport);
         }
+        // One 1080-tall reference canvas whose width follows the panel's
+        // aspect ratio: 16:9 stays 1920, 21:9 and 32:9 Smart Monitors get a
+        // wider canvas. Mirrors computeTvLayout() in js/platform/tvViewport.js
+        // (tests/starlit-tv-viewport.test.mjs keeps the two in step); the app
+        // applies interface size and screen edges once it boots.
+        var screenWidth = Number(window.screen && window.screen.width) || 1920;
+        var screenHeight = Number(window.screen && window.screen.height) || 1080;
+        var layoutWidth = Math.round(1080 * (screenWidth / screenHeight));
+        if (!(layoutWidth >= 1920)) layoutWidth = 1920;
+        if (layoutWidth > 3840) layoutWidth = 3840;
         viewport.setAttribute(
           "content",
-          "width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+          "width=" +
+            layoutWidth +
+            ", height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         );
       })();
     </script>
@@ -51,7 +63,9 @@
     <link rel="stylesheet" href="css/layout.css?v=20260509s" />
     <link rel="stylesheet" href="css/components.css?v=20260531supporters2" />
     <link rel="stylesheet" href="css/themes.css?v=20260509s" />
-  <link rel="stylesheet" href="css/starlit.css">
+    <link rel="stylesheet" href="css/starlit-tv-tokens.css" />
+    <link rel="stylesheet" href="css/starlit-tv.css" />
+    <link rel="stylesheet" href="css/starlit.css" />
 </head>
   <body>
     <script src="boot-guard.js"></script>

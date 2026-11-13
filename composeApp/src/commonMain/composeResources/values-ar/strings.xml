@@ -20,6 +20,9 @@
     <string name="action_reset">استعادة الافتراضي</string>
     <string name="action_resume">استئناف</string>
     <string name="action_retry">إعادة المحاولة</string>
+    <string name="cd_decrease_value">تقليل %1$s</string>
+    <string name="cd_increase_value">زيادة %1$s</string>
+    <string name="action_refresh">تحديث</string>
     <string name="action_save">حفظ</string>
     <string name="action_saving">جارٍ الحفظ…</string>
     <string name="action_switch">تبديل</string>
@@ -406,6 +409,8 @@
     <string name="compose_player_subtitle_delay">تأخير الترجمة</string>
     <string name="compose_player_subtitles">الترجمات</string>
     <string name="compose_player_text_opacity">شفافية النص</string>
+    <string name="compose_player_timing">التوقيت</string>
+    <string name="compose_player_text">النص</string>
     <string name="compose_player_brightness_level">السطوع %1$s</string>
     <string name="compose_player_volume_level">مستوى الصوت %1$s</string>
     <string name="compose_player_muted">مكتوم</string>
@@ -1748,6 +1753,7 @@
     <string name="cloud_library_play_not_connected">الخدمة السحابية غير متصلة.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s غير متصل.</string>
     <string name="cloud_library_playable_file_count">عدد الملفات القابلة للتشغيل: %1$d</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d ملفات</string>
     <string name="cloud_library_provider_all">الكل</string>
     <string name="cloud_library_refresh">تحديث المكتبة السحابية</string>
     <string name="cloud_library_search_label">البحث في المكتبة السحابية</string>

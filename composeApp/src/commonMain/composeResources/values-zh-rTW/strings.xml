@@ -34,6 +34,9 @@
     <string name="action_reset">重設為預設值</string>
     <string name="action_resume">履歷</string>
     <string name="action_retry">重試</string>
+    <string name="cd_decrease_value">減少%1$s</string>
+    <string name="cd_increase_value">增加%1$s</string>
+    <string name="action_refresh">重新整理</string>
     <string name="action_save">保存</string>
     <string name="action_saving">正在儲存中...</string>
     <string name="action_switch">開關</string>
@@ -544,6 +547,8 @@
     <string name="compose_player_subtitle_delay">字幕延遲</string>
     <string name="compose_player_subtitles">字幕</string>
     <string name="compose_player_text_opacity">文本不透明度</string>
+    <string name="compose_player_timing">時間</string>
+    <string name="compose_player_text">文字</string>
     <string name="compose_player_brightness_level">亮度 %1$s</string>
     <string name="compose_player_volume_level">音量 %1$s</string>
     <string name="compose_player_muted">靜音</string>
@@ -860,6 +865,9 @@
     <string name="remote_pc_check_ip">在此位址尋找 PC</string>
     <string name="remote_pc_desktop_addresses">本機 PC 位址：%1$s</string>
     <string name="remote_pc_saved_devices">之前配對的電腦</string>
+    <string name="remote_pc_hero_hint">在電腦上開啟手機遙控器。使用相同的帳戶和網路。</string>
+    <string name="remote_pc_saved_bluetooth">藍牙 · 無需代碼</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · 需要確認</string>
     <string name="remote_pc_saved_notice">已儲存的電腦已準備好重新連線。當兩個裝置仍具有受保護的配對金鑰時，先前核准的 Bluetooth PC 不需要另一個代碼。 LAN 連線仍需要確認。</string>
     <string name="remote_pc_forget">忘了</string>
     <string name="remote_pc_wake">喚醒電腦</string>
@@ -932,6 +940,9 @@
     <string name="remote_window_status_connected">電話已連接</string>
     <string name="remote_window_status_offline">未準備好</string>
     <string name="remote_window_other_ways">其他連接方式</string>
+    <string name="remote_window_local_address">電腦本機位址</string>
+    <string name="remote_window_copy_address">複製位址</string>
+    <string name="remote_window_trouble_caption">防火牆規則、網路類型和連接埠</string>
     <string name="remote_window_network_section">網路</string>
     <string name="remote_firewall_checking">檢查 Windows 防火牆...</string>
     <string name="remote_discovery_unavailable">自動 UDP 發現不可用。您仍可透過掃描 QR 代碼或輸入此電腦的 IP 位址進行配對。</string>
@@ -2304,6 +2315,7 @@
     <string name="cloud_library_play_not_connected">雲端服務未連線。</string>
     <string name="cloud_library_play_provider_not_connected">%1$s 未連接。</string>
     <string name="cloud_library_playable_file_count">%1$d 可播放文件</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d 個檔案</string>
     <string name="cloud_library_provider_all">全部</string>
     <string name="cloud_library_refresh">刷新雲端庫</string>
     <string name="cloud_library_search_label">搜尋雲端庫</string>
@@ -2710,6 +2722,8 @@
     <string name="layout_random_episode_sub">隨機播放任何系列中的劇集。關閉此功能會暫停隨機播放。</string>
     <string name="random_episode_unwatched">未觀看的劇集</string>
     <string name="random_episode_include_watched">所有劇集</string>
+    <string name="shuffle_pool_episode_count">%1$d 集</string>
+    <string name="shuffle_pool_episode_count_all">%1$d 集，包括已觀看的</string>
     <string name="random_episode_empty_subtitle">沒有可隨機播放的集數。</string>
     <string name="random_episode_caught_up">您已觀看每一集。選擇要再次觀看的所有劇集。</string>
     <string name="random_episode_loading">正在載入劇集...</string>
@@ -2843,7 +2857,10 @@
     <string name="account_credentials_password_step2">輸入電子郵件中的代碼，然後選擇新密碼。該代碼自動過期。</string>
     <string name="account_credentials_email_step">確認您目前的密碼以要求新電子郵件。您必須批准發送到這兩個電子郵件地址的連結。</string>
     <string name="account_credentials_current_password">目前密碼</string>
+    <string name="cd_show_password">顯示密碼</string>
+    <string name="cd_hide_password">隱藏密碼</string>
     <string name="account_credentials_verification_code">信箱驗證碼</string>
+    <string name="account_credentials_code_placeholder">6 位數驗證碼</string>
     <string name="account_credentials_new_password">新密碼</string>
     <string name="account_credentials_confirm_password">確認新密碼</string>
     <string name="account_credentials_new_email">新電子郵件地址</string>
@@ -3083,4 +3100,5 @@
     <string name="changelog_view_github">在 GitHub 上查看</string>
     <string name="updates_whats_new">新增內容</string>
     <string name="updates_download_size">%1$s 下載</string>
+    <string name="source_filter_result_count">%1$d / %2$d 個來源</string>
 </resources>

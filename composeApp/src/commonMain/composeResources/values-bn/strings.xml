@@ -33,6 +33,9 @@
     <string name="action_reset">ডিফল্টে রিসেট করুন</string>
     <string name="action_resume">দেখা চালিয়ে যান</string>
     <string name="action_retry">আবার চেষ্টা করুন</string>
+    <string name="cd_decrease_value">%1$s কমান</string>
+    <string name="cd_increase_value">%1$s বাড়ান</string>
+    <string name="action_refresh">রিফ্রেশ</string>
     <string name="action_save">সেভ</string>
     <string name="action_saving">সেভ করা হচ্ছে…</string>
     <string name="action_switch">স্যুইচ</string>
@@ -473,6 +476,8 @@
     <string name="compose_player_subtitle_delay">সাবটাইটেল ডিলে</string>
     <string name="compose_player_subtitles">সাবটাইটেল</string>
     <string name="compose_player_text_opacity">টেক্সট অপাসিটি</string>
+    <string name="compose_player_timing">সময়</string>
+    <string name="compose_player_text">টেক্সট</string>
     <string name="compose_player_brightness_level">উজ্জ্বলতা %1$s</string>
     <string name="compose_player_volume_level">ভলিউম %1$s</string>
     <string name="compose_player_muted">মিউট করা</string>
@@ -1918,6 +1923,7 @@
     <string name="cloud_library_play_not_connected">ক্লাউড পরিষেবা সংযুক্ত নেই।</string>
     <string name="cloud_library_play_provider_not_connected">%1$s সংযুক্ত নেই।</string>
     <string name="cloud_library_playable_file_count">%1$dটি প্লেযোগ্য ফাইল</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$dটি ফাইল</string>
     <string name="cloud_library_provider_all">সব</string>
     <string name="cloud_library_refresh">রিফ্রেশ ক্লাউড লাইব্রেরি</string>
     <string name="cloud_library_search_label">ক্লাউড লাইব্রেরি সার্চ করুন</string>
@@ -2367,6 +2373,8 @@
     <string name="layout_random_episode_sub">যেকোনো সিরিজ থেকে পর্ব এলোমেলো করুন। এটি বন্ধ করলে শাফেল বিরতি হয়।</string>
     <string name="random_episode_unwatched">না দেখা পর্ব</string>
     <string name="random_episode_include_watched">সমস্ত পর্ব</string>
+    <string name="shuffle_pool_episode_count">%1$dটি পর্ব</string>
+    <string name="shuffle_pool_episode_count_all">%1$dটি পর্ব, দেখা পর্বসহ</string>
     <string name="random_episode_empty_subtitle">এলোমেলো করার জন্য কোনো পর্ব উপলব্ধ নেই।</string>
     <string name="random_episode_caught_up">আপনি প্রতিটি পর্ব দেখেছেন। আবার দেখার জন্য সমস্ত পর্ব বাছুন।</string>
     <string name="random_episode_loading">পর্ব লোড হচ্ছে…</string>

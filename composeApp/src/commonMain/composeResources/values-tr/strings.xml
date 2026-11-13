@@ -19,6 +19,9 @@
     <string name="action_reset">Sıfırla</string>
     <string name="action_resume">Devam et</string>
     <string name="action_retry">Tekrar dene</string>
+    <string name="cd_decrease_value">%1$s azalt</string>
+    <string name="cd_increase_value">%1$s artır</string>
+    <string name="action_refresh">Yenile</string>
     <string name="action_save">Kaydet</string>
     <string name="action_saving">Kaydediliyor...</string>
     <string name="action_switch">Geçiş yap</string>
@@ -393,6 +396,8 @@
     <string name="compose_player_subtitle_delay">Altyazı Gecikmesi</string>
     <string name="compose_player_subtitles">Altyazılar</string>
     <string name="compose_player_text_opacity">Metin Opaklığı</string>
+    <string name="compose_player_timing">Zamanlama</string>
+    <string name="compose_player_text">Metin</string>
     <string name="compose_player_brightness_level">Parlaklık %1$s</string>
     <string name="compose_player_volume_level">Ses %1$s</string>
     <string name="compose_player_muted">Sessizde</string>
@@ -1736,6 +1741,7 @@
     <string name="cloud_library_play_not_connected">Bulut servisi bağlı değil.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s bağlı değil.</string>
     <string name="cloud_library_playable_file_count">%1$d oynatılabilir dosya</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d dosya</string>
     <string name="cloud_library_provider_all">Tümü</string>
     <string name="cloud_library_refresh">Bulut kitaplığını yenile</string>
     <string name="cloud_library_search_label">Bulut kütüphanesinde ara</string>

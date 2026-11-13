@@ -1,43 +1,63 @@
 package com.nuvio.app.features.remote
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.BluetoothDisabled
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Lan
-import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.WifiOff
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioGroupRow
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioIconChipTone
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
-import com.nuvio.app.core.ui.NuvioCompactActionButton
-import com.nuvio.app.core.ui.NuvioCompactActionTone
+import com.nuvio.app.core.ui.NuvioSectionLabel
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioSquareIconButtonStyle
+import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.tabular
 import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
-/** The desktop Phone remote window: QR code, firewall, connection state. */
+// Desktop group metrics: 40 dp chips, 16 dp gaps and wider rows than the phone lists.
+private val RowChip = 40.dp
+private val RowGap = 16.dp
+private val RowHorizontal = 20.dp
+private val RowVertical = 16.dp
+private val RowTextInset = RowHorizontal + RowChip + RowGap
+
+/** The desktop Phone remote page: the pairing QR code, how to connect, and connection help. */
 @Composable
 internal fun PhoneRemoteScreen(
     addresses: List<String>,
@@ -56,94 +76,114 @@ internal fun PhoneRemoteScreen(
     val discoveryReady by DesktopRemote.discoveryReady.collectAsState()
     val bluetoothHostReady by DesktopRemote.bluetoothHostReady.collectAsState()
     val disconnectedStatus = stringResource(Res.string.remote_disconnected_status)
-    Column(Modifier.fillMaxSize()) {
-        // Header
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    val disconnect = {
+        DesktopRemote.transport.disconnect()
+        DesktopRemote.status.value = disconnectedStatus
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= 720.dp
+        val gutter = if (wide) 40.dp else 24.dp
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = gutter, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            RemoteIconBadge(Icons.Rounded.PhoneAndroid, size = 48.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(Res.string.remote_qr_phone_remote), style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
-                Text(stringResource(Res.string.remote_window_subtitle), style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.colors.textSecondary)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NuvioSquareIconButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(Res.string.action_close),
+                        onClick = onClose,
+                        size = 36.dp,
+                        style = NuvioSquareIconButtonStyle.Surface,
+                    )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(Res.string.compose_settings_page_account),
+                            style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
+                        Text(stringResource(Res.string.remote_qr_phone_remote),
+                            style = MaterialTheme.typography.headlineLarge, color = tokens.colors.textPrimary)
+                    }
+                    PhoneRemoteStatusChip(
+                        text = stringResource(
+                            when {
+                                connected -> Res.string.remote_window_status_connected
+                                hostReady -> Res.string.remote_window_status_ready
+                                else -> Res.string.remote_window_status_offline
+                            },
+                        ),
+                        dot = when {
+                            connected || hostReady -> tokens.colors.success
+                            else -> tokens.colors.warning
+                        },
+                    )
+                }
+                Text(
+                    stringResource(Res.string.remote_window_subtitle),
+                    modifier = Modifier.padding(start = 48.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.colors.textMuted,
+                )
             }
-            RemoteStatusPill(
-                text = stringResource(
-                    when {
-                        connected -> Res.string.remote_window_status_connected
-                        hostReady -> Res.string.remote_window_status_ready
-                        else -> Res.string.remote_window_status_offline
-                    },
-                ),
-                tone = when {
-                    connected -> RemoteTone.Success
-                    hostReady -> RemoteTone.Accent
-                    else -> RemoteTone.Warning
-                },
-            )
-        }
-        HorizontalDivider(color = tokens.colors.borderSubtle)
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val wide = maxWidth >= 720.dp
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (pairing != null) {
-                    // A phone is asking to pair: the code check takes over the window.
-                    Spacer(Modifier.height(12.dp))
-                    RemotePairingPanel(pairing, pairingConfirmed, onConfirmPairing, onRejectPairing)
-                } else if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        QrPanel(addresses, hostReady, hostFailure, status, Modifier.width(320.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            DetailsColumn(addresses, firewall, hostReady, discoveryReady, connected, bluetoothHostReady)
-                        }
+            if (pairing != null) {
+                // A phone is asking to pair: the code check takes over the page.
+                NuvioSurfaceCard(
+                    modifier = Modifier.widthIn(max = 560.dp).align(Alignment.CenterHorizontally),
+                    outlined = true,
+                    contentPadding = 24.dp,
+                ) {
+                    RemotePairingPanel(pairing, pairingConfirmed, onConfirmPairing, onRejectPairing,
+                        Modifier.align(Alignment.CenterHorizontally))
+                }
+            } else if (wide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
+                    QrPanel(addresses, hostReady, hostFailure, status, Modifier.width(340.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        DetailsColumn(firewall, hostReady, discoveryReady, connected, bluetoothHostReady, disconnect)
                     }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        QrPanel(addresses, hostReady, hostFailure, status, Modifier.fillMaxWidth())
-                        DetailsColumn(addresses, firewall, hostReady, discoveryReady, connected, bluetoothHostReady)
-                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    QrPanel(addresses, hostReady, hostFailure, status, Modifier.fillMaxWidth())
+                    DetailsColumn(firewall, hostReady, discoveryReady, connected, bluetoothHostReady, disconnect)
                 }
             }
         }
+    }
+}
 
-        HorizontalDivider(color = tokens.colors.borderSubtle)
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (connected) {
-                DialogButton(
-                    text = stringResource(Res.string.remote_disconnect),
-                    style = DialogButtonStyle.Destructive,
-                    onClick = {
-                        DesktopRemote.transport.disconnect()
-                        DesktopRemote.status.value = disconnectedStatus
-                    },
-                )
-            }
-            DialogButton(
-                text = stringResource(Res.string.action_close),
-                style = if (connected) DialogButtonStyle.Secondary else DialogButtonStyle.Primary,
-                onClick = onClose,
-            )
-        }
+@Composable
+private fun PhoneRemoteStatusChip(text: String, dot: androidx.compose.ui.graphics.Color) {
+    val tokens = MaterialTheme.nuvio
+    Row(
+        Modifier
+            .height(32.dp)
+            .clip(tokens.shapes.chip)
+            .background(tokens.colors.surface)
+            .border(tokens.borders.thin, tokens.colors.borderSubtle, tokens.shapes.chip)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+        Text(text, style = MaterialTheme.nuvioTypeScale.bodySm, fontWeight = FontWeight.SemiBold,
+            color = tokens.colors.textSecondary, maxLines = 1)
     }
 }
 
 @Composable
 private fun QrPanel(addresses: List<String>, hostReady: Boolean, hostFailure: Boolean, status: String, modifier: Modifier) {
     val tokens = MaterialTheme.nuvio
-    RemoteCard(modifier, contentPadding = 20.dp, spacing = 14.dp) {
-        Text(stringResource(Res.string.remote_window_scan_title), style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
+    NuvioSurfaceCard(
+        modifier = modifier,
+        outlined = true,
+        contentPadding = 20.dp,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(stringResource(Res.string.remote_window_scan_title), style = MaterialTheme.typography.titleLarge,
+            color = tokens.colors.textPrimary)
         when {
             hostReady && addresses.isNotEmpty() -> DesktopPairingQr(addresses)
             hostReady -> QrPlaceholder(Icons.Rounded.WifiOff, stringResource(Res.string.remote_qr_no_network))
@@ -158,15 +198,18 @@ private fun QrPlaceholder(icon: ImageVector?, text: String) {
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 228.dp)
-            .clip(tokens.shapes.compactCard)
-            .background(tokens.colors.textPrimary.copy(alpha = tokens.opacity.subtle))
+            .heightIn(min = 260.dp)
+            .clip(tokens.shapes.button)
+            .background(tokens.colors.surfaceCard)
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
     ) {
-        if (icon != null) Icon(icon, contentDescription = null, tint = tokens.colors.textMuted, modifier = Modifier.size(36.dp))
-        else NuvioLoadingIndicator(Modifier.size(28.dp), color = tokens.colors.accent, size = 28.dp)
+        if (icon != null) {
+            NuvioIconChip(icon, size = 48.dp, tone = NuvioIconChipTone.Warning)
+        } else {
+            NuvioLoadingIndicator(Modifier.size(28.dp), color = tokens.colors.accent, size = 28.dp)
+        }
         if (text.isNotBlank()) {
             Text(text, style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary, textAlign = TextAlign.Center)
         }
@@ -175,12 +218,12 @@ private fun QrPlaceholder(icon: ImageVector?, text: String) {
 
 @Composable
 private fun DetailsColumn(
-    addresses: List<String>,
     firewall: RemoteFirewallAccess,
     hostReady: Boolean,
     discoveryReady: Boolean,
     connected: Boolean,
     bluetoothHostReady: Boolean,
+    onDisconnect: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     val firewallState by firewall.state.collectAsState()
@@ -188,89 +231,122 @@ private fun DetailsColumn(
         if (hostReady && !connected) firewall.refresh()
     }
     if (connected) {
-        RemoteCard(tone = RemoteTone.Success) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = tokens.colors.success, modifier = Modifier.size(22.dp))
-                Text(stringResource(Res.string.remote_qr_connected), style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
-            }
-        }
-    }
-    if (hostReady && !discoveryReady && !connected) {
-        RemoteCard(tone = RemoteTone.Warning) {
-            Text(
-                stringResource(Res.string.remote_discovery_unavailable),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.colors.textPrimary,
+        NuvioGroup(isTablet = true) {
+            NuvioGroupRow(
+                title = stringResource(Res.string.remote_qr_connected),
+                verticalPadding = RowVertical,
+                startPadding = RowHorizontal,
+                endPadding = RowHorizontal,
+                spacing = RowGap,
+                titleMaxLines = 3,
+                leading = { NuvioIconChip(Icons.Rounded.CheckCircle, size = RowChip, tone = NuvioIconChipTone.Success) },
+                trailing = {
+                    DialogButton(
+                        text = stringResource(Res.string.remote_disconnect),
+                        onClick = onDisconnect,
+                        style = DialogButtonStyle.Destructive,
+                    )
+                },
             )
         }
     }
-    RemoteCard {
-        Text(stringResource(Res.string.remote_window_steps_title), style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
-        listOf(
-            Res.string.remote_window_step_open,
-            Res.string.remote_window_step_scan,
-            Res.string.remote_window_step_confirm,
-        ).forEachIndexed { index, step ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(
-                    Modifier.size(24.dp).clip(CircleShape).background(tokens.colors.accent.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("${index + 1}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                        color = tokens.colors.accent)
-                }
-                Text(stringResource(step), Modifier.weight(1f).padding(top = 2.dp), style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.colors.textSecondary)
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        NuvioSectionLabel(stringResource(Res.string.remote_window_steps_title).uppercase())
+        NuvioGroup(isTablet = true) {
+            listOf(
+                Res.string.remote_window_step_open,
+                Res.string.remote_window_step_scan,
+                Res.string.remote_window_step_confirm,
+            ).forEachIndexed { index, step ->
+                if (index > 0) NuvioGroupDivider(startInset = RowTextInset)
+                NuvioGroupRow(
+                    title = stringResource(step),
+                    verticalPadding = RowVertical,
+                    startPadding = RowHorizontal,
+                    endPadding = RowHorizontal,
+                    spacing = RowGap,
+                    titleMaxLines = 4,
+                    leading = {
+                        NuvioIconChip(size = RowChip) {
+                            Text("${index + 1}", style = MaterialTheme.typography.bodyLarge.tabular, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                )
             }
         }
     }
-    if (hostReady) {
-        RemoteCard {
-            Text(stringResource(Res.string.remote_window_other_ways), style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary)
-            if (addresses.isNotEmpty()) {
-                InfoLine(Icons.Rounded.Lan, stringResource(Res.string.remote_pc_desktop_addresses, addresses.joinToString(", ")))
-            }
-            InfoLine(
-                if (bluetoothHostReady) Icons.Rounded.Bluetooth else Icons.Rounded.BluetoothDisabled,
-                stringResource(
-                    if (bluetoothHostReady) Res.string.remote_bluetooth_host_ready
-                    else Res.string.remote_bluetooth_host_unavailable,
-                ),
-            )
-        }
-    }
+
+    // Keep the VPN opt-in and revoke controls reachable even when the remote
+    // listener is unavailable; otherwise recovery would require LAN access.
     if (isDesktop && DesktopRemote.transport.vpnHostSupported) {
         RemoteVpnSettingsCard(firewall)
     }
-    if (hostReady && !connected) {
-        var showNetworkHelp by remember { mutableStateOf(false) }
-        LaunchedEffect(showNetworkHelp) {
-            if (showNetworkHelp) firewall.refresh()
-        }
-        NuvioCompactActionButton(
-            label = stringResource(Res.string.remote_network_help),
-            icon = Icons.Rounded.Lan,
-            tone = NuvioCompactActionTone.Ghost,
-            modifier = Modifier.testTag("remote-network-help"),
-            onClick = { showNetworkHelp = !showNetworkHelp },
-        )
-        if (showNetworkHelp) {
-            Text(stringResource(Res.string.remote_network_help_body),
-                style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary)
-        }
-        // A blocked Ethernet profile needs to be visible before the user
-        // struggles with QR pairing or discovers the hidden Network help.
-        if (showNetworkHelp || firewallState != RemoteFirewallState.NotNeeded &&
-            firewallState != RemoteFirewallState.Allowed) {
-            RemoteFirewallCard(firewall)
+    if (!hostReady) return
+    val showHelp = !connected
+    var helpOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(helpOpen) {
+        if (helpOpen) firewall.refresh()
+    }
+    // A blocked Ethernet profile needs to be visible before the user
+    // struggles with QR pairing or opens the help row.
+    val firewallNeedsAttention = firewallState != RemoteFirewallState.NotNeeded &&
+        firewallState != RemoteFirewallState.Allowed
+    val showFirewall = showHelp && firewallState != RemoteFirewallState.NotNeeded && (helpOpen || firewallNeedsAttention)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        NuvioSectionLabel(stringResource(Res.string.remote_window_other_ways).uppercase())
+        NuvioGroup(isTablet = true) {
+            if (!discoveryReady && !connected) {
+                InfoRow(Icons.Rounded.WarningAmber, NuvioIconChipTone.Warning, stringResource(Res.string.remote_discovery_unavailable))
+                NuvioGroupDivider(startInset = RowTextInset)
+            }
+            if (bluetoothHostReady) {
+                InfoRow(Icons.Rounded.Bluetooth, NuvioIconChipTone.Accent, stringResource(Res.string.remote_bluetooth_host_ready))
+            } else {
+                InfoRow(Icons.Rounded.BluetoothDisabled, NuvioIconChipTone.Warning,
+                    stringResource(Res.string.remote_bluetooth_host_unavailable))
+            }
+            if (showHelp) {
+                NuvioGroupDivider(startInset = RowTextInset)
+                NuvioGroupRow(
+                    title = stringResource(Res.string.remote_network_help),
+                    description = stringResource(Res.string.remote_window_trouble_caption),
+                    modifier = Modifier.testTag("remote-network-help"),
+                    onClick = { helpOpen = !helpOpen },
+                    verticalPadding = RowVertical,
+                    startPadding = RowHorizontal,
+                    endPadding = RowHorizontal,
+                    spacing = RowGap,
+                    leading = {
+                        NuvioIconChip(Icons.AutoMirrored.Rounded.HelpOutline, size = RowChip, tone = NuvioIconChipTone.Neutral)
+                    },
+                    trailing = {
+                        Icon(
+                            if (helpOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = tokens.colors.textMuted,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                )
+                AnimatedVisibility(visible = helpOpen) {
+                    Text(
+                        stringResource(Res.string.remote_network_help_body),
+                        modifier = Modifier.padding(start = RowTextInset, end = RowHorizontal, bottom = RowVertical),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colors.textSecondary,
+                    )
+                }
+            }
+            if (showFirewall) {
+                NuvioGroupDivider(startInset = RowTextInset)
+                RemoteFirewallCard(firewall)
+            }
         }
     }
 }
 
-/** Explicit opt-in. The system VPN is managed by the user, not by Starlit. */
+/** Private VPN access requires an active adapter and an explicit desktop opt-in. */
 @Composable
 private fun RemoteVpnSettingsCard(firewall: RemoteFirewallAccess) {
     val transport = DesktopRemote.transport
@@ -278,22 +354,24 @@ private fun RemoteVpnSettingsCard(firewall: RemoteFirewallAccess) {
     var approved by remember { mutableStateOf(transport.approvedVpnAddress()) }
     var error by remember { mutableStateOf(false) }
     val firewallState by firewall.vpnState.collectAsState()
+    val tokens = MaterialTheme.nuvio
+
     LaunchedEffect(approved) { firewall.refreshPrivateVpnAccess(approved) }
-    RemoteCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Rounded.VpnKey, contentDescription = null, tint = MaterialTheme.nuvio.colors.accent)
-            Text(stringResource(Res.string.remote_vpn_pc_title), style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.nuvio.colors.textPrimary)
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            NuvioIconChip(Icons.Rounded.VpnKey, tone = NuvioIconChipTone.Accent)
+            Text(stringResource(Res.string.remote_vpn_pc_title),
+                style = MaterialTheme.typography.titleMedium, color = tokens.colors.textPrimary)
         }
-        Text(stringResource(Res.string.remote_vpn_pc_desc), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.nuvio.colors.textSecondary)
+        Text(stringResource(Res.string.remote_vpn_pc_desc),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
         if (approved != null) {
             Text(stringResource(Res.string.remote_vpn_pc_enabled, approved.orEmpty()),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.nuvio.colors.textPrimary)
-            NuvioCompactActionButton(
-                label = stringResource(Res.string.remote_vpn_disable),
-                icon = Icons.Rounded.VpnKey, tone = NuvioCompactActionTone.Ghost,
+                style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textPrimary)
+            DialogButton(
+                text = stringResource(Res.string.remote_vpn_disable),
                 modifier = Modifier.testTag("remote-vpn-disable"),
+                style = DialogButtonStyle.Destructive,
                 onClick = {
                     error = !transport.approveVpnAddress(null)
                     approved = transport.approvedVpnAddress()
@@ -302,14 +380,14 @@ private fun RemoteVpnSettingsCard(firewall: RemoteFirewallAccess) {
             )
         } else {
             if (addresses.isEmpty()) {
-                Text(stringResource(Res.string.remote_vpn_pc_not_found), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.nuvio.colors.textSecondary)
+                Text(stringResource(Res.string.remote_vpn_pc_not_found),
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
             }
             addresses.forEach { address ->
-                NuvioCompactActionButton(
-                    label = stringResource(Res.string.remote_vpn_enable, address),
-                    icon = Icons.Rounded.VpnKey, tone = NuvioCompactActionTone.Primary,
+                DialogButton(
+                    text = stringResource(Res.string.remote_vpn_enable, address),
                     modifier = Modifier.testTag("remote-vpn-enable"),
+                    style = DialogButtonStyle.Primary,
                     onClick = {
                         error = !transport.approveVpnAddress(address)
                         approved = transport.approvedVpnAddress()
@@ -320,43 +398,58 @@ private fun RemoteVpnSettingsCard(firewall: RemoteFirewallAccess) {
         if (approved != null) {
             when (firewallState) {
                 RemoteFirewallState.Allowed -> Text(stringResource(Res.string.remote_vpn_firewall_ready),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.nuvio.colors.textPrimary)
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
                 RemoteFirewallState.Requesting, RemoteFirewallState.Checking ->
                     Text(stringResource(Res.string.remote_vpn_firewall_checking),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.nuvio.colors.textSecondary)
-                else -> NuvioCompactActionButton(
-                    label = stringResource(Res.string.remote_vpn_firewall_allow),
-                    icon = Icons.Rounded.VpnKey,
-                    tone = NuvioCompactActionTone.Primary,
+                        style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
+                else -> DialogButton(
+                    text = stringResource(Res.string.remote_vpn_firewall_allow),
                     modifier = Modifier.testTag("remote-vpn-firewall-allow"),
+                    style = DialogButtonStyle.Primary,
                     onClick = { approved?.let(firewall::requestPrivateVpnAccess) },
                 )
             }
         }
-        NuvioCompactActionButton(
-            label = stringResource(Res.string.remote_vpn_refresh),
-            icon = Icons.Rounded.Lan, tone = NuvioCompactActionTone.Ghost,
+        DialogButton(
+            text = stringResource(Res.string.remote_vpn_refresh),
             onClick = {
                 addresses = transport.vpnInterfaces()
                 approved = transport.approvedVpnAddress()
                 error = false
             },
         )
-        if (error) Text(stringResource(Res.string.remote_vpn_pc_error), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.nuvio.colors.textPrimary)
+        if (error) Text(stringResource(Res.string.remote_vpn_pc_error),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
         if (firewallState == RemoteFirewallState.Failed) Text(
             stringResource(Res.string.remote_vpn_firewall_failed),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.nuvio.colors.textPrimary)
-        Text(stringResource(Res.string.remote_vpn_pc_firewall), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.nuvio.colors.textSecondary)
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
+        Text(stringResource(Res.string.remote_vpn_pc_firewall),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
     }
 }
 
+/** A status line in a group. The first sentence is the title; the rest explains it. */
 @Composable
-private fun InfoLine(icon: ImageVector, text: String) {
-    val tokens = MaterialTheme.nuvio
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icon, contentDescription = null, tint = tokens.colors.textMuted, modifier = Modifier.size(20.dp))
-        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary)
-    }
+private fun InfoRow(icon: ImageVector, tone: NuvioIconChipTone, text: String) {
+    val (title, detail) = splitLeadSentence(text)
+    NuvioGroupRow(
+        title = title,
+        description = detail,
+        verticalPadding = RowVertical,
+        startPadding = RowHorizontal,
+        endPadding = RowHorizontal,
+        spacing = RowGap,
+        titleMaxLines = 4,
+        descriptionMaxLines = 6,
+        leading = { NuvioIconChip(icon, size = RowChip, tone = tone) },
+    )
+}
+
+/** "Bluetooth is available. Pair your phone…" becomes a title and its explanation. */
+internal fun splitLeadSentence(text: String): Pair<String, String?> {
+    val index = listOf(". ", "。", "؟ ", "। ").map { text.indexOf(it) }.filter { it > 0 }.minOrNull()
+        ?: return text to null
+    val title = text.substring(0, index).trim()
+    val rest = text.substring(index + 1).trim()
+    return if (rest.isEmpty()) text to null else title to rest
 }

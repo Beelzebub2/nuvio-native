@@ -1,20 +1,35 @@
 package com.nuvio.app.features.settings
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.VisualTransformation
+import com.nuvio.app.core.ui.NuvioActionLabel
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioGroupRow
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioInputField
+import com.nuvio.app.core.ui.NuvioLabeledField
+import com.nuvio.app.core.ui.NuvioPillButton
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioSquareIconButtonStyle
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.tabular
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,9 +64,7 @@ import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
 import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogSurface
-import com.nuvio.app.core.ui.DialogTextField
 import com.nuvio.app.core.ui.NuvioStatusModal
-import com.nuvio.app.core.ui.NuvioSurfaceCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -125,38 +138,22 @@ internal fun AccountCredentialsCard(account: AuthState.Authenticated) {
         onDispose { lifecycle.removeObserver(observer) }
     }
 
-    NuvioSurfaceCard(modifier = Modifier.testTag("account-credentials-card")) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(Res.string.account_credentials_password_label),
-                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(Res.string.account_credentials_password_description),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = { dismiss(); dialog = CredentialsDialog.PASSWORD_CONFIRM },
-                modifier = Modifier.testTag("account-change-password-button")) {
-                Text(stringResource(Res.string.account_credentials_change))
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Rounded.AlternateEmail, contentDescription = null, modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(Res.string.account_credentials_email_label),
-                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(account.email.orEmpty(), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = { dismiss(); dialog = CredentialsDialog.EMAIL },
-                modifier = Modifier.testTag("account-change-email-button")) {
-                Text(stringResource(Res.string.account_credentials_change))
-            }
-        }
+    NuvioGroup(modifier = Modifier.testTag("account-credentials-card")) {
+        CredentialRow(
+            icon = Icons.Rounded.AlternateEmail,
+            title = stringResource(Res.string.account_credentials_email_label),
+            description = account.email.orEmpty(),
+            buttonTag = "account-change-email-button",
+            onChange = { dismiss(); dialog = CredentialsDialog.EMAIL },
+        )
+        NuvioGroupDivider()
+        CredentialRow(
+            icon = Icons.Rounded.Lock,
+            title = stringResource(Res.string.account_credentials_password_label),
+            description = stringResource(Res.string.account_credentials_password_description),
+            buttonTag = "account-change-password-button",
+            onChange = { dismiss(); dialog = CredentialsDialog.PASSWORD_CONFIRM },
+        )
     }
 
     if (dialog != null) {
@@ -174,66 +171,86 @@ internal fun AccountCredentialsCard(account: AuthState.Authenticated) {
             }),
         ) {
             if (!changePasswordCode) {
-                DialogTextField(
-                    value = currentPassword,
-                    onValueChange = { currentPassword = it },
-                    label = stringResource(Res.string.account_credentials_current_password),
-                    modifier = Modifier.testTag("account-current-password-field"),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    enabled = !busy,
-                )
+                NuvioLabeledField(label = stringResource(Res.string.account_credentials_current_password)) {
+                    PasswordInput(
+                        value = currentPassword,
+                        onValueChange = { currentPassword = it },
+                        enabled = !busy,
+                        modifier = Modifier.testTag("account-current-password-field"),
+                    )
+                }
             }
             if (changePasswordCode) {
-                DialogTextField(
-                    value = verificationCode,
-                    onValueChange = { verificationCode = it.filter { c -> c in '0'..'9' }.take(8) },
-                    label = stringResource(Res.string.account_credentials_verification_code),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    enabled = !busy,
-                    modifier = Modifier.testTag("account-verification-code"),
-                )
-                DialogTextField(
-                    value = newPassword,
-                    onValueChange = { newPassword = it.take(128) },
+                NuvioLabeledField(label = stringResource(Res.string.account_credentials_verification_code)) {
+                    NuvioInputField(
+                        value = verificationCode,
+                        onValueChange = { verificationCode = it.filter { c -> c in '0'..'9' }.take(8) },
+                        placeholder = stringResource(Res.string.account_credentials_code_placeholder),
+                        minHeight = 48.dp,
+                        enabled = !busy,
+                        isError = formError == missingCode,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        textStyle = MaterialTheme.typography.bodyLarge.tabular,
+                        modifier = Modifier.testTag("account-verification-code"),
+                    )
+                }
+                val passwordRuleBroken = formError == invalidPassword
+                NuvioLabeledField(
                     label = stringResource(Res.string.account_credentials_new_password),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    enabled = !busy,
-                )
-                DialogTextField(
-                    value = repeatValue,
-                    onValueChange = { repeatValue = it.take(128) },
-                    label = stringResource(Res.string.account_credentials_confirm_password),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    enabled = !busy,
-                )
+                    helper = invalidPassword,
+                    isError = passwordRuleBroken,
+                ) {
+                    PasswordInput(
+                        value = newPassword,
+                        onValueChange = { newPassword = it.take(128) },
+                        enabled = !busy,
+                        isError = passwordRuleBroken,
+                    )
+                }
+                NuvioLabeledField(label = stringResource(Res.string.account_credentials_confirm_password)) {
+                    PasswordInput(
+                        value = repeatValue,
+                        onValueChange = { repeatValue = it.take(128) },
+                        enabled = !busy,
+                        isError = formError == mismatchPassword,
+                    )
+                }
             }
             if (isEmail) {
-                DialogTextField(
-                    value = newEmail,
-                    onValueChange = { newEmail = it.take(254) },
-                    label = stringResource(Res.string.account_credentials_new_email),
-                    modifier = Modifier.testTag("account-new-email-field"),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    enabled = !busy,
-                )
-                DialogTextField(
-                    value = repeatValue,
-                    onValueChange = { repeatValue = it.take(254) },
-                    label = stringResource(Res.string.account_credentials_confirm_email),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    enabled = !busy,
-                )
+                NuvioLabeledField(label = stringResource(Res.string.account_credentials_new_email)) {
+                    NuvioInputField(
+                        value = newEmail,
+                        onValueChange = { newEmail = it.take(254) },
+                        placeholder = "name@example.com",
+                        minHeight = 48.dp,
+                        enabled = !busy,
+                        isError = formError == invalidEmail || formError == sameEmail,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.testTag("account-new-email-field"),
+                    )
+                }
+                NuvioLabeledField(label = stringResource(Res.string.account_credentials_confirm_email)) {
+                    NuvioInputField(
+                        value = repeatValue,
+                        onValueChange = { repeatValue = it.take(254) },
+                        placeholder = "name@example.com",
+                        minHeight = 48.dp,
+                        enabled = !busy,
+                        isError = formError == mismatchEmail,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    )
+                }
             }
-            formError?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            formError?.takeIf { it != invalidPassword }?.let {
+                Text(it, style = MaterialTheme.nuvioTypeScale.bodySm, color = MaterialTheme.nuvio.colors.danger)
             }
             if (activeDialog == CredentialsDialog.PASSWORD_CONFIRM) {
-                TextButton(
-                    enabled = !busy,
+                NuvioActionLabel(
+                    text = stringResource(Res.string.account_credentials_use_reset_link),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(vertical = 6.dp).alpha(if (busy) MaterialTheme.nuvio.opacity.disabled else 1f),
                     onClick = {
+                        if (busy) return@NuvioActionLabel
                         busy = true
                         formError = null
                         scope.launch {
@@ -253,7 +270,7 @@ internal fun AccountCredentialsCard(account: AuthState.Authenticated) {
                             }
                         }
                     },
-                ) { Text(stringResource(Res.string.account_credentials_use_reset_link)) }
+                )
             }
             DialogButtons {
                 DialogButton(text = stringResource(Res.string.action_cancel), enabled = !busy,
@@ -369,5 +386,63 @@ internal fun AccountCredentialsCard(account: AuthState.Authenticated) {
         message = feedback.orEmpty(),
         isVisible = feedback != null,
         onConfirm = { feedback = null },
+    )
+}
+
+/** An account detail with its value and a Change pill. */
+@Composable
+private fun CredentialRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    buttonTag: String,
+    onChange: () -> Unit,
+) {
+    NuvioGroupRow(
+        title = title,
+        description = description,
+        titleMaxLines = 1,
+        descriptionMaxLines = 2,
+        leading = { NuvioIconChip(icon) },
+        trailing = {
+            NuvioPillButton(
+                text = stringResource(Res.string.account_credentials_change),
+                onClick = onChange,
+                modifier = Modifier.testTag(buttonTag),
+            )
+        },
+    )
+}
+
+/** A password field with a show/hide button. */
+@Composable
+private fun PasswordInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+) {
+    var visible by remember { mutableStateOf(false) }
+    NuvioInputField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = "",
+        modifier = modifier,
+        minHeight = 48.dp,
+        enabled = enabled,
+        isError = isError,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        trailingContent = {
+            NuvioSquareIconButton(
+                icon = if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                contentDescription = stringResource(if (visible) Res.string.cd_hide_password else Res.string.cd_show_password),
+                onClick = { visible = !visible },
+                size = 36.dp,
+                style = NuvioSquareIconButtonStyle.Ghost,
+                tint = MaterialTheme.nuvio.colors.textMuted,
+            )
+        },
     )
 }

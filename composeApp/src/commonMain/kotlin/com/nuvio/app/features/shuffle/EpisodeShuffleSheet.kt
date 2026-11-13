@@ -1,5 +1,25 @@
 package com.nuvio.app.features.shuffle
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtons
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioGroupRow
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.NuvioSectionLabel
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioTag
+import com.nuvio.app.core.ui.NuvioTagStyle
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,18 +31,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,48 +120,74 @@ internal fun EpisodeShuffleSheet(
         sheetState = sheetState,
         fullHeight = true,
     ) {
+        val tokens = MaterialTheme.nuvio
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp).padding(bottom = nuvioSafeBottomPadding(20.dp)),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 20.dp).padding(top = 6.dp, bottom = nuvioSafeBottomPadding(20.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (preview != null) {
-                    TextButton(enabled = !starting, onClick = { selected = null }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.action_back))
-                    }
+                    NuvioSquareIconButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(Res.string.action_back),
+                        onClick = { selected = null },
+                        size = 36.dp,
+                        enabled = !starting,
+                    )
                 }
-                Column {
-                    Text(stringResource(Res.string.random_episode_title), style = MaterialTheme.typography.titleLarge)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(stringResource(Res.string.random_episode_title), style = MaterialTheme.typography.titleLarge,
+                        color = tokens.colors.textPrimary)
                     Text(meta.name, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = tokens.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (preview == null) {
-                Text(stringResource(Res.string.shuffle_choose_episodes), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(Res.string.shuffle_choose_episodes), style = MaterialTheme.typography.bodyLarge,
+                    color = tokens.colors.textSecondary)
                 when {
-                    readyPicker == null -> Text(stringResource(Res.string.random_episode_loading))
-                    allCount == 0 -> Text(stringResource(Res.string.random_episode_empty_subtitle))
+                    readyPicker == null -> Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        NuvioLoadingIndicator(Modifier.size(18.dp), color = tokens.colors.accent, size = 18.dp)
+                        Text(stringResource(Res.string.random_episode_loading), style = MaterialTheme.typography.bodyMedium,
+                            color = tokens.colors.textMuted)
+                    }
+                    allCount == 0 -> Text(stringResource(Res.string.random_episode_empty_subtitle),
+                        style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted)
                     else -> {
-                        for (include in listOf(false, true)) {
-                            OutlinedButton(
-                                onClick = { includeWatched = include; selected = readyPicker.pick(include) },
-                                enabled = include || unwatchedCount > 0,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(stringResource(if (include) Res.string.random_episode_include_watched else Res.string.random_episode_unwatched))
-                            }
+                        NuvioGroup(containerColor = tokens.colors.surfaceCard) {
+                            ShufflePoolRow(
+                                icon = Icons.Rounded.VisibilityOff,
+                                title = stringResource(Res.string.random_episode_unwatched),
+                                description = stringResource(Res.string.shuffle_pool_episode_count, unwatchedCount),
+                                // Nothing left to watch: the pool is empty until All episodes is chosen.
+                                enabled = unwatchedCount > 0,
+                                onClick = { includeWatched = false; selected = readyPicker.pick(false) },
+                            )
+                            NuvioGroupDivider()
+                            ShufflePoolRow(
+                                icon = Icons.Rounded.Shuffle,
+                                title = stringResource(Res.string.random_episode_include_watched),
+                                description = stringResource(Res.string.shuffle_pool_episode_count_all, allCount),
+                                enabled = true,
+                                onClick = { includeWatched = true; selected = readyPicker.pick(true) },
+                            )
                         }
                         if (unwatchedCount == 0) Text(stringResource(Res.string.random_episode_caught_up),
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted)
                     }
                 }
             } else {
                 val watched = readyPicker?.isWatched(preview) == true
                 val hidden = blurUnwatchedEpisodes && !watched
+                val artworkShape = tokens.shapes.button
                 Box(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(artworkShape)
+                        .background(tokens.colors.surfaceCard)
+                        .border(tokens.borders.thin, tokens.colors.borderSubtle, artworkShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (!hidden && !preview.thumbnail.isNullOrBlank()) {
@@ -156,60 +195,117 @@ internal fun EpisodeShuffleSheet(
                             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(if (hidden) Icons.Default.VisibilityOff else Icons.Default.Shuffle,
-                                contentDescription = null, modifier = Modifier.size(32.dp))
-                            if (hidden) Text(stringResource(Res.string.shuffle_artwork_hidden), style = MaterialTheme.typography.bodySmall)
+                            Icon(if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Shuffle,
+                                contentDescription = null, tint = tokens.colors.textMuted, modifier = Modifier.size(32.dp))
+                            if (hidden) Text(stringResource(Res.string.shuffle_artwork_hidden),
+                                style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
                         }
                     }
-                    Text(
-                        stringResource(if (watched) Res.string.episodes_cd_watched else Res.string.shuffle_unwatched),
-                        style = MaterialTheme.typography.labelMedium, color = Color.White,
-                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
-                            .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    NuvioTag(
+                        text = stringResource(if (watched) Res.string.episodes_cd_watched else Res.string.shuffle_unwatched),
+                        style = NuvioTagStyle.Overlay,
+                        height = 26.dp,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
                     )
                 }
-                Text(stringResource(if (includeWatched) Res.string.random_episode_include_watched else Res.string.random_episode_unwatched),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(stringResource(Res.string.shuffle_preview_title), style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary)
-                Text(localizedSeasonEpisodeCode(preview.season, preview.episode).orEmpty(),
-                    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(preview.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                preview.overview?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        NuvioSectionLabel(stringResource(Res.string.shuffle_preview_title).uppercase())
+                        NuvioTag(
+                            text = stringResource(
+                                if (includeWatched) Res.string.random_episode_include_watched else Res.string.random_episode_unwatched,
+                            ),
+                            style = NuvioTagStyle.Accent,
+                        )
+                    }
+                    localizedSeasonEpisodeCode(preview.season, preview.episode)?.takeIf { it.isNotBlank() }?.let { code ->
+                        Text(code, style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary)
+                    }
+                    Text(preview.title, style = MaterialTheme.nuvioTypeScale.titleMd, color = tokens.colors.textPrimary,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    preview.overview?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                            color = tokens.colors.textMuted)
+                    }
                 }
                 val resume = progress[preview.season to preview.episode]?.let {
                     !it.isEffectivelyCompleted && (it.lastPositionMs > 0 || it.progressFraction > 0)
                 } == true
                 val canPlay = availability.canPlay(meta.type, preview.id, meta.id, preview.season, preview.episode)
-                NuvioPrimaryButton(
-                    text = stringResource(when {
-                        starting -> Res.string.shuffle_starting
-                        !canPlay -> Res.string.playback_unavailable
-                        resume -> Res.string.action_resume
-                        else -> Res.string.shuffle_play_episode
-                    }), enabled = !starting && canPlay, onClick = { play(onPlay) },
-                )
-                if ((readyPicker?.count(includeWatched) ?: 0) > 1) {
-                    OutlinedButton(enabled = !starting, onClick = { selected = readyPicker?.pick(includeWatched) },
-                        modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text(stringResource(Res.string.shuffle_again), modifier = Modifier.padding(start = 8.dp))
+                val canShuffleAgain = (readyPicker?.count(includeWatched) ?: 0) > 1
+                val canPlayManually = onPlayManually != null && availability.canStream(meta.type, preview.id)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NuvioPrimaryButton(
+                        text = stringResource(when {
+                            starting -> Res.string.shuffle_starting
+                            !canPlay -> Res.string.playback_unavailable
+                            resume -> Res.string.action_resume
+                            else -> Res.string.shuffle_play_episode
+                        }),
+                        enabled = !starting && canPlay,
+                        icon = Icons.Rounded.PlayArrow,
+                        onClick = { play(onPlay) },
+                    )
+                    if (canShuffleAgain || canPlayManually) {
+                        DialogButtons(Modifier.padding(top = 0.dp)) {
+                            if (canPlayManually) {
+                                DialogButton(
+                                    text = stringResource(Res.string.play_manually),
+                                    onClick = { onPlayManually?.let { play(it) } },
+                                    enabled = !starting,
+                                )
+                            }
+                            if (canShuffleAgain) {
+                                DialogButton(
+                                    text = stringResource(Res.string.shuffle_again),
+                                    onClick = { selected = readyPicker?.pick(includeWatched) },
+                                    enabled = !starting,
+                                )
+                            }
+                        }
                     }
-                } else Text(stringResource(Res.string.shuffle_only_episode), style = MaterialTheme.typography.bodySmall)
-                if (onPlayManually != null && availability.canStream(meta.type, preview.id)) {
-                    TextButton(enabled = !starting, onClick = { play(onPlayManually) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(Res.string.play_manually))
+                    if (resume) {
+                        DialogButton(
+                            text = stringResource(Res.string.cw_action_start_from_beginning),
+                            onClick = { play(onStartFromBeginning) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !starting && canPlay,
+                        )
                     }
-                }
-                if (resume) TextButton(enabled = !starting && canPlay, onClick = { play(onStartFromBeginning) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(Res.string.cw_action_start_from_beginning))
+                    if (!canShuffleAgain) {
+                        Text(stringResource(Res.string.shuffle_only_episode), style = MaterialTheme.nuvioTypeScale.bodySm,
+                            color = tokens.colors.textMuted)
+                    }
                 }
             }
         }
     }
+}
+
+/** One of the two episode pools on the first step: an icon chip, the pool name and its size. */
+@Composable
+private fun ShufflePoolRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    NuvioGroupRow(
+        title = title,
+        description = description,
+        onClick = onClick,
+        enabled = enabled,
+        leading = { NuvioIconChip(icon) },
+        trailing = {
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.nuvio.colors.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+    )
 }
 
 @Composable

@@ -32,6 +32,9 @@
     <string name="action_reset">ڈیفالٹ پر واپس کریں</string>
     <string name="action_resume">جاری رکھیں</string>
     <string name="action_retry">دوبارہ کوشش کریں</string>
+    <string name="cd_decrease_value">%1$s کم کریں</string>
+    <string name="cd_increase_value">%1$s بڑھائیں</string>
+    <string name="action_refresh">ریفریش کریں</string>
     <string name="action_save">محفوظ کریں</string>
     <string name="action_saving">محفوظ کیا جا رہا ہے…</string>
     <string name="action_switch">تبدیل کریں</string>
@@ -472,6 +475,8 @@
     <string name="compose_player_subtitle_delay">سب ٹائٹل تاخیر</string>
     <string name="compose_player_subtitles">سب ٹائٹلز</string>
     <string name="compose_player_text_opacity">متن کی شفافیت</string>
+    <string name="compose_player_timing">ٹائمنگ</string>
+    <string name="compose_player_text">متن</string>
     <string name="compose_player_brightness_level">روشنائی %1$s</string>
     <string name="compose_player_volume_level">آواز %1$s</string>
     <string name="compose_player_muted">آواز بند</string>
@@ -1916,6 +1921,7 @@
     <string name="cloud_library_play_not_connected">Cloud سروس کنیکٹ نہیں ہے۔</string>
     <string name="cloud_library_play_provider_not_connected">%1$s کنیکٹ نہیں ہے۔</string>
     <string name="cloud_library_playable_file_count">چلانے کے قابل %1$d فائلیں</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d فائلیں</string>
     <string name="cloud_library_provider_all">سب</string>
     <string name="cloud_library_refresh">Cloud Library ریفریش کریں</string>
     <string name="cloud_library_search_label">Cloud Library میں تلاش کریں</string>

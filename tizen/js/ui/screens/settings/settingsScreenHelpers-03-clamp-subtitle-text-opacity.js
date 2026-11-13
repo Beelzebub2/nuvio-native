@@ -237,6 +237,14 @@ export const SECTION_META = [
     labelKey: "settings.sections.appearance.label",
     subtitleKey: "settings.sections.appearance.subtitle"
   },
+  {
+    id: "display",
+    labelKey: "display_section_title",
+    label: "Display & scaling",
+    subtitleKey: "display_section_subtitle",
+    subtitle:
+      "Starlit sizes itself to your TV. Change these only if text looks too big or too small, or the edges are cut off."
+  },
   { id: "ambient", labelKey: "ambient_mode_title", subtitleKey: "ambient_mode_subtitle" },
   {
     id: "layout",
@@ -292,6 +300,7 @@ export const SECTION_ICONS = {
   profiles: "people",
   watchParty: "groups",
   appearance: "palette",
+  display: "tv",
   layout: "grid_view",
   contentDiscovery: "explore",
   plugins: "build",

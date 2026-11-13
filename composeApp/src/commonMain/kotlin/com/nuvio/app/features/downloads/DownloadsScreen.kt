@@ -1,7 +1,20 @@
 package com.nuvio.app.features.downloads
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,24 +30,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DownloadForOffline
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,12 +57,35 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.core.i18n.localizedByteUnit
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.DialogButtonStyle
+import com.nuvio.app.core.ui.NuvioEmptyBlock
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioIconChipTone
+import com.nuvio.app.core.ui.NuvioPillButton
+import com.nuvio.app.core.ui.NuvioPillButtonStyle
+import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.NuvioSectionHeader
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioSquareIconButtonStyle
+import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.NuvioTag
+import com.nuvio.app.core.ui.NuvioTagStyle
+import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.ui.nuvioCheckboxColors
+import com.nuvio.app.core.ui.nuvioConsumePointerEvents
+import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.tabular
+import com.nuvio.app.navigation.LocalNativeNavigationBarHidden
+import com.nuvio.app.navigation.LocalUseNativeNavigation
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioStatusModal
@@ -99,7 +128,10 @@ fun DownloadsScreen(
             .map { it.id }.toSet()
     }
     val selection = selectedIds.intersect(visibleIds)
-    LaunchedEffect(visibleIds) { selectedIds = selectedIds.intersect(visibleIds) }
+    LaunchedEffect(visibleIds) {
+        selectedIds = selectedIds.intersect(visibleIds)
+        if (visibleIds.isEmpty()) selectionMode = false
+    }
     val toggleSelection: (Set<String>) -> Unit = { ids ->
         if (canManage) selectedIds = if (selection.containsAll(ids)) selection - ids else selection + ids
     }
@@ -127,35 +159,50 @@ fun DownloadsScreen(
             else MaterialTheme.nuvio.spacing.screenHorizontal,
     ) {
         stickyHeader {
-            NuvioScreenHeader(
-                title = if (selectedShowId == null) {
-                    stringResource(Res.string.compose_settings_root_downloads_title)
+            val downloadsTitle = stringResource(Res.string.compose_settings_root_downloads_title)
+            val pageTitle = if (selectedShowId == null) {
+                downloadsTitle
+            } else {
+                selectedShowTitle ?: stringResource(Res.string.downloads_show_downloads)
+            }
+            val goBack = {
+                if (selectedShowId != null) {
+                    onBackFromShow?.invoke() ?: run { selectedShowId = null }
                 } else {
-                    selectedShowTitle ?: stringResource(Res.string.downloads_show_downloads)
-                },
-                onBack = {
-                    if (selectedShowId != null) {
-                        onBackFromShow?.invoke() ?: run { selectedShowId = null }
+                    onBack()
+                }
+            }
+            if (isDesktop) {
+                // Desktop shows the folder, with Open folder, in its overview card.
+                NuvioScreenHeader(title = pageTitle, onBack = goBack)
+            } else {
+                MobileDownloadsHeader(
+                    title = if (selectionMode) {
+                        stringResource(Res.string.downloads_mobile_selected_count, selection.size)
                     } else {
-                        onBack()
-                    }
-                },
-                actions = {
-                    // Desktop shows the folder, with Open folder, in its overview card.
-                    if (!isDesktop) IconButton(
-                        onClick = {
-                            if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
-                                NuvioToastController.show(openDownloadsDirectoryFailedText)
-                            }
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Folder,
-                            contentDescription = stringResource(Res.string.downloads_open_directory),
-                        )
-                    }
-                },
-            )
+                        pageTitle
+                    },
+                    // While selecting, the page name moves up; a show page keeps "Downloads" above it.
+                    eyebrow = when {
+                        selectionMode -> pageTitle
+                        selectedShowId != null -> downloadsTitle
+                        else -> null
+                    },
+                    selecting = selectionMode,
+                    canSelect = canManage && visibleIds.isNotEmpty(),
+                    onBack = goBack,
+                    // Done leaves selection mode and clears what was ticked.
+                    onToggleSelecting = {
+                        selectionMode = !selectionMode
+                        if (!selectionMode) selectedIds = emptySet()
+                    },
+                    onOpenFolder = {
+                        if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
+                            NuvioToastController.show(openDownloadsDirectoryFailedText)
+                        }
+                    },
+                )
+            }
         }
 
         if (selectedShowId == null && canManage && profileId != null) {
@@ -188,23 +235,10 @@ fun DownloadsScreen(
             item { MobileDownloadsOverview(uiState) }
             item { DownloadManagementControls() }
         }
-        if (canManage && visibleIds.isNotEmpty()) {
-            item {
-                DownloadSelectionControls(
-                    selecting = selectionMode,
-                    allSelected = selection.containsAll(visibleIds),
-                    selectedCount = selection.size,
-                    onToggleMode = {
-                        selectionMode = !selectionMode
-                        if (!selectionMode) selectedIds = emptySet()
-                    },
-                    onSelectAll = { selectedIds = visibleIds },
-                    onClear = { selectedIds = emptySet() },
-                    onRemove = {
-                        bulkDeletion = true
-                        pendingDeletionIds = selection.toSet()
-                    },
-                )
+        val startSelection: (Set<String>) -> Unit = { ids ->
+            if (canManage) {
+                selectionMode = true
+                selectedIds = selection + ids
             }
         }
 
@@ -215,22 +249,39 @@ fun DownloadsScreen(
                 onOpenShow = { showId, title ->
                     onNavigateToShow?.invoke(showId, title) ?: run { selectedShowId = showId }
                 },
-                onDeleteDownload = requestSingleDeletion,
                 selecting = selectionMode,
                 selectedIds = selection,
                 onToggleSelection = toggleSelection,
+                onStartSelection = startSelection,
             )
         } else {
             downloadsShowContent(
                 showId = selectedShowId.orEmpty(),
                 episodes = completedEpisodes,
                 onOpenDownload = onOpenDownload,
-                onDeleteDownload = requestSingleDeletion,
                 selecting = selectionMode,
                 selectedIds = selection,
                 onToggleSelection = toggleSelection,
+                onStartSelection = startSelection,
             )
         }
+        // Room for the floating selection bar, so the last rows stay reachable.
+        if (selectionMode) item(key = "downloads-selection-spacer") { Spacer(Modifier.height(64.dp)) }
+    }
+    if (!isDesktop && selectionMode && canManage) {
+        DownloadSelectionBar(
+            allSelected = selection.containsAll(visibleIds),
+            selectedCount = selection.size,
+            onSelectAll = { selectedIds = visibleIds },
+            onRemove = {
+                bulkDeletion = true
+                pendingDeletionIds = selection.toSet()
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = MaterialTheme.nuvio.spacing.screenHorizontal)
+                .padding(bottom = nuvioSafeBottomPadding(16.dp)),
+        )
     }
     }
 
@@ -255,91 +306,150 @@ fun DownloadsScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** The phone header: back, title (or the selection count) and the Select / Done pill. */
 @Composable
-private fun DownloadSelectionControls(
+private fun MobileDownloadsHeader(
+    title: String,
+    eyebrow: String?,
     selecting: Boolean,
-    allSelected: Boolean,
-    selectedCount: Int,
-    onToggleMode: () -> Unit,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onRemove: () -> Unit,
+    canSelect: Boolean,
+    onBack: () -> Unit,
+    onToggleSelecting: () -> Unit,
+    onOpenFolder: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End) {
-            if (selecting) {
-                Text(
-                    stringResource(Res.string.downloads_mobile_selected_count, selectedCount),
-                    modifier = Modifier.weight(1f).padding(start = 10.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val tokens = MaterialTheme.nuvio
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // With a native navigation bar the title and back button are already on screen.
+    val nativeNavigation = LocalUseNativeNavigation.current && !LocalNativeNavigationBarHidden.current
+    Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.matchParentSize().background(tokens.colors.background).nuvioConsumePointerEvents())
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = if (nativeNavigation) 0.dp else statusBarTop, bottom = 4.dp)
+                .heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (nativeNavigation) {
+                Spacer(Modifier.weight(1f))
+            } else {
+                NuvioSquareIconButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(Res.string.action_back),
+                    onClick = onBack,
+                    size = 36.dp,
+                    style = NuvioSquareIconButtonStyle.Surface,
+                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (eyebrow != null) {
+                        Text(eyebrow, style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(title, style = MaterialTheme.typography.headlineLarge, color = tokens.colors.textPrimary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (!selecting) {
+                NuvioSquareIconButton(
+                    icon = Icons.Rounded.Folder,
+                    contentDescription = stringResource(Res.string.downloads_open_directory),
+                    onClick = onOpenFolder,
+                    size = 36.dp,
+                    iconSize = 18.dp,
                 )
             }
-            TextButton(onClick = onToggleMode) {
-                Text(stringResource(if (selecting) Res.string.downloads_mobile_done else
-                    Res.string.downloads_mobile_select))
-            }
-        }
-        if (selecting) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onSelectAll, enabled = !allSelected) {
-                Text(stringResource(Res.string.downloads_select_all))
-            }
-            TextButton(onClick = onClear, enabled = selectedCount > 0) {
-                Text(stringResource(Res.string.downloads_clear_selection))
-            }
-            TextButton(onClick = onRemove, enabled = selectedCount > 0) {
-                Text(stringResource(Res.string.downloads_remove_selected, selectedCount), color =
-                    if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            if (canSelect) {
+                NuvioPillButton(
+                    text = stringResource(if (selecting) Res.string.downloads_mobile_done else Res.string.downloads_mobile_select),
+                    onClick = onToggleSelecting,
+                    style = if (selecting) NuvioPillButtonStyle.Primary else NuvioPillButtonStyle.Secondary,
+                )
             }
         }
     }
 }
 
+/** Select all and Remove selected, floating over the list while selecting. */
+@Composable
+private fun DownloadSelectionBar(
+    allSelected: Boolean,
+    selectedCount: Int,
+    onSelectAll: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = MaterialTheme.nuvio
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(tokens.colors.surfaceCard)
+            .border(tokens.borders.thin, tokens.colors.textPrimary.copy(alpha = tokens.opacity.pressed), shape)
+            .nuvioConsumePointerEvents()
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DialogButton(
+            text = stringResource(Res.string.downloads_select_all),
+            onClick = onSelectAll,
+            modifier = Modifier.weight(1f),
+            enabled = !allSelected,
+        )
+        DialogButton(
+            text = stringResource(Res.string.downloads_remove_selected, selectedCount),
+            onClick = onRemove,
+            modifier = Modifier.weight(1f),
+            style = DialogButtonStyle.Destructive,
+            enabled = selectedCount > 0,
+        )
+    }
+}
+
 @Composable
 private fun MobileDownloadsOverview(state: DownloadsUiState) {
+    val tokens = MaterialTheme.nuvio
     val downloading = state.items.count { it.status == DownloadStatus.Downloading }
     val completed = state.completedItems.size
     val problems = state.items.count { it.status == DownloadStatus.Failed }
     val downloadedSize = state.completedItems.fold(0L) { total, item ->
         total + (item.totalBytes ?: item.downloadedBytes).coerceAtLeast(0L)
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(26.dp))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(stringResource(Res.string.downloads_mobile_library),
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(Res.string.downloads_mobile_storage_used, formatDownloadBytes(downloadedSize)),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            NuvioIconChip(Icons.Rounded.DownloadForOffline, size = 48.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(Res.string.downloads_mobile_library),
+                    style = MaterialTheme.typography.titleLarge, color = tokens.colors.textPrimary)
+                Text(stringResource(Res.string.downloads_mobile_storage_used, formatDownloadBytes(downloadedSize)),
+                    style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted)
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                OverviewMetric(downloading, stringResource(Res.string.downloads_mobile_in_progress))
-                OverviewMetric(completed, stringResource(Res.string.downloads_mobile_ready))
-                OverviewMetric(problems, stringResource(Res.string.downloads_mobile_attention))
-            }
+        }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OverviewMetric(downloading, stringResource(Res.string.downloads_mobile_in_progress), Modifier.weight(1f))
+            OverviewMetric(completed, stringResource(Res.string.downloads_mobile_ready), Modifier.weight(1f))
+            OverviewMetric(problems, stringResource(Res.string.downloads_mobile_attention), Modifier.weight(1f),
+                highlight = problems > 0)
         }
     }
 }
 
 @Composable
-private fun OverviewMetric(count: Int, title: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("$count", style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-        Text(title, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+private fun OverviewMetric(count: Int, title: String, modifier: Modifier = Modifier, highlight: Boolean = false) {
+    val tokens = MaterialTheme.nuvio
+    Column(
+        modifier
+            .fillMaxHeight()
+            .clip(tokens.shapes.compactCard)
+            .background(tokens.colors.surfaceCard)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text("$count", style = MaterialTheme.nuvioTypeScale.titleMd.tabular,
+            color = if (highlight) tokens.colors.warning else tokens.colors.textPrimary)
+        Text(title, style = MaterialTheme.nuvioTypeScale.labelSm, fontWeight = FontWeight.Normal,
+            color = tokens.colors.textMuted, maxLines = 2)
     }
 }
 
@@ -347,10 +457,10 @@ private fun LazyListScope.downloadsRootContent(
     uiState: DownloadsUiState,
     onOpenDownload: (DownloadItem) -> Unit,
     onOpenShow: (showId: String, title: String) -> Unit,
-    onDeleteDownload: (String) -> Unit,
     selecting: Boolean,
     selectedIds: Set<String>,
     onToggleSelection: (Set<String>) -> Unit,
+    onStartSelection: (Set<String>) -> Unit,
 ) {
     val activeItems = uiState.activeItems
     val completedMovies = uiState.completedItems.filterNot(DownloadItem::isEpisode)
@@ -365,135 +475,94 @@ private fun LazyListScope.downloadsRootContent(
         .sortedBy { (item, _) -> item.title.lowercase() }
 
     if (activeItems.isNotEmpty()) {
-        item {
-            SectionTitle(stringResource(Res.string.downloads_section_active))
-        }
-        items(
-            items = activeItems,
-            key = { it.id },
-        ) { item ->
-            DownloadRow(
-                item = item,
-                selecting = selecting,
-                selected = item.id in selectedIds,
-                onToggleSelection = { onToggleSelection(setOf(item.id)) },
-                onOpen = { onOpenDownload(item) },
-                onPause = { DownloadsRepository.pauseDownload(item.id) },
-                onResume = { DownloadsRepository.resumeDownload(item.id) },
-                onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { onDeleteDownload(item.id) },
-            )
+        item(key = "downloads-active") {
+            val downloading = activeItems.any { it.status == DownloadStatus.Downloading }
+            val paused = activeItems.any { it.status == DownloadStatus.Paused }
+            DownloadSection(
+                title = stringResource(Res.string.downloads_section_active),
+                // Pause wins while anything is running; otherwise offer to resume what is paused.
+                actionLabel = when {
+                    selecting -> null
+                    downloading -> stringResource(Res.string.downloads_mobile_pause_all)
+                    paused -> stringResource(Res.string.downloads_mobile_resume_all)
+                    else -> null
+                },
+                onAction = if (downloading) DownloadsRepository::pauseActiveDownloads else DownloadsRepository::resumeAll,
+            ) {
+                activeItems.forEachIndexed { index, item ->
+                    key(item.id) {
+                        if (index > 0) NuvioGroupDivider(startInset = WideThumbnailInset)
+                        DownloadRow(
+                            item = item,
+                            wideThumbnail = true,
+                            selecting = selecting,
+                            selected = item.id in selectedIds,
+                            onToggleSelection = { onToggleSelection(setOf(item.id)) },
+                            onStartSelection = { onStartSelection(setOf(item.id)) },
+                            onOpen = { onOpenDownload(item) },
+                        )
+                    }
+                }
+            }
         }
     }
 
     if (completedMovies.isNotEmpty()) {
-        item {
-            SectionTitle(stringResource(Res.string.downloads_section_movies))
-        }
-        items(
-            items = completedMovies,
-            key = { it.id },
-        ) { item ->
-            DownloadRow(
-                item = item,
-                selecting = selecting,
-                selected = item.id in selectedIds,
-                onToggleSelection = { onToggleSelection(setOf(item.id)) },
-                onOpen = { onOpenDownload(item) },
-                onPause = { DownloadsRepository.pauseDownload(item.id) },
-                onResume = { DownloadsRepository.resumeDownload(item.id) },
-                onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { onDeleteDownload(item.id) },
-            )
+        item(key = "downloads-movies") {
+            DownloadSection(title = stringResource(Res.string.downloads_section_movies)) {
+                completedMovies.forEachIndexed { index, item ->
+                    key(item.id) {
+                        if (index > 0) NuvioGroupDivider(startInset = PosterInset)
+                        DownloadRow(
+                            item = item,
+                            wideThumbnail = false,
+                            selecting = selecting,
+                            selected = item.id in selectedIds,
+                            onToggleSelection = { onToggleSelection(setOf(item.id)) },
+                            onStartSelection = { onStartSelection(setOf(item.id)) },
+                            onOpen = { onOpenDownload(item) },
+                        )
+                    }
+                }
+            }
         }
     }
 
     if (completedShows.isNotEmpty()) {
-        item {
-            SectionTitle(stringResource(Res.string.downloads_section_shows))
-        }
-        items(
-            items = completedShows,
-            key = { (item, _) -> item.parentMetaId },
-        ) { (item, episodes) ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .clickable { onOpenShow(item.parentMetaId, item.title) },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    val episodeIds = episodes.map { it.id }.toSet()
-                    val selectionLabel = stringResource(Res.string.downloads_select_item, item.title)
-                    if (selecting) TriStateCheckbox(
-                            state = when {
+        item(key = "downloads-shows") {
+            DownloadSection(title = stringResource(Res.string.downloads_section_shows)) {
+                completedShows.forEachIndexed { index, (item, episodes) ->
+                    key(item.parentMetaId) {
+                        if (index > 0) NuvioGroupDivider(startInset = PosterInset)
+                        val episodeIds = episodes.map { it.id }.toSet()
+                        DownloadedShowRow(
+                            item = item,
+                            episodeCount = episodes.size,
+                            selecting = selecting,
+                            selection = when {
                                 selectedIds.containsAll(episodeIds) -> ToggleableState.On
                                 episodeIds.any { it in selectedIds } -> ToggleableState.Indeterminate
                                 else -> ToggleableState.Off
                             },
-                            onClick = { onToggleSelection(episodeIds) },
-                            modifier = Modifier.semantics { contentDescription = selectionLabel },
-                        )
-                    val artwork = item.poster ?: item.episodeThumbnail
-                    Box(Modifier.width(52.dp).height(74.dp).clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentAlignment = Alignment.Center) {
-                        if (artwork != null) NuvioAsyncImage(model = artwork, contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().height(74.dp), contentScale = ContentScale.Crop)
-                        else Icon(Icons.Rounded.DownloadForOffline, null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = stringResource(Res.string.downloads_episode_count, episodes.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            onToggleSelection = { onToggleSelection(episodeIds) },
+                            onStartSelection = { onStartSelection(episodeIds) },
+                            onOpen = { onOpenShow(item.parentMetaId, item.title) },
                         )
                     }
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }
     }
 
     if (uiState.items.isEmpty()) {
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 40.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(46.dp))
-                Text(
-                    text = stringResource(Res.string.downloads_empty_title),
-                    style = MaterialTheme.typography.titleMedium,
+        item(key = "downloads-empty") {
+            NuvioSurfaceCard(outlined = true) {
+                NuvioEmptyBlock(
+                    icon = Icons.Rounded.DownloadForOffline,
+                    title = stringResource(Res.string.downloads_empty_title),
+                    message = stringResource(Res.string.downloads_mobile_empty_description),
+                    modifier = Modifier.padding(vertical = 14.dp),
                 )
-                Text(stringResource(Res.string.downloads_mobile_empty_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -503,10 +572,10 @@ private fun LazyListScope.downloadsShowContent(
     showId: String,
     episodes: List<DownloadItem>,
     onOpenDownload: (DownloadItem) -> Unit,
-    onDeleteDownload: (String) -> Unit,
     selecting: Boolean,
     selectedIds: Set<String>,
     onToggleSelection: (Set<String>) -> Unit,
+    onStartSelection: (Set<String>) -> Unit,
 ) {
     val showEpisodes = episodes
         .filter { it.parentMetaId == showId }
@@ -522,17 +591,13 @@ private fun LazyListScope.downloadsShowContent(
         )
 
     if (seasons.isEmpty()) {
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 40.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(Res.string.downloads_empty_episodes),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        item(key = "downloads-show-empty") {
+            NuvioSurfaceCard(outlined = true) {
+                NuvioEmptyBlock(
+                    icon = Icons.Rounded.DownloadForOffline,
+                    title = stringResource(Res.string.downloads_empty_episodes),
+                    tone = NuvioIconChipTone.Neutral,
+                    modifier = Modifier.padding(vertical = 14.dp),
                 )
             }
         }
@@ -540,189 +605,220 @@ private fun LazyListScope.downloadsShowContent(
     }
 
     seasons.forEach { (seasonNumber, entries) ->
-        item {
-            SectionTitle(
-                if (seasonNumber == 0) {
+        item(key = "downloads-season-$seasonNumber") {
+            DownloadSection(
+                title = if (seasonNumber == 0) {
                     stringResource(Res.string.episodes_specials)
                 } else {
                     stringResource(Res.string.episodes_season, seasonNumber)
                 },
-            )
-        }
-
-        val sortedEpisodes = entries.sortedForSeriesDownloads()
-
-        items(
-            items = sortedEpisodes,
-            key = { it.id },
-        ) { item ->
-            DownloadRow(
-                item = item,
-                selecting = selecting,
-                selected = item.id in selectedIds,
-                onToggleSelection = { onToggleSelection(setOf(item.id)) },
-                onOpen = { onOpenDownload(item) },
-                onPause = { DownloadsRepository.pauseDownload(item.id) },
-                onResume = { DownloadsRepository.resumeDownload(item.id) },
-                onRetry = { DownloadsRepository.retryDownload(item.id) },
-                onDelete = { onDeleteDownload(item.id) },
-            )
+            ) {
+                entries.sortedForSeriesDownloads().forEachIndexed { index, item ->
+                    key(item.id) {
+                        if (index > 0) NuvioGroupDivider(startInset = WideThumbnailInset)
+                        DownloadRow(
+                            item = item,
+                            wideThumbnail = true,
+                            selecting = selecting,
+                            selected = item.id in selectedIds,
+                            onToggleSelection = { onToggleSelection(setOf(item.id)) },
+                            onStartSelection = { onStartSelection(setOf(item.id)) },
+                            onOpen = { onOpenDownload(item) },
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+// Row text starts after the leading artwork: 16 dp padding + artwork + 12 dp gap.
+private val WideThumbnailInset = 92.dp
+private val PosterInset = 68.dp
+
+/** A section label, an optional inline action, and its rows in one group. */
+@Composable
+private fun DownloadSection(
+    title: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    rows: @Composable ColumnScope.() -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        NuvioSectionHeader(title = title.uppercase(), actionLabel = actionLabel, onAction = onAction)
+        NuvioGroup(content = rows)
+    }
+}
+
+/** Artwork behind a download row: a 16:9 still for episodes and queue items, a poster otherwise. */
+@Composable
+private fun DownloadArtwork(model: String?, wide: Boolean) {
+    val tokens = MaterialTheme.nuvio
+    val shape = RoundedCornerShape(NuvioTokens.Radius.md)
+    Box(
+        Modifier
+            .size(width = if (wide) 64.dp else 40.dp, height = if (wide) 36.dp else 60.dp)
+            .clip(shape)
+            .background(tokens.colors.surfaceCard)
+            .border(tokens.borders.thin, tokens.colors.borderSubtle, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.DownloadForOffline, contentDescription = null, tint = tokens.colors.textMuted,
+            modifier = Modifier.size(18.dp))
+        if (model != null) {
+            NuvioAsyncImage(model = model, contentDescription = null, modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun DownloadRow(
     item: DownloadItem,
+    wideThumbnail: Boolean,
     selecting: Boolean,
     selected: Boolean,
     onToggleSelection: () -> Unit,
+    onStartSelection: () -> Unit,
     onOpen: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onRetry: () -> Unit,
-    onDelete: () -> Unit,
 ) {
+    val tokens = MaterialTheme.nuvio
     val displayTitle = item.displayTitle()
     val displaySubtitle = downloadDisplaySubtitle(item, displayTitle)
-    val artwork = item.episodeThumbnail ?: item.poster ?: item.background
+    val artwork = if (wideThumbnail) item.episodeThumbnail ?: item.background ?: item.poster
+        else item.poster ?: item.episodeThumbnail ?: item.background
     val selectionLabel = stringResource(Res.string.downloads_select_item, displayTitle)
-    Surface(
-        modifier = Modifier
+    val failed = item.status == DownloadStatus.Failed
+    val paused = item.status == DownloadStatus.Paused
+    Row(
+        Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 5.dp)
-            .clickable(enabled = selecting || item.isPlayable,
-                onClick = if (selecting) onToggleSelection else onOpen),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+            .combinedClickable(
+                enabled = true,
+                onClick = when {
+                    selecting -> onToggleSelection
+                    item.isPlayable -> onOpen
+                    else -> ({})
+                },
+                // A long press starts selecting with this row ticked.
+                onLongClick = if (selecting) null else onStartSelection,
+            )
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(Modifier.width(82.dp).height(112.dp).clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center) {
-                    if (artwork != null) {
-                        NuvioAsyncImage(model = artwork, contentDescription = null,
-                            modifier = Modifier.width(82.dp).height(112.dp), contentScale = ContentScale.Crop)
-                    } else {
-                        Icon(Icons.Rounded.DownloadForOffline, contentDescription = null,
-                            modifier = Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (selecting) Checkbox(
-                            checked = selected, onCheckedChange = { onToggleSelection() },
-                            modifier = Modifier.semantics {
-                                contentDescription = selectionLabel
-                            },
-                        )
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(displayTitle, style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (displaySubtitle.isNotBlank()) Text(displaySubtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    if (item.providerName.isNotBlank()) Text(item.providerName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        DownloadStateTag(item.status)
-                        if (item.torrentHash != null && item.sourceUrl.isBlank()) {
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-                                Text("P2P", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-                    }
-                }
+        DownloadArtwork(artwork, wide = wideThumbnail)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(displayTitle, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                color = tokens.colors.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (displaySubtitle.isNotBlank()) {
+                Text(displaySubtitle, style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textSecondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-
-            if (item.status == DownloadStatus.Downloading ||
-                (item.status == DownloadStatus.Paused && item.downloadedBytes > 0L)) {
-                if (item.totalBytes != null && item.totalBytes > 0L) {
-                    LinearProgressIndicator(progress = item.progressFraction,
-                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
-                } else if (item.status == DownloadStatus.Downloading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
-                }
+            Text(
+                statusText(item),
+                style = MaterialTheme.nuvioTypeScale.bodySm.tabular,
+                color = if (failed) tokens.colors.danger else tokens.colors.textMuted,
+                maxLines = if (failed) 3 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val showProgress = item.status == DownloadStatus.Downloading || (paused && item.downloadedBytes > 0L)
+            if (showProgress && item.totalBytes != null && item.totalBytes > 0L) {
+                NuvioProgressBar(
+                    progress = item.progressFraction,
+                    modifier = Modifier.padding(top = 2.dp),
+                    trackColor = tokens.colors.textPrimary.copy(alpha = tokens.opacity.pressed),
+                    fillColor = if (paused) tokens.colors.textMuted else tokens.colors.accent,
+                )
             }
-            Text(statusText(item),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (item.status == DownloadStatus.Failed) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (item.status == DownloadStatus.Failed) 3 else 2,
-                overflow = TextOverflow.Ellipsis)
-            if (!selecting) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                when (item.status) {
-                    DownloadStatus.Downloading -> TextButton(onClick = onPause) {
-                        Icon(Icons.Rounded.Pause, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(Res.string.compose_action_pause))
-                    }
-                    DownloadStatus.Paused -> TextButton(onClick = onResume) {
-                        Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(Res.string.action_resume))
-                    }
-                    DownloadStatus.Failed -> TextButton(onClick = onRetry) {
-                        Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(Res.string.action_retry))
-                    }
-                    DownloadStatus.Completed -> TextButton(onClick = onOpen, enabled = item.isPlayable) {
-                        Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(Res.string.action_play))
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(Res.string.action_delete),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            if (item.torrentHash != null && item.sourceUrl.isBlank()) {
+                NuvioTag("P2P", style = NuvioTagStyle.Outline, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        if (selecting) {
+            Checkbox(
+                checked = selected,
+                onCheckedChange = { onToggleSelection() },
+                modifier = Modifier.size(40.dp).semantics { contentDescription = selectionLabel },
+                colors = nuvioCheckboxColors(),
+            )
+        } else {
+            when (item.status) {
+                DownloadStatus.Downloading -> NuvioSquareIconButton(
+                    icon = Icons.Rounded.Pause,
+                    contentDescription = stringResource(Res.string.compose_action_pause),
+                    onClick = { DownloadsRepository.pauseDownload(item.id) },
+                    iconSize = 18.dp,
+                )
+                DownloadStatus.Paused -> NuvioSquareIconButton(
+                    icon = Icons.Rounded.PlayArrow,
+                    contentDescription = stringResource(Res.string.action_resume),
+                    onClick = { DownloadsRepository.resumeDownload(item.id) },
+                    iconSize = 18.dp,
+                )
+                DownloadStatus.Failed -> NuvioSquareIconButton(
+                    icon = Icons.Rounded.Refresh,
+                    contentDescription = stringResource(Res.string.action_retry),
+                    onClick = { DownloadsRepository.retryDownload(item.id) },
+                    iconSize = 18.dp,
+                )
+                DownloadStatus.Completed -> NuvioSquareIconButton(
+                    icon = Icons.Rounded.PlayArrow,
+                    contentDescription = stringResource(Res.string.action_play),
+                    onClick = onOpen,
+                    style = NuvioSquareIconButtonStyle.AccentSoft,
+                    enabled = item.isPlayable,
+                    iconSize = 18.dp,
+                )
             }
         }
     }
 }
 
+/** A show with finished episodes. It opens the show's episode list. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DownloadStateTag(status: DownloadStatus) {
-    val container = when (status) {
-        DownloadStatus.Downloading -> MaterialTheme.colorScheme.primaryContainer
-        DownloadStatus.Paused -> MaterialTheme.colorScheme.surfaceContainerHigh
-        DownloadStatus.Completed -> MaterialTheme.colorScheme.tertiaryContainer
-        DownloadStatus.Failed -> MaterialTheme.colorScheme.errorContainer
-    }
-    val foreground = when (status) {
-        DownloadStatus.Downloading -> MaterialTheme.colorScheme.onPrimaryContainer
-        DownloadStatus.Paused -> MaterialTheme.colorScheme.onSurfaceVariant
-        DownloadStatus.Completed -> MaterialTheme.colorScheme.onTertiaryContainer
-        DownloadStatus.Failed -> MaterialTheme.colorScheme.onErrorContainer
-    }
-    val title = when (status) {
-        DownloadStatus.Downloading -> stringResource(Res.string.downloads_mobile_in_progress)
-        DownloadStatus.Paused -> stringResource(Res.string.downloads_mobile_paused)
-        DownloadStatus.Completed -> stringResource(Res.string.downloads_mobile_ready)
-        DownloadStatus.Failed -> stringResource(Res.string.downloads_mobile_attention)
-    }
-    Surface(color = container, shape = CircleShape) {
-        Text(title, modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall, color = foreground)
+private fun DownloadedShowRow(
+    item: DownloadItem,
+    episodeCount: Int,
+    selecting: Boolean,
+    selection: ToggleableState,
+    onToggleSelection: () -> Unit,
+    onStartSelection: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    val selectionLabel = stringResource(Res.string.downloads_select_item, item.title)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = if (selecting) onToggleSelection else onOpen,
+                onLongClick = if (selecting) null else onStartSelection,
+            )
+            .padding(start = 16.dp, end = if (selecting) 8.dp else 16.dp, top = 12.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DownloadArtwork(item.poster ?: item.episodeThumbnail, wide = false)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                color = tokens.colors.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(Res.string.downloads_episode_count, episodeCount),
+                style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
+        }
+        if (selecting) {
+            TriStateCheckbox(
+                state = selection,
+                onClick = onToggleSelection,
+                modifier = Modifier.size(40.dp).semantics { contentDescription = selectionLabel },
+                colors = nuvioCheckboxColors(),
+            )
+        } else {
+            Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = tokens.colors.textMuted,
+                modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -754,17 +850,6 @@ private fun downloadDisplaySubtitle(
         item.episodeTitle?.trim().orEmpty().takeIf { it.isNotBlank() && it != displayTitle },
         item.title.trim().takeIf { it.isNotBlank() && it != displayTitle },
     ).filterNotNull().joinToString(" • ")
-}
-
-@Composable
-private fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold,
-    )
 }
 
 @Composable

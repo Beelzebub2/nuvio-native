@@ -30,6 +30,9 @@
     <string name="action_resume">Gjenoppta</string>
     <string name="action_resume_episode">Gjenoppta %1$s</string>
     <string name="action_retry">Prøv på nytt</string>
+    <string name="cd_decrease_value">Reduser %1$s</string>
+    <string name="cd_increase_value">Øk %1$s</string>
+    <string name="action_refresh">Oppdater</string>
     <string name="action_save">Lagre</string>
     <string name="action_saved">Lagret</string>
     <string name="action_saving">Lagrer…</string>
@@ -114,6 +117,7 @@
     <string name="cloud_library_play_not_connected">Skytjenesten er ikke tilkoblet.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s er ikke tilkoblet.</string>
     <string name="cloud_library_playable_file_count">%1$d spillbare filer</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d filer</string>
     <string name="cloud_library_playback_disabled">Skybibliotek er deaktivert.</string>
     <string name="cloud_library_provider_all">Alle</string>
     <string name="cloud_library_provider_unavailable">Skybibliotek er ikke tilgjengelig for %1$s.</string>
@@ -600,6 +604,8 @@
     <string name="compose_player_tap_to_unlock">Trykk for å låse opp</string>
     <string name="compose_player_tba">TBA</string>
     <string name="compose_player_text_opacity">Tekstopasitet</string>
+    <string name="compose_player_timing">Timing</string>
+    <string name="compose_player_text">Tekst</string>
     <string name="compose_player_track_number">Spor %1$d</string>
     <string name="compose_player_unlock_controls">Lås opp avspillerkontroller</string>
     <string name="compose_player_via">Via %1$s</string>

@@ -103,6 +103,9 @@ class RemoteControllerUiTest {
             onNodeWithText("Peers: 7").assertIsDisplayed()
             onNodeWithText("Seeds: 8").assertIsDisplayed()
             onNodeWithText("Cached").assertIsDisplayed()
+            // The sheet is its own root, drawn over the (empty) page root.
+            val sheet = File("build/remote-ui-capture/pc-source-picker.png").apply { parentFile.mkdirs() }
+            ImageIO.write(onAllNodes(isRoot()).onLast().captureToImage().toAwtImage(), "png", sheet)
         }
 
     @Test
@@ -122,6 +125,19 @@ class RemoteControllerUiTest {
         onNodeWithText("Previously paired PCs".uppercase()).performScrollTo().assertIsDisplayed()
         onNodeWithText("Can't find your PC?").performScrollTo().assertIsDisplayed()
         capture("pc-controller-find-bottom")
+    }
+
+    @Test
+    fun savedVpnUsesConnectNotWakeAndPrivateEndpointRemainsEditable() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.remembered.value = listOf(
+            RememberedRemoteDevice("VPN PC", "100.101.42.18", 0L, vpn = true),
+        )
+        show(desktopLayout = false)
+        onNodeWithTag("remote-saved-pc-100.101.42.18").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("remote-wake-pc-100.101.42.18").assertDoesNotExist()
+        onNodeWithTag("desktop-remote-enter-vpn").performScrollTo().performClick()
+        onNodeWithTag("desktop-remote-vpn-address").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("desktop-remote-vpn-connect").assertIsNotEnabled()
     }
 
     @Test
@@ -236,6 +252,7 @@ class RemoteControllerUiTest {
         onNodeWithText("Fullscreen on PC").performScrollTo().assertIsDisplayed()
         onNodeWithTag("remote-skip-interval").performScrollTo().assertIsEnabled()
         onNodeWithText("Skip intro").performScrollTo().assertIsDisplayed()
+        capture("pc-controller-remote")
         onNodeWithContentDescription("Next episode").assertIsEnabled()
         onAllNodesWithTag("remote-toggle-fullscreen").assertCountEquals(1)
         onAllNodesWithTag("remote-skip-interval").assertCountEquals(1)
@@ -275,8 +292,10 @@ class RemoteControllerUiTest {
         onNodeWithTag("remote-saved-pc-${saved.address}").performScrollTo().assertIsDisplayed()
             .assert(!hasClickAction())
         onNodeWithTag("remote-saved-pc-${other.address}").assert(hasClickAction())
+        // The connected PC shows a Connected tag; only the other saved PC offers Connect.
+        onAllNodesWithText("Connect").assertCountEquals(1)
         onNodeWithContentDescription("More options for Office PC").performClick()
-        onNodeWithText("Connect").assertDoesNotExist()
+        onAllNodesWithText("Connect").assertCountEquals(1)
         onAllNodesWithText("Disconnect").assertCountEquals(2)
         onNodeWithText("Forget").assertIsDisplayed()
 
@@ -285,7 +304,8 @@ class RemoteControllerUiTest {
             DesktopRemote.connected.value = false
         }
         onNodeWithTag("remote-saved-pc-${saved.address}").assert(hasClickAction())
-        onNodeWithText("Connect").assertIsDisplayed()
+        // Both saved PCs offer Connect again, and so does the menu that is still open.
+        onAllNodesWithText("Connect").assertCountEquals(3)
     }
 
     @Test
@@ -358,6 +378,7 @@ class RemoteControllerUiTest {
         onNodeWithTag("remote-skip-interval").assertDoesNotExist()
         onNodeWithContentDescription("Next episode").assertDoesNotExist()
         onNodeWithText("Nothing playing yet").assertIsDisplayed()
+        capture("pc-controller-idle")
         capture("pc-controller-idle-fullscreen")
     }
 

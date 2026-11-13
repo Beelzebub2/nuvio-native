@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
+import { getTvCanvasSize } from "../../../platform/tvViewport.js";
 export function createPlayerScreenMethods64() {
   const {
     PlayerController,
@@ -230,8 +231,9 @@ export function createPlayerScreenMethods64() {
         if (useFullViewport) {
           video.style.left = "0px";
           video.style.top = "0px";
-          video.style.width = "100vw";
-          video.style.height = "100vh";
+          const canvas = getTvCanvasSize();
+          video.style.width = `${canvas.width}px`;
+          video.style.height = `${canvas.height}px`;
           video.style.objectFit = mode.objectFit;
         } else {
           video.style.left = `${Math.round(videoRect.x)}px`;

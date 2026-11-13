@@ -18,6 +18,8 @@
     <string name="action_reset">Resetează la valorile implicite</string>
     <string name="action_resume">Reia</string>
     <string name="action_retry">Reîncearcă</string>
+    <string name="cd_decrease_value">Reduce %1$s</string>
+    <string name="cd_increase_value">Mărește %1$s</string>
     <string name="action_save">Salvează</string>
     <string name="action_saving">Se salvează…</string>
     <string name="action_switch">Schimbă</string>
@@ -390,6 +392,8 @@
     <string name="compose_player_subtitle_delay">Decalaj subtitrare</string>
     <string name="compose_player_subtitles">Subtitrări</string>
     <string name="compose_player_text_opacity">Opacitate text</string>
+    <string name="compose_player_timing">Sincronizare</string>
+    <string name="compose_player_text">Text</string>
     <string name="compose_player_brightness_level">Luminozitate %1$s</string>
     <string name="compose_player_volume_level">Volum %1$s</string>
     <string name="compose_player_muted">Mut</string>

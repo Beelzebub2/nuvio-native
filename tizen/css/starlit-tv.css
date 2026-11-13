@@ -1,0 +1,2497 @@
+/*
+ * Starlit TV interface layer.
+ *
+ * Applies the design tokens (starlit-tv-tokens.css) to the screens. Rules are
+ * scoped under #app so they win over the inherited component styles without
+ * !important, and every length is a px value on the 1080-tall reference canvas
+ * (see js/platform/tvViewport.js). Layout widths use the live canvas size, so
+ * 21:9 / 32:9 canvases and the "Compact" / "Large" interface sizes reflow.
+ *
+ * Focus is always one of three treatments:
+ *   buttons, keys, chips, rail items  accent fill + 4px gap + 5px ring, no scale
+ *   list rows                         tinted fill + ring, no scale
+ *   cards and posters                 ring + 1.06 scale
+ */
+
+/* ---- Canvas -------------------------------------------------------------- */
+
+html,
+body {
+  background: var(--tv-bg);
+  color: var(--tv-text);
+}
+
+#app {
+  color: var(--tv-text);
+  font-family: var(--app-font-family, var(--tv-font));
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+}
+
+#app .screen {
+  width: var(--tv-layout-width);
+  height: var(--tv-layout-height);
+}
+
+/* Lighter animations: focus moves and screen changes become instant. Loading
+   indicators keep spinning (they are keyframe animations, not transitions). */
+.tv-reduce-motion #app *,
+.tv-reduce-motion #app *::before,
+.tv-reduce-motion #app *::after {
+  -webkit-transition: none !important;
+  transition: none !important;
+}
+
+.tv-reduce-motion #app .home-row-enter,
+.tv-reduce-motion #app .search-route-enter,
+.tv-reduce-motion #app .nuvio-dialog-panel-enter,
+.tv-reduce-motion #app .home-hero-backdrop,
+.tv-reduce-motion #app .home-hero-logo {
+  -webkit-animation: none !important;
+  animation: none !important;
+}
+
+/* ---- Navigation rail ------------------------------------------------------ */
+
+#app .home-shell,
+#app .settings-shell {
+  --legacy-sidebar-rail-width: var(--tv-rail-width);
+  --legacy-sidebar-open-width: 360px;
+  --legacy-sidebar-item-width: var(--tv-rail-item);
+  --legacy-sidebar-item-expanded-width: 296px;
+  --legacy-sidebar-item-height: var(--tv-rail-item);
+  --legacy-sidebar-item-radius: 22px;
+  --legacy-sidebar-padding: 0px;
+  --legacy-sidebar-item-gap: 12px;
+  --legacy-sidebar-leading-offset: 19px;
+  --legacy-sidebar-label-start: 72px;
+  --legacy-sidebar-label-end: 20px;
+  --legacy-sidebar-focus-scale: 1;
+  --sidebar-icon-size: 34px;
+  --sidebar-leading-visual-size: 56px;
+}
+
+#app .home-sidebar {
+  width: var(--tv-rail-width);
+  padding: var(--tv-safe-action) 0;
+  align-items: flex-start;
+  background: transparent;
+  overflow: visible;
+  transition: none;
+}
+
+#app .home-sidebar.expanded {
+  width: var(--legacy-sidebar-open-width);
+  background: var(--tv-bg-elevated);
+}
+
+#app .home-rail-brand {
+  display: block;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 0 36px;
+  border-radius: 14px;
+}
+
+#app .home-nav-list {
+  flex: 1 1 auto;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin: 132px 0 0 28px;
+}
+
+#app .home-nav-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0 0 0 28px;
+}
+
+#app .home-nav-item,
+#app .home-profile-pill {
+  width: var(--tv-rail-item);
+  height: var(--tv-rail-item);
+  margin: 0;
+  padding: 0;
+  border-radius: 22px;
+  justify-content: center;
+  gap: 0;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 1;
+  visibility: inherit;
+  pointer-events: auto;
+  transform: none;
+  transition: none;
+  will-change: auto;
+}
+
+#app .home-nav-item.selected {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--tv-ring);
+}
+
+#app .home-sidebar.content-expanded .home-nav-item,
+#app .home-sidebar.content-expanded .home-profile-pill {
+  width: 304px;
+  justify-content: flex-start;
+  padding: 0 20px 0 19px;
+  gap: 19px;
+  transform: none;
+}
+
+#app .home-sidebar.content-expanded .home-nav-item.selected {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--tv-ring);
+}
+
+#app .home-nav-item.focused,
+#app .home-profile-pill.focused,
+#app .home-sidebar.content-expanded .home-nav-item.focused,
+#app .home-sidebar.content-expanded .home-nav-item.selected.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button) !important;
+  transform: none;
+}
+
+#app .home-nav-label,
+#app .home-profile-name {
+  width: 0;
+  opacity: 0;
+  transform: none;
+  transition: none;
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+#app .home-sidebar.content-expanded .home-nav-label,
+#app .home-sidebar.content-expanded .home-profile-name {
+  width: auto;
+  flex: 1 1 auto;
+  opacity: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .home-profile-pill {
+  margin-top: 8px;
+  border-radius: 36px;
+}
+
+#app .home-profile-avatar {
+  width: 56px;
+  height: 56px;
+  font-size: var(--tv-type-label);
+  line-height: 1;
+  font-weight: 700;
+}
+
+#app .home-sidebar.content-expanded .home-profile-pill {
+  padding-left: 8px;
+  gap: 16px;
+}
+
+#app .home-main {
+  height: var(--tv-layout-height);
+  margin-left: var(--tv-rail-width);
+}
+
+/* ---- Home ----------------------------------------------------------------- */
+
+#app .home-screen-shell.home-layout-modern {
+  --home-content-start: 48px;
+  --modern-track-peek-extension: 48px;
+  --home-row-gap: var(--tv-poster-gap);
+  --modern-rows-viewport-height: 43.4%;
+  --modern-hero-copy-top-safe: var(--tv-top);
+  --modern-hero-copy-bottom-gap: 24px;
+  --modern-hero-copy-max-width: 900px;
+  --modern-hero-copy-gap: 20px;
+  --modern-hero-title-size: var(--tv-type-hero);
+  --modern-hero-title-line-height: var(--tv-type-hero-lh);
+  --modern-hero-logo-max-width: 560px;
+  --modern-hero-logo-max-height: 208px;
+  --modern-hero-meta-size: var(--tv-type-label);
+  --modern-hero-secondary-size: var(--tv-type-label);
+  --modern-hero-description-size: var(--tv-type-body);
+  --modern-hero-description-line-height: var(--tv-type-body-lh);
+  --modern-hero-description-max-width: 760px;
+  --home-poster-width: var(--tv-poster-w);
+  --home-poster-radius: var(--tv-radius-poster);
+  --home-continue-width: var(--tv-card-w);
+  --home-continue-height: var(--tv-card-h);
+}
+
+#app .home-screen-shell.home-layout-modern .home-modern-hero-copy {
+  justify-content: flex-start;
+}
+
+#app .home-hero-eyebrow {
+  flex: 0 0 auto;
+  min-height: 24px;
+  color: var(--tv-ring);
+  font-size: var(--tv-type-caption);
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: var(--tv-type-eyebrow-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .home-hero-eyebrow::before {
+  content: attr(data-type-label);
+}
+
+#app .home-hero-eyebrow[data-row-title]::after {
+  content: " · " attr(data-row-title);
+  white-space: pre;
+}
+
+#app .home-hero-eyebrow[data-type-label=""][data-row-title]::after {
+  content: attr(data-row-title);
+}
+
+#app .home-screen-shell.home-layout-modern .home-hero-title-text {
+  font-weight: 800;
+  letter-spacing: var(--tv-type-title-tracking);
+  color: var(--tv-text);
+}
+
+#app .home-screen-shell.home-layout-modern .home-modern-hero-meta-line,
+#app .home-screen-shell.home-layout-modern .home-modern-hero-secondary {
+  color: var(--tv-text-2);
+  font-weight: 500;
+  line-height: 32px;
+}
+
+#app .home-screen-shell.home-layout-modern .home-modern-hero-meta-group-leading {
+  color: var(--tv-text);
+  font-size: var(--tv-type-subtitle);
+  line-height: var(--tv-type-subtitle-lh);
+  font-weight: 600;
+}
+
+#app .home-screen-shell.home-layout-modern .home-modern-hero-highlight {
+  color: var(--tv-text-2);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+#app .home-screen-shell.home-layout-modern .home-modern-hero-badge {
+  padding: 2px 10px;
+  border: 2px solid var(--tv-badge-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tv-text);
+  font-size: var(--tv-type-caption);
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+#app .home-screen-shell.home-layout-modern .home-hero-description {
+  color: var(--tv-text-2);
+  letter-spacing: 0;
+  -webkit-line-clamp: 2;
+  max-height: 76px;
+}
+
+#app .home-screen-shell.home-layout-modern .home-row-head {
+  margin-bottom: var(--tv-row-title-gap);
+}
+
+#app .home-screen-shell.home-layout-modern .home-row-title {
+  font-size: var(--tv-type-row);
+  line-height: var(--tv-type-row-lh);
+  font-weight: 700;
+  color: var(--tv-text);
+}
+
+/* Continue watching: 400 x 225 landscape cards, 36px apart so a focused card
+   (1.06 plus its ring) never touches its neighbour. */
+#app .home-screen-shell.home-layout-modern .home-track-continue {
+  --home-track-gap: var(--tv-card-gap);
+  gap: var(--tv-card-gap);
+}
+
+/* A horizontally scrolling track clips vertically, so give the focused card's
+   scale and ring room inside it without moving the row. */
+#app .home-screen-shell.home-layout-modern .home-track {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  margin-top: -20px;
+  margin-bottom: -20px;
+}
+
+#app .home-screen-shell .home-continue-card,
+#app .home-screen-shell .home-poster-card {
+  -webkit-transition: -webkit-transform var(--tv-focus-duration) ease-out;
+  transition: transform var(--tv-focus-duration) ease-out;
+}
+
+#app .home-screen-shell .home-continue-card {
+  border: 0;
+  border-radius: var(--tv-radius-card);
+  background: var(--tv-bg-card);
+}
+
+#app .home-screen-shell .home-continue-card .home-continue-media {
+  border-radius: var(--tv-radius-card);
+}
+
+/* The inherited focus rules are !important, so these have to be as well. */
+#app .home-screen-shell .home-continue-card.home-content-card.focused {
+  border: 0;
+  outline: 0;
+  -webkit-transform: scale(var(--tv-focus-card-scale)) !important;
+  transform: scale(var(--tv-focus-card-scale)) !important;
+  box-shadow: var(--tv-focus-shadow-card) !important;
+  z-index: 2;
+}
+
+#app .home-screen-shell .home-continue-card.focused .home-continue-media {
+  box-shadow: none;
+  background-color: transparent;
+}
+
+#app .home-screen-shell .home-poster-card.home-content-card.focused {
+  border: 0;
+  outline: 0;
+  -webkit-transform: scale(var(--tv-focus-card-scale)) !important;
+  transform: scale(var(--tv-focus-card-scale)) !important;
+  z-index: 2;
+}
+
+#app .home-screen-shell .home-poster-card .home-poster-frame {
+  border: 0;
+  border-radius: var(--tv-radius-poster);
+}
+
+#app .home-screen-shell .home-poster-card.focused .home-poster-frame {
+  border: 0;
+  box-shadow: var(--tv-focus-shadow-card);
+}
+
+.tv-reduce-motion #app .home-screen-shell .home-continue-card.home-content-card.focused,
+.tv-reduce-motion #app .home-screen-shell .home-poster-card.home-content-card.focused {
+  -webkit-transform: none !important;
+  transform: none !important;
+}
+
+#app .home-continue-badge {
+  border-radius: 8px;
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 700;
+}
+
+#app .home-continue-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+#app .home-continue-progress > * {
+  border-radius: 3px;
+  background: var(--tv-accent);
+}
+
+/* ---- Settings ------------------------------------------------------------- */
+
+/* Settings uses the full canvas: the section list on the 120px keyline, the
+   section itself beside it. The navigation rail stays reachable (Left from the
+   list) but only shows while it has focus. */
+#app .settings-shell {
+  background: var(--tv-bg);
+  color: var(--tv-text);
+}
+
+#app .settings-shell .home-sidebar:not(.expanded) {
+  visibility: hidden;
+}
+
+#app .settings-shell .home-sidebar.expanded {
+  z-index: 20;
+}
+
+#app .settings-shell .settings-workspace {
+  display: flex;
+  width: var(--tv-layout-width);
+  height: var(--tv-layout-height);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 0;
+  transition: none;
+}
+
+#app .settings-shell .settings-sidebar-frame {
+  flex: 0 0 600px;
+  width: 600px;
+  display: flex;
+  flex-direction: column;
+  padding: 88px 40px 48px var(--tv-keyline-full);
+  background: var(--tv-bg-elevated);
+}
+
+#app .settings-heading {
+  flex: 0 0 auto;
+  margin: 0 0 40px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .settings-shell .settings-sidebar {
+  flex: 1 1 auto;
+  height: auto;
+  gap: 8px;
+  padding: 10px;
+  margin: -10px;
+  width: auto;
+}
+
+#app .settings-shell .settings-nav-item {
+  flex: 0 0 auto;
+  min-height: 68px;
+  padding: 0 24px;
+  border: 0 !important;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  font-weight: 600;
+}
+
+#app .settings-shell .settings-nav-item .settings-nav-label {
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  font-weight: 600;
+}
+
+#app .settings-shell .settings-nav-item .settings-nav-icon,
+#app .settings-shell .settings-nav-item .settings-nav-chevron,
+#app .settings-shell .settings-nav-item > svg {
+  display: none;
+}
+
+#app .settings-shell .settings-nav-item.selected {
+  background: var(--tv-fill-chip);
+  color: var(--tv-ring);
+}
+
+#app .settings-shell .settings-nav-item.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+#app .settings-shell .settings-content-frame {
+  flex: 1 1 auto;
+  padding: 88px 96px 0 80px;
+}
+
+#app .settings-shell .settings-content {
+  gap: 20px;
+  /* Room for the focus ring of the first and last row. */
+  padding: 10px 10px 48px;
+  margin: -10px;
+  width: auto;
+}
+
+#app .settings-shell .settings-title {
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .settings-shell .settings-subtitle {
+  max-width: 960px;
+  margin-top: 16px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-body);
+  line-height: 34px;
+}
+
+#app .settings-shell .settings-group-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#app .settings-shell .settings-stack {
+  gap: 12px;
+}
+
+#app .settings-shell .settings-action-row {
+  min-height: var(--tv-list-row-h);
+  padding: 16px 28px;
+  border: 0 !important;
+  border-radius: var(--tv-radius-row);
+  background: var(--tv-fill-row);
+  color: var(--tv-text);
+}
+
+#app .settings-shell .settings-action-row.focused {
+  background: var(--tv-focus-bg);
+  box-shadow: var(--tv-focus-shadow-row);
+}
+
+#app .settings-shell .settings-row-copy {
+  gap: 6px;
+}
+
+#app .settings-shell .settings-row-title {
+  color: var(--tv-text);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+}
+
+#app .settings-shell .settings-row-subtitle {
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 500;
+}
+
+#app .settings-shell .settings-row-tail {
+  color: var(--tv-text);
+}
+
+#app .settings-shell .settings-row-value {
+  font-size: var(--tv-type-body);
+  font-weight: 700;
+}
+
+#app .settings-shell .settings-toggle-pill {
+  width: 76px;
+  height: 44px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: none;
+}
+
+#app .settings-shell .settings-toggle-pill.is-checked {
+  background: var(--tv-accent);
+}
+
+#app .settings-shell .settings-toggle-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--tv-text);
+}
+
+#app .settings-shell .settings-toggle-pill.is-checked .settings-toggle-thumb {
+  background: var(--tv-on-accent);
+}
+
+/* Display & scaling */
+#app .tv-display-detected {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  align-self: flex-start;
+  min-height: 44px;
+  margin-bottom: 14px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--tv-fill-row);
+  color: var(--tv-text);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 600;
+}
+
+#app .tv-display-detected-icon {
+  flex: 0 0 auto;
+  color: var(--tv-text-2);
+}
+
+/* Value controls drop under the title when the row runs out of room. */
+#app .tv-display-row {
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  height: auto;
+  row-gap: 16px;
+}
+
+#app .tv-display-row .settings-row-copy {
+  flex: 1 1 320px;
+}
+
+.tv-narrow #app .settings-shell .settings-sidebar-frame {
+  flex-basis: 460px;
+  width: 460px;
+  padding-right: 32px;
+}
+
+.tv-narrow #app .settings-shell .settings-content-frame {
+  padding: 88px 64px 0 56px;
+}
+
+.tv-narrow #app .stream-route-left {
+  flex-basis: 520px;
+  width: 520px;
+  padding-right: 48px;
+}
+
+.tv-narrow #app .stream-route-thumb {
+  width: 352px;
+  height: 198px;
+}
+
+#app .tv-display-control {
+  gap: 0;
+}
+
+#app .tv-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: var(--tv-radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#app .tv-segment {
+  display: inline-flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 28px;
+  border-radius: var(--tv-radius-pill);
+  color: var(--tv-text);
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#app .tv-segment.is-selected {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+}
+
+#app .tv-stepper-value {
+  min-width: 96px;
+  padding: 0 16px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#app .tv-stepper-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--tv-text-2);
+}
+
+#app .tv-stepper-arrow.is-disabled {
+  opacity: 0.3;
+}
+
+#app .tv-theme-swatches {
+  display: inline-flex;
+  align-items: center;
+}
+
+#app .tv-theme-swatch {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  margin-left: 16px;
+  border-radius: 50%;
+}
+
+#app .tv-theme-swatch.is-selected {
+  box-shadow: 0 0 0 4px var(--tv-bg), 0 0 0 7px var(--tv-text);
+}
+
+#app .settings-action-row.focused .tv-theme-swatch.is-selected {
+  box-shadow: 0 0 0 4px var(--tv-focus-bg), 0 0 0 7px var(--tv-text);
+}
+
+/* ---- Title details -------------------------------------------------------- */
+
+/* The banner is compact so the season tabs and the first episode row share
+   the first screen. Order: title, facts, ratings, actions, synopsis. Actions
+   stay above the synopsis because that is the D-pad order (Down from the
+   buttons reaches a long synopsis). */
+#app .series-detail-shell {
+  --detail-safe-x: var(--tv-keyline-full);
+  background: var(--tv-bg);
+  color: var(--tv-text);
+}
+
+#app .detail-hero-section {
+  height: auto;
+  min-height: 0;
+  justify-content: flex-start;
+  padding: var(--tv-top) var(--tv-keyline-full) 0;
+}
+
+#app .detail-hero-brand {
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+#app .series-detail-title {
+  margin: 0 0 20px;
+  max-width: 1100px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-hero);
+  line-height: var(--tv-type-hero-lh);
+  font-weight: 800;
+  letter-spacing: var(--tv-type-title-tracking);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+#app .series-detail-logo {
+  width: auto;
+  height: auto;
+  max-width: 620px;
+  max-height: 160px;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+#app .detail-hero-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Focus rings of the buttons extend past the box. */
+  overflow: visible;
+  max-height: none;
+}
+
+#app .detail-hero-body > .detail-meta-stack {
+  order: 1;
+  margin: 0;
+  gap: 12px;
+}
+
+#app .detail-hero-body > .detail-external-ratings,
+#app .detail-hero-body > .series-external-ratings {
+  order: 2;
+  margin: 12px 0 0;
+}
+
+#app .detail-hero-body > .series-detail-actions {
+  order: 3;
+  margin: 28px 0 0;
+  gap: 16px;
+  align-items: center;
+}
+
+#app .detail-hero-body > .detail-resume-indicator {
+  order: 4;
+  margin: 16px 0 0;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 600;
+}
+
+#app .detail-hero-body > .series-detail-support {
+  order: 5;
+  margin: 12px 0 0;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+}
+
+#app .detail-hero-body > .series-detail-description {
+  order: 6;
+  max-width: 800px;
+  margin: 20px 0 0;
+  padding: 0;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+  letter-spacing: 0;
+}
+
+#app .series-detail-description .detail-synopsis-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+#app .series-detail-description.focused {
+  border-radius: 12px;
+  background: var(--tv-focus-bg);
+  box-shadow:
+    0 0 0 12px var(--tv-focus-bg),
+    0 0 0 16px var(--tv-bg),
+    0 0 0 20px var(--tv-ring);
+  color: var(--tv-text);
+}
+
+#app .detail-meta-row {
+  min-height: 36px;
+  gap: 12px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-label);
+  line-height: 36px;
+  font-weight: 500;
+}
+
+#app .detail-meta-row .detail-meta-genres {
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-label);
+  font-weight: 500;
+}
+
+#app .detail-meta-row.secondary {
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-meta);
+  font-weight: 600;
+}
+
+#app .detail-meta-row .series-imdb-badge {
+  gap: 8px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-label);
+  font-weight: 700;
+}
+
+#app .detail-meta-row .series-imdb-badge img {
+  width: 56px;
+  height: auto;
+}
+
+/* Buttons: fill, gap and ring; no scale. */
+#app .series-primary-btn,
+#app .series-secondary-btn,
+#app .series-circle-btn {
+  border: 0;
+  background: var(--tv-fill-button);
+  color: var(--tv-text);
+  transform: none;
+  transition: none;
+  box-shadow: none;
+}
+
+#app .series-primary-btn,
+#app .series-secondary-btn {
+  width: auto;
+  min-width: 0;
+  height: var(--tv-button-h);
+  min-height: var(--tv-button-h);
+  padding: 0 var(--tv-button-pad-x);
+  border-radius: 36px;
+  font-size: var(--tv-type-body);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+#app .series-primary-btn {
+  height: var(--tv-button-h-primary);
+  min-height: var(--tv-button-h-primary);
+  padding: 0 40px 0 32px;
+  border-radius: 38px;
+  gap: 14px;
+  font-weight: 700;
+}
+
+#app .series-primary-btn > span {
+  font-size: var(--tv-type-body);
+  font-weight: 700;
+}
+
+#app .series-primary-btn .series-btn-icon,
+#app .series-primary-btn .series-btn-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+#app .series-circle-btn {
+  width: var(--tv-icon-button);
+  height: var(--tv-icon-button);
+  min-width: var(--tv-icon-button);
+  border-radius: 50%;
+}
+
+#app .series-circle-btn svg {
+  width: 32px;
+  height: 32px;
+}
+
+#app .series-circle-btn.is-library-selected,
+#app .series-circle-btn.is-selected {
+  color: var(--tv-ring);
+}
+
+#app .series-primary-btn.focused,
+#app .series-secondary-btn.focused,
+#app .series-circle-btn.focused,
+#app .series-circle-btn.is-library-selected.focused,
+#app .series-circle-btn.is-selected.focused {
+  border: 0;
+  outline: 0;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  transform: none;
+}
+
+#app .series-primary-btn.focused svg,
+#app .series-primary-btn.focused path,
+#app .series-circle-btn.focused svg,
+#app .series-circle-btn.focused path {
+  color: var(--tv-on-accent);
+  fill: currentColor;
+}
+
+/* Season tabs */
+#app .series-season-row {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 44px var(--tv-keyline-full) 16px;
+  gap: 12px;
+  align-items: center;
+}
+
+#app .series-season-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: 56px;
+  min-height: 56px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: var(--tv-radius-pill);
+  background: transparent;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-label);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0;
+  transform: none;
+  transition: none;
+  box-shadow: none;
+}
+
+#app .series-season-btn.selected {
+  background: var(--tv-fill-selected);
+  color: var(--tv-on-selected);
+}
+
+#app .series-season-btn.focused,
+#app .series-season-btn.selected.focused {
+  border: 0;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  transform: none;
+}
+
+/* Episode cards: artwork with the title and facts underneath. */
+#app .series-episode-track {
+  gap: 24px;
+  padding: 16px var(--tv-keyline-full) 28px;
+  align-items: flex-start;
+}
+
+#app .series-episode-card {
+  flex: 0 0 var(--tv-episode-w);
+  width: var(--tv-episode-w);
+  min-width: var(--tv-episode-w);
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  -webkit-transition: -webkit-transform var(--tv-focus-duration) ease-out;
+  transition: transform var(--tv-focus-duration) ease-out;
+}
+
+#app .series-episode-thumb {
+  position: relative;
+  display: block;
+  width: var(--tv-episode-w);
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+#app .series-episode-image {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: var(--tv-episode-w);
+  height: var(--tv-episode-h);
+  border-radius: var(--tv-radius-poster);
+  background-color: var(--tv-bg-card);
+  background-size: cover;
+  background-position: center;
+}
+
+#app .series-episode-overlay,
+#app .series-episode-badge,
+#app .series-episode-overview {
+  display: none;
+}
+
+#app .series-episode-copy {
+  position: static;
+  display: block;
+  width: auto;
+  padding: 16px 0 0;
+  background: none;
+}
+
+#app .series-episode-title {
+  margin: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 700;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .series-episode-title > span {
+  display: inline;
+}
+
+#app .series-episode-status.idle {
+  display: none;
+}
+
+#app .series-episode-meta {
+  display: block;
+  text-align: left;
+  margin: 6px 0 0;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 600;
+}
+
+#app .series-episode-status {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  left: auto;
+  bottom: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+#app .series-episode-status.complete {
+  background: rgba(11, 14, 20, 0.82);
+  color: var(--tv-text);
+}
+
+#app .series-episode-progress {
+  position: absolute;
+  top: 174px;
+  right: 18px;
+  bottom: auto;
+  left: 18px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+}
+
+#app .series-episode-progress > span {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tv-accent);
+}
+
+#app .series-episode-card.focused {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-transform: scale(var(--tv-focus-card-scale));
+  transform: scale(var(--tv-focus-card-scale));
+  z-index: 2;
+}
+
+#app .series-episode-card.focused .series-episode-thumb {
+  border: 0;
+  box-shadow: none;
+}
+
+#app .series-episode-card.focused .series-episode-image {
+  box-shadow: var(--tv-focus-shadow-card);
+}
+
+.tv-reduce-motion #app .series-episode-card.focused {
+  -webkit-transform: none;
+  transform: none;
+}
+
+/* ---- Choose a source ------------------------------------------------------ */
+
+/* Two panes: what is about to play (640px, elevated) and the list of sources.
+   The list takes the rest of the canvas, so it widens on 21:9 and narrows on
+   the "Large" interface size without the rows changing height. */
+#app .stream-route-shell {
+  background: var(--tv-bg);
+  color: var(--tv-text);
+}
+
+#app .stream-route-backdrop,
+#app .stream-route-backdrop-dim,
+#app .stream-route-left-gradient,
+#app .stream-route-right-gradient {
+  display: none;
+}
+
+#app .stream-route-content {
+  display: flex;
+  align-items: stretch;
+}
+
+#app .stream-route-left {
+  flex: 0 0 640px;
+  width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: var(--tv-top) 64px 64px var(--tv-keyline-full);
+  background: var(--tv-bg-elevated);
+}
+
+#app .stream-route-left-inner {
+  width: auto;
+  align-items: flex-start;
+  text-align: left;
+}
+
+#app .stream-route-thumb {
+  width: 456px;
+  height: 256px;
+  margin: 0 0 28px;
+  border-radius: 20px;
+  background-color: var(--tv-bg-card);
+  background-size: cover;
+  background-position: center;
+}
+
+#app .stream-route-logo {
+  width: auto;
+  max-width: 420px;
+  height: auto;
+  max-height: 120px;
+  margin: 0 0 16px;
+  object-position: left center;
+}
+
+#app .stream-route-title {
+  margin: 0 0 12px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+/* For an episode the series name becomes the eyebrow and the episode leads. */
+#app .stream-route-left-inner.is-episode .stream-route-title {
+  margin: 0 0 12px;
+  color: var(--tv-ring);
+  font-size: var(--tv-type-caption);
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: var(--tv-type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+#app .stream-route-episode-code,
+#app .stream-route-subtitle {
+  margin: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .stream-route-detail-line,
+#app .stream-route-detail-line.is-info {
+  margin: 16px 0 0;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+#app .stream-route-left-footer {
+  flex: 0 0 auto;
+}
+
+#app .stream-route-plays-best {
+  padding: 22px 24px;
+  border-radius: 20px;
+  background: var(--tv-fill-row);
+}
+
+#app .stream-route-plays-best-title {
+  color: var(--tv-text);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 700;
+}
+
+#app .stream-route-plays-best-body {
+  margin-top: 10px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-caption);
+  line-height: 30px;
+  font-weight: 500;
+}
+
+#app .stream-route-hints {
+  display: flex;
+  align-items: center;
+  margin-top: 24px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 500;
+}
+
+#app .stream-route-hint-key {
+  margin-right: 10px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--tv-fill-button);
+  color: var(--tv-text);
+  font-weight: 700;
+}
+
+#app .stream-route-right {
+  flex: 1 1 auto;
+  width: auto;
+  padding: var(--tv-top) 96px 0 80px;
+}
+
+#app .stream-route-panel-shell {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  overflow: visible;
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+#app .stream-route-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  margin-bottom: 24px;
+}
+
+#app .stream-route-heading-title {
+  margin: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .stream-route-heading-count {
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-meta);
+  line-height: 40px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#app .stream-route-panel-header {
+  padding: 0;
+}
+
+#app .stream-route-resume-label {
+  margin-bottom: 12px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+}
+
+#app .stream-route-chip-wrap,
+#app .stream-route-panel-header .stream-route-chip-wrap {
+  height: auto;
+  flex: 0 0 auto;
+  margin: 0 -12px;
+}
+
+#app .stream-route-chip-track {
+  height: auto;
+  gap: 12px;
+  /* Room for the focus ring inside the scrolling track. */
+  padding: 12px;
+}
+
+#app .stream-route-chip {
+  flex: 0 0 auto;
+  height: var(--tv-chip-h);
+  min-height: var(--tv-chip-h);
+  min-width: 0;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--tv-radius-pill);
+  background: var(--tv-fill-chip);
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+
+#app .stream-route-chip > span {
+  font-size: var(--tv-type-meta);
+  font-weight: 600;
+}
+
+#app .stream-route-chip-count {
+  margin-left: 8px;
+}
+
+#app .stream-route-chip.selected {
+  background: var(--tv-fill-selected);
+  color: var(--tv-on-selected);
+}
+
+#app .stream-route-chip.focused,
+#app .stream-route-chip.selected.focused {
+  border: 0;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  transform: none;
+}
+
+#app .stream-route-panel {
+  border-radius: 0;
+}
+
+#app .stream-route-list {
+  /* Ring room at the sides; the list scrolls under the header. */
+  padding: 12px 12px 64px;
+  margin: 0 -12px;
+  scroll-padding-top: 12px;
+  scroll-padding-bottom: 24px;
+}
+
+#app .stream-route-card-row {
+  gap: 0;
+  margin-bottom: 14px;
+}
+
+#app .stream-route-card {
+  min-height: var(--tv-list-row-h);
+  padding: 16px 28px 16px 20px;
+  gap: 28px;
+  border: 0;
+  border-radius: var(--tv-radius-row);
+  background: var(--tv-fill-row);
+  color: var(--tv-text);
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+
+#app .stream-route-card.focused {
+  border: 0;
+  background: var(--tv-focus-bg);
+  box-shadow: var(--tv-focus-shadow-row);
+  transform: none;
+}
+
+#app .stream-route-quality {
+  flex: 0 0 104px;
+  width: 104px;
+  height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--tv-fill-chip);
+}
+
+#app .stream-route-quality-res {
+  color: var(--tv-text);
+  font-size: 32px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+#app .stream-route-quality-range {
+  color: var(--tv-text-2);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+#app .stream-route-card-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#app .stream-route-card-heading {
+  color: var(--tv-text);
+  font-size: var(--tv-type-body);
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+#app .stream-route-card-copy.has-summary .stream-route-card-heading {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .stream-route-card-line {
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+#app .stream-route-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-caption);
+  line-height: 30px;
+  font-weight: 500;
+}
+
+#app .stream-route-card-meta-part + .stream-route-card-meta-part::before {
+  content: "\00B7";
+  margin: 0 12px;
+}
+
+#app .stream-route-warning {
+  margin-left: 16px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--tv-warn-bg);
+  color: var(--tv-warn-text);
+  font-weight: 700;
+}
+
+#app .stream-route-card-status {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#app .stream-route-card-status svg {
+  margin-right: 8px;
+}
+
+#app .stream-route-card-status.is-instant {
+  color: var(--tv-ring);
+}
+
+/* The add-on is named in the row's second line; keep only its logo here. */
+#app .stream-route-card-side {
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+#app .stream-route-card-side .stream-route-addon-name {
+  display: none;
+}
+
+#app .stream-route-addon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+#app .stream-route-addon-badge > span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* The size is already in the second line. */
+#app .stream-route-card-copy.has-summary .stream-route-stream-badge.size {
+  display: none;
+}
+
+#app .stream-route-stream-badge {
+  font-size: var(--tv-type-caption);
+}
+
+/* ---- Search ------------------------------------------------------------- */
+
+/* Field across the top, the on-screen keyboard on the 176px keyline and the
+   results to its right. The keyboard sits outside the scrolling content, so it
+   stays put while result rows scroll. */
+#app .search-screen-shell {
+  --search-keyboard-width: 492px;
+  --search-results-start: 568px; /* keyboard + 76px gutter, from the keyline */
+}
+
+#app .search-content {
+  height: var(--tv-layout-height);
+  padding: 72px 96px 48px var(--tv-safe-action);
+  background: var(--tv-bg);
+  scroll-padding-top: 72px;
+}
+
+#app .search-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 48px;
+  padding: 0;
+}
+
+#app .search-field {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 88px;
+}
+
+#app .search-input-field {
+  width: 100%;
+  height: 88px;
+  padding: 0 520px 0 92px;
+  border: 0;
+  border-radius: var(--tv-radius-pill);
+  background: var(--tv-bg-elevated);
+  color: var(--tv-text);
+  font-size: 36px;
+  line-height: 88px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+#app .search-input-field::placeholder {
+  color: var(--tv-text-3);
+}
+
+#app .search-input-field.focused {
+  border: 0;
+  background: var(--tv-focus-bg);
+  box-shadow: var(--tv-focus-shadow-row);
+}
+
+#app .search-field-icon {
+  position: absolute;
+  top: 27px;
+  left: 38px;
+  color: var(--tv-text-2);
+  pointer-events: none;
+}
+
+#app .search-field-hint {
+  position: absolute;
+  top: 0;
+  right: 36px;
+  max-width: 480px;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-caption);
+  line-height: 88px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+#app .search-discover-btn,
+#app .search-voice-btn {
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tv-fill-button);
+  color: var(--tv-text);
+  box-shadow: none;
+  transition: none;
+}
+
+#app .search-action-icon {
+  font-size: 40px;
+  color: currentColor;
+}
+
+#app .search-discover-btn.focused,
+#app .search-voice-btn.focused {
+  border: 0;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+#app .search-voice-btn.listening {
+  background: var(--tv-focus-bg);
+  color: var(--tv-ring);
+}
+
+/* On-screen keyboard: six keys per row. */
+#app .search-keyboard-pane {
+  position: absolute;
+  top: 208px;
+  left: var(--tv-keyline);
+  z-index: 4;
+  width: var(--search-keyboard-width);
+}
+
+#app .search-keyboard {
+  display: grid;
+  grid-template-columns: repeat(6, 72px);
+  grid-auto-rows: 72px;
+  gap: 10px 12px;
+}
+
+#app .search-key {
+  min-width: 0;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tv-radius-key);
+  background: var(--tv-fill-chip);
+  color: var(--tv-text);
+  font: inherit;
+  font-size: 32px;
+  line-height: 72px;
+  font-weight: 600;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: none;
+}
+
+#app .search-key-action {
+  font-size: var(--tv-type-label);
+}
+
+#app .search-key-space {
+  grid-column: span 3;
+}
+
+#app .search-key-clear {
+  grid-column: span 2;
+}
+
+#app .search-key.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+/* Tizen 4 has no CSS grid: the same keyboard as wrapping rows. */
+#app.no-css-grid .search-keyboard,
+.no-css-grid #app .search-keyboard {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  width: var(--search-keyboard-width);
+}
+
+.no-css-grid #app .search-keyboard {
+  /* Margins space the keys here; a grid gap would double up where flex gap works. */
+  gap: 0;
+}
+
+.no-css-grid #app .search-keyboard > .search-key {
+  width: 72px;
+  margin: 0 12px 10px 0;
+}
+
+.no-css-grid #app .search-keyboard > .search-key:nth-child(6n),
+.no-css-grid #app .search-keyboard > .search-key-clear {
+  margin-right: 0;
+}
+
+.no-css-grid #app .search-keyboard > .search-key-space {
+  width: 240px;
+}
+
+.no-css-grid #app .search-keyboard > .search-key-clear {
+  width: 156px;
+}
+
+/* Results, recent searches and empty states: right of the keyboard. */
+/* The content box already starts on the 176px keyline. */
+#app .search-content > :not(.search-header) {
+  margin-left: var(--search-results-start);
+}
+
+#app .search-results-row {
+  margin-bottom: 28px;
+}
+
+#app .search-results-title {
+  padding: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-row);
+  line-height: var(--tv-type-row-lh);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+#app .search-results-subtitle {
+  margin-top: 4px;
+  padding: 0;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 600;
+}
+
+#app .search-results-track {
+  gap: 30px;
+  margin: 8px 0 0 -16px;
+  /* Ring and scale room inside the scrolling track. */
+  padding: 20px 64px 20px 16px;
+}
+
+#app .search-result-card {
+  flex: 0 0 192px;
+  width: 192px;
+  scroll-margin-inline: 16px;
+  -webkit-transition: -webkit-transform var(--tv-focus-duration) ease-out;
+  transition: transform var(--tv-focus-duration) ease-out;
+}
+
+#app .search-result-poster-wrap {
+  height: 288px;
+  border: 0;
+  border-radius: var(--tv-radius-poster);
+  background: var(--tv-bg-card);
+  transition: none;
+}
+
+#app .search-result-poster {
+  border-radius: var(--tv-radius-poster);
+}
+
+#app .search-result-card.focused {
+  -webkit-transform: scale(var(--tv-focus-card-scale));
+  transform: scale(var(--tv-focus-card-scale));
+}
+
+#app .search-result-card.focused .search-result-poster-wrap {
+  border: 0;
+  background-color: var(--tv-bg-card);
+  box-shadow: var(--tv-focus-shadow-card);
+}
+
+.tv-reduce-motion #app .search-result-card.focused {
+  -webkit-transform: none;
+  transform: none;
+}
+
+#app .search-result-name {
+  margin-top: 16px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 700;
+}
+
+#app .search-result-meta,
+#app .search-result-year,
+#app .search-result-subtitle {
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 600;
+}
+
+#app .search-empty-state {
+  align-items: flex-start;
+  padding: 24px 0 0;
+  text-align: left;
+}
+
+#app .search-empty-icon {
+  display: none;
+}
+
+#app .search-empty-state h2 {
+  margin: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .search-empty-state p {
+  margin: 12px 0 0;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-body);
+  line-height: var(--tv-type-body-lh);
+}
+
+/* ---- Sign in --------------------------------------------------------------- */
+
+#app .qr-layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 80px;
+  width: var(--tv-layout-width);
+  height: var(--tv-layout-height);
+  padding: 0 160px;
+  background: var(--tv-bg);
+  color: var(--tv-text);
+}
+
+#app .qr-server-menu-trigger {
+  position: absolute;
+  top: var(--tv-safe-action);
+  left: var(--tv-safe-action);
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tv-fill-chip);
+  color: var(--tv-text-2);
+  font-size: 32px;
+}
+
+#app .qr-server-menu-trigger.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+#app .qr-left-panel {
+  flex: 1 1 auto;
+  max-width: 900px;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+}
+
+#app .qr-brand-lockup {
+  justify-content: flex-start;
+  margin: 0 0 72px;
+}
+
+#app .qr-logo {
+  height: 72px;
+  max-width: 320px;
+}
+
+#app .qr-copy-block {
+  max-width: 880px;
+}
+
+#app .qr-title {
+  margin: 0;
+  color: var(--tv-text);
+  font-size: var(--tv-type-display);
+  line-height: var(--tv-type-display-lh);
+  font-weight: 800;
+  letter-spacing: var(--tv-type-title-tracking);
+}
+
+#app .qr-description {
+  max-width: 760px;
+  margin: 24px 0 0;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-body);
+  line-height: 40px;
+  letter-spacing: 0;
+}
+
+#app .qr-steps {
+  margin: 44px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#app .qr-step {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  margin: 0 0 24px;
+  color: var(--tv-text);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+}
+
+#app .qr-step-number {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  margin-right: 24px;
+  border-radius: 50%;
+  background: var(--tv-fill-chip);
+  color: var(--tv-ring);
+  font-size: var(--tv-type-label);
+  line-height: 52px;
+  font-weight: 700;
+  text-align: center;
+}
+
+#app .qr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+}
+
+#app .qr-actions-left {
+  justify-content: flex-start;
+  margin-top: 40px;
+}
+
+#app .qr-action-btn,
+#app .qr-action-btn-primary,
+#app .qr-action-btn-secondary {
+  height: var(--tv-button-h);
+  min-height: var(--tv-button-h);
+  padding: 0 var(--tv-button-pad-x);
+  border: 0;
+  border-radius: 36px;
+  background: var(--tv-fill-button);
+  color: var(--tv-text);
+  font-size: var(--tv-type-body);
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+
+#app .qr-action-btn.focused {
+  border: 0;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  transform: none;
+}
+
+#app .qr-action-btn[disabled] {
+  opacity: 0.5;
+}
+
+#app .qr-layout-phone .qr-terms {
+  justify-content: flex-start;
+}
+
+#app .qr-terms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+  color: var(--tv-text-3);
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  text-align: left;
+}
+
+#app .qr-terms-link {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-caption);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+#app .qr-terms-link.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  text-decoration: none;
+}
+
+#app .qr-card-panel {
+  flex: 0 0 auto;
+}
+
+#app .qr-card {
+  width: 640px;
+  height: auto;
+  min-height: 0;
+  padding: 48px;
+  border: 0;
+  border-radius: 32px;
+  background: var(--tv-bg-elevated);
+  color: var(--tv-text);
+  gap: 16px;
+}
+
+/* Phone sign-in: a light card so phone cameras read the code reliably. */
+#app .qr-layout-phone .qr-card {
+  width: 560px;
+  align-items: center;
+  padding: 48px 48px 44px;
+  background: #f3f5f8;
+  color: #0b0e14;
+  gap: 0;
+}
+
+#app .qr-layout-phone .qr-card-header,
+#app .qr-layout-phone .qr-login-instruction {
+  display: none;
+}
+
+#app .qr-code-frame {
+  width: 400px;
+  height: 400px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+#app .qr-layout-phone .qr-code-frame {
+  background: transparent;
+}
+
+#app .qr-code-frame canvas,
+#app .qr-image {
+  display: block;
+  width: 400px;
+  height: 400px;
+}
+
+#app .qr-scan-caption {
+  margin-top: 28px;
+  color: #0b0e14;
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 700;
+  text-align: center;
+}
+
+#app .qr-divider {
+  width: 100%;
+  height: 2px;
+  margin: 24px 0;
+  background: rgba(11, 14, 20, 0.12);
+}
+
+#app .qr-layout:not(.qr-layout-phone) .qr-scan-caption,
+#app .qr-layout:not(.qr-layout-phone) .qr-divider {
+  display: none;
+}
+
+#app .qr-manual-text {
+  color: inherit;
+  opacity: 0.72;
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  font-weight: 500;
+  text-align: center;
+}
+
+#app .qr-code-text {
+  margin-top: 12px;
+  color: inherit;
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#app .qr-expiry {
+  margin-top: 12px;
+  color: inherit;
+  opacity: 0.72;
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  font-weight: 600;
+  text-align: center;
+}
+
+#app .qr-status {
+  min-height: 0;
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  font-size: var(--tv-type-caption);
+  line-height: var(--tv-type-caption-lh);
+  text-align: center;
+}
+
+#app .qr-code-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: #0b0e14;
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+  text-align: center;
+}
+
+#app .qr-server-menu {
+  border-radius: var(--tv-radius-row);
+  background: var(--tv-bg-elevated);
+}
+
+#app .qr-server-menu-item {
+  min-height: 64px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--tv-text);
+  font-size: var(--tv-type-label);
+}
+
+#app .qr-server-menu-item.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+#app .qr-auth-input {
+  height: var(--tv-button-h);
+  border: 0;
+  border-radius: 16px;
+  background: var(--tv-fill-row);
+  color: var(--tv-text);
+  font-size: var(--tv-type-body);
+}
+
+#app .qr-auth-input.focused {
+  background: var(--tv-focus-bg);
+  box-shadow: var(--tv-focus-shadow-row);
+}
+
+/* ---- Player ------------------------------------------------------------------ */
+
+#app .player-controls-overlay {
+  --player-controls-x: var(--tv-keyline-full);
+  --player-controls-y: 64px;
+  --player-control-size: 72px;
+}
+
+/* Title top-left: series name as the eyebrow, the episode as the title. */
+#app .player-meta {
+  position: fixed;
+  top: 64px;
+  left: var(--tv-keyline-full);
+  z-index: 2;
+  max-width: 1100px;
+}
+
+#app .player-title {
+  color: var(--tv-text);
+  font-size: var(--tv-type-screen);
+  line-height: var(--tv-type-screen-lh);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .player-meta.has-episode .player-title {
+  color: rgba(244, 246, 250, 0.82);
+  font-size: var(--tv-type-caption);
+  line-height: 26px;
+  font-weight: 700;
+  letter-spacing: var(--tv-type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+#app .player-subtitle {
+  margin-top: 6px;
+  color: var(--tv-text);
+  font-size: 40px;
+  line-height: 48px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#app .player-meta-secondary {
+  margin-top: 8px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-meta);
+  line-height: var(--tv-type-meta-lh);
+}
+
+#app .player-controls-top {
+  color: var(--tv-text);
+}
+
+#app .player-clock {
+  font-size: 40px;
+  line-height: 48px;
+  font-weight: 800;
+}
+
+#app .player-ends-at {
+  margin-top: 6px;
+  color: var(--tv-text-2);
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 600;
+}
+
+/* Timeline */
+#app .player-progress-shell {
+  margin-top: 0;
+  padding: 10px 0;
+}
+
+#app .player-progress-track {
+  height: 8px;
+  border-radius: 4px;
+  overflow: visible;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+#app .player-progress-shell.focused .player-progress-track {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.35), 0 0 0 7px var(--tv-ring);
+}
+
+#app .player-progress-fill {
+  background: var(--tv-accent);
+  border-radius: 4px;
+}
+
+#app .player-progress-ticks {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+#app .player-progress-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  margin-left: -2px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+#app .player-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  color: var(--tv-text);
+  font-size: var(--tv-type-label);
+  line-height: var(--tv-type-label-lh);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#app .player-time-row.hidden {
+  display: none;
+}
+
+#app .player-chapter-label {
+  flex: 1 1 auto;
+  padding: 0 24px;
+  color: var(--tv-text-2);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The combined "0:12 / 48:00" label stays for live streams only. */
+#app .player-time-label:not(.is-live) {
+  display: none;
+}
+
+#app .player-time-label.is-live {
+  font-size: var(--tv-type-label);
+  font-weight: 700;
+}
+
+/* Buttons: transport on the left, labelled track buttons on the right. */
+#app .player-controls-row {
+  margin-top: 24px;
+}
+
+#app .player-controls-row .player-control-buttons {
+  flex: 1 1 auto;
+  gap: 16px;
+}
+
+#app .player-control-btn {
+  width: var(--player-control-size);
+  min-width: var(--player-control-size);
+  height: var(--player-control-size);
+  border: 0;
+  border-radius: 50%;
+  background: var(--tv-fill-button);
+  color: var(--tv-text);
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+
+#app .player-control-btn .player-control-icon {
+  width: 32px;
+  height: 32px;
+}
+
+#app .player-control-btn .player-control-icon-mask {
+  background-color: currentColor;
+}
+
+#app .player-control-btn.is-primary {
+  width: var(--tv-play-button);
+  min-width: var(--tv-play-button);
+  height: var(--tv-play-button);
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+}
+
+#app .player-control-btn.is-primary .player-control-icon {
+  width: 36px;
+  height: 36px;
+}
+
+#app .player-control-btn.has-track-label {
+  width: auto;
+  min-width: 0;
+  padding: 0 28px 0 22px;
+  border-radius: 36px;
+  gap: 12px;
+}
+
+#app .player-control-btn.is-track-start {
+  margin-left: auto;
+}
+
+#app .player-control-text {
+  color: currentColor;
+  font-size: var(--tv-type-label);
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#app .player-control-btn.focused,
+#app .player-control-btn.is-primary.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+  transform: none;
+}
+
+#app .player-control-btn.focused .player-control-icon-mask,
+#app .player-control-btn.is-primary .player-control-icon-mask {
+  background-color: var(--tv-on-accent);
+}
+
+#app .player-control-btn:not(.focused):not(.is-primary) .player-control-icon-mask {
+  background-color: var(--tv-text);
+}
+
+/* Skip intro: a light pill above the controls. */
+#app .player-skip-intro .player-skip-intro-button,
+#app .player-skip-intro button {
+  height: 64px;
+  padding: 0 30px;
+  border: 0;
+  border-radius: 32px;
+  background: rgba(244, 246, 250, 0.92);
+  color: #0b0e14;
+  font-size: var(--tv-type-label);
+  font-weight: 700;
+}
+
+#app .player-skip-intro .focused,
+#app .player-skip-intro button.focused {
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  box-shadow: var(--tv-focus-shadow-button);
+}
