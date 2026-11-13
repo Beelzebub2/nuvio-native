@@ -9,6 +9,8 @@ on:
       - 'composeApp/src/desktopTest/js/discord-share-toggle.test.mjs'
       - 'tests/native-discord-share-safety.test.cpp'
       - 'tests/native-play*.test.*'
+      - 'tests/native-ass-original-styling.test.cjs'
+      - 'tests/libass-local-subtitles-probe.windows.py'
       - 'tests/surround-upmix-libmpv-probe.windows.py'
       - '.github/workflows/playback-diagnostics-check.yml'
   workflow_dispatch:
@@ -37,8 +39,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Test sanitized reports, opt-in and lifecycle
-        run: node --test tests/native-player-diagnostics.test.cjs
+      - name: Test playback diagnostics and native ASS/SSA styling policy
+        run: node --test tests/native-player-diagnostics.test.cjs tests/native-ass-original-styling.test.cjs
       - name: Test Discord player toggle states
         run: node composeApp/src/desktopTest/js/discord-share-toggle.test.mjs
       - name: Test Discord centre-audio and endpoint safety policy
@@ -89,6 +91,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -99,6 +104,8 @@ jobs:
           nuget install Microsoft.Web.WebView2 -Version 1.0.4078.44 -OutputDirectory "$env:RUNNER_TEMP/nuget" -DirectDownload -NonInteractive -NoCache
           if ($LASTEXITCODE -ne 0) { throw 'WebView2 SDK installation failed.' }
           "WEBVIEW2_ROOT=$env:RUNNER_TEMP/nuget/Microsoft.Web.WebView2.1.0.4078.44" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Validate Windows ASS/SSA native styling policy
+        run: node --test tests/native-ass-original-styling.test.cjs
       - name: Build Windows native bridge and test diagnostics and player lifecycle
         shell: pwsh
         run: >-
@@ -107,6 +114,7 @@ jobs:
           --tests '*PlaybackDiagnosticsTest*'
           --tests '*NativePlayerStartupTest*' --tests '*NativePlayerControllerTeardownTest*'
           --tests '*PreferredAudioTrackTest*'
+          --tests '*OriginalAssSubtitleStyleTest*'
           --tests '*OpeningOverlayFullscreenTest*'
           --tests '*PrivatePlaybackUiTest*' --tests '*PrivatePlaybackIndicatorUiTest*'
           '-Dorg.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
@@ -115,6 +123,9 @@ jobs:
       - name: Verify real 5.1 PCM output from bundled audio engine
         shell: pwsh
         run: python tests/surround-upmix-libmpv-probe.windows.py
+      - name: Verify local animated ASS/SSA rendering with bundled libmpv
+        shell: pwsh
+        run: python tests/libass-local-subtitles-probe.windows.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:

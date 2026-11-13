@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.player.skip.AutoSkipSegmentType
 import com.nuvio.app.features.player.skip.SkipIntroRepository
 import com.nuvio.app.features.player.skip.NextEpisodeThresholdMode
@@ -84,7 +85,7 @@ data class PlayerSettingsUiState(
     val nextEpisodeThresholdPercent: Float = 95f,
     val nextEpisodeThresholdMinutesBeforeEnd: Float = 2f,
     val preloadNextEpisodeSources: Boolean = false,
-    val useLibass: Boolean = false,
+    val useLibass: Boolean = isDesktop,
     val libassRenderType: String = "CUES",
     val iosVideoOutputPreset: IosVideoOutputPreset = IosVideoOutputPreset.NativeEdr,
     val iosToneMappingMode: IosToneMappingMode = IosToneMappingMode.Auto,
@@ -159,7 +160,7 @@ object PlayerSettingsRepository {
     private var nextEpisodeThresholdPercent = 95f
     private var nextEpisodeThresholdMinutesBeforeEnd = 2f
     private var preloadNextEpisodeSources = false
-    private var useLibass = false
+    private var useLibass = isDesktop
     private var libassRenderType = "CUES"
     private var iosVideoOutputPreset = IosVideoOutputPreset.NativeEdr
     private var iosToneMappingMode = IosToneMappingMode.Auto
@@ -239,7 +240,7 @@ object PlayerSettingsRepository {
         nextEpisodeThresholdPercent = 95f
         nextEpisodeThresholdMinutesBeforeEnd = 2f
         preloadNextEpisodeSources = false
-        useLibass = false
+        useLibass = isDesktop
         libassRenderType = "CUES"
         iosVideoOutputPreset = IosVideoOutputPreset.NativeEdr
         iosToneMappingMode = IosToneMappingMode.Auto
@@ -390,7 +391,9 @@ object PlayerSettingsRepository {
         nextEpisodeThresholdPercent = PlayerSettingsStorage.loadNextEpisodeThresholdPercent() ?: 95f
         nextEpisodeThresholdMinutesBeforeEnd = PlayerSettingsStorage.loadNextEpisodeThresholdMinutesBeforeEnd() ?: 2f
         preloadNextEpisodeSources = PlayerSettingsStorage.loadPreloadNextEpisodeSources() ?: false
-        useLibass = PlayerSettingsStorage.loadUseLibass() ?: false
+        // Preserve author-provided ASS/SSA typography on desktop by default.
+        // An explicitly saved false still selects custom subtitle styling.
+        useLibass = PlayerSettingsStorage.loadUseLibass() ?: isDesktop
         libassRenderType = PlayerSettingsStorage.loadLibassRenderType() ?: "CUES"
         iosVideoOutputPreset = PlayerSettingsStorage.loadIosVideoOutputPreset()
             ?.let { runCatching { IosVideoOutputPreset.valueOf(it) }.getOrNull() }

@@ -1996,17 +1996,17 @@ JNIEXPORT void JNICALL NP(applySubtitleStyle)(
     Player *p = asPlayer(handle);
     if (!p) return;
     const bool preserveAssStyles = useLibass == JNI_TRUE;
-    // Keep the track's own ASS styling when libass rendering is on, and let the
-    // settings below take over when it is off (matching the Windows bridge).
+    // Keep the track's own ASS styling (including placement and scale) when
+    // libass is on; custom text styling remains explicitly opt-in.
     mpv_set_property_string(p->mpv, "sub-ass-override",
-                            preserveAssStyles ? "scale" : "force");
+                            preserveAssStyles ? "no" : "force");
     const double clampedSize = std::max(18.0, std::min(96.0, static_cast<double>(fontSize)));
-    const double subtitleScale = preserveAssStyles ? clampedSize / 54.0 : 1.0;
+    const double subtitleScale = 1.0;
     std::string scale = std::to_string(subtitleScale);
     mpv_set_property_string(p->mpv, "sub-scale", scale.c_str());
     std::string size = std::to_string(clampedSize);
     mpv_set_property_string(p->mpv, "sub-font-size", size.c_str());
-    std::string pos = std::to_string(subPos);
+    std::string pos = std::to_string(preserveAssStyles ? 100 : subPos);
     mpv_set_property_string(p->mpv, "sub-pos", pos.c_str());
     if (!preserveAssStyles) {
         std::string background = jstringToUtf8(env, backgroundColor);
