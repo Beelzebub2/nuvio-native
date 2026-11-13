@@ -49,9 +49,35 @@ jobs:
             tizen/artifacts/SHA256SUMS-WebOS
             tizen/artifacts/webos-package-metadata.json
           if-no-files-found: error
-  publish:
+  release-eligibility:
     if: github.event_name == 'release' && !github.event.release.prerelease
-    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      accepted: ${{ steps.acceptance.outputs.accepted }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Check whether a device-accepted LG package is configured
+        id: acceptance
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = 'tizen/release/webos-acceptance.json';
+          let accepted = false;
+          try {
+            const evidence = JSON.parse(fs.readFileSync(path, 'utf8'));
+            accepted = evidence.status === 'PASS';
+          } catch {
+            accepted = false;
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'accepted=' + accepted + '\n');
+          console.log(accepted ? 'LG device acceptance present; enforce exact IPK release gate.' : 'LG package is not device-accepted; skip LG publishing without failing the parent release.');
+          NODE
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease && needs.release-eligibility.outputs.accepted == 'true'
+    needs: [build, release-eligibility]
     runs-on: ubuntu-latest
     permissions:
       contents: write
