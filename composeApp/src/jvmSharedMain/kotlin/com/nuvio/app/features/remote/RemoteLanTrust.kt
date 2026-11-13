@@ -70,6 +70,10 @@ private fun hostLanIdentity(account: RemoteAccount, store: RemoteLanTrustStore?)
     }.getOrNull()
 }
 
+/** One account-scoped PC identifier is reused across authenticated LAN and Bluetooth sessions. */
+internal fun remoteHostIdentityId(account: RemoteAccount, store: RemoteLanTrustStore?): String? =
+    hostLanIdentity(account, store)?.id
+
 /** Both peers must advertise the LAN extension before exchanging these frames. */
 internal fun resumeLanTrust(
     pairing: RemotePairingChannel,

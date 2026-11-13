@@ -90,6 +90,8 @@ internal data class RemotePlayback(
     val mediaTitle: String = "",
     val episodeLine: String = "",
     val poster: String = "",
+    /** Stable desktop lookup hint, transmitted only inside the authenticated encrypted session. */
+    val desktopId: String = "",
 )
 
 internal fun RemotePlayback.effectiveVolumeMax(): Float =
@@ -154,6 +156,9 @@ internal interface DesktopRemoteTransport {
     fun approvedVpnAddress(): String? = null
     fun approveVpnAddress(address: String?): Boolean = false
     fun discoverBluetooth() {}
+    /** One opt-in attempt per phone app launch, with LAN preferred and Bluetooth fallback. */
+    fun reconnectRemembered(devices: List<RememberedRemoteDevice>) {}
+    fun cancelStartupReconnect() {}
     fun localAddresses(): List<String> = emptyList()
     fun wake(address: String, mac: String) {}
     fun connect(desktop: RemoteDesktop)
@@ -187,6 +192,8 @@ internal object DesktopRemote {
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
+    val autoReconnect = MutableStateFlow(false)
+    private var startupReconnectAccount: RemoteAccount? = null
     val visible = MutableStateFlow(false)
     val pendingHandoff = MutableStateFlow<RemotePlaybackHandoff?>(null)
     val sourcePicker = MutableStateFlow(RemoteSourcePicker())
@@ -208,18 +215,36 @@ internal object DesktopRemote {
 
     /** Changing the account/server replaces remembered devices, never merges trust domains. */
     fun accountChanged(account: RemoteAccount?) {
+        if (activeAccount != account) startupReconnectAccount = null
         activeAccount = account
         remembered.value = account?.let(RememberedRemoteDeviceStore::read).orEmpty()
+        autoReconnect.value = account?.let(RememberedRemoteDeviceStore::autoReconnectEnabled) ?: false
+    }
+
+    fun setAutoReconnect(enabled: Boolean) {
+        val account = activeAccount ?: return
+        RememberedRemoteDeviceStore.setAutoReconnectEnabled(account, enabled)
+        autoReconnect.value = enabled
+        if (!enabled) transport.cancelStartupReconnect()
+    }
+
+    /** Invoked after the transport starts, once for each signed-in account in this app process. */
+    fun reconnectOnAppLaunch(account: RemoteAccount) {
+        if (isDesktop || activeAccount != account || startupReconnectAccount == account ||
+            !autoReconnect.value || remembered.value.isEmpty() || connected.value) return
+        startupReconnectAccount = account
+        transport.reconnectRemembered(remembered.value)
     }
 
     /** Called only after encrypted, account-verified pairing or a previously approved secure resume. */
     fun pairedWith(
         account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long, trustedId: String? = null,
+        pcId: String? = null,
     ) {
         if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
         val list = rememberRemoteDevice(
             remembered.value, desktop.name, desktop.vpnHost ?: desktop.address,
-            nowEpochMs, desktop.bluetooth, trustedId, desktop.vpn,
+            nowEpochMs, desktop.bluetooth, trustedId, desktop.vpn, pcId,
         )
         RememberedRemoteDeviceStore.write(account, list)
         remembered.value = list
@@ -256,6 +281,37 @@ internal object DesktopRemote {
         }
     }
 
+    /** Remove every approved transport for one verified PC; never revoke another PC by name. */
+    fun forgetPc(pc: RememberedRemotePc) {
+        val current = activeAccount ?: return
+        val targets = remembered.value.filter { it in pc.devices }
+        if (targets.isEmpty()) return
+        val ids = targets.filterNot { it.bluetooth }.mapNotNull { it.trustedId }.distinct()
+        for (device in targets.filter { it.bluetooth }) {
+            if (!transport.forgetBluetoothTrust(current, device.address)) {
+                status.value = "Could not forget the Bluetooth PC securely. Please try again."
+                return
+            }
+        }
+        for (id in ids) {
+            if (!transport.forgetLanTrust(current, id)) {
+                status.value = "Could not forget this Wi-Fi PC securely. Please try again."
+                return
+            }
+        }
+        val isCurrent = targets.any {
+            isActiveRemoteDesktop(connected.value, activeDesktop.value, it.address, it.bluetooth, it.vpn)
+        }
+        val next = remembered.value.filterNot { it in targets ||
+            (!it.bluetooth && it.trustedId != null && it.trustedId in ids) }
+        RememberedRemoteDeviceStore.write(current, next)
+        remembered.value = next
+        if (isCurrent) {
+            transport.disconnect()
+            status.value = "Disconnected. Pair this PC again before using remote control."
+        }
+    }
+
     fun saveWakeAddress(address: String, mac: String): Boolean {
         val current = activeAccount ?: return false
         val validated = normalizedWakeMac(mac) ?: return false
@@ -274,12 +330,7 @@ internal object DesktopRemote {
     fun open() {
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value && !connecting.value) {
-            val lastBluetooth = preferredBluetoothReconnect(remembered.value, transport.bluetoothSupported)
-            if (lastBluetooth != null) {
-                transport.connect(RemoteDesktop(lastBluetooth.address, 0, lastBluetooth.name, bluetooth = true))
-            } else {
-                transport.discover(deepScan = true)
-            }
+            transport.discover(deepScan = true)
         }
     }
 
@@ -404,6 +455,7 @@ internal fun DesktopRemoteHost() {
             DesktopRemote.accountChanged(remoteAccount)
             DesktopRemote.handoffAccount = remoteAccount
             DesktopRemote.transport.start(remoteAccount, isDesktop)
+            if (!isDesktop) DesktopRemote.reconnectOnAppLaunch(remoteAccount)
         } else {
             DesktopRemote.accountChanged(null)
             DesktopRemote.handoffAccount = null

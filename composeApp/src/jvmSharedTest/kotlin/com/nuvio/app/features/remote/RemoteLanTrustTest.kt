@@ -103,6 +103,15 @@ class RemoteLanTrustTest {
         }
     }
 
+    @Test fun stableDesktopIdentityIsScopedToTheAuthenticatedAccount() {
+        val store = TestLanStore()
+        val id = assertNotNull(remoteHostIdentityId(account, store))
+        assertEquals(id, remoteHostIdentityId(account, store))
+        assertNotEquals(id, remoteHostIdentityId(account.copy(userId = "second-user"), store))
+        assertNotEquals(id, remoteHostIdentityId(account.copy(server = "https://other.example"), store))
+        assertNull(remoteHostIdentityId(account, null))
+    }
+
     @Test fun rememberedDesktopIdentitySurvivesIpChangeWithoutDuplicate() {
         val id = "1".repeat(32)
         val old = rememberRemoteDevice(emptyList(), "PC", "192.168.1.20", 1L, trustedId = id)
