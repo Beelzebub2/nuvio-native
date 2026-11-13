@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
-import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.features.cloud.PremiumizeCloudLibraryPosterUrl
 import com.nuvio.app.features.cloud.TorboxCloudLibraryPosterUrl
@@ -74,7 +73,8 @@ internal data class LicenseItem(
 fun LicensesAttributionsSettingsScreen(
     onBack: () -> Unit,
 ) {
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.LicensesAttributions,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -259,6 +259,7 @@ private fun LinkedPlainRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .clickable(onClick = onOpen)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.Top,

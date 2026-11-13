@@ -845,6 +845,7 @@ private fun PosterToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .clip(MaterialTheme.nuvio.shapes.compactCard)
             .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

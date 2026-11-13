@@ -153,6 +153,7 @@ private fun MdbListApiKeyRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(stringResource(Res.string.settings_mdb_api_key_title))
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

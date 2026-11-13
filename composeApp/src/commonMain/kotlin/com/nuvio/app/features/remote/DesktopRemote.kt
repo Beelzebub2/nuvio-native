@@ -50,6 +50,14 @@ internal data class RemoteSourcePicker(
     val message: String = "",
 )
 
+internal const val REMOTE_SOURCE_ACK_TIMEOUT_MS = 20_000L
+internal const val REMOTE_SOURCE_RESULTS_TIMEOUT_MS = 45_000L
+
+/** A PC acknowledgment is not a result; an empty in-progress search must still finish or expire. */
+internal fun RemoteSourcePicker.isAwaitingSources(requestId: String): Boolean =
+    requestId.isNotBlank() && (this.requestId != requestId ||
+        (phase == "searching" && sources.isEmpty()))
+
 internal const val REMOTE_SOURCE_CAPABILITY = "source-picker-v2"
 /** Desktop player volume is normalized to 0..2 (0..200%). Old PCs advertise 1. */
 internal const val REMOTE_MAX_VOLUME_LEVEL = 2f
@@ -184,6 +192,7 @@ internal object DesktopRemote {
     val sourcePicker = MutableStateFlow(RemoteSourcePicker())
     val sourcePickerVisible = MutableStateFlow(false)
     val pendingPhoneSourceRequestId = MutableStateFlow("")
+    private var latestPhoneSourceHandoff: RemotePlaybackHandoff? = null
     val sourceRequestId = MutableStateFlow("")
     var sourceRequestPreviousPlaybackId = ""
     /** Installed only while a desktop stream picker belongs to the active remote request. */
@@ -287,6 +296,7 @@ internal object DesktopRemote {
             return false
         }
         val requestId = newRemotePlaybackId()
+        latestPhoneSourceHandoff = safe
         pendingPhoneSourceRequestId.value = requestId
         sourcePickerVisible.value = true
         transport.send(RemoteCommand(
@@ -297,6 +307,11 @@ internal object DesktopRemote {
             requestId = requestId,
         ))
         return true
+    }
+
+    fun retryPhoneSourceRequest(): Boolean {
+        val handoff = latestPhoneSourceHandoff ?: return false
+        return requestHandoff(handoff)
     }
 
     /** Enter the source-picker flow only after the encrypted, account-verified session has authorized the command. */
@@ -342,6 +357,7 @@ internal object DesktopRemote {
         }
         sourcePickerVisible.value = false
         pendingPhoneSourceRequestId.value = ""
+        latestPhoneSourceHandoff = null
     }
 
     fun acceptPendingHandoff() {
