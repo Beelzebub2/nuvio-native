@@ -2,7 +2,9 @@
 // of stable releases rather than treating GitHub's latest overall tag as the
 // newest version available for this TV.
 export const TIZEN_RELEASES_URL = "https://api.github.com/repos/Beelzebub2/nuvio-native/releases?per_page=50";
+export const TIZEN_RENAMED_RELEASES_URL = "https://api.github.com/repos/Beelzebub2/starlit/releases?per_page=50";
 const TIZEN_RELEASE_URL_PREFIX = "https://github.com/Beelzebub2/nuvio-native/releases/tag/";
+const TIZEN_RENAMED_RELEASE_URL_PREFIX = "https://github.com/Beelzebub2/starlit/releases/tag/";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_RETRY_DELAY_MS = 2000;
 const DEFAULT_MAX_ATTEMPTS = 2;
@@ -47,7 +49,7 @@ export function isRemoteAppVersionNewer(remote, local) {
 function releaseTag(release) {
   return String(release?.tag_name || release?.name || "").trim();
 }
-export function parseLatestRelease(release) {
+export function parseLatestRelease(release, releaseUrlPrefix = TIZEN_RELEASE_URL_PREFIX) {
   if (!release || release.draft || release.prerelease) {
     return null;
   }
@@ -66,14 +68,14 @@ export function parseLatestRelease(release) {
     tag,
     title: String(release.name || tag).trim() || tag,
     notes: String(release.body || "").trim(),
-    releaseUrl: TIZEN_RELEASE_URL_PREFIX + encodeURIComponent(tag),
+    releaseUrl: releaseUrlPrefix + encodeURIComponent(tag),
     assetName
   };
 }
-export function selectLatestTizenRelease(releases, currentVersion) {
+export function selectLatestTizenRelease(releases, currentVersion, releaseUrlPrefix = TIZEN_RELEASE_URL_PREFIX) {
   if (!Array.isArray(releases)) return null;
   const candidates = releases
-    .map(parseLatestRelease)
+    .map((release) => parseLatestRelease(release, releaseUrlPrefix))
     .filter((release) => release && isRemoteAppVersionNewer(release.tag, currentVersion));
   // GitHub usually orders releases by publication time, but a later published
   // backport should never trigger a downgrade from a newer Tizen package.
@@ -90,43 +92,56 @@ export async function getLatestAppUpdate({
   if (typeof fetchImpl !== "function") {
     throw new Error("Fetch is unavailable");
   }
-  const supportsAbort = typeof globalThis.AbortController === "function";
-  const controller = supportsAbort ? new AbortController() : null;
-  let timeoutId = null;
-  try {
-    const request = fetchImpl(TIZEN_RELEASES_URL, {
-      method: "GET",
-      headers: {
-        Accept: "application/vnd.github+json"
-      },
-      cache: "no-store",
-      signal: controller?.signal
-    });
-    const result = await Promise.race([
-      Promise.resolve(request).then(async (response) => {
-        if (!response?.ok) {
-          const error = new Error(`GitHub release check failed: HTTP ${response?.status || 0}`);
-          error.status = Number(response?.status || 0);
-          throw error;
-        }
-        return response.json();
-      }),
-      new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => {
+  // Keep the pre-rename release source first. A future GitHub 301/404 must
+  // only switch to the explicitly allowed new repository, not an arbitrary
+  // redirect destination. An opaque redirect can occur in TV web runtimes.
+  const sources = [
+    [TIZEN_RELEASES_URL, TIZEN_RELEASE_URL_PREFIX],
+    [TIZEN_RENAMED_RELEASES_URL, TIZEN_RENAMED_RELEASE_URL_PREFIX]
+  ];
+  for (let index = 0; index < sources.length; index += 1) {
+    const [url, releaseUrlPrefix] = sources[index];
+    const controller = typeof globalThis.AbortController === "function" ? new AbortController() : null;
+    let timeoutId = null;
+    try {
+      const request = fetchImpl(url, {
+        method: "GET",
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store",
+        redirect: "manual",
+        signal: controller?.signal
+      });
+      const result = await Promise.race([
+        Promise.resolve(request).then(async (response) => {
+          const status = Number(response?.status || 0);
+          if (response?.type === "opaqueredirect" || [301, 302, 307, 308, 404].includes(status)) {
+            const error = new Error(`GitHub release check failed: HTTP ${status}`);
+            error.status = status;
+            error.renameFallback = true;
+            throw error;
+          }
+          if (!response?.ok) {
+            const error = new Error(`GitHub release check failed: HTTP ${status}`);
+            error.status = status;
+            throw error;
+          }
+          return response.json();
+        }),
+        new Promise((_, reject) => {
+          timeoutId = setTimeout(() => {
             controller?.abort();
             reject(new Error("GitHub release check timed out"));
-          },
-          Math.max(1, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)
-        );
-      })
-    ]);
-    return selectLatestTizenRelease(result, currentVersion);
-  } finally {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
+          }, Math.max(1, Number(timeoutMs) || DEFAULT_TIMEOUT_MS));
+        })
+      ]);
+      return selectLatestTizenRelease(result, currentVersion, releaseUrlPrefix);
+    } catch (error) {
+      if (!(index === 0 && error?.renameFallback)) throw error;
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
     }
   }
+  return null;
 }
 function isRetryableUpdateCheckError(error) {
   const status = Number(error?.status || 0);
