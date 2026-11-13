@@ -2273,8 +2273,8 @@ static void nuvioMpvWakeup(void *ctx) {
                                 stripSdh:(BOOL)stripSdh {
     if (!_mpv) return;
     double size = MAX(18.0, MIN(96.0, fontSize));
-    double scale = useLibass ? size / 54.0 : 1.0;
-    int64_t position = MAX(0, MIN(150, subPos));
+    double scale = 1.0;
+    int64_t position = useLibass ? 100 : MAX(0, MIN(150, subPos));
     double outline = MAX(0.0, MIN(8.0, outlineSize));
     NSString *resolvedTextColor = textColor ?: @"#FFFFFFFF";
     NSString *resolvedBackgroundColor = backgroundColor ?: @"#00000000";
@@ -2293,7 +2293,7 @@ static void nuvioMpvWakeup(void *ctx) {
     BOOL stripSdhChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleStripSdh != stripSdh;
 
     if (modeChanged) {
-        [self setStringProperty:"sub-ass-override" value:useLibass ? @"scale" : @"force"];
+        [self setStringProperty:"sub-ass-override" value:useLibass ? @"no" : @"force"];
     }
     if (modeChanged || (!useLibass && boldChanged)) {
         const char *styleOverridesCommand[] = {
