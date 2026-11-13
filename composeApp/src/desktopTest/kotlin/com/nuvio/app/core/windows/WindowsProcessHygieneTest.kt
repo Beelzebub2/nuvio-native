@@ -137,5 +137,10 @@ class WindowsProcessHygieneTest {
         assertEquals(64, runElevatedHelperTask(arrayOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_FIREWALL_TASK, "C:\\evil.exe")))
         assertEquals(64, runElevatedHelperTask(arrayOf(
             ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK, "C:\\evil.exe")))
+        assertEquals(64, runElevatedHelperTask(arrayOf(ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_VPN_FIREWALL_TASK)))
+        assertEquals(64, runElevatedHelperTask(arrayOf(
+            ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK, "C:\\evil.exe")))
+        assertEquals(64, runElevatedHelperTask(arrayOf(
+            ELEVATED_TASK_ARGUMENT, PHONE_REMOTE_VPN_FIREWALL_TASK, "10.0.0.1", "C:\\evil.exe")))
     }
 }
