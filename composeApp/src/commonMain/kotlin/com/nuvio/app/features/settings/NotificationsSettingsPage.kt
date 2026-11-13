@@ -76,7 +76,8 @@ private fun NotificationTestCard(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .settingsSearchTarget(stringResource(Res.string.settings_notifications_test_title)),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(

@@ -243,6 +243,7 @@ private fun MetaSectionReorderableList(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val lazyListState = rememberLazyListState()
+    SettingsSearchLazyListFocus(SettingsPage.MetaScreen, lazyListState)
     val reorderableLazyListState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
     ) { from, to ->
@@ -310,6 +311,7 @@ private fun MetaSectionRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(stringResource(item.key.titleRes))
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
     ) {
         Row(

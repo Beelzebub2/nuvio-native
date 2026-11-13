@@ -55,7 +55,11 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 internal sealed class SettingsSearchTarget {
-    data class Page(val page: SettingsPage) : SettingsSearchTarget()
+    data class Page(
+        val page: SettingsPage,
+        val focusKey: String? = null,
+        val focusTitle: String? = null,
+    ) : SettingsSearchTarget()
     object Collections : SettingsSearchTarget()
     object SwitchProfile : SettingsSearchTarget()
     object CheckForUpdates : SettingsSearchTarget()
@@ -186,7 +190,7 @@ internal fun settingsSearchEntries(
             section = section,
             category = category,
             icon = icon,
-            target = SettingsSearchTarget.Page(page),
+            target = SettingsSearchTarget.Page(page, focusKey = key, focusTitle = title),
         )
     }
 
