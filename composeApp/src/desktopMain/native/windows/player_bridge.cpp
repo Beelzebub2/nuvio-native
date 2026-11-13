@@ -697,8 +697,9 @@ struct DefaultSurroundOutput {
     std::wstring endpointId;
 };
 
-// Inspect the configured Windows shared-mode speaker layout. A sink that merely
-// accepts six channels is not sufficient: the actual speaker mask must match.
+// Inspect Windows' default shared-mode layout. For physical speakers the mix
+// mask must match; explicitly selected headset modes can use an APO-provided
+// multichannel stream format but cannot establish audible HRTF processing.
 DefaultSurroundOutput defaultSurroundOutput(starlit_surround::Mode mode) {
     DefaultSurroundOutput output;
     const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -743,43 +744,41 @@ DefaultSurroundOutput defaultSurroundOutput(starlit_surround::Mode mode) {
             if (mode == starlit_surround::Mode::speakersFivePointOne) {
                 output.layout = starlit_surround::configuredLayout(
                     format->nChannels, extended->dwChannelMask);
-            } else if (mode == starlit_surround::Mode::virtualHeadsetSevenPointOne) {
-                ComPtr<IPropertyStore> properties;
-                std::wstring friendlyName;
-                if (SUCCEEDED(mediaDevice->OpenPropertyStore(STGM_READ, &properties))) {
-                    PROPVARIANT name;
-                    PropVariantInit(&name);
-                    if (SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &name)) &&
-                        name.vt == VT_LPWSTR && name.pwszVal) {
-                        friendlyName = name.pwszVal;
-                    }
-                    PropVariantClear(&name);
-                }
-                // Require an exact 7.1 float-PCM stream. An 8-channel closest
-                // match or generic stereo sink must not be treated as compatible.
-                WAVEFORMATEXTENSIBLE sevenPointOne{};
-                sevenPointOne.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-                sevenPointOne.Format.nChannels = 8;
-                sevenPointOne.Format.nSamplesPerSec = format->nSamplesPerSec;
-                sevenPointOne.Format.wBitsPerSample = 32;
-                sevenPointOne.Format.nBlockAlign = 8 * sizeof(float);
-                sevenPointOne.Format.nAvgBytesPerSec =
-                    sevenPointOne.Format.nSamplesPerSec * sevenPointOne.Format.nBlockAlign;
-                sevenPointOne.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-                sevenPointOne.Samples.wValidBitsPerSample = 32;
-                sevenPointOne.dwChannelMask = starlit_surround::kSevenPointOneMask;
-                sevenPointOne.SubFormat = {
-                    0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
-                }; // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT without requiring ksmedia.h
-                WAVEFORMATEX *closest = nullptr;
-                const HRESULT supported = audioClient->IsFormatSupported(
-                    AUDCLNT_SHAREMODE_SHARED,
-                    reinterpret_cast<const WAVEFORMATEX *>(&sevenPointOne),
-                    &closest);
-                if (closest) CoTaskMemFree(closest);
+            } else if (mode == starlit_surround::Mode::virtualHeadsetSevenPointOne ||
+                       mode == starlit_surround::Mode::virtualHeadsetFivePointOne) {
+                const auto acceptsExactFloatPcm = [&](WORD channels, DWORD mask) {
+                    WAVEFORMATEXTENSIBLE stream{};
+                    stream.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+                    stream.Format.nChannels = channels;
+                    stream.Format.nSamplesPerSec = format->nSamplesPerSec;
+                    stream.Format.wBitsPerSample = 32;
+                    stream.Format.nBlockAlign = channels * sizeof(float);
+                    stream.Format.nAvgBytesPerSec =
+                        stream.Format.nSamplesPerSec * stream.Format.nBlockAlign;
+                    stream.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+                    stream.Samples.wValidBitsPerSample = 32;
+                    stream.dwChannelMask = mask;
+                    stream.SubFormat = {
+                        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
+                    }; // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+                    WAVEFORMATEX *closest = nullptr;
+                    const HRESULT supported = audioClient->IsFormatSupported(
+                        AUDCLNT_SHAREMODE_SHARED,
+                        reinterpret_cast<const WAVEFORMATEX *>(&stream),
+                        &closest);
+                    if (closest) CoTaskMemFree(closest);
+                    return supported == S_OK; // S_FALSE closest match is not sufficient.
+                };
+                const bool wantsFivePointOne =
+                    mode == starlit_surround::Mode::virtualHeadsetFivePointOne;
                 output.layout = starlit_surround::configuredVirtualHeadsetLayout(
-                    format->nChannels, extended->dwChannelMask, friendlyName,
-                    supported == S_OK);
+                    mode, format->nChannels, extended->dwChannelMask,
+                    wantsFivePointOne &&
+                        acceptsExactFloatPcm(6, starlit_surround::kFivePointOneSideMask),
+                    wantsFivePointOne &&
+                        acceptsExactFloatPcm(6, starlit_surround::kFivePointOneBackMask),
+                    !wantsFivePointOne &&
+                        acceptsExactFloatPcm(8, starlit_surround::kSevenPointOneMask));
             }
         }
     }
@@ -1344,7 +1343,7 @@ public:
 
     bool setSurroundUpmixMode(int mode) {
         if (shuttingDown.load() || stopping.load()) return false;
-        if (mode < 0 || mode > 2) return false;
+        if (mode < 0 || mode > 3) return false;
         const bool changed = surroundRequested.exchange(mode) != mode;
         postUiTask([self = shared_from_this(), changed]() {
             if (self->shuttingDown.load()) return;

@@ -938,19 +938,19 @@ const syncAutoToggleButtons = () => {
     if (toggle.button === surroundUpmixButton) {
       const status = Number(state.surroundUpmixStatus);
       const target = autoToggleLabel(toggle);
-      const virtualHeadset = target === "7.1";
+      const virtualHeadset = Boolean(state.surroundUpmixHeadsetMode);
       const active = enabled && status === 2;
       const failed = enabled && status === -1;
       const description = !enabled
         ? "Original audio · upmix off"
         : active
           ? virtualHeadset
-            ? "7.1 PCM sent to headset · enable surround in iCUE separately"
+            ? target + " PCM sent to the audio driver · headset virtualization is not verified"
             : "Stereo upmixed to 5.1 PCM"
           : failed
             ? "Upmix unavailable · audio output rejected the filter"
             : virtualHeadset
-              ? "Upmix not active · requires a compatible Corsair VOID headset and 7.1 PCM stream"
+              ? "Upmix not active · requires an audio driver that accepts " + target + " PCM"
               : "Upmix not active · requires a Windows output configured for 5.1 PCM";
       toggle.button.setAttribute("title", description);
       toggle.button.setAttribute("aria-label", description);
