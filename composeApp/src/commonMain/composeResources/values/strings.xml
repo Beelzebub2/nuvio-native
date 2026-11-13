@@ -554,6 +554,7 @@
     <string name="player_local_subtitle_unsupported">Choose an SRT, ASS, SSA, or VTT subtitle file.</string>
     <string name="player_local_subtitle_unreadable">This subtitle file is empty, missing, or cannot be read.</string>
     <string name="player_local_subtitle_oversized">Subtitle files must be 16 MiB or smaller.</string>
+    <string name="player_local_subtitle_multiple_files">Drop only one subtitle file at a time.</string>
     <string name="player_local_subtitle_failed">Could not open the file picker. Please try again.</string>
     <string name="player_local_subtitle_player_not_ready">The player is not ready to load a subtitle file.</string>
     <string name="compose_player_text_opacity">Text Opacity</string>
