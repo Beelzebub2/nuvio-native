@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import vm from "node:vm";
 import { readAppMetadata } from "./appMetadata.mjs";
 import { TIZEN_MEDIA_KEY_NAMES } from "../js/platform/tizen/tizenRemoteKeys.js";
+import { releaseRepoForBuild } from "./release-repository.mjs";
 const { version } = await readAppMetadata();
 const file = `Starlit-Tizen-${version}.wgt`;
 const bytes = await readFile(new URL(`../artifacts/${file}`, import.meta.url));
@@ -55,5 +56,5 @@ if (process.argv.includes("--verify")) {
   await writeFile(new URL("../artifacts/SHA256SUMS-Tizen", import.meta.url), sums);
   await writeFile(new URL("../artifacts/package-metadata.json", import.meta.url), JSON.stringify({ version, filename: file, sha256, status: "NOT DEVICE-VERIFIED" },null,2) + "\n");
 }
-if(!process.argv.includes("--verify")) await writeFile(new URL("../artifacts/apps2samsung-feed.json",import.meta.url),JSON.stringify({schemaVersion:2,providers:[{id:"starlit-tizen",url:"https://api.github.com/repos/Beelzebub2/nuvio-native/releases",displayName:"Starlit TV",take:1,expandAssets:false,certLevel:"public",category:"media",buildInfo:{name:"Starlit TV",description:"Starlit account sync and user-supplied sources for Samsung Tizen, adapted from NuvioTVSmart."}}]},null,2)+"\n");
+if(!process.argv.includes("--verify")) await writeFile(new URL("../artifacts/apps2samsung-feed.json",import.meta.url),JSON.stringify({schemaVersion:2,providers:[{id:"starlit-tizen",url:`https://api.github.com/repos/${releaseRepoForBuild()}/releases`,displayName:"Starlit TV",take:1,expandAssets:false,certLevel:"public",category:"media",buildInfo:{name:"Starlit TV",description:"Starlit account sync and user-supplied sources for Samsung Tizen, adapted from NuvioTVSmart."}}]},null,2)+"\n");
 console.log(`Verified unsigned ${file}: ${sha256}`);

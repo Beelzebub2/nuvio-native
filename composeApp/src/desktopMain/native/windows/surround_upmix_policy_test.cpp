@@ -10,6 +10,24 @@ int main() {
     assert(configuredLayout(6, starlit_surround::kFivePointOneSideMask) == Layout::fivePointOneSide);
     assert(configuredLayout(6, starlit_surround::kFivePointOneBackMask) == Layout::fivePointOneBack);
     assert(configuredLayout(8, starlit_surround::kSevenPointOneMask) == Layout::unsupported);
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        2, starlit_surround::kStereoMask, L"Headset Earphone (CORSAIR VOID ELITE Wireless Gaming Headset)", true
+    ) == Layout::virtualHeadsetSevenPointOne);
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        8, starlit_surround::kSevenPointOneMask, L"corsair void headset", true
+    ) == Layout::virtualHeadsetSevenPointOne);
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        2, starlit_surround::kStereoMask, L"Generic Stereo Headset", true
+    ) == Layout::unsupported); // WASAPI acceptance alone is not enough.
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        2, starlit_surround::kStereoMask, L"CORSAIR VOID ELITE", false
+    ) == Layout::unsupported); // Format must be an exact supported 7.1 stream.
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        2, 0, L"CORSAIR VOID ELITE", true
+    ) == Layout::unsupported); // Unknown channel mask remains unmodified.
+    assert(starlit_surround::configuredVirtualHeadsetLayout(
+        6, starlit_surround::kFivePointOneSideMask, L"CORSAIR VOID ELITE", true
+    ) == Layout::unsupported); // Never treat real 5.1 speakers as a headset route.
     assert(configuredLayout(6, 0) == Layout::unsupported);
     assert(configuredLayout(2, starlit_surround::kFivePointOneSideMask) == Layout::unsupported);
     assert(configuredLayout(6, 0x000f) == Layout::unsupported);
@@ -21,9 +39,12 @@ int main() {
     assert(!acceptsStereoInput(""));
     assert(starlit_surround::mpvOutputLayout(Layout::fivePointOneSide) == "5.1(side)");
     assert(starlit_surround::mpvOutputLayout(Layout::fivePointOneBack) == "5.1");
+    assert(starlit_surround::mpvOutputLayout(Layout::virtualHeadsetSevenPointOne) == "7.1");
     assert(starlit_surround::mpvOutputLayout(Layout::unsupported).empty());
     assert(std::string_view(starlit_surround::mpvFilter(Layout::fivePointOneSide)).find("lfe=0") != std::string_view::npos);
     assert(std::string_view(starlit_surround::mpvFilter(Layout::fivePointOneBack)).find("chl_out=5.1:") != std::string_view::npos);
+    assert(std::string_view(starlit_surround::mpvFilter(Layout::virtualHeadsetSevenPointOne)).find("chl_out=7.1:") != std::string_view::npos);
+    assert(std::string_view(starlit_surround::mpvFilter(Layout::virtualHeadsetSevenPointOne)).find("lfe=0") != std::string_view::npos);
     assert(starlit_surround::mpvFilter(Layout::unsupported) == nullptr);
     return 0;
 }
