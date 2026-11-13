@@ -45,6 +45,8 @@ import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiFind
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -246,6 +248,15 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
+    val autoReconnect by DesktopRemote.autoReconnect.collectAsState()
+    val groupedPcs = groupRememberedRemotePcs(savedPcs)
+    val reachableLan = desktops.mapTo(mutableSetOf()) { it.address }
+    val visibleLan = desktops.filterNot { found ->
+        savedPcs.any { !it.bluetooth && !it.vpn && it.address == found.address }
+    }
+    val visibleBluetooth = bluetoothDesktops.filterNot { found ->
+        savedPcs.any { it.bluetooth && it.address.equals(found.address, ignoreCase = true) }
+    }
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
     val tokens = MaterialTheme.nuvio
     val supported = DesktopRemote.transport.supported
@@ -327,10 +338,33 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     }
     if (!supported) return
 
-    if (desktops.isNotEmpty()) {
+    NuvioGroup {
+        NuvioGroupRow(
+            title = stringResource(Res.string.remote_pc_auto_reconnect_title),
+            description = stringResource(Res.string.remote_pc_auto_reconnect_caption),
+            modifier = Modifier.testTag("remote-auto-reconnect"),
+            onClick = { DesktopRemote.setAutoReconnect(!autoReconnect) },
+            leading = { NuvioIconChip(Icons.Rounded.Wifi, tone = NuvioIconChipTone.Neutral) },
+            trailing = {
+                Switch(
+                    checked = autoReconnect,
+                    onCheckedChange = DesktopRemote::setAutoReconnect,
+                    modifier = Modifier.testTag("remote-auto-reconnect-switch"),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = tokens.colors.onAccent,
+                        checkedTrackColor = tokens.colors.accent,
+                        uncheckedThumbColor = tokens.colors.textMuted,
+                        uncheckedTrackColor = tokens.colors.borderDefault,
+                    ),
+                )
+            },
+        )
+    }
+
+    if (visibleLan.isNotEmpty()) {
         FoundPcGroup(
             title = stringResource(Res.string.remote_pc_found_devices),
-            devices = desktops,
+            devices = visibleLan,
             icon = Icons.Rounded.Computer,
             connected = connected,
             connecting = connecting,
@@ -338,11 +372,11 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
             detail = { it.address },
         )
     }
-    if (bluetoothDesktops.isNotEmpty()) {
+    if (visibleBluetooth.isNotEmpty()) {
         val bluetoothLabel = stringResource(Res.string.remote_bluetooth_device, "%s")
         FoundPcGroup(
             title = stringResource(Res.string.remote_bluetooth_found_devices),
-            devices = bluetoothDesktops,
+            devices = visibleBluetooth,
             icon = Icons.Rounded.Bluetooth,
             connected = connected,
             connecting = connecting,
@@ -355,21 +389,26 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     // the connected PC's identity in the status hero.
     ConnectOptions(busy = busy, scanStatus = status.takeIf { connected && scanning })
 
-    if (savedPcs.isNotEmpty()) {
+    if (groupedPcs.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             NuvioSectionLabel(stringResource(Res.string.remote_pc_saved_devices).uppercase())
             NuvioGroup {
-                savedPcs.forEachIndexed { index, saved ->
-                    // Pairing updates move a saved PC to the top. Preserve its own menu
-                    // and Wake-on-LAN editor instead of moving that UI onto another row.
-                    key(saved.bluetooth, saved.vpn, saved.address) {
+                groupedPcs.forEachIndexed { index, pc ->
+                    // Only a verified identity combines transports; keep each PC's editor state
+                    // attached to its identity when the recent-connection order changes.
+                    key(pc.key) {
                         if (index > 0) NuvioGroupDivider()
                         SavedPcRow(
-                            saved = saved,
+                            pc = pc,
                             enabled = !busy,
-                            active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth, saved.vpn),
-                            // A LAN PC that answered the last search is awake: offer Connect, not Wake.
-                            reachable = saved.bluetooth || saved.vpn || desktops.any { !it.bluetooth && it.address == saved.address },
+                            active = pc.devices.any { device ->
+                                isActiveRemoteDesktop(
+                                    connected, activeDesktop, device.address, device.bluetooth, device.vpn,
+                                )
+                            },
+                            reachable = pc.bluetooth != null || pc.vpn != null ||
+                                pc.lan?.address in reachableLan,
+                            reachableLanAddresses = reachableLan,
                             onDisconnect = onDisconnect,
                         )
                     }
@@ -581,22 +620,34 @@ private fun RowChevron() {
 
 @Composable
 private fun SavedPcRow(
-    saved: RememberedRemoteDevice,
+    pc: RememberedRemotePc,
     enabled: Boolean,
     active: Boolean,
     reachable: Boolean,
+    reachableLanAddresses: Set<String>,
     onDisconnect: () -> Unit,
 ) {
+    val saved = pc.primary
+    val lan = pc.lan
+    val bluetooth = pc.bluetooth
+    val vpn = pc.vpn
     var menuOpen by remember { mutableStateOf(false) }
     var editingWake by remember { mutableStateOf(false) }
-    var macDraft by remember(saved.wakeMac) { mutableStateOf(saved.wakeMac.orEmpty()) }
+    var macDraft by remember(lan?.wakeMac) { mutableStateOf(lan?.wakeMac.orEmpty()) }
     var macError by remember { mutableStateOf(false) }
-    val connect = { connectRememberedRemoteDevice(DesktopRemote.transport, saved) }
+    val connect = { connectRememberedRemotePc(DesktopRemote.transport, pc, reachableLanAddresses) }
+    val wifiDescription = stringResource(Res.string.remote_pc_saved_wifi)
+    val bluetoothDescription = stringResource(Res.string.remote_pc_saved_bluetooth)
+    val vpnDescription = stringResource(Res.string.remote_vpn_tile)
+    val description = listOfNotNull(
+        wifiDescription.takeIf { lan != null },
+        bluetoothDescription.takeIf { bluetooth != null },
+        vpn?.let { "$vpnDescription · ${it.address}" },
+    ).joinToString(" · ")
     Column {
         NuvioGroupRow(
-            title = saved.name,
-            description = if (saved.vpn) "${stringResource(Res.string.remote_vpn_tile)} · ${saved.address}"
-                else stringResource(if (saved.bluetooth) Res.string.remote_pc_saved_bluetooth else Res.string.remote_pc_saved_wifi),
+            title = pc.name,
+            description = description,
             modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = if (active) null else connect,
             enabled = enabled,
@@ -607,9 +658,9 @@ private fun SavedPcRow(
             leading = {
                 NuvioIconChip(
                     icon = when {
-                        saved.bluetooth -> Icons.Rounded.Bluetooth
-                        saved.vpn -> Icons.Rounded.VpnKey
-                        else -> Icons.Rounded.Wifi
+                        lan != null -> Icons.Rounded.Wifi
+                        vpn != null -> Icons.Rounded.VpnKey
+                        else -> Icons.Rounded.Bluetooth
                     },
                     tone = NuvioIconChipTone.Neutral,
                 )
@@ -617,30 +668,29 @@ private fun SavedPcRow(
             trailing = {
                 when {
                     active -> NuvioTag(stringResource(Res.string.remote_pc_status_connected), style = NuvioTagStyle.Success)
-                    reachable -> NuvioPillButton(
+                    reachable || lan == null -> NuvioPillButton(
                         text = stringResource(Res.string.remote_pc_connect),
                         onClick = connect,
                         style = NuvioPillButtonStyle.Primary,
                         enabled = enabled,
                     )
-                    // A LAN PC that did not answer may be asleep: wake it, or set its MAC first.
                     else -> NuvioPillButton(
                         text = stringResource(Res.string.remote_pc_wake),
                         onClick = {
-                            val mac = saved.wakeMac
-                            if (mac != null) DesktopRemote.transport.wake(saved.address, mac)
+                            val mac = lan.wakeMac
+                            if (mac != null) DesktopRemote.transport.wake(lan.address, mac)
                             else {
                                 editingWake = true
                                 macError = false
                             }
                         },
-                        modifier = Modifier.testTag("remote-wake-pc-${saved.address}"),
+                        modifier = Modifier.testTag("remote-wake-pc-${lan.address}"),
                     )
                 }
                 Box {
                     NuvioSquareIconButton(
                         icon = Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(Res.string.remote_pc_more_options, saved.name),
+                        contentDescription = stringResource(Res.string.remote_pc_more_options, pc.name),
                         onClick = { menuOpen = true },
                         size = 36.dp,
                         style = NuvioSquareIconButtonStyle.Ghost,
@@ -652,7 +702,7 @@ private fun SavedPcRow(
                             enabled = enabled,
                             onClick = { menuOpen = false; if (active) onDisconnect() else connect() },
                         )
-                        if (!saved.bluetooth && !saved.vpn) {
+                        if (lan != null) {
                             MenuItem(
                                 text = stringResource(Res.string.remote_pc_set_wake_mac),
                                 selected = editingWake,
@@ -661,13 +711,13 @@ private fun SavedPcRow(
                         }
                         MenuItem(
                             text = stringResource(Res.string.remote_pc_forget),
-                            onClick = { menuOpen = false; DesktopRemote.forget(saved.address) },
+                            onClick = { menuOpen = false; DesktopRemote.forgetPc(pc) },
                         )
                     }
                 }
             },
         )
-        AnimatedVisibility(visible = editingWake) {
+        AnimatedVisibility(visible = editingWake && lan != null) {
             Column(
                 Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -688,7 +738,7 @@ private fun SavedPcRow(
                 NuvioPillButton(
                     text = stringResource(Res.string.remote_pc_save_mac),
                     onClick = {
-                        if (DesktopRemote.saveWakeAddress(saved.address, macDraft)) editingWake = false
+                        if (lan != null && DesktopRemote.saveWakeAddress(lan.address, macDraft)) editingWake = false
                         else macError = true
                     },
                     style = NuvioPillButtonStyle.Primary,
