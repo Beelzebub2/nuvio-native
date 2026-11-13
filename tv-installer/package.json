@@ -1,0 +1,42 @@
+{
+  "name": "starlit-tv-installer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Starlit TV developer installer for LG webOS",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "lint": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js && node --check src/installer.cjs && node --check src/ipk.cjs && node --check src/releases.cjs",
+    "dist:win": "electron-builder --win portable --publish never"
+  },
+  "dependencies": {
+    "@webos-tools/cli": "3.2.4"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "app.starlit.tvinstaller",
+    "productName": "Starlit TV Installer",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@webos-tools/cli/**"
+    ],
+    "files": [
+      "src/**/*",
+      "installer.config.json",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "Starlit-TV-Installer-Windows-${version}.${ext}"
+    }
+  }
+}
