@@ -407,7 +407,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                                 )
                             },
                             reachable = pc.bluetooth != null || pc.vpn != null ||
-                                pc.lan?.address in reachableLan,
+                                pc.lan?.address?.let(reachableLan::contains) == true,
                             reachableLanAddresses = reachableLan,
                             onDisconnect = onDisconnect,
                         )
@@ -677,14 +677,16 @@ private fun SavedPcRow(
                     else -> NuvioPillButton(
                         text = stringResource(Res.string.remote_pc_wake),
                         onClick = {
-                            val mac = lan.wakeMac
-                            if (mac != null) DesktopRemote.transport.wake(lan.address, mac)
-                            else {
-                                editingWake = true
-                                macError = false
+                            lan?.let { savedLan ->
+                                val mac = savedLan.wakeMac
+                                if (mac != null) DesktopRemote.transport.wake(savedLan.address, mac)
+                                else {
+                                    editingWake = true
+                                    macError = false
+                                }
                             }
                         },
-                        modifier = Modifier.testTag("remote-wake-pc-${lan.address}"),
+                        modifier = Modifier.testTag("remote-wake-pc-${lan?.address}"),
                     )
                 }
                 Box {
