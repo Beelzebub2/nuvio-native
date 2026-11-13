@@ -66,9 +66,14 @@ class DesktopSettingsUiTest {
             field.performTextInput("Auto-play Next Episode")
             waitForIdle()
 
-            onNodeWithText("Auto-play Next Episode").performClick()
+            onNode(
+                hasText("Auto-play Next Episode") and !hasContentDescription("Search settings..."),
+            ).performClick()
             waitUntil(timeoutMillis = 5_000) {
                 onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Auto-play Next Episode").assertIsDisplayed() }.isSuccess
             }
             sidebar("Playback").assertIsSelected()
             onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
@@ -90,6 +95,9 @@ class DesktopSettingsUiTest {
             }
             waitUntil(timeoutMillis = 5_000) {
                 onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Auto-play Next Episode").assertIsDisplayed() }.isSuccess
             }
             onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
             onNodeWithTag("settings-search-focused").assertIsDisplayed()

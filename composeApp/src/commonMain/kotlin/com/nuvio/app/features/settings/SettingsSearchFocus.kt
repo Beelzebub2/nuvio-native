@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
 import com.nuvio.app.core.ui.nuvio
@@ -83,6 +84,7 @@ internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): 
 
     val requester = remember { BringIntoViewRequester() }
     var highlighted by remember(request.id) { mutableStateOf(false) }
+    var positioned by remember(request.id) { mutableStateOf(false) }
     val accent = MaterialTheme.nuvio.colors.accent
     val highlightColor by animateColorAsState(
         targetValue = if (highlighted) accent.copy(alpha = 0.18f) else Color.Transparent,
@@ -90,8 +92,8 @@ internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): 
         label = "settings-search-highlight",
     )
 
-    LaunchedEffect(request.id) {
-        if (!SettingsSearchFocus.claim(request)) return@LaunchedEffect
+    LaunchedEffect(request.id, positioned) {
+        if (!positioned || !SettingsSearchFocus.claim(request)) return@LaunchedEffect
         try {
             requester.bringIntoView()
             highlighted = true
@@ -104,6 +106,9 @@ internal fun Modifier.settingsSearchTarget(title: String, key: String? = null): 
 
     return this
         .bringIntoViewRequester(requester)
+        .onGloballyPositioned { coordinates ->
+            positioned = coordinates.isAttached && coordinates.size.height > 0
+        }
         .background(highlightColor, RectangleShape)
         .then(if (highlighted) Modifier.testTag("settings-search-focused") else Modifier)
 }
