@@ -8,6 +8,7 @@ import { compatibilityPolicy } from "./compatibilityPolicy.mjs";
 import { runWebOsToolsBinary } from "./aresCli.mjs";
 import { pruneCssFileForPlatform } from "./pruneCssForPlatform.mjs";
 import { fetchPinnedWebOsServices } from "./fetch-webos-services.mjs";
+import { prepareWebOsArtwork } from "./create-webos-artwork.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
@@ -22,6 +23,7 @@ const webOsPluginServiceId = "app.starlit.webos.plugin.service";
 const upstreamRootDir = path.join(cacheDir, "webos-upstream");
 const webOsServiceSourceDir = path.join(upstreamRootDir, "services", "webos");
 const artifactsDir = path.join(rootDir, "artifacts");
+const artworkDir = path.join(cacheDir, "webos-artwork");
 const appId = "app.starlit.webos";
 const webOsPluginServiceSourceDir = path.join(upstreamRootDir, "services", "webos", "plugin");
 const webOsRuntimeScriptPath = "assets/libs/webOSTV.js";
@@ -167,6 +169,7 @@ async function stageApp() {
   const { version } = await readAppMetadata();
   await cp(distDir, appStageDir, { recursive: true });
   await pruneCssFileForPlatform(path.join(appStageDir, "css", "bundle.css"), "webos");
+  await prepareWebOsArtwork();
   const appInfoPath = path.join(appStageDir, "appinfo.json");
   const appInfo = JSON.parse(await readFile(appInfoPath, "utf8"));
   appInfo.id = appId;
@@ -181,31 +184,31 @@ async function stageApp() {
   await writeFile(appInfoPath, `${JSON.stringify(appInfo, null, 2)}\n`, "utf8");
   await Promise.all([
     validatePngDimensions(
-      path.join(rootDir, "assets", "images", "icon.png"),
+      path.join(artworkDir, "icon.png"),
       80,
       80,
       "webOS small icon"
     ),
     validatePngDimensions(
-      path.join(rootDir, "assets", "images", "largeIcon.png"),
+      path.join(artworkDir, "largeIcon.png"),
       130,
       130,
       "webOS large icon"
     ),
-    validateOpaquePng(path.join(rootDir, "assets", "images", "icon.png"), "webOS small icon"),
-    validateOpaquePng(path.join(rootDir, "assets", "images", "largeIcon.png"), "webOS large icon"),
+    validateOpaquePng(path.join(artworkDir, "icon.png"), "webOS small icon"),
+    validateOpaquePng(path.join(artworkDir, "largeIcon.png"), "webOS large icon"),
     validatePngDimensions(
-      path.join(rootDir, "assets", "images", "splash.png"),
+      path.join(artworkDir, "splash.png"),
       1920,
       1080,
       "webOS splash image"
     ),
-    cp(path.join(rootDir, "assets", "images", "icon.png"), path.join(appStageDir, "icon.png")),
+    cp(path.join(artworkDir, "icon.png"), path.join(appStageDir, "icon.png")),
     cp(
-      path.join(rootDir, "assets", "images", "largeIcon.png"),
+      path.join(artworkDir, "largeIcon.png"),
       path.join(appStageDir, "largeIcon.png")
     ),
-    cp(path.join(rootDir, "assets", "images", "splash.png"), path.join(appStageDir, "splash.png"))
+    cp(path.join(artworkDir, "splash.png"), path.join(appStageDir, "splash.png"))
   ]);
   const webOsScriptPath = await resolveWebOsScriptPath(appStageDir);
   await cp(path.join(rootDir, "LICENSE"), path.join(appStageDir, "LICENSE"));
