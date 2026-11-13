@@ -2366,4 +2366,6 @@
     <string name="remote_vpn_firewall_checking">A verificar a Firewall do Windows ou a aguardar autorização de administrador…</string>
     <string name="remote_vpn_firewall_allow">Permitir VPN na Firewall do Windows</string>
     <string name="remote_vpn_firewall_failed">A alteração à Firewall do Windows falhou ou foi cancelada. O acesso VPN continua sujeito à definição do Starlit; repete a configuração da firewall, se necessário.</string>
+    <string name="remote_pc_auto_reconnect_title">Reconectar automaticamente ao abrir a aplicação</string>
+    <string name="remote_pc_auto_reconnect_caption">Liga ao último PC emparelhado ao abrir o Starlit. Tenta primeiro por Wi-Fi e depois por Bluetooth, se disponível.</string>
 </resources>
