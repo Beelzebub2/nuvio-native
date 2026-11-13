@@ -59,16 +59,37 @@ button:focus-visible, input:focus-visible, .source-choice:focus-within {
   background: linear-gradient(165deg, #18233a, #101727 65%, #0e1524);
 }
 .intro h1 { margin: 0 0 16px; font-size: clamp(33px, 3.4vw, 48px); letter-spacing: -0.035em; line-height: 1.13; font-weight: 720; }
-.intro p { margin: 0; max-width: 34ch; color: var(--muted); font-size: 14px; line-height: 1.65; }
-.guide { padding: 28px 0 23px; }
+.intro p { margin: 0; max-width: 42ch; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.platform-switch { border: 0; padding: 0; margin: 28px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.platform-switch legend { width: 100%; font-size: 12px; font-weight: 700; margin-bottom: 11px; }
+.platform-option {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #131e30;
+  cursor: pointer;
+  min-width: 0;
+}
+.platform-option:hover { background: #1e2d43; }
+.platform-option.selected { background: #203a4b; border-color: #6acadd; }
+.platform-option:focus-within { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.platform-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.platform-option strong { font-size: 14px; }
+.platform-option span { font-size: 12px; color: #b4c9db; }
+.guide { padding: 23px 0; }
 .guide h2 { margin: 0 0 13px; font-size: 13px; color: var(--text); }
 .guide ol { margin: 0; padding-left: 20px; color: var(--muted); line-height: 1.6; font-size: 12px; }
 .guide li + li { margin-top: 7px; }
 .guide strong { color: #dde8fa; font-weight: 620; }
+.host-ip-note { margin: 14px 0 0; font-size: 11px; line-height: 1.5; color: #b1c6dc; }
+.host-ip-note strong { overflow-wrap: anywhere; }
 .form-stack { display: grid; gap: 17px; }
 .field { display: grid; gap: 7px; }
 .field label { font-size: 12px; font-weight: 650; }
-.field input {
+.field input, .field select {
   min-height: 43px;
   width: 100%;
   border-radius: 9px;
@@ -78,6 +99,7 @@ button:focus-visible, input:focus-visible, .source-choice:focus-within {
   font-size: 14px;
   padding: 8px 13px;
 }
+.field select { cursor: pointer; appearance: auto; }
 .field input::placeholder { color: #8da0b9; }
 .field small { font-size: 11px; color: #a3b1c8; }
 .secondary { background: #202d41; color: #e7f3fd; border-color: #3b4d66; }

@@ -2,16 +2,18 @@
   "name": "starlit-tv-installer",
   "version": "0.1.0",
   "private": true,
-  "description": "Starlit TV developer installer for LG webOS",
+  "description": "Starlit TV installer for Samsung Tizen and LG webOS",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "lint": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js && node --check src/installer.cjs && node --check src/ipk.cjs && node --check src/releases.cjs",
+    "lint": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js && node --check src/installer.cjs && node --check src/ipk.cjs && node --check src/wgt.cjs && node --check src/samsung.cjs && node --check src/platforms.cjs && node --check src/releases.cjs",
     "dist:win": "electron-builder --win portable --publish never"
   },
   "dependencies": {
-    "@webos-tools/cli": "3.2.4"
+    "@xmldom/xmldom": "0.9.12",
+    "@webos-tools/cli": "3.2.6",
+    "jszip": "3.10.1"
   },
   "devDependencies": {
     "electron": "33.4.11",
@@ -33,6 +35,8 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
       "target": [
         "portable"
       ],

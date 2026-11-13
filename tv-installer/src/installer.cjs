@@ -4,16 +4,11 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { isIP } = require("node:net");
 const { inspectIpk, MAX_IPK, STABLE_APP_ID } = require("./ipk.cjs");
+const { platformInfo, isLanIPv4 } = require("./platforms.cjs");
+const { operateSamsung } = require("./samsung.cjs");
 const { fetchVerifiedRelease } = require("./releases.cjs");
 
-function isLanIPv4(value) {
-  if (isIP(value) !== 4) return false;
-  const parts = value.split(".").map(Number);
-  return parts[0] === 10 || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-    (parts[0] === 192 && parts[1] === 168);
-}
 function validateTarget({ ip, deviceName, passphrase = "" } = {}) {
   if (!isLanIPv4(ip)) throw new Error("Enter the TV's private LAN IPv4 address");
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,49}$/.test(String(deviceName || ""))) {
@@ -105,11 +100,17 @@ async function requireSavedDevice(target, { listDevices = devices } = {}) {
   return deviceName;
 }
 async function operate({
-  action, target, source = "release", filePath = ""
+  action, target, source = "release", filePath = "", platform = "webos", signing = "samsung"
 } = {}, {
   run = runAres, listDevices = devices, onStatus = () => {},
-  fetchRelease = fetchVerifiedRelease
+  fetchRelease = fetchVerifiedRelease, samsungOps = {}
 } = {}) {
+  platformInfo(platform);
+  if (platform === "tizen") {
+    return operateSamsung({ action, target, source, filePath, signing }, {
+      fetchRelease, onStatus, ...samsungOps
+    });
+  }
   if (!["pair", "install", "launch", "uninstall"].includes(action)) {
     throw new Error("Unknown installer action");
   }
@@ -128,7 +129,7 @@ async function operate({
   let tempDir = "";
   try {
     if (source === "release") {
-      const downloaded = await fetchRelease({ onStatus });
+      const downloaded = await fetchRelease({ platform: "webos", onStatus });
       tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "starlit-tv-install-"));
       packagePath = path.join(tempDir, downloaded.filename);
       await fsp.writeFile(packagePath, downloaded.bytes, { flag: "wx", mode: 0o600 });

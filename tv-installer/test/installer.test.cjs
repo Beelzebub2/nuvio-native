@@ -79,7 +79,7 @@ test("Release assets require a stable tag and an exact SHA-256", () => {
   const name = "Starlit-WebOS-0.1.0.ipk", hash = "a".repeat(64);
   assert.equal(parseChecksum(hash + "  " + name + "\n", name), hash);
   assert.throws(() => parseChecksum(hash + "  other.ipk", name), /SHA-256/);
-  assert.throws(() => expectedReleaseAssets({ tag_name: "v0.1.0", assets: [] }), /accepted webOS/);
+  assert.throws(() => expectedReleaseAssets({ tag_name: "v0.1.0", assets: [] }), /accepted LG webOS/);
   assert.equal(approvedAssetUrl('https://github.com/Beelzebub2/starlit/releases/download/v0.1.0/' + name, 'v0.1.0', name), 'https://github.com/Beelzebub2/starlit/releases/download/v0.1.0/' + name);
   assert.throws(() => approvedAssetUrl('https://github.com/attacker/starlit/releases/download/v0.1.0/' + name, 'v0.1.0', name), /Untrusted/);
   assert.throws(() => expectedReleaseAssets({ tag_name: "v0.1.0", prerelease: true, assets: [] }), /verified stable/);
