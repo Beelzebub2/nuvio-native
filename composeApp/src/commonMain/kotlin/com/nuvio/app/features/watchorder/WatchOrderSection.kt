@@ -101,7 +101,8 @@ internal fun WatchOrderSection(
             )
             if (!loading && loaded != null) {
                 Text(
-                    text = stringResource(Res.string.watch_order_summary, required.size),
+                    text = if (required.size == 1) stringResource(Res.string.watch_order_summary_one)
+                        else stringResource(Res.string.watch_order_summary, required.size),
                     style = MaterialTheme.nuvioTypeScale.bodySm,
                     color = tokens.colors.textMuted,
                 )
@@ -132,15 +133,12 @@ internal fun WatchOrderSection(
             )
             return@Column
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WatchOrderConfidenceBadge(loaded.confidence, Modifier.weight(1f, fill = false))
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                val malId = currentMalId
-                if (malId != null && onOpenFullOrder != null) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // The badge needs its natural width; a 50/50 row truncates it on compact phones.
+            WatchOrderConfidenceBadge(loaded.confidence)
+            val malId = currentMalId
+            if (malId != null && onOpenFullOrder != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     NuvioActionLabel(
                         text = stringResource(Res.string.watch_order_view_all),
                         onClick = { onOpenFullOrder(malId, currentTitleCompleted) },

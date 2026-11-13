@@ -131,7 +131,8 @@ internal fun WatchOrderScreen(
                     )
                     if (result != null) {
                         Text(
-                            text = stringResource(Res.string.watch_order_summary, steps.size),
+                            text = if (steps.size == 1) stringResource(Res.string.watch_order_summary_one)
+                                else stringResource(Res.string.watch_order_summary, steps.size),
                             style = MaterialTheme.nuvioTypeScale.bodySm,
                             color = tokens.colors.textMuted,
                         )
