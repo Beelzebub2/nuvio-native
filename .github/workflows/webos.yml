@@ -30,9 +30,10 @@ jobs:
           cache: npm
           cache-dependency-path: tizen/package-lock.json
       - run: npm ci --ignore-scripts
-      - run: npm install --no-save --ignore-scripts --no-audit @webos-tools/cli@3.2.4
+      - run: npm install --no-save --ignore-scripts --no-audit @webos-tools/cli@3.2.4 @resvg/resvg-js@2.6.2
       - run: npm run lint
       - run: npm test
+      - run: npm run test:webos
       - name: Require stable app version on tagged release
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
         env:
