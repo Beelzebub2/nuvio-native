@@ -69,6 +69,7 @@ actual fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
     sourceAvailable: Boolean,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)?,
 ) {
     if (DesktopHostOs.current == DesktopHostOs.MACOS ||
         DesktopHostOs.current == DesktopHostOs.WINDOWS ||
@@ -92,6 +93,7 @@ actual fun PlatformPlayerSurface(
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
             onError = onError,
+            onLocalSubtitleDrop = onLocalSubtitleDrop,
         )
         return
     }
@@ -124,6 +126,7 @@ private fun NativePlayerSurface(
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)?,
 ) {
     val platformDensity = LocalNuvioPlatformDensity.current
     val host = remember { NativePlayerHost() }
@@ -138,6 +141,8 @@ private fun NativePlayerSurface(
     val latestOnInitialPositionHandled = rememberUpdatedState(onInitialPositionHandled)
     val latestOnError = rememberUpdatedState(onError)
     val latestPlayerControlsState = rememberUpdatedState(playerControlsState)
+    val latestLocalSubtitleDrop = rememberUpdatedState(onLocalSubtitleDrop)
+    val latestSourceAvailable = rememberUpdatedState(sourceAvailable)
     val playerSettings by PlayerSettingsRepository.uiState.collectAsState()
     val decoderPriority = playerSettings.decoderPriority
     val nvidiaRtxSuperResolutionEnabled = playerSettings.nvidiaRtxSuperResolutionEnabled
@@ -169,6 +174,26 @@ private fun NativePlayerSurface(
             host.onDisplayableChanged = null
             host.onFirstPaint = null
             host.onFirstFullSizePaint = null
+        }
+    }
+
+    // The native video is a heavyweight AWT Canvas inside SwingPanel. Compose's
+    // parent drop target cannot reliably receive drops over that Canvas.
+    DisposableEffect(host, onLocalSubtitleDrop != null) {
+        val previousTarget = host.dropTarget
+        val nativeTarget = if (onLocalSubtitleDrop != null) {
+            installNativeLocalSubtitleDropTarget(
+                component = host,
+                isEnabled = { latestSourceAvailable.value && latestLocalSubtitleDrop.value != null },
+                onResult = { result -> latestLocalSubtitleDrop.value?.invoke(result) },
+            )
+        } else {
+            null
+        }
+        onDispose {
+            if (nativeTarget != null && host.dropTarget === nativeTarget) {
+                host.dropTarget = previousTarget
+            }
         }
     }
 

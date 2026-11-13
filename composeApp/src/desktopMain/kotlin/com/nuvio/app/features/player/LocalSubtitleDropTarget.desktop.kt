@@ -12,6 +12,13 @@ import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
+import java.awt.Component
+import java.awt.GraphicsEnvironment
+import java.awt.dnd.DnDConstants
+import java.awt.dnd.DropTarget
+import java.awt.dnd.DropTargetAdapter
+import java.awt.dnd.DropTargetDragEvent
+import java.awt.dnd.DropTargetDropEvent
 import java.io.File
 
 /**
@@ -29,6 +36,49 @@ internal fun validateDroppedLocalSubtitle(transferable: Transferable): LocalSubt
             else -> validateLocalSubtitleFile(files[0] as File)
         }
     }.getOrElse { LocalSubtitleFileResult.Rejected(LocalSubtitleFileError.UNREADABLE) }
+}
+
+/** Native mpv's heavyweight Canvas needs its own OS file drop target. */
+internal fun installNativeLocalSubtitleDropTarget(
+    component: Component,
+    isEnabled: () -> Boolean,
+    onResult: (LocalSubtitleFileResult) -> Unit,
+): DropTarget? {
+    if (GraphicsEnvironment.isHeadless()) return null
+    return runCatching {
+        DropTarget(
+            component,
+            DnDConstants.ACTION_COPY,
+            object : DropTargetAdapter() {
+                override fun dragEnter(event: DropTargetDragEvent) {
+                    if (isEnabled() && event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                        event.acceptDrag(DnDConstants.ACTION_COPY)
+                    } else {
+                        event.rejectDrag()
+                    }
+                }
+
+                override fun drop(event: DropTargetDropEvent) {
+                    if (!isEnabled() || !event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                        event.rejectDrop()
+                        return
+                    }
+                    event.acceptDrop(DnDConstants.ACTION_COPY)
+                    val handled = runCatching {
+                        val result = validateDroppedLocalSubtitle(event.transferable)
+                        if (result != null) {
+                            onResult(result)
+                            true
+                        } else {
+                            false
+                        }
+                    }.getOrDefault(false)
+                    event.dropComplete(handled)
+                }
+            },
+            true,
+        )
+    }.getOrNull()
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)

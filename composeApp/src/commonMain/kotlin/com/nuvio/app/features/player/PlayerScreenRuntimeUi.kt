@@ -505,6 +505,27 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val localDropOversized = stringResource(Res.string.player_local_subtitle_oversized)
     val localDropMultiple = stringResource(Res.string.player_local_subtitle_multiple_files)
     val localDropNotReady = stringResource(Res.string.player_local_subtitle_player_not_ready)
+    val onLocalSubtitleDropResult: (LocalSubtitleFileResult) -> Unit = { result ->
+        when (result) {
+            is LocalSubtitleFileResult.Selected -> {
+                if (!selectUserLocalSubtitleFile(result)) {
+                    NuvioToastController.show(localDropNotReady)
+                }
+            }
+            is LocalSubtitleFileResult.Rejected -> {
+                NuvioToastController.show(
+                    when (result.reason) {
+                        LocalSubtitleFileError.UNSUPPORTED_FORMAT -> localDropUnsupported
+                        LocalSubtitleFileError.UNREADABLE -> localDropUnreadable
+                        LocalSubtitleFileError.TOO_LARGE -> localDropOversized
+                        LocalSubtitleFileError.MULTIPLE_FILES -> localDropMultiple
+                        LocalSubtitleFileError.PICKER_FAILED -> localDropUnreadable
+                    },
+                )
+            }
+            LocalSubtitleFileResult.Cancelled -> Unit
+        }
+    }
 
     BindRemotePlayback(playerControlsState)
 
@@ -513,27 +534,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             .fillMaxSize()
             .localSubtitleDropTarget(
                 enabled = playerController != null && !isChoosingLocalSubtitle,
-                onResult = { result ->
-                    when (result) {
-                        is LocalSubtitleFileResult.Selected -> {
-                            if (!selectUserLocalSubtitleFile(result)) {
-                                NuvioToastController.show(localDropNotReady)
-                            }
-                        }
-                        is LocalSubtitleFileResult.Rejected -> {
-                            NuvioToastController.show(
-                                when (result.reason) {
-                                    LocalSubtitleFileError.UNSUPPORTED_FORMAT -> localDropUnsupported
-                                    LocalSubtitleFileError.UNREADABLE -> localDropUnreadable
-                                    LocalSubtitleFileError.TOO_LARGE -> localDropOversized
-                                    LocalSubtitleFileError.MULTIPLE_FILES -> localDropMultiple
-                                    LocalSubtitleFileError.PICKER_FAILED -> localDropUnreadable
-                                },
-                            )
-                        }
-                        LocalSubtitleFileResult.Cancelled -> Unit
-                    }
-                },
+                onResult = onLocalSubtitleDropResult,
             )
             .onSizeChanged { layoutSize = it }
             .then(
@@ -635,6 +636,11 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                         controlsVisible = !playerControlsLocked
                         removeFailedStreamFromCache()
                     }
+                },
+                onLocalSubtitleDrop = if (playerController != null && !isChoosingLocalSubtitle) {
+                    onLocalSubtitleDropResult
+                } else {
+                    null
                 },
             )
         }

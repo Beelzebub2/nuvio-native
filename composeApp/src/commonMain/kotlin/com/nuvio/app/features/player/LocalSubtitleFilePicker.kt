@@ -1,13 +1,13 @@
 package com.nuvio.app.features.player
 
 /** The chosen local path is intentionally never stored or included in account sync. */
-internal sealed interface LocalSubtitleFileResult {
+sealed interface LocalSubtitleFileResult {
     data class Selected(val uri: String, val displayName: String) : LocalSubtitleFileResult
     data class Rejected(val reason: LocalSubtitleFileError) : LocalSubtitleFileResult
     data object Cancelled : LocalSubtitleFileResult
 }
 
-internal enum class LocalSubtitleFileError {
+enum class LocalSubtitleFileError {
     UNSUPPORTED_FORMAT,
     UNREADABLE,
     TOO_LARGE,
