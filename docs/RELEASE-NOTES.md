@@ -1,3 +1,28 @@
+## Starlit 1.24.0
+
+### Playback, audio and subtitles
+
+- **Optional virtual 7.1 headset output on Windows:** Expose a device-supported multi-channel PCM route for compatible hardware, with a safe fallback for unsupported output devices. This does not claim a stereo headset becomes true discrete surround.
+- **Local subtitle files:** Accept validated subtitle file drops on the desktop player without replacing the current media source or accepting arbitrary file types.
+- **ASS/SSA subtitle styling:** Keep authored subtitle styling on the desktop and avoid unexpected subtitle selection resets.
+
+### Controls, navigation and authentication
+
+- **Precise settings search:** Open and highlight the matching setting rather than stopping at its containing page.
+- **Details and remote reliability:** Prevent overview panels from overlapping and give phone-to-PC source searches a bounded timeout and explicit retry.
+- **Opt-in private-network remote control:** Permit compatible private VPN routes without opening remote control to the public internet.
+- **Tracking account sign-in:** Include public OAuth provider IDs in release builds and support the updated Simkl device-authorization and refresh flow without embedding confidential client secrets.
+
+### Release and TV compatibility
+
+- **Samsung TV GitHub repository migration support:** Discover signed-off TV release assets using either official repository name after GitHub moves the project. Validate QR and PC-assisted update URLs against those two names and keep checksum verification. This does not provide a signed public Tizen package.
+- **App release migration:** Preserve existing Windows, Android and Linux update and installation identities while preparing for the public source repository rename. The GitHub repository name does not change as part of this release.
+
+### Verification and limitations
+
+- Stable installers are published only after the tagged release pipeline passes Windows installer and uninstall tests, signed Android and Android TV builds, Linux package integrity checks and release provenance validation.
+- Samsung Tizen installations remain developer previews requiring matching certificate and physical-device acceptance. No new public Samsung Tizen WGT or LG webOS package is included. Real-device verification of headset spatial output, VPN remote control, and tracking sign-in remains outstanding. Experimental draft changes are excluded.
+
 ## Starlit 1.23.0
 
 ### Interface and navigation
