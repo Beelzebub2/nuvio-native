@@ -23,7 +23,7 @@ const upstreamRootDir = path.join(cacheDir, "webos-upstream");
 const webOsServiceSourceDir = path.join(upstreamRootDir, "services", "webos");
 const artifactsDir = path.join(rootDir, "artifacts");
 const appId = "app.starlit.webos";
-const webOsPluginServiceSourceDir = path.join(rootDir, "services", "webos", "plugin");
+const webOsPluginServiceSourceDir = path.join(upstreamRootDir, "services", "webos", "plugin");
 const webOsRuntimeScriptPath = "assets/libs/webOSTV.js";
 async function assertDistExists() {
   try {
