@@ -33,6 +33,9 @@
     <string name="action_reset">Reset to Default</string>
     <string name="action_resume">Resume</string>
     <string name="action_retry">Retry</string>
+    <string name="cd_decrease_value">Decrease %1$s</string>
+    <string name="cd_increase_value">Increase %1$s</string>
+    <string name="action_refresh">Refresh</string>
     <string name="action_save">Save</string>
     <string name="action_saving">Saving…</string>
     <string name="action_switch">Switch</string>
@@ -555,6 +558,8 @@
     <string name="player_local_subtitle_failed">Could not open the file picker. Please try again.</string>
     <string name="player_local_subtitle_player_not_ready">The player is not ready to load a subtitle file.</string>
     <string name="compose_player_text_opacity">Text Opacity</string>
+    <string name="compose_player_timing">Timing</string>
+    <string name="compose_player_text">Text</string>
     <string name="compose_player_brightness_level">Brightness %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Muted</string>
@@ -872,6 +877,8 @@
     <string name="remote_pc_check_ip">Find PC at this address</string>
     <string name="remote_pc_desktop_addresses">Local PC address: %1$s</string>
     <string name="remote_pc_saved_devices">Previously paired PCs</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · no code needed</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · asks to confirm</string>
     <string name="remote_pc_saved_notice">Saved PCs are ready to reconnect. Previously approved Bluetooth PCs do not need another code when both devices still have their protected pairing keys. LAN connections still require confirmation.</string>
     <string name="remote_pc_forget">Forget</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -933,6 +940,7 @@
     <string name="remote_pc_hero_searching_title">Looking for your PC</string>
     <string name="remote_pc_hero_connecting_title">Connecting to your PC</string>
     <string name="remote_pc_hero_connected_title">Your phone is a remote</string>
+    <string name="remote_pc_hero_hint">Open Phone remote on the PC. Use the same account and network.</string>
     <string name="remote_pc_ways_to_connect">Ways to connect</string>
     <string name="remote_pc_tile_qr_caption">Point at the code in Phone remote on your PC.</string>
     <string name="remote_pc_tile_network_caption">Find PCs on this Wi-Fi.</string>
@@ -959,6 +967,9 @@
     <string name="remote_window_status_connected">Phone connected</string>
     <string name="remote_window_status_offline">Not ready</string>
     <string name="remote_window_other_ways">Other ways to connect</string>
+    <string name="remote_window_local_address">Local PC address</string>
+    <string name="remote_window_copy_address">Copy address</string>
+    <string name="remote_window_trouble_caption">Firewall rules, network type and ports</string>
     <string name="remote_window_network_section">Network</string>
     <string name="remote_firewall_checking">Checking Windows Firewall…</string>
     <string name="remote_discovery_unavailable">Automatic UDP discovery is unavailable. You can still pair by scanning the QR code or entering this PC's IP address.</string>
@@ -2103,6 +2114,7 @@
     <string name="source_filter_clear">Clear filters</string>
     <string name="source_filter_no_matches">No matching sources</string>
     <string name="source_filter_adjust">Try a different search or clear some filters.</string>
+    <string name="source_filter_result_count">%1$d of %2$d sources</string>
     <string name="streams_resume_from_percent">Resume from %1$d%</string>
     <string name="streams_resume_from_time">Resume from %1$s</string>
     <string name="streams_size">SIZE %1$s</string>
@@ -2380,6 +2392,7 @@
     <string name="cloud_library_play_not_connected">Cloud service is not connected.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s is not connected.</string>
     <string name="cloud_library_playable_file_count">%1$d playable files</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d files</string>
     <string name="cloud_library_provider_all">All</string>
     <string name="cloud_library_refresh">Refresh cloud library</string>
     <string name="cloud_library_search_label">Search cloud library</string>
@@ -2834,6 +2847,8 @@
     <string name="layout_random_episode_sub">Shuffle episodes from any series. Turning this off pauses shuffle.</string>
     <string name="random_episode_unwatched">Unwatched episodes</string>
     <string name="random_episode_include_watched">All episodes</string>
+    <string name="shuffle_pool_episode_count">%1$d episodes</string>
+    <string name="shuffle_pool_episode_count_all">%1$d episodes, watched ones included</string>
     <string name="random_episode_empty_subtitle">No episodes are available to shuffle.</string>
     <string name="random_episode_caught_up">You have watched every episode. Choose All episodes to watch again.</string>
     <string name="random_episode_loading">Loading episodes…</string>
@@ -2966,7 +2981,10 @@
     <string name="account_credentials_password_step2">Enter the code from your email, then choose a new password. The code expires automatically.</string>
     <string name="account_credentials_email_step">Confirm your current password to request a new email. You must approve links sent to both email addresses.</string>
     <string name="account_credentials_current_password">Current password</string>
+    <string name="cd_show_password">Show password</string>
+    <string name="cd_hide_password">Hide password</string>
     <string name="account_credentials_verification_code">Email verification code</string>
+    <string name="account_credentials_code_placeholder">6-digit code</string>
     <string name="account_credentials_new_password">New password</string>
     <string name="account_credentials_confirm_password">Confirm new password</string>
     <string name="account_credentials_new_email">New email address</string>

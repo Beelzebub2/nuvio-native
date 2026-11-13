@@ -3,6 +3,7 @@ import { focusWithoutScroll } from "../../navigation/focusWithoutScroll.js";
 import { CONTROLS_HIDE_TRANSITION_MS, syncHtmlSubtitleClearance } from "./subtitleOverlayClearance.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
+import { canvasRectToNative } from "../../../platform/tvViewport.js";
 export function createPlayerScreenMethods29() {
   const { PlayerController, Environment, STARTUP_PLAYBACK_ADVANCE_EPSILON_SECONDS, BUFFERING_SPINNER_STALL_MS, interpolatePostPlayRect } =
     internals;
@@ -138,12 +139,7 @@ export function createPlayerScreenMethods29() {
         if (usingAvPlay) {
           // AVPlay uses 1920x1080 coordinates, independently of the CSS viewport.
           PlayerController.setAvPlayDisplayRect?.(
-            {
-              x: (rect.x * nativeViewport.width) / viewportWidth,
-              y: (rect.y * nativeViewport.height) / viewportHeight,
-              width: (rect.width * nativeViewport.width) / viewportWidth,
-              height: (rect.height * nativeViewport.height) / viewportHeight
-            },
+            canvasRectToNative(rect, nativeViewport),
             "PLAYER_DISPLAY_MODE_FULL_SCREEN"
           );
         } else if (video?.style) {

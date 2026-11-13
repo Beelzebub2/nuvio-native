@@ -353,6 +353,7 @@ fun SettingsScreen(
 
         if (isSelectedTab || page == SettingsPage.Root) {
             pageStateHolder.SaveableStateProvider("content") {
+        SettingsSearchPageScope(page) {
         if (maxWidth >= 960.dp) {
             TabletSettingsScreen(
                 page = page,
@@ -497,6 +498,7 @@ fun SettingsScreen(
                 onCollectionsClick = onCollectionsClick,
             )
         }
+        }
             }
         }
     }
@@ -583,6 +585,7 @@ private fun MobileSettingsScreen(
         var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
         var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
         val listState = rememberLazyListState()
+        SettingsSearchLazyListFocus(page, listState)
         ScreenActivityEffect(listState) { active ->
             if (!active) listState.stopScroll()
         }
@@ -603,7 +606,13 @@ private fun MobileSettingsScreen(
         }
         fun openSearchTarget(target: SettingsSearchTarget) {
             when (target) {
-                is SettingsSearchTarget.Page -> when (target.page) {
+                is SettingsSearchTarget.Page -> {
+                    if (target.focusKey != null && target.focusTitle != null) {
+                        SettingsSearchFocus.request(target.page, target.focusKey, target.focusTitle)
+                    } else {
+                        SettingsSearchFocus.clear()
+                    }
+                    when (target.page) {
                     SettingsPage.Account -> onAccountClick()
                     SettingsPage.SupportersContributors -> {
                         if (AppFeaturePolicy.supportersContributorsPageEnabled) {
@@ -621,6 +630,7 @@ private fun MobileSettingsScreen(
                     SettingsPage.Homescreen -> onHomescreenClick()
                     SettingsPage.MetaScreen -> onMetaScreenClick()
                     else -> onPageChange(target.page)
+                    }
                 }
                 SettingsSearchTarget.Collections -> onCollectionsClick()
                 SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
@@ -1138,6 +1148,11 @@ private fun TabletSettingsScreen(
                     when (target) {
                         is SettingsSearchTarget.Page -> {
                             if (target.page.isEnabledByPolicy()) {
+                                if (target.focusKey != null && target.focusTitle != null) {
+                                    SettingsSearchFocus.request(target.page, target.focusKey, target.focusTitle)
+                                } else {
+                                    SettingsSearchFocus.clear()
+                                }
                                 if (isDesktop) {
                                     // Opening a result ends the search, like picking a sidebar entry.
                                     settingsSearchQuery = ""
@@ -1156,6 +1171,7 @@ private fun TabletSettingsScreen(
                 }
 
                 val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                SettingsSearchLazyListFocus(effectivePage, listState)
                 ScreenActivityEffect(listState) { active ->
                     if (!active) listState.stopScroll()
                 }

@@ -168,6 +168,46 @@ export function createPlayerScreenMethods32() {
         this.renderSeekOverlay();
       }
     },
+    /** Elapsed, chapter and remaining under the bar, plus chapter ticks. */
+    renderTimeRow(position, duration) {
+      const uiRefs = this.uiRefs || {};
+      const uiState = this.lastUiTickState || (this.lastUiTickState = {});
+      const elapsedText = formatTime(position);
+      if (uiRefs.elapsedLabel && uiState.elapsedText !== elapsedText) {
+        uiRefs.elapsedLabel.textContent = elapsedText;
+        uiState.elapsedText = elapsedText;
+      }
+      const remainingText = duration > 0 ? `\u2212${formatTime(Math.max(0, duration - position))}` : "";
+      if (uiRefs.remainingLabel && uiState.remainingText !== remainingText) {
+        uiRefs.remainingLabel.textContent = remainingText;
+        uiState.remainingText = remainingText;
+      }
+      const chapters = Array.isArray(this.playerChapters) ? this.playerChapters : [];
+      let chapterText = "";
+      if (chapters.length > 1 && typeof this.chapterIndexAt === "function") {
+        const index = this.chapterIndexAt(position * 1000);
+        const chapter = index >= 0 ? chapters[index] : null;
+        if (chapter) {
+          const title = String(chapter.title || "").trim();
+          const number = t("player_chapter_number", [index + 1], `Chapter ${index + 1}`);
+          chapterText = title && title !== number ? `${number} \u00B7 ${title}` : number;
+        }
+      }
+      if (uiRefs.chapterLabel && uiState.chapterText !== chapterText) {
+        uiRefs.chapterLabel.textContent = chapterText;
+        uiState.chapterText = chapterText;
+      }
+      const ticksKey = chapters.length > 1 && duration > 0 ? `${duration}:${chapters.map((chapter) => chapter.startMs).join(",")}` : "";
+      if (uiRefs.progressTicks && uiState.ticksKey !== ticksKey) {
+        uiState.ticksKey = ticksKey;
+        uiRefs.progressTicks.innerHTML = ticksKey
+          ? chapters
+              .filter((chapter) => chapter.startMs > 0 && chapter.startMs / 1000 < duration)
+              .map((chapter) => `<span class="player-progress-tick" style="left:${Math.round((chapter.startMs / 1000 / duration) * 10000) / 100}%"></span>`)
+              .join("")
+          : "";
+      }
+    },
     renderProgressPosition() {
       // Android shows a pending preview seek wherever the timeline is drawn
       // (pendingPreviewSeekPosition ?: position) and redraws it on every step.
@@ -189,6 +229,7 @@ export function createPlayerScreenMethods32() {
           uiState.progressWidth = nextWidth;
         }
       }
+      this.renderTimeRow(position, duration);
       const timeLabel = uiRefs.timeLabel;
       if (timeLabel) {
         const nextTimeLabel = `${formatTime(position)} / ${formatTime(duration)}`;

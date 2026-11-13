@@ -18,6 +18,9 @@
     <string name="action_reset">Obnoviť predvolené</string>
     <string name="action_resume">Pokračovať</string>
     <string name="action_retry">Skúsiť znova</string>
+    <string name="cd_decrease_value">Znížiť: %1$s</string>
+    <string name="cd_increase_value">Zvýšiť: %1$s</string>
+    <string name="action_refresh">Obnoviť</string>
     <string name="action_save">Uložiť</string>
     <string name="action_saving">Ukladanie…</string>
     <string name="action_validate">Overiť</string>
@@ -380,6 +383,8 @@
     <string name="compose_player_subtitle_delay">Oneskorenie titulkov</string>
     <string name="compose_player_subtitles">Titulky</string>
     <string name="compose_player_text_opacity">Priehľadnosť textu</string>
+    <string name="compose_player_timing">Načasovanie</string>
+    <string name="compose_player_text">Text</string>
     <string name="compose_player_brightness_level">Jas %1$s</string>
     <string name="compose_player_volume_level">Hlasitosť %1$s</string>
     <string name="compose_player_muted">Stlmené</string>
@@ -1531,6 +1536,7 @@
     <string name="cloud_library_play_not_connected">Cloudová služba nie je pripojená.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s nie je pripojený.</string>
     <string name="cloud_library_playable_file_count">%1$d prehrávateľných súborov</string>
+    <string name="cloud_library_provider_file_count">%1$s · súborov: %2$d</string>
     <string name="cloud_library_provider_all">Všetky</string>
     <string name="cloud_library_refresh">Obnoviť cloudovú knižnicu</string>
     <string name="cloud_library_select_provider">Vybrať poskytovateľa</string>
@@ -2374,6 +2380,8 @@
     <string name="layout_random_episode_sub">Náhodne prehrávať epizódy z akéhokoľvek seriálu. Vypnutím tejto možnosti pozastavíte náhodný výber.</string>
     <string name="random_episode_unwatched">Nevidené epizódy</string>
     <string name="random_episode_include_watched">Všetky epizódy</string>
+    <string name="shuffle_pool_episode_count">Epizódy: %1$d</string>
+    <string name="shuffle_pool_episode_count_all">Epizódy: %1$d vrátane videných</string>
     <string name="random_episode_empty_subtitle">Nie sú k dispozícii žiadne epizódy na náhodné prehrávanie.</string>
     <string name="random_episode_caught_up">Pozreli ste si každú epizódu. Ak chcete pozerať znova, zvoľte Všetky epizódy.</string>
     <string name="random_episode_loading">Načítavajú sa epizódy…</string>

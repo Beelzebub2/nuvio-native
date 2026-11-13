@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
+import { toCanvasPoint } from "../../../platform/tvViewport.js";
 export function createPlayerScreenMethods69() {
   const { SUBTITLE_LANGUAGE_OFF_KEY, clamp } = internals;
   return {
@@ -149,7 +150,11 @@ export function createPlayerScreenMethods69() {
       if (!rect || rect.width <= 0 || !Number.isFinite(duration) || duration <= 0) {
         return false;
       }
-      const x = Number(event?.clientX ?? rect.left);
+      // Pointer coordinates are on-screen px; the rect is canvas px.
+      const x =
+        event?.clientX == null
+          ? rect.left
+          : toCanvasPoint(Number(event.clientX), Number(event.clientY || 0)).x;
       const ratio = clamp((x - rect.left) / rect.width, 0, 1);
       this.seekPreviewSeconds = null;
       this.seekRepeatCount = 0;

@@ -319,7 +319,7 @@ export function createSearchScreenMethods01() {
       this.requestRender();
     },
     shouldPatchResultsWithoutReplacingInput() {
-      return this.isSearchInputEditingActive() && !this.pendingAutoFocusResults;
+      return (this.isSearchInputEditingActive() || this.isSearchKeyboardFocused()) && !this.pendingAutoFocusResults;
     },
     renderResultsOnly() {
       const content = this.container?.querySelector(".search-content");
@@ -329,7 +329,7 @@ export function createSearchScreenMethods01() {
         this.requestRender();
         return;
       }
-      const preserveInputEditing = document.activeElement === input;
+      const preserveInputEditing = document.activeElement === input || this.isSearchKeyboardFocused();
       const selectionSnapshot = preserveInputEditing ? null : getInputSelectionSnapshot(input);
       while (header.nextSibling) {
         header.nextSibling.remove();

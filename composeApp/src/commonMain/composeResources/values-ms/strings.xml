@@ -34,6 +34,9 @@
     <string name="action_reset">Tetapkan Semula kepada Lalai</string>
     <string name="action_resume">Sambung semula</string>
     <string name="action_retry">Cuba semula</string>
+    <string name="cd_decrease_value">Kurangkan %1$s</string>
+    <string name="cd_increase_value">Tambah %1$s</string>
+    <string name="action_refresh">Muat semula</string>
     <string name="action_save">Simpan</string>
     <string name="action_saving">Menyimpan…</string>
     <string name="action_switch">Tukar</string>
@@ -549,6 +552,8 @@ akaun</string>
     <string name="compose_player_subtitle_delay">Kelewatan Sarikata</string>
     <string name="compose_player_subtitles">Sarikata</string>
     <string name="compose_player_text_opacity">Kelegapan Teks</string>
+    <string name="compose_player_timing">Pemasaan</string>
+    <string name="compose_player_text">Teks</string>
     <string name="compose_player_brightness_level">Kecerahan %1$s</string>
     <string name="compose_player_volume_level">Jilid %1$s</string>
     <string name="compose_player_muted">Dibisukan</string>
@@ -862,6 +867,9 @@ Logo</string>
     <string name="remote_pc_check_ip">Cari PC di alamat ini</string>
     <string name="remote_pc_desktop_addresses">Alamat PC tempatan: %1$s</string>
     <string name="remote_pc_saved_devices">PC berpasangan sebelum ini</string>
+    <string name="remote_pc_hero_hint">Buka Alat kawalan jauh telefon pada PC. Gunakan akaun dan rangkaian yang sama.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · tiada kod diperlukan</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · meminta pengesahan</string>
     <string name="remote_pc_saved_notice">PC yang disimpan sedia untuk disambung semula. PC Bluetooth yang diluluskan sebelum ini tidak memerlukan kod lain apabila kedua-dua peranti masih mempunyai kunci pasangan yang dilindungi. Sambungan LAN masih memerlukan pengesahan.</string>
     <string name="remote_pc_forget">Lupakan</string>
     <string name="remote_pc_wake">Bangun PC</string>
@@ -934,6 +942,9 @@ Logo</string>
     <string name="remote_window_status_connected">Telefon disambungkan</string>
     <string name="remote_window_status_offline">Tidak bersedia</string>
     <string name="remote_window_other_ways">Cara lain untuk menyambung</string>
+    <string name="remote_window_local_address">Alamat tempatan PC</string>
+    <string name="remote_window_copy_address">Salin alamat</string>
+    <string name="remote_window_trouble_caption">Peraturan tembok api, jenis rangkaian dan port</string>
     <string name="remote_window_network_section">Rangkaian</string>
     <string name="remote_firewall_checking">Menyemak Windows Firewall…</string>
     <string name="remote_discovery_unavailable">Penemuan UDP automatik tidak tersedia. Anda masih boleh berpasangan dengan mengimbas kod QR atau memasukkan alamat IP PC ini.</string>
@@ -2316,6 +2327,7 @@ Rangkaian</string>
     <string name="cloud_library_play_not_connected">Perkhidmatan awan tidak disambungkan.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s tidak disambungkan.</string>
     <string name="cloud_library_playable_file_count">%1$d fail boleh main</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d fail</string>
     <string name="cloud_library_provider_all">Semua</string>
     <string name="cloud_library_refresh">Muat semula pustaka awan</string>
     <string name="cloud_library_search_label">Cari pustaka awan</string>
@@ -2725,6 +2737,8 @@ Penilaian</string>
     <string name="layout_random_episode_sub">Kocok episod daripada mana-mana siri. Mematikan ini menjeda shuffle.</string>
     <string name="random_episode_unwatched">Episod tidak ditonton</string>
     <string name="random_episode_include_watched">Semua episod</string>
+    <string name="shuffle_pool_episode_count">%1$d episod</string>
+    <string name="shuffle_pool_episode_count_all">%1$d episod, termasuk yang telah ditonton</string>
     <string name="random_episode_empty_subtitle">Tiada episod tersedia untuk dikocok.</string>
     <string name="random_episode_caught_up">Anda telah menonton setiap episod. Pilih Semua episod untuk ditonton semula.</string>
     <string name="random_episode_loading">Memuatkan episod…</string>
@@ -2857,7 +2871,10 @@ Penilaian</string>
     <string name="account_credentials_password_step2">Masukkan kod daripada e-mel anda, kemudian pilih kata laluan baharu. Kod tamat tempoh secara automatik.</string>
     <string name="account_credentials_email_step">Sahkan kata laluan semasa anda untuk meminta e-mel baharu. Anda mesti meluluskan pautan yang dihantar ke kedua-dua alamat e-mel.</string>
     <string name="account_credentials_current_password">Kata laluan semasa</string>
+    <string name="cd_show_password">Tunjukkan kata laluan</string>
+    <string name="cd_hide_password">Sembunyikan kata laluan</string>
     <string name="account_credentials_verification_code">Kod pengesahan e-mel</string>
+    <string name="account_credentials_code_placeholder">Kod 6 digit</string>
     <string name="account_credentials_new_password">Kata laluan baharu</string>
     <string name="account_credentials_confirm_password">Sahkan kata laluan baharu</string>
     <string name="account_credentials_new_email">Alamat e-mel baharu</string>
@@ -3098,4 +3115,5 @@ Had permintaan</string>
     <string name="changelog_view_github">Lihat pada GitHub</string>
     <string name="updates_whats_new">Perkara baharu</string>
     <string name="updates_download_size">%1$s muat turun</string>
+    <string name="source_filter_result_count">%1$d daripada %2$d sumber</string>
 </resources>

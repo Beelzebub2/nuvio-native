@@ -5,6 +5,8 @@
   "version": "0.1.0",
   "scripts": {
     "build": "node ./scripts/build.mjs",
+    "build:css": "node ./scripts/build-css.mjs",
+    "capture:design": "node ./scripts/tv-design-capture.mjs",
     "lint": "eslint \"js/**/*.js\" --quiet --rule \"no-unused-vars: off\"",
     "test": "node --test tests/starlit*.test.mjs && npm run test:upstream",
     "test:upstream": "node --test scripts/test-tizen-seek-loading.mjs scripts/test-tizen-avplay-seek-sequencing.mjs scripts/test-tizen-redirect-resolver.mjs scripts/test-tizen-direct-avplay-source.mjs scripts/test-tizen-matroska-audio-metadata.mjs scripts/test-tizen-bitmap-subtitle.mjs scripts/test-dash-mime-hints.mjs scripts/test-profile-scoped-store-cache.mjs scripts/test-plugin-service-lifecycle.mjs scripts/test-youtube-proxy.mjs js/platform/tvPerformancePolicy.test.mjs js/ui/screens/player/audioTrackDisplay.test.mjs js/ui/screens/player/playbackErrorStatus.test.mjs",

@@ -177,7 +177,7 @@ export function openDetailShuffle(screen) {
             image.src = selected.thumbnail;
             image.alt = "";
             image.style.cssText =
-              "display:block;width:100%;max-height:22vh;object-fit:cover;border-radius:12px";
+              "display:block;width:100%;max-height:238px;object-fit:cover;border-radius:12px";
             return image;
           }
         : null;

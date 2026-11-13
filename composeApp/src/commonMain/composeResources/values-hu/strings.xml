@@ -18,6 +18,9 @@
     <string name="action_reset">Alapértelmezés visszaállítása</string>
     <string name="action_resume">Folytatás</string>
     <string name="action_retry">Újra</string>
+    <string name="cd_decrease_value">%1$s csökkentése</string>
+    <string name="cd_increase_value">%1$s növelése</string>
+    <string name="action_refresh">Frissítés</string>
     <string name="action_save">Mentés</string>
     <string name="action_saving">Mentés…</string>
     <string name="action_validate">Ellenőrzés</string>
@@ -1374,6 +1377,8 @@
     <string name="compose_player_select_addon_subtitle_first">Először válassz ki egy kiegészítő feliratot</string>
     <string name="compose_player_subtitle_delay">Felirat késleltetése</string>
     <string name="compose_player_text_opacity">Szöveg átlátszósága</string>
+    <string name="compose_player_timing">Időzítés</string>
+    <string name="compose_player_text">Szöveg</string>
     <string name="compose_settings_page_advanced">Haladó</string>
     <string name="compose_settings_page_streams">Streamek</string>
     <string name="settings_appearance_section_streams">STREAMEK</string>
@@ -1598,6 +1603,7 @@
     <string name="cloud_library_play_not_connected">A felhőszolgáltatás nincs csatlakoztatva.</string>
     <string name="cloud_library_play_provider_not_connected">A(z) %1$s nincs csatlakoztatva.</string>
     <string name="cloud_library_playable_file_count">%1$d lejátszható fájl</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d fájl</string>
     <string name="cloud_library_provider_all">Mindegyik</string>
     <string name="cloud_library_refresh">Felhő könyvtár frissítése</string>
     <string name="cloud_library_select_provider">Szolgáltató kiválasztása</string>

@@ -1,4 +1,5 @@
 import { renderAmbientSection } from "./settingsAmbientSection.js";
+import { renderDisplaySection } from "./settingsDisplaySection.js";
 import { renderWatchPartySection } from "./settingsWatchPartySection.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./settingsScreenContext.js";
@@ -179,6 +180,7 @@ export function createSettingsScreenMethods12() {
       if (section.id === "profiles") return this.renderProfilesSection(model);
       if (section.id === "watchParty") return renderWatchPartySection.call(this);
       if (section.id === "appearance") return this.renderAppearanceSection(model);
+      if (section.id === "display") return renderDisplaySection.call(this, model);
       if (section.id === "ambient") return renderAmbientSection.call(this);
       if (section.id === "layout") return this.renderLayoutSection(model);
       if (section.id === "contentDiscovery") return this.renderContentDiscoverySection();
@@ -197,7 +199,13 @@ export function createSettingsScreenMethods12() {
       this.layoutPrefs = this.model.layout;
       this.sidebarExpanded = Boolean(this.layoutPrefs?.modernSidebar && this.sidebarExpanded);
       this.visibleSections = getVisibleSections(this.model);
+      const heading = this.container?.querySelector?.("[data-settings-heading]");
+      if (heading) {
+        heading.textContent = t("sidebar.settings", {}, "Settings");
+      }
       this.actionMap = new Map();
+      // Left/Right value steppers registered by rows (Display & scaling).
+      this.adjustMap = new Map();
       if (!this.visibleSections.length) {
         this.visibleSections = [SECTION_META.find((item) => item.id === "appearance") || SECTION_META[0]];
       }

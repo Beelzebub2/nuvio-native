@@ -18,6 +18,9 @@
     <string name="action_reset">Resetuj</string>
     <string name="action_resume">Wznów</string>
     <string name="action_retry">Ponów</string>
+    <string name="cd_decrease_value">Zmniejsz: %1$s</string>
+    <string name="cd_increase_value">Zwiększ: %1$s</string>
+    <string name="action_refresh">Odśwież</string>
     <string name="action_save">Zapisz</string>
     <string name="action_saving">Zapisywanie…</string>
     <string name="action_validate">Sprawdź</string>
@@ -369,6 +372,8 @@
     <string name="compose_player_subtitle_delay">Opóźnienie napisów</string>
     <string name="compose_player_subtitles">Napisy</string>
     <string name="compose_player_text_opacity">Przezroczystość tekstu</string>
+    <string name="compose_player_timing">Synchronizacja</string>
+    <string name="compose_player_text">Tekst</string>
     <string name="compose_player_brightness_level">Jasność %1$s</string>
     <string name="compose_player_volume_level">Głośność %1$s</string>
     <string name="compose_player_muted">Wyciszony</string>
@@ -1478,6 +1483,7 @@
     <string name="cloud_library_play_not_connected">Usługa chmurowa nie jest połączona.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s nie jest połączony.</string>
     <string name="cloud_library_playable_file_count">%1$d odtwarzalnych plików</string>
+    <string name="cloud_library_provider_file_count">%1$s · plików: %2$d</string>
     <string name="cloud_library_provider_all">Wszystkie</string>
     <string name="cloud_library_refresh">Odśwież bibliotekę w chmurze</string>
     <string name="cloud_library_select_provider">Wybierz dostawcę</string>

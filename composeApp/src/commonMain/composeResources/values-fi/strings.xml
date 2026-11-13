@@ -34,6 +34,9 @@
     <string name="action_reset">Palauta oletusarvo</string>
     <string name="action_resume">Jatka</string>
     <string name="action_retry">Yritä uudelleen</string>
+    <string name="cd_decrease_value">Pienennä: %1$s</string>
+    <string name="cd_increase_value">Suurenna: %1$s</string>
+    <string name="action_refresh">Päivitä</string>
     <string name="action_save">Tallenna</string>
     <string name="action_saving">Tallennetaan…</string>
     <string name="action_switch">Kytkin</string>
@@ -542,6 +545,8 @@
     <string name="compose_player_subtitle_delay">Tekstityksen viive</string>
     <string name="compose_player_subtitles">Tekstitykset</string>
     <string name="compose_player_text_opacity">Tekstin peittävyys</string>
+    <string name="compose_player_timing">Ajoitus</string>
+    <string name="compose_player_text">Teksti</string>
     <string name="compose_player_brightness_level">Kirkkaus %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Mykistetty</string>
@@ -854,6 +859,9 @@
     <string name="remote_pc_check_ip">Etsi PC tästä osoitteesta</string>
     <string name="remote_pc_desktop_addresses">Paikallinen PC-osoite: %1$s</string>
     <string name="remote_pc_saved_devices">Aiemmin yhdistetyt tietokoneet</string>
+    <string name="remote_pc_hero_hint">Avaa Puhelimen kaukosäädin tietokoneella. Käytä samaa tiliä ja verkkoa.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · ei koodia</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · pyytää vahvistusta</string>
     <string name="remote_pc_saved_notice">Tallennetut tietokoneet ovat valmiita yhdistämään uudelleen. Aiemmin hyväksytyt Bluetooth PC:t eivät tarvitse toista koodia, kun molemmilla laitteilla on edelleen suojatut pariliitosavaimet. LAN-yhteydet vaativat edelleen vahvistuksen.</string>
     <string name="remote_pc_forget">Unohda</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -926,6 +934,9 @@
     <string name="remote_window_status_connected">Puhelin yhdistetty</string>
     <string name="remote_window_status_offline">Ei valmis</string>
     <string name="remote_window_other_ways">Muita tapoja muodostaa yhteys</string>
+    <string name="remote_window_local_address">Tietokoneen paikallinen osoite</string>
+    <string name="remote_window_copy_address">Kopioi osoite</string>
+    <string name="remote_window_trouble_caption">Palomuurisäännöt, verkon tyyppi ja portit</string>
     <string name="remote_window_network_section">Verkko</string>
     <string name="remote_firewall_checking">Tarkistetaan Windowsin palomuuria…</string>
     <string name="remote_discovery_unavailable">Automaattinen UDP-etsintä ei ole käytettävissä. Voit silti muodostaa pariliitoksen skannaamalla QR-koodin tai kirjoittamalla tämän tietokoneen IP-osoitteen.</string>
@@ -2285,6 +2296,7 @@
     <string name="cloud_library_play_not_connected">Pilvipalvelua ei ole yhdistetty.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s ei ole yhdistetty.</string>
     <string name="cloud_library_playable_file_count">%1$d toistettavat tiedostot</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d tiedostoa</string>
     <string name="cloud_library_provider_all">Kaikki</string>
     <string name="cloud_library_refresh">Päivitä pilvikirjasto</string>
     <string name="cloud_library_search_label">Hae pilvikirjastosta</string>
@@ -2685,6 +2697,8 @@
     <string name="layout_random_episode_sub">Sekoita jaksot mistä tahansa sarjasta. Tämän poistaminen keskeyttää satunnaistoiston.</string>
     <string name="random_episode_unwatched">Katsomattomat jaksot</string>
     <string name="random_episode_include_watched">Kaikki jaksot</string>
+    <string name="shuffle_pool_episode_count">%1$d jaksoa</string>
+    <string name="shuffle_pool_episode_count_all">%1$d jaksoa, myös katsotut</string>
     <string name="random_episode_empty_subtitle">Jaksoja ei ole sekoitettuna.</string>
     <string name="random_episode_caught_up">Olet katsonut jokaisen jakson. Valitse Kaikki jaksot katsoaksesi uudelleen.</string>
     <string name="random_episode_loading">Ladataan jaksoja…</string>
@@ -2817,7 +2831,10 @@
     <string name="account_credentials_password_step2">Anna sähköpostistasi saamasi koodi ja valitse sitten uusi salasana. Koodi vanhenee automaattisesti.</string>
     <string name="account_credentials_email_step">Pyydä uusi sähköposti vahvistamalla nykyinen salasanasi. Sinun on hyväksyttävä molempiin sähköpostiosoitteisiin lähetetyt linkit.</string>
     <string name="account_credentials_current_password">Nykyinen salasana</string>
+    <string name="cd_show_password">Näytä salasana</string>
+    <string name="cd_hide_password">Piilota salasana</string>
     <string name="account_credentials_verification_code">Sähköpostin vahvistuskoodi</string>
+    <string name="account_credentials_code_placeholder">6-numeroinen koodi</string>
     <string name="account_credentials_new_password">Uusi salasana</string>
     <string name="account_credentials_confirm_password">Vahvista uusi salasana</string>
     <string name="account_credentials_new_email">Uusi sähköpostiosoite</string>
@@ -3056,4 +3073,5 @@
     <string name="changelog_view_github">Näytä GitHub</string>
     <string name="updates_whats_new">Mitä uutta</string>
     <string name="updates_download_size">%1$s lataus</string>
+    <string name="source_filter_result_count">%1$d / %2$d lähdettä</string>
 </resources>

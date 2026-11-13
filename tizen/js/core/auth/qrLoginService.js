@@ -4,6 +4,8 @@ import { SessionStore } from "../storage/sessionStore.js";
 import { ServerConfigurationStore } from "../../data/local/serverConfigurationStore.js";
 import { createDeviceAuthorizationClient, validateDeviceEndpoints } from "./starlitDeviceAuthorization.js";
 import { withRequestTimeout } from "../network/requestTimeout.js";
+// The name the approval page shows; the sign-in screen tells the viewer to approve it.
+export const STARLIT_TV_DEVICE_NAME = "Starlit Samsung TV";
 let client = null;
 let generation = -1;
 let attempt = 0;
@@ -31,7 +33,7 @@ export const QrLoginService = {
       const endpoints = validateDeviceEndpoints(document, config.backendUrl);
       const startedClient = createDeviceAuthorizationClient({ endpoints, fetchImpl: (url, options) => withRequestTimeout(signal => fetch(url, { ...options, signal }), 15000, options.signal) });
       client = startedClient;
-      const result = await startedClient.start("Starlit Samsung TV", AuthManager.getSessionSignal());
+      const result = await startedClient.start(STARLIT_TV_DEVICE_NAME, AuthManager.getSessionSignal());
       if (!isCurrent() || client !== startedClient) { startedClient.cancel(); return null; }
       return result;
     } catch (_) { if (isCurrent()) lastError = "TV authorization unavailable. Check the Starlit account server or continue as guest."; return null; }

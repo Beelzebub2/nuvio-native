@@ -14,15 +14,25 @@ import com.nuvio.app.features.collection.FolderDetailScreen
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.settings.SettingsScreen
+import com.nuvio.app.features.settings.SettingsPage
+import com.nuvio.app.features.settings.SettingsSearchPageScope
 import com.nuvio.app.navigation.AppRoute
+import com.nuvio.app.navigation.AccountSettingsRoute
+import com.nuvio.app.navigation.AddonsSettingsRoute
 import com.nuvio.app.navigation.CollectionEditorPageRoute
 import com.nuvio.app.navigation.CollectionEditorRoute
 import com.nuvio.app.navigation.CollectionsRoute
+import com.nuvio.app.navigation.ContinueWatchingSettingsRoute
 import com.nuvio.app.navigation.DetailRoute
 import com.nuvio.app.rememberOpenMeta
 import com.nuvio.app.navigation.FolderDetailRoute
+import com.nuvio.app.navigation.HomescreenSettingsRoute
+import com.nuvio.app.navigation.LicensesAttributionsSettingsRoute
+import com.nuvio.app.navigation.MetaScreenSettingsRoute
 import com.nuvio.app.navigation.NuvioNavigator
+import com.nuvio.app.navigation.PluginsSettingsRoute
 import com.nuvio.app.navigation.SettingsPageRoute
+import com.nuvio.app.navigation.SupportersContributorsSettingsRoute
 
 @Composable
 internal fun SettingsDestination(
@@ -31,7 +41,22 @@ internal fun SettingsDestination(
     content: @Composable (onBack: () -> Unit) -> Unit,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
-    content(onBack)
+    val targetPage = when (route) {
+        is HomescreenSettingsRoute -> SettingsPage.Homescreen
+        is MetaScreenSettingsRoute -> SettingsPage.MetaScreen
+        is ContinueWatchingSettingsRoute -> SettingsPage.ContinueWatching
+        is AddonsSettingsRoute -> SettingsPage.Addons
+        is PluginsSettingsRoute -> SettingsPage.Plugins
+        is AccountSettingsRoute -> SettingsPage.Account
+        is SupportersContributorsSettingsRoute -> SettingsPage.SupportersContributors
+        is LicensesAttributionsSettingsRoute -> SettingsPage.LicensesAttributions
+        else -> null
+    }
+    if (targetPage != null) {
+        SettingsSearchPageScope(targetPage) { content(onBack) }
+    } else {
+        content(onBack)
+    }
 }
 
 @Composable

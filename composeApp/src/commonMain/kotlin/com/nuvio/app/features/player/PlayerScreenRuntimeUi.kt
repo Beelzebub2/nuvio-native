@@ -990,6 +990,10 @@ private fun PlayerScreenRuntime.BindRemotePlayback(state: PlayerControlsState) {
     val remoteState = RemotePlayback(
         playbackId = identity,
         title = listOf(state.title, state.episodeText).filter { it.isNotBlank() }.joinToString(" • ").take(250),
+        mediaTitle = state.title.take(150),
+        episodeLine = state.episodeText.take(150),
+        // Only web artwork: a local add-on address would not resolve from the phone.
+        poster = poster?.takeIf { it.startsWith("https://") && it.length <= 500 }.orEmpty(),
         playing = state.isPlaying,
         position = state.positionMs,
         duration = state.durationMs,

@@ -202,7 +202,7 @@ class DesktopAccountQrUiTest {
             assertEquals("starlit-pc:1:192.168.1.50", result.text)
             val file = File("build/account-qr-capture/phone-remote-dialog.png").apply { parentFile.mkdirs() }
             ImageIO.write(onNodeWithTag("desktop-remote-window").captureToImage().toAwtImage(), "png", file)
-            onNodeWithText("Close").performClick()
+            onNodeWithContentDescription("Close").performClick()
         } finally {
             DesktopRemote.visible.value = false
             DesktopRemote.hostReady.value = previousReady
@@ -223,16 +223,19 @@ class DesktopAccountQrUiTest {
                 onNodeWithText("Connect phone").performClick()
                 onNodeWithTag("desktop-pairing-qr").assertDoesNotExist()
                 onNodeWithText("Connect this PC to Wi-Fi or Ethernet, then reopen Phone remote to show a QR code.").assertIsDisplayed()
-                onNodeWithText("Close").performClick()
+                onNodeWithContentDescription("Close").performClick()
                 runOnIdle { addresses = listOf("192.168.1.50") }
                 onNodeWithText("Connect phone").performClick()
                 onNodeWithContentDescription("Desktop pairing QR code for 192.168.1.50").assertIsDisplayed()
-                onNodeWithText("Local PC address: 192.168.1.50").assertIsDisplayed()
-                onNodeWithText("Close").performClick()
+                // The redesigned QR card renders the address label and value separately.
+                onNodeWithText("Local PC address").assertIsDisplayed()
+                onNodeWithText("192.168.1.50").assertIsDisplayed()
+                onNodeWithContentDescription("Close").performClick()
                 runOnIdle { addresses = listOf("10.0.0.2") }
                 onNodeWithText("Connect phone").performClick()
                 onNodeWithContentDescription("Desktop pairing QR code for 10.0.0.2").assertIsDisplayed()
-                onNodeWithText("Local PC address: 10.0.0.2").assertIsDisplayed()
+                onNodeWithText("Local PC address").assertIsDisplayed()
+                onNodeWithText("10.0.0.2").assertIsDisplayed()
             } finally {
                 DesktopRemote.visible.value = false
                 DesktopRemote.hostReady.value = previousReady

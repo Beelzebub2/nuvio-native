@@ -1,10 +1,38 @@
 package com.nuvio.app.features.library
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.nuvio.app.core.ui.DialogButton
+import com.nuvio.app.core.ui.NuvioEmptyBlock
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioGroupRow
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioIconChipTone
+import com.nuvio.app.core.ui.NuvioInputField
+import com.nuvio.app.core.ui.NuvioPrimaryButton
+import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.NuvioSectionHeader
+import com.nuvio.app.core.ui.NuvioSegment
+import com.nuvio.app.core.ui.NuvioSegmentedControl
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioSquareIconButtonStyle
+import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioGroupSegment
+import com.nuvio.app.core.ui.nuvioTypeScale
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,9 +50,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GridView
@@ -35,10 +61,7 @@ import androidx.compose.material.icons.rounded.ViewAgenda
 import com.nuvio.app.core.ui.DisintegratingContainer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import com.nuvio.app.core.ui.desktopPageHorizontalPaddingForWidth
@@ -54,7 +77,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -79,7 +101,6 @@ import com.nuvio.app.core.ui.posterGridColumnCountForCatalogWidth
 import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
 import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
-import com.nuvio.app.core.ui.shimmer
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
 import com.nuvio.app.features.cloud.CloudLibraryItemType
@@ -350,7 +371,7 @@ fun LibraryScreen(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(MaterialTheme.colorScheme.background)
+                            .background(MaterialTheme.nuvio.colors.background)
                             .nuvioConsumePointerEvents(),
                     )
                     androidx.compose.foundation.layout.Column(
@@ -401,7 +422,7 @@ fun LibraryScreen(
                                                 } else {
                                                     stringResource(Res.string.library_layout_show_horizontal)
                                                 },
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = MaterialTheme.nuvio.colors.textSecondary,
                                             )
                                         }
                                     }
@@ -450,7 +471,7 @@ fun LibraryScreen(
                                 },
                                 modifier = Modifier.padding(horizontal = libraryPageInset()),
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
                 }
@@ -631,25 +652,25 @@ private fun LazyListScope.cloudLibraryContent(
         }
 
         !uiState.isEnabled -> {
-            item {
-                HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = libraryPageInset()),
+            item(key = "cloud-library-disabled") {
+                CloudLibraryStateCard(
+                    icon = Icons.Rounded.CloudOff,
                     title = stringResource(Res.string.cloud_library_disabled_title),
                     message = stringResource(Res.string.cloud_library_disabled_message),
                     actionLabel = stringResource(Res.string.cloud_library_disabled_action),
-                    onActionClick = onConnectCloudClick,
+                    onAction = onConnectCloudClick,
                 )
             }
         }
 
         !uiState.hasConnectedProvider -> {
-            item {
-                HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = libraryPageInset()),
+            item(key = "cloud-library-connect") {
+                CloudLibraryStateCard(
+                    icon = Icons.Rounded.Cloud,
                     title = stringResource(Res.string.cloud_library_connect_title),
                     message = stringResource(Res.string.cloud_library_connect_message),
                     actionLabel = stringResource(Res.string.cloud_library_connect_action),
-                    onActionClick = onConnectCloudClick,
+                    onAction = onConnectCloudClick,
                 )
             }
         }
@@ -679,7 +700,7 @@ private fun LazyListScope.cloudLibraryContent(
             val selectedItem = filteredItems.firstOrNull { it.stableKey == selectedCloudItemKey }
 
             if (selectedItem != null) {
-                item {
+                item(key = "cloud-library-files-${selectedItem.stableKey}") {
                     CloudLibraryFilePicker(
                         item = selectedItem,
                         onBack = onBackToItems,
@@ -687,24 +708,38 @@ private fun LazyListScope.cloudLibraryContent(
                     )
                 }
             } else {
-                item {
-                    CloudLibraryToolbar(
-                        uiState = uiState,
-                        selectedProviderId = selectedProviderId,
-                        selectedType = effectiveSelectedType,
-                        availableTypes = availableTypes,
-                        onProviderSelected = onProviderSelected,
-                        onTypeSelected = onTypeSelected,
-                        onRefresh = onRefresh,
-                        modifier = Modifier.padding(horizontal = libraryPageInset()),
-                    )
-                }
-
                 item(key = "cloud-library-search") {
                     CloudLibrarySearchField(
                         query = searchQuery,
                         onQueryChange = onSearchQueryChange,
-                        modifier = Modifier.padding(horizontal = libraryPageInset(), vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = libraryPageInset()).padding(top = 4.dp),
+                    )
+                }
+                // Provider and type pickers only matter when there is more than one of either.
+                if (uiState.providers.size > 1 || availableTypes.size > 1 || hasActiveFilter) {
+                    item(key = "cloud-library-filters") {
+                        CloudLibraryFilters(
+                            uiState = uiState,
+                            selectedProviderId = selectedProviderId,
+                            selectedType = effectiveSelectedType,
+                            availableTypes = availableTypes,
+                            onProviderSelected = onProviderSelected,
+                            onTypeSelected = onTypeSelected,
+                            modifier = Modifier.padding(horizontal = libraryPageInset()),
+                        )
+                    }
+                }
+                item(key = "cloud-library-section-header") {
+                    val providerLabel = uiState.providers
+                        .firstOrNull { it.providerId == selectedProviderId }?.providerName
+                        ?: uiState.providers.singleOrNull()?.providerName
+                        ?: stringResource(Res.string.cloud_library_provider_all)
+                    NuvioSectionHeader(
+                        title = stringResource(Res.string.cloud_library_provider_file_count, providerLabel, filteredItems.size)
+                            .uppercase(),
+                        actionLabel = stringResource(Res.string.action_refresh),
+                        onAction = onRefresh,
+                        modifier = Modifier.padding(horizontal = libraryPageInset()).padding(top = 6.dp),
                     )
                 }
 
@@ -716,51 +751,76 @@ private fun LazyListScope.cloudLibraryContent(
                 }
                 failedProviderStates.forEach { providerState ->
                     item(key = "cloud-error-${providerState.providerId}") {
-                        HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = libraryPageInset()),
+                        CloudLibraryStateCard(
+                            icon = Icons.Rounded.ErrorOutline,
+                            tone = NuvioIconChipTone.Warning,
                             title = stringResource(Res.string.cloud_library_load_failed, providerState.providerName),
                             message = providerState.errorMessage.orEmpty(),
-                            actionLabel = stringResource(Res.string.action_retry),
-                            onActionClick = onRefresh,
+                            secondaryActionLabel = stringResource(Res.string.action_retry),
+                            onSecondaryAction = onRefresh,
                         )
                     }
                 }
 
                 if (uiState.isRefreshing && filteredItems.isEmpty()) {
-                    cloudLibrarySkeletonItems()
+                    cloudLibrarySkeletonItems(includeToolbar = false)
                 } else if (filteredItems.isEmpty() && failedProviderStates.isEmpty()) {
-                    item {
-                        HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = libraryPageInset()),
+                    item(key = "cloud-library-empty") {
+                        CloudLibraryStateCard(
+                            icon = if (hasActiveFilter) Icons.Rounded.SearchOff else Icons.Rounded.Cloud,
+                            tone = NuvioIconChipTone.Neutral,
                             title = stringResource(
-                                if (hasActiveFilter) {
-                                    Res.string.cloud_library_no_matches_title
-                                } else {
-                                    Res.string.cloud_library_empty_title
-                                },
+                                if (hasActiveFilter) Res.string.cloud_library_no_matches_title else Res.string.cloud_library_empty_title,
                             ),
                             message = stringResource(
-                                if (hasActiveFilter) {
-                                    Res.string.cloud_library_no_matches_message
-                                } else {
-                                    Res.string.cloud_library_empty_message
-                                },
+                                if (hasActiveFilter) Res.string.cloud_library_no_matches_message else Res.string.cloud_library_empty_message,
                             ),
-                            actionLabel = if (hasActiveFilter) null else stringResource(Res.string.action_retry),
-                            onActionClick = if (hasActiveFilter) null else onRefresh,
+                            secondaryActionLabel = if (hasActiveFilter) null else stringResource(Res.string.action_retry),
+                            onSecondaryAction = if (hasActiveFilter) null else onRefresh,
                         )
                     }
                 } else {
-                    items(
+                    itemsIndexed(
                         items = filteredItems,
-                        key = { item -> item.stableKey },
-                    ) { item ->
+                        key = { _, item -> item.stableKey },
+                    ) { index, item ->
                         CloudLibraryRow(
                             item = item,
+                            isFirst = index == 0,
+                            isLast = index == filteredItems.lastIndex,
                             onClick = { onItemSelected(item) },
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** A cloud state (off, not connected, failed, empty) as a card with an icon chip and one action. */
+@Composable
+private fun CloudLibraryStateCard(
+    icon: ImageVector,
+    title: String,
+    message: String,
+    tone: NuvioIconChipTone = NuvioIconChipTone.Accent,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+) {
+    NuvioSurfaceCard(modifier = Modifier.padding(horizontal = libraryPageInset()), outlined = true) {
+        NuvioEmptyBlock(
+            icon = icon,
+            title = title,
+            message = message,
+            tone = tone,
+            modifier = Modifier.padding(vertical = 8.dp),
+        ) {
+            if (actionLabel != null && onAction != null) {
+                NuvioPrimaryButton(text = actionLabel, onClick = onAction)
+            } else if (secondaryActionLabel != null && onSecondaryAction != null) {
+                DialogButton(text = secondaryActionLabel, onClick = onSecondaryAction)
             }
         }
     }
@@ -772,40 +832,40 @@ private fun CloudLibrarySearchField(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    OutlinedTextField(
+    NuvioInputField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth(),
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        placeholder = { Text(stringResource(Res.string.cloud_library_search_label)) },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = null,
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(Res.string.compose_search_clear),
-                    )
-                }
+        placeholder = stringResource(Res.string.cloud_library_search_label),
+        modifier = modifier,
+        leadingIcon = Icons.Rounded.Search,
+        minHeight = 48.dp,
+        trailingContent = if (query.isEmpty()) {
+            null
+        } else {
+            {
+                NuvioSquareIconButton(
+                    icon = Icons.Rounded.Close,
+                    contentDescription = stringResource(Res.string.compose_search_clear),
+                    onClick = { onQueryChange("") },
+                    size = 36.dp,
+                    style = NuvioSquareIconButtonStyle.Ghost,
+                    iconSize = 18.dp,
+                )
             }
         },
     )
 }
 
-private fun LazyListScope.cloudLibrarySkeletonItems() {
-    item(key = "cloud-library-skeleton-toolbar") {
-        CloudLibrarySkeletonToolbar(
-            modifier = Modifier.padding(horizontal = libraryPageInset()),
-        )
+private fun LazyListScope.cloudLibrarySkeletonItems(includeToolbar: Boolean = true) {
+    if (includeToolbar) {
+        item(key = "cloud-library-skeleton-toolbar") {
+            CloudLibrarySkeletonToolbar(
+                modifier = Modifier.padding(horizontal = libraryPageInset()),
+            )
+        }
     }
-    items(3) {
-        CloudLibrarySkeletonRow()
+    items(3) { index ->
+        CloudLibrarySkeletonRow(isFirst = index == 0, isLast = index == 2)
     }
 }
 
@@ -815,32 +875,27 @@ private fun LibrarySourceSwitch(
     onModeSelected: (LibraryViewMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    NuvioSegmentedControl(
+        segments = listOf(
+            NuvioSegment(LibraryViewMode.Saved, stringResource(Res.string.library_source_saved)),
+            NuvioSegment(LibraryViewMode.Cloud, stringResource(Res.string.library_source_cloud)),
+        ),
+        selected = selectedMode,
+        onSelect = onModeSelected,
+        fillWidth = true,
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        LibraryChip(
-            label = stringResource(Res.string.library_source_saved),
-            selected = selectedMode == LibraryViewMode.Saved,
-            onClick = { onModeSelected(LibraryViewMode.Saved) },
-        )
-        LibraryChip(
-            label = stringResource(Res.string.library_source_cloud),
-            selected = selectedMode == LibraryViewMode.Cloud,
-            onClick = { onModeSelected(LibraryViewMode.Cloud) },
-        )
-    }
+    )
 }
 
+/** Provider and type pickers for the cloud list. */
 @Composable
-private fun CloudLibraryToolbar(
+private fun CloudLibraryFilters(
     uiState: CloudLibraryUiState,
     selectedProviderId: String?,
     selectedType: CloudLibraryItemType?,
     availableTypes: List<CloudLibraryItemType>,
     onProviderSelected: (String?) -> Unit,
     onTypeSelected: (CloudLibraryItemType?) -> Unit,
-    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val providerOptions = buildList {
@@ -872,163 +927,96 @@ private fun CloudLibraryToolbar(
     val selectedTypeLabel = selectedType?.let { type -> cloudLibraryTypeLabel(type) }
         ?: stringResource(Res.string.cloud_library_type_all)
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                NuvioDropdownChip(
-                    title = stringResource(Res.string.cloud_library_select_provider),
-                    label = selectedProviderName,
-                    selectedKey = selectedProviderId.orEmpty(),
-                    options = providerOptions,
-                    enabled = providerOptions.size > 1,
-                    onSelected = { option ->
-                        onProviderSelected(option.key.ifBlank { null })
-                    },
-                )
-                NuvioDropdownChip(
-                    title = stringResource(Res.string.cloud_library_select_type),
-                    label = selectedTypeLabel,
-                    selectedKey = selectedType?.name.orEmpty(),
-                    options = typeOptions,
-                    enabled = typeOptions.size > 1,
-                    onSelected = { option ->
-                        val type = option.key
-                            .takeIf { it.isNotBlank() }
-                            ?.let(CloudLibraryItemType::valueOf)
-                        onTypeSelected(type)
-                    },
-                )
-            }
-            IconButton(onClick = onRefresh) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = stringResource(Res.string.cloud_library_refresh),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryChip(
-    label: String,
-    selected: Boolean,
-    loading: Boolean = false,
-    error: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) colorScheme.primaryContainer else colorScheme.surfaceContainerLow,
-        border = if (selected) BorderStroke(1.dp, colorScheme.primary.copy(alpha = 0.45f)) else null,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-                .shimmer(loading),
-            style = MaterialTheme.typography.labelMedium,
-            color = when {
-                error -> colorScheme.error
-                selected -> colorScheme.onPrimaryContainer
-                else -> colorScheme.onSurfaceVariant
+        NuvioDropdownChip(
+            title = stringResource(Res.string.cloud_library_select_provider),
+            label = selectedProviderName,
+            selectedKey = selectedProviderId.orEmpty(),
+            options = providerOptions,
+            enabled = providerOptions.size > 2,
+            onSelected = { option ->
+                onProviderSelected(option.key.ifBlank { null })
             },
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        )
+        NuvioDropdownChip(
+            title = stringResource(Res.string.cloud_library_select_type),
+            label = selectedTypeLabel,
+            selectedKey = selectedType?.name.orEmpty(),
+            options = typeOptions,
+            enabled = typeOptions.size > 2 || selectedType != null,
+            onSelected = { option ->
+                val type = option.key
+                    .takeIf { it.isNotBlank() }
+                    ?.let(CloudLibraryItemType::valueOf)
+                onTypeSelected(type)
+            },
         )
     }
 }
 
+/** One cloud item in the lazy file group: icon chip, name, size and state, and a chevron. */
 @Composable
 private fun CloudLibraryRow(
     item: CloudLibraryItem,
+    isFirst: Boolean,
+    isLast: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tokens = MaterialTheme.nuvio
     val playableCount = item.playableFiles.size
-    Surface(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = cloudRowInset(), vertical = 6.dp)
-            .clickable(enabled = playableCount > 0, onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+            .padding(horizontal = libraryPageInset())
+            .nuvioGroupSegment(
+                isFirst = isFirst,
+                isLast = isLast,
+                containerColor = tokens.colors.surface,
+                borderColor = tokens.colors.borderSubtle,
+                radius = if (isDesktop) NuvioTokens.Radius.xl else NuvioTokens.Radius.lg,
+            ),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = cloudLibrarySubtitle(item),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = cloudLibraryStatusLine(item),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (playableCount > 0) {
-                    IconButton(onClick = onClick) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = stringResource(Res.string.action_play),
-                        )
-                    }
-                }
-            }
-            item.progressFraction?.takeIf { it in 0f..0.999f }?.let { progress ->
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        if (!isFirst) NuvioGroupDivider()
+        NuvioGroupRow(
+            title = item.name,
+            description = cloudLibraryMetaLine(item),
+            onClick = onClick,
+            enabled = playableCount > 0,
+            titleMaxLines = 1,
+            descriptionMaxLines = 1,
+            leading = {
+                NuvioIconChip(
+                    icon = if (playableCount > 1) Icons.Rounded.VideoLibrary else Icons.Rounded.Movie,
+                    tone = if (playableCount > 0) NuvioIconChipTone.Accent else NuvioIconChipTone.Neutral,
                 )
-            }
-        }
+            },
+            meta = {
+                item.progressFraction?.takeIf { it in 0f..0.999f }?.let { progress ->
+                    NuvioProgressBar(
+                        progress = progress,
+                        modifier = Modifier.padding(top = 6.dp),
+                        trackColor = tokens.colors.textPrimary.copy(alpha = tokens.opacity.pressed),
+                        fillColor = tokens.colors.accent,
+                    )
+                }
+            },
+            trailing = {
+                if (playableCount > 0) {
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = stringResource(Res.string.action_play),
+                        tint = tokens.colors.textMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+        )
     }
 }
 
@@ -1039,159 +1027,88 @@ private fun CloudLibraryFilePicker(
     onFileSelected: (CloudLibraryFile) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = cloudRowInset(), vertical = 6.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    val tokens = MaterialTheme.nuvio
+    NuvioGroup(
+        modifier = modifier.padding(horizontal = libraryPageInset()),
+        isTablet = isDesktop,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(Res.string.action_back),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = stringResource(Res.string.cloud_library_file_picker_title),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            val files = item.playableFiles
-            if (files.isEmpty()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.cloud_library_no_files_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = stringResource(Res.string.cloud_library_no_files_message),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                files.forEach { file ->
-                    CloudLibraryFileRow(
-                        file = file,
-                        onClick = { onFileSelected(file) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CloudLibraryFileRow(
-    file: CloudLibraryFile,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .size(18.dp),
-                    imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+            NuvioSquareIconButton(
+                icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = stringResource(Res.string.action_back),
+                onClick = onBack,
+                size = 36.dp,
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    modifier = Modifier.weight(1f),
-                    text = file.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = file.sizeBytes?.let { size -> formatCloudBytes(size) }.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = tokens.colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = stringResource(Res.string.cloud_library_play_file),
-                    tint = MaterialTheme.colorScheme.primary,
+                Text(
+                    text = stringResource(Res.string.cloud_library_file_picker_title),
+                    style = MaterialTheme.nuvioTypeScale.bodySm,
+                    color = tokens.colors.textMuted,
+                )
+            }
+        }
+        val files = item.playableFiles
+        if (files.isEmpty()) {
+            NuvioGroupDivider(startInset = 0.dp)
+            NuvioEmptyBlock(
+                icon = Icons.Rounded.SearchOff,
+                title = stringResource(Res.string.cloud_library_no_files_title),
+                message = stringResource(Res.string.cloud_library_no_files_message),
+                tone = NuvioIconChipTone.Neutral,
+                modifier = Modifier.padding(16.dp),
+            )
+        } else {
+            files.forEach { file ->
+                NuvioGroupDivider(startInset = 0.dp)
+                NuvioGroupRow(
+                    title = file.name,
+                    description = file.sizeBytes?.let { size -> formatCloudBytes(size) },
+                    onClick = { onFileSelected(file) },
+                    titleMaxLines = 2,
+                    leading = { NuvioIconChip(Icons.AutoMirrored.Rounded.InsertDriveFile) },
+                    trailing = {
+                        NuvioSquareIconButton(
+                            icon = Icons.Rounded.PlayArrow,
+                            contentDescription = stringResource(Res.string.cloud_library_play_file),
+                            onClick = { onFileSelected(file) },
+                            style = NuvioSquareIconButtonStyle.AccentSoft,
+                            iconSize = 18.dp,
+                        )
+                    },
                 )
             }
         }
     }
 }
 
+/** "1.4 GB · Cached" or "3 playable files · Torrents" for the second line of a cloud row. */
 @Composable
-private fun cloudLibrarySubtitle(item: CloudLibraryItem): String {
-    val fileLine = when (val playableCount = item.playableFiles.size) {
+private fun cloudLibraryMetaLine(item: CloudLibraryItem): String {
+    val playableCount = item.playableFiles.size
+    val fileLine = when (playableCount) {
         0 -> stringResource(Res.string.cloud_library_no_playable_files)
-        1 -> item.playableFiles.first().name
+        1 -> null
         else -> stringResource(Res.string.cloud_library_playable_file_count, playableCount)
     }
-    return listOf(item.providerName, cloudLibraryTypeLabel(item.type), fileLine).joinToString(" • ")
-}
-
-@Composable
-private fun cloudLibraryStatusLine(item: CloudLibraryItem): String {
-    val fallback = if (item.playableFiles.isEmpty()) {
-        stringResource(Res.string.cloud_library_no_playable_files)
-    } else {
-        stringResource(Res.string.cloud_library_status_ready)
-    }
     return listOfNotNull(
-        item.status?.toDisplayStatus(),
         item.sizeBytes?.let(::formatCloudBytes),
-        item.progressFraction?.let { "${(it * 100f).toInt()}%" },
-    ).joinToString(" • ").ifBlank { fallback }
+        item.status?.toDisplayStatus() ?: stringResource(Res.string.cloud_library_status_ready).takeIf { playableCount > 0 },
+        fileLine,
+        cloudLibraryTypeLabel(item.type),
+        item.progressFraction?.takeIf { it in 0f..0.999f }?.let { "${(it * 100f).toInt()}%" },
+    ).distinct().joinToString(" · ")
 }
 
 @Composable
@@ -1226,64 +1143,40 @@ private fun String.toDisplayStatus(): String =
 private fun CloudLibrarySkeletonToolbar(
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SkeletonBlock(width = 112.dp, height = 36.dp, cornerRadius = 12.dp)
-            SkeletonBlock(width = 92.dp, height = 36.dp, cornerRadius = 12.dp)
-        }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SkeletonBlock(modifier = Modifier.fillMaxWidth(), height = 48.dp, cornerRadius = 12.dp)
+        SkeletonBlock(width = 140.dp, height = 14.dp, cornerRadius = 6.dp)
     }
 }
 
 @Composable
 private fun CloudLibrarySkeletonRow(
+    isFirst: Boolean,
+    isLast: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    val tokens = MaterialTheme.nuvio
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = cloudRowInset(), vertical = 6.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+            .padding(horizontal = libraryPageInset())
+            .nuvioGroupSegment(
+                isFirst = isFirst,
+                isLast = isLast,
+                containerColor = tokens.colors.surface,
+                borderColor = tokens.colors.borderSubtle,
+            ),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        if (!isFirst) NuvioGroupDivider()
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.74f),
-                        height = 18.dp,
-                        cornerRadius = 6.dp,
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        height = 14.dp,
-                        cornerRadius = 6.dp,
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.52f),
-                        height = 12.dp,
-                        cornerRadius = 6.dp,
-                    )
-                }
-                SkeletonBlock(width = 48.dp, height = 48.dp, cornerRadius = 24.dp)
+            SkeletonBlock(width = 36.dp, height = 36.dp, cornerRadius = 12.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SkeletonBlock(modifier = Modifier.fillMaxWidth(0.74f), height = 16.dp, cornerRadius = 6.dp)
+                SkeletonBlock(modifier = Modifier.fillMaxWidth(0.5f), height = 12.dp, cornerRadius = 6.dp)
             }
         }
     }

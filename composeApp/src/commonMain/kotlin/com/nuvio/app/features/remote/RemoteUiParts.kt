@@ -5,34 +5,39 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.VerifiedUser
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
@@ -40,249 +45,30 @@ import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogHint
 import com.nuvio.app.core.ui.DialogOption
 import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.NuvioActionLabel
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioIconChip
+import com.nuvio.app.core.ui.NuvioIconChipTone
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.NuvioModalBottomSheet
+import com.nuvio.app.core.ui.NuvioSquareIconButton
+import com.nuvio.app.core.ui.NuvioStatusEyebrow
+import com.nuvio.app.core.ui.NuvioStatusTone
+import com.nuvio.app.core.ui.NuvioTag
+import com.nuvio.app.core.ui.NuvioTagStyle
+import com.nuvio.app.core.ui.dismissNuvioBottomSheet
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioHighlightedRowColor
+import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.surfaceInset
+import com.nuvio.app.core.ui.tabular
 import com.nuvio.app.features.streams.SourceResultsFilters
 import com.nuvio.app.features.streams.SourceResultsFilterControls
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
-
-/** Semantic color roles used across the remote screens. */
-internal enum class RemoteTone { Neutral, Accent, Success, Warning, Danger }
-
-@Composable
-internal fun RemoteTone.color(): Color {
-    val colors = MaterialTheme.nuvio.colors
-    return when (this) {
-        RemoteTone.Neutral -> colors.textMuted
-        RemoteTone.Accent -> colors.accent
-        RemoteTone.Success -> colors.success
-        RemoteTone.Warning -> colors.warning
-        RemoteTone.Danger -> colors.danger
-    }
-}
-
-/** A bordered surface. A tone tints it for notices such as firewall warnings. */
-@Composable
-internal fun RemoteCard(
-    modifier: Modifier = Modifier,
-    tone: RemoteTone? = null,
-    contentPadding: Dp = 16.dp,
-    spacing: Dp = 12.dp,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val tokens = MaterialTheme.nuvio
-    val shape = tokens.shapes.card
-    val tint = tone?.color()
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(tint?.copy(alpha = 0.08f) ?: tokens.colors.surface)
-            .border(tokens.borders.thin, tint?.copy(alpha = 0.32f) ?: tokens.colors.borderSubtle, shape)
-            .padding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(spacing),
-        content = content,
-    )
-}
-
-@Composable
-internal fun RemoteSectionHeader(title: String, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            title.uppercase(),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.nuvio.colors.textMuted,
-        )
-        trailing?.invoke()
-    }
-}
-
-@Composable
-internal fun RemoteStatusPill(text: String, tone: RemoteTone, modifier: Modifier = Modifier, busy: Boolean = false) {
-    val color = tone.color()
-    Row(
-        modifier
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
-            .testTag("remote-status-pill"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (busy) NuvioLoadingIndicator(Modifier.size(10.dp), color = color, size = 10.dp)
-        else Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-        Text(
-            text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.nuvio.colors.textPrimary,
-            maxLines = 1,
-        )
-    }
-}
-
-/** A round tinted icon, with a progress ring while [busy]. */
-@Composable
-internal fun RemoteIconBadge(icon: ImageVector, tone: RemoteTone = RemoteTone.Accent, size: Dp = 48.dp, busy: Boolean = false) {
-    val color = tone.color()
-    Box(
-        Modifier.size(size).clip(CircleShape).background(color.copy(alpha = 0.14f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (busy) CircularProgressIndicator(Modifier.fillMaxSize(), color = color, strokeWidth = 2.dp)
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(size * 0.48f))
-    }
-}
-
-/** One way to connect (QR, network, Bluetooth, address), laid out in a two-column grid. */
-@Composable
-internal fun RemoteActionTile(
-    icon: ImageVector,
-    label: String,
-    caption: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    primary: Boolean = false,
-    selected: Boolean = false,
-    enabled: Boolean = true,
-) {
-    val tokens = MaterialTheme.nuvio
-    val shape = tokens.shapes.compactCard
-    val container = when {
-        primary -> tokens.colors.accent
-        selected -> tokens.colors.accent.copy(alpha = tokens.opacity.selected)
-        else -> tokens.colors.surface
-    }
-    val contentColor = if (primary) tokens.colors.onAccent else tokens.colors.textPrimary
-    Column(
-        modifier
-            .clip(shape)
-            .background(container)
-            .border(
-                tokens.borders.thin,
-                when {
-                    primary -> Color.Transparent
-                    selected -> tokens.colors.accent.copy(alpha = 0.5f)
-                    else -> tokens.colors.borderSubtle
-                },
-                shape,
-            )
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.45f)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = if (primary) contentColor else tokens.colors.accent, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.height(2.dp))
-        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = contentColor, maxLines = 2)
-        if (caption != null) {
-            Text(
-                caption,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (primary) contentColor.copy(alpha = 0.78f) else tokens.colors.textMuted,
-                maxLines = 3,
-            )
-        }
-    }
-}
-
-/** Lays tiles out two per row with equal heights. */
-@Composable
-internal fun RemoteTileGrid(tiles: List<@Composable (Modifier) -> Unit>, spacing: Dp = 10.dp) {
-    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
-        tiles.chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                row.forEach { tile -> tile(Modifier.weight(1f).fillMaxHeight()) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-internal fun RemoteDeviceRow(
-    name: String,
-    detail: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    active: Boolean = false,
-    trailing: @Composable (RowScope.() -> Unit)? = null,
-) {
-    val tokens = MaterialTheme.nuvio
-    val shape = tokens.shapes.compactCard
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(tokens.colors.surface)
-            .border(tokens.borders.thin, tokens.colors.borderSubtle, shape)
-            .then(if (active) Modifier else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick))
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RemoteIconBadge(icon, size = 40.dp)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
-                color = tokens.colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted, maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-        }
-        if (trailing != null) trailing() else if (active) {
-            Text(stringResource(Res.string.remote_pc_status_connected), style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold, color = tokens.colors.textSecondary)
-        } else {
-            Text(stringResource(Res.string.remote_pc_connect), style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold, color = tokens.colors.accent)
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null,
-                tint = tokens.colors.accent, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-/** Equal-width tabs in the same pill style as the app's segmented controls. */
-@Composable
-internal fun <T> RemoteTabs(tabs: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    val tokens = MaterialTheme.nuvio
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(tokens.colors.surface)
-            .border(tokens.borders.thin, tokens.colors.borderSubtle, RoundedCornerShape(14.dp))
-            .padding(4.dp)
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        tabs.forEach { (key, label) ->
-            val isSelected = key == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) tokens.colors.accent.copy(alpha = tokens.opacity.selected) else Color.Transparent)
-                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(key) }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (isSelected) tokens.colors.textPrimary else tokens.colors.textSecondary,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
-}
 
 /** The six-digit code as separate boxes, split in half so it is easy to compare aloud. */
 @Composable
@@ -365,22 +151,30 @@ internal fun RemotePairingPanel(
     Column(
         modifier.widthIn(max = 520.dp).fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        RemoteIconBadge(Icons.Rounded.VerifiedUser, size = 64.dp, busy = confirmed)
-        Text(stringResource(Res.string.remote_verify_title), style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary, textAlign = TextAlign.Center)
-        Text(stringResource(Res.string.remote_verify_prompt), style = MaterialTheme.typography.bodyMedium,
-            color = tokens.colors.textSecondary, textAlign = TextAlign.Center)
+        NuvioIconChip(size = 56.dp, shape = tokens.shapes.button) {
+            if (confirmed) {
+                NuvioLoadingIndicator(Modifier.size(26.dp), color = LocalContentColor.current, size = 26.dp)
+            } else {
+                Icon(Icons.Rounded.VerifiedUser, contentDescription = null, modifier = Modifier.size(28.dp))
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(Res.string.remote_verify_title), style = MaterialTheme.nuvioTypeScale.titleMd,
+                color = tokens.colors.textPrimary, textAlign = TextAlign.Center)
+            Text(stringResource(Res.string.remote_verify_prompt), style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textMuted, textAlign = TextAlign.Center)
+        }
         RemotePairingCode(pairing.code, large = true)
         Text(
             if (confirmed) stringResource(Res.string.remote_verify_waiting)
             else stringResource(Res.string.remote_verify_peer, pairing.peer),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.nuvioTypeScale.bodySm,
             color = tokens.colors.textMuted,
             textAlign = TextAlign.Center,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DialogButton(text = stringResource(Res.string.remote_handoff_reject), onClick = onReject)
             DialogButton(
                 text = stringResource(Res.string.remote_verify_confirm),
@@ -404,13 +198,13 @@ internal fun RemoteHandoffDialog(title: String, onAccept: () -> Unit, onReject: 
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(tokens.shapes.compactCard)
-                .background(tokens.colors.textPrimary.copy(alpha = tokens.opacity.subtle))
+                .background(tokens.colors.surfaceCard)
                 .padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = tokens.colors.accent, modifier = Modifier.size(22.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, color = tokens.colors.textPrimary)
+            NuvioIconChip(Icons.Rounded.PlayArrow)
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tokens.colors.textPrimary)
         }
         DialogButtons {
             DialogButton(text = stringResource(Res.string.remote_handoff_reject), onClick = onReject)
@@ -423,9 +217,19 @@ internal fun RemoteHandoffDialog(title: String, onAccept: () -> Unit, onReject: 
     }
 }
 
-/** A list picker for episodes, subtitles or sources, opened from a playback tile. */
+/**
+ * A list picker for episodes, subtitles, audio tracks or sources, opened from a playback option.
+ * [actionLabel] adds an inline action under the list, such as looking for add-on subtitles.
+ */
 @Composable
-internal fun RemoteChoiceList(title: String, items: List<RemoteChoice>, command: String, onDismiss: () -> Unit) {
+internal fun RemoteChoiceList(
+    title: String,
+    items: List<RemoteChoice>,
+    command: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
     DialogSurface(onDismissRequest = onDismiss, title = title) {
         Column(
             Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
@@ -442,6 +246,18 @@ internal fun RemoteChoiceList(title: String, items: List<RemoteChoice>, command:
                 )
             }
         }
+        if (actionLabel != null && onAction != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.nuvio.colors.accent,
+                    modifier = Modifier.size(18.dp))
+                NuvioActionLabel(
+                    text = actionLabel,
+                    onClick = onAction,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            }
+        }
         DialogButtons {
             DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
         }
@@ -449,6 +265,7 @@ internal fun RemoteChoiceList(title: String, items: List<RemoteChoice>, command:
 }
 
 /** Initial source selection happens on the phone; the PC keeps the actual stream objects. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun RemoteSourcePickerDialog(
     requestId: String,
@@ -477,130 +294,161 @@ internal fun RemoteSourcePickerDialog(
     val searching = connected && !noResponse && (!matches || state.phase == "searching")
     val preparing = connected && matches && state.phase == "preparing"
     val playing = connected && matches && state.phase == "playing"
-    DialogSurface(
-        onDismissRequest = onDismiss,
-        title = stringResource(Res.string.remote_source_picker_title),
-        message = stringResource(Res.string.remote_source_picker_device, pcName.ifBlank { "Starlit PC" }),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (matches && state.title.isNotBlank()) {
-                Text(state.title, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold, color = tokens.colors.textPrimary,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            if (searching || preparing) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    NuvioLoadingIndicator(Modifier.size(18.dp), color = tokens.colors.accent, size = 18.dp)
+    val showSources = matches && state.sources.isNotEmpty() && state.phase in setOf("searching", "ready")
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val title = stringResource(Res.string.remote_source_picker_title)
+    NuvioModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        stringResource(if (preparing) Res.string.remote_source_picker_preparing else Res.string.remote_source_picker_searching),
-                        style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textSecondary,
+                        title,
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = tokens.colors.textPrimary,
+                    )
+                    NuvioStatusEyebrow(
+                        text = stringResource(Res.string.remote_source_picker_device, pcName.ifBlank { "Starlit PC" }),
+                        tone = if (connected) NuvioStatusTone.Success else NuvioStatusTone.Danger,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+                NuvioSquareIconButton(
+                    icon = Icons.Rounded.Close,
+                    contentDescription = stringResource(Res.string.action_close),
+                    onClick = { scope.launch { dismissNuvioBottomSheet(sheetState, onDismiss) } },
+                    size = 36.dp,
+                    iconSize = 18.dp,
+                )
             }
-            if (playing) {
-                RemoteCard(tone = RemoteTone.Success) {
-                    Text(stringResource(Res.string.remote_source_picker_playing),
-                        style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textPrimary)
+            if (matches && state.title.isNotBlank()) {
+                Text(state.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                    color = tokens.colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            // One status at a time takes the list area; a search that already has results keeps
+            // the list and reports progress in a single line above it.
+            when {
+                !connected -> SourcePickerStatus(Icons.Rounded.LinkOff, NuvioIconChipTone.Danger,
+                    stringResource(Res.string.remote_source_picker_disconnected))
+                noResponse && !matches -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
+                    stringResource(Res.string.remote_source_picker_timeout))
+                playing -> SourcePickerStatus(Icons.Rounded.CheckCircle, NuvioIconChipTone.Success,
+                    stringResource(Res.string.remote_source_picker_playing))
+                preparing -> SourcePickerStatus(Icons.Rounded.DesktopWindows, NuvioIconChipTone.Accent,
+                    stringResource(Res.string.remote_source_picker_preparing), busy = true)
+                matches && state.phase == "empty" -> SourcePickerStatus(Icons.Rounded.SearchOff, NuvioIconChipTone.Neutral,
+                    stringResource(Res.string.remote_source_picker_empty))
+                matches && state.phase == "error" -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Danger,
+                    state.message.ifBlank { stringResource(Res.string.remote_source_picker_error) })
+                searching && !showSources -> SourcePickerStatus(Icons.Rounded.Search, NuvioIconChipTone.Accent,
+                    stringResource(Res.string.remote_source_picker_searching), busy = true)
+                searching -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NuvioLoadingIndicator(Modifier.size(16.dp), color = tokens.colors.accent, size = 16.dp)
+                    Text(stringResource(Res.string.remote_source_picker_searching),
+                        style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
                 }
             }
-            if (!connected) {
-                DialogHint(stringResource(Res.string.remote_source_picker_disconnected), isError = true)
-            } else if (noResponse && !matches) {
-                DialogHint(stringResource(Res.string.remote_source_picker_timeout), isError = true)
-            } else if (matches && state.phase == "empty") {
-                DialogHint(stringResource(Res.string.remote_source_picker_empty))
-            } else if (matches && state.phase == "error") {
-                DialogHint(state.message.ifBlank { stringResource(Res.string.remote_source_picker_error) }, isError = true)
-            } else if (matches && state.message.isNotBlank() && state.phase != "playing") {
+            if (connected && matches && state.message.isNotBlank() && state.phase !in setOf("playing", "error")) {
                 DialogHint(state.message)
             }
-            if (matches && state.sources.isNotEmpty() && state.phase in setOf("searching", "ready")) {
+            if (showSources) {
                 SourceResultsFilterControls(
                     filters = sourceFilters,
                     availability = filterAvailability,
                     onFiltersChange = { sourceFilters = it },
                     modifier = Modifier.fillMaxWidth(),
+                    resultCount = filteredSources.size,
+                    onSheet = true,
+                    contentPadding = PaddingValues(0.dp),
+                    searchHeight = 44.dp,
                 )
                 if (filteredSources.isEmpty()) {
-                    DialogHint(stringResource(Res.string.source_filter_no_matches))
-                    Text(
-                        stringResource(Res.string.source_filter_adjust),
-                        color = tokens.colors.textSecondary,
-                        style = MaterialTheme.typography.bodySmall,
+                    SourcePickerStatus(
+                        icon = Icons.Rounded.SearchOff,
+                        tone = NuvioIconChipTone.Neutral,
+                        text = stringResource(Res.string.source_filter_no_matches),
+                        detail = stringResource(Res.string.source_filter_adjust),
                     )
                 } else {
-                val recommended = filteredSources.firstOrNull { it.recommended }
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())
-                        .testTag("remote-initial-sources"),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (recommended != null) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                stringResource(Res.string.streams_best_match),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = tokens.colors.accent,
-                            )
-                            val reason = when (recommended.recommendationReason) {
-                                "AutoPlayRules" -> Res.string.streams_best_match_auto_play
-                                "ReadyToPlay" -> Res.string.streams_best_match_ready
-                                "HighestQuality" -> Res.string.streams_best_match_highest_quality
-                                else -> null
-                            }
-                            if (reason != null) {
-                                Text(
-                                    stringResource(reason),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = tokens.colors.textSecondary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
+                    // The PC's pick leads the list; the rest keep the PC's order.
+                    val ordered = filteredSources.filter { it.recommended }.take(1) +
+                        filteredSources.filterNot { it.recommended }
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                            .testTag("remote-initial-sources"),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        NuvioGroup(containerColor = tokens.colors.surfaceInset) {
+                            ordered.forEachIndexed { index, source ->
+                                if (index > 0) NuvioGroupDivider(startInset = 16.dp, endInset = 16.dp)
+                                RemoteSourceOption(
+                                    source = source,
+                                    isRecommended = index == 0 && source.recommended,
+                                    onClick = { DesktopRemote.selectPhoneSource(source.id) },
                                 )
                             }
                         }
-                        RemoteSourceOption(
-                            source = recommended,
-                            isRecommended = true,
-                            onClick = { DesktopRemote.selectPhoneSource(recommended.id) },
-                        )
+                        if (filteredSources.any { it.qualityStars != null }) {
+                            Text(
+                                stringResource(Res.string.remote_source_quality_hint),
+                                style = MaterialTheme.nuvioTypeScale.bodySm,
+                                color = tokens.colors.textMuted,
+                            )
+                        }
                     }
-                    filteredSources.filterNot { it.recommended }.forEach { source ->
-                        RemoteSourceOption(
-                            source = source,
-                            isRecommended = false,
-                            onClick = { DesktopRemote.selectPhoneSource(source.id) },
-                        )
-                    }
-                    if (filteredSources.any { it.qualityStars != null }) {
-                        Text(
-                            stringResource(Res.string.remote_source_quality_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tokens.colors.textMuted,
-                        )
-                    }
-                }
                 }
             }
+            DialogButton(
+                text = stringResource(Res.string.remote_source_picker_controller),
+                onClick = onOpenController,
+                modifier = Modifier.fillMaxWidth(),
+                style = if (playing) DialogButtonStyle.Primary else DialogButtonStyle.Secondary,
+            )
         }
-        DialogButtons {
-            DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
-            if (playing) {
-                DialogButton(
-                    text = stringResource(Res.string.remote_source_picker_controller),
-                    onClick = onOpenController,
-                    style = DialogButtonStyle.Primary,
-                )
-            }
+    }
+}
+
+/** A centred status in the picker's list area: searching, preparing, playing, or a problem. */
+@Composable
+private fun SourcePickerStatus(
+    icon: ImageVector,
+    tone: NuvioIconChipTone,
+    text: String,
+    detail: String? = null,
+    busy: Boolean = false,
+) {
+    val tokens = MaterialTheme.nuvio
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        NuvioIconChip(size = 48.dp, tone = tone) {
+            if (busy) NuvioLoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current, size = 24.dp)
+            else Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = tokens.colors.textPrimary,
+            textAlign = TextAlign.Center,
+        )
+        if (detail != null) {
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted, textAlign = TextAlign.Center)
         }
     }
 }
 
 /** One touch target per PC-resolved stream; all additional fields are optional for older peers. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RemoteSourceOption(
     source: RemoteChoice,
@@ -608,99 +456,90 @@ private fun RemoteSourceOption(
     onClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
-    val shape = RoundedCornerShape(12.dp)
-    Column(
-        Modifier.fillMaxWidth()
-            .clip(shape)
-            .background(if (isRecommended) tokens.colors.accent.copy(alpha = 0.12f) else tokens.colors.surface)
-            .border(
-                tokens.borders.thin,
-                if (isRecommended) tokens.colors.accent.copy(alpha = 0.65f) else tokens.colors.borderSubtle,
-                shape,
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                if (isRecommended) nuvioHighlightedRowColor(tokens.colors.surfaceInset) else tokens.colors.surfaceInset,
             )
             .clickable(role = Role.Button, onClick = onClick)
             .testTag("remote-source-option")
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 source.label,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isRecommended) FontWeight.SemiBold else FontWeight.Medium,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
                 color = tokens.colors.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Icon(
-                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = if (isRecommended) tokens.colors.accent else tokens.colors.textMuted,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        if (source.quality != null || source.qualityStars != null) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                source.quality?.let { quality ->
-                    Text(
-                        quality,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = tokens.colors.textSecondary,
-                    )
+            if (isRecommended || source.cached) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (isRecommended) NuvioTag(stringResource(Res.string.streams_best_match), style = NuvioTagStyle.Accent)
+                    if (source.cached) NuvioTag(stringResource(Res.string.remote_source_cached), style = NuvioTagStyle.Success)
                 }
-                source.qualityStars?.takeIf { it in 1..5 }?.let { stars ->
-                    val description = stringResource(Res.string.remote_source_quality_stars, stars)
-                    Row(
-                        Modifier.semantics(mergeDescendants = true) { contentDescription = description },
-                        horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                        repeat(5) { index ->
-                            Icon(
-                                if (index < stars) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = if (index < stars) tokens.colors.accent else tokens.colors.textMuted,
-                            )
+            }
+            val meta = buildList {
+                source.quality?.takeIf { it.isNotBlank() }?.let(::add)
+                source.seeders?.let { add(stringResource(Res.string.remote_source_seeders, it)) }
+                source.peers?.let { add(stringResource(Res.string.remote_source_peers, it)) }
+            }
+            val stars = source.qualityStars?.takeIf { it in 1..5 }
+            if (stars != null || meta.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (stars != null) {
+                        val description = stringResource(Res.string.remote_source_quality_stars, stars)
+                        Row(
+                            Modifier.semantics(mergeDescendants = true) { contentDescription = description },
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            repeat(5) { index ->
+                                Icon(
+                                    Icons.Rounded.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = if (index < stars) tokens.colors.accent else tokens.colors.textPrimary.copy(alpha = 0.18f),
+                                )
+                            }
                         }
+                    }
+                    val metaStyle = MaterialTheme.nuvioTypeScale.bodySm.tabular
+                    meta.forEachIndexed { index, part ->
+                        if (index > 0) Text("·", style = metaStyle, color = tokens.colors.textMuted)
+                        Text(part, style = metaStyle, color = tokens.colors.textMuted, maxLines = 1)
                     }
                 }
             }
-        }
-        if (source.seeders != null || source.peers != null || source.cached) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                source.seeders?.let { count ->
-                    Text(
-                        stringResource(Res.string.remote_source_seeders, count),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = tokens.colors.textSecondary,
-                    )
+            if (isRecommended) {
+                val reason = when (source.recommendationReason) {
+                    "AutoPlayRules" -> Res.string.streams_best_match_auto_play
+                    "ReadyToPlay" -> Res.string.streams_best_match_ready
+                    "HighestQuality" -> Res.string.streams_best_match_highest_quality
+                    else -> null
                 }
-                source.peers?.let { count ->
-                    Text(
-                        stringResource(Res.string.remote_source_peers, count),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = tokens.colors.textSecondary,
-                    )
-                }
-                if (source.cached) {
-                    Text(
-                        stringResource(Res.string.remote_source_cached),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = tokens.colors.accent,
-                    )
+                if (reason != null) {
+                    Text(stringResource(reason), style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+        Icon(
+            Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            tint = if (isRecommended) tokens.colors.accent else tokens.colors.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

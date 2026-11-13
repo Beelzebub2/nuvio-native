@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
-import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.features.addons.httpRequestRaw
@@ -267,7 +266,8 @@ private object SupportersContributorsRepository {
 fun SupportersContributorsSettingsScreen(
     onBack: () -> Unit,
 ) {
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.SupportersContributors,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {

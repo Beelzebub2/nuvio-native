@@ -20,9 +20,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.Menu
 import com.nuvio.app.core.ui.MenuItem
-import com.nuvio.app.core.ui.NuvioActionSize
-import com.nuvio.app.core.ui.NuvioCompactActionButton
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.app.core.ui.NuvioPillButton
+import com.nuvio.app.core.ui.NuvioSquareIconButton
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
+import com.nuvio.app.core.ui.tabular
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -41,14 +48,16 @@ internal actual fun DesktopPairingQr(addresses: List<String>) {
     val address = selected ?: return
     val matrix = remember(address) { remoteQrMatrix(checkNotNull(remotePairingQrPayload(address))) }
     val description = stringResource(Res.string.remote_qr_image_description, address)
+    val tokens = MaterialTheme.nuvio
+    val clipboard = LocalClipboardManager.current
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // A white tile with rounded corners keeps the code readable on dark themes.
         Box(
-            Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(10.dp),
+            Modifier.size(260.dp).background(Color.White, RoundedCornerShape(16.dp)).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.size(208.dp).testTag("desktop-pairing-qr").semantics {
+            Canvas(Modifier.fillMaxSize().testTag("desktop-pairing-qr").semantics {
                 contentDescription = description
             }) {
                 drawRect(Color.White)
@@ -61,20 +70,45 @@ internal actual fun DesktopPairingQr(addresses: List<String>) {
                 }
             }
         }
-        Text(
-            address,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.nuvio.colors.textPrimary,
-        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(tokens.colors.surfaceCard, tokens.shapes.compactCard)
+                .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    stringResource(Res.string.remote_window_local_address),
+                    style = MaterialTheme.nuvioTypeScale.labelSm,
+                    fontWeight = FontWeight.Normal,
+                    color = tokens.colors.textMuted,
+                )
+                Text(
+                    address,
+                    style = MaterialTheme.typography.bodyLarge.tabular,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tokens.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            NuvioSquareIconButton(
+                icon = Icons.Rounded.ContentCopy,
+                contentDescription = stringResource(Res.string.remote_window_copy_address),
+                onClick = { clipboard.setText(AnnotatedString(address)) },
+                size = 36.dp,
+                iconSize = 18.dp,
+            )
+        }
         if (candidates.size > 1) {
             var expanded by remember { mutableStateOf(false) }
             Box {
-                NuvioCompactActionButton(
-                    label = stringResource(Res.string.remote_qr_change_network),
-                    icon = Icons.Rounded.Lan,
-                    trailingIcon = Icons.Rounded.ExpandMore,
-                    size = NuvioActionSize.Small,
+                NuvioPillButton(
+                    text = stringResource(Res.string.remote_qr_change_network),
                     onClick = { expanded = true },
+                    icon = Icons.Rounded.Lan,
                 )
                 Menu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     candidates.forEach { candidate ->

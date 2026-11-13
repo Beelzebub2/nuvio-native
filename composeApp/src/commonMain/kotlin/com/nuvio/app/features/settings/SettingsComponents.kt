@@ -226,7 +226,7 @@ internal fun SettingsSection(
     val tokens = MaterialTheme.nuvio
     Column {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().settingsSearchTarget(title),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -251,6 +251,7 @@ internal fun SettingsNavigationRow(
     enabled: Boolean = true,
     isTablet: Boolean,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
+    searchKey: String? = null,
     onClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -261,6 +262,7 @@ internal fun SettingsNavigationRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title, searchKey)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding)
             .alpha(if (enabled) NuvioTokens.Opacity.visible else tokens.opacity.medium),
@@ -351,6 +353,7 @@ internal fun SettingsSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.Start,
@@ -406,6 +409,7 @@ internal fun SettingsChipRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .padding(
                 horizontal = if (isTablet) 20.dp else 16.dp,
                 vertical = if (isTablet) 16.dp else 14.dp,

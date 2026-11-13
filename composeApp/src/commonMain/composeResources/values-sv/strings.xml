@@ -34,6 +34,9 @@
     <string name="action_reset">Återställ till standard</string>
     <string name="action_resume">Återuppta</string>
     <string name="action_retry">Försök igen</string>
+    <string name="cd_decrease_value">Minska %1$s</string>
+    <string name="cd_increase_value">Öka %1$s</string>
+    <string name="action_refresh">Uppdatera</string>
     <string name="action_save">Spara</string>
     <string name="action_saving">Sparar...</string>
     <string name="action_switch">Switch</string>
@@ -542,6 +545,8 @@
     <string name="compose_player_subtitle_delay">Undertextfördröjning</string>
     <string name="compose_player_subtitles">Undertexter</string>
     <string name="compose_player_text_opacity">Textopacitet</string>
+    <string name="compose_player_timing">Timing</string>
+    <string name="compose_player_text">Text</string>
     <string name="compose_player_brightness_level">Ljusstyrka %1$s</string>
     <string name="compose_player_volume_level">Volym %1$s</string>
     <string name="compose_player_muted">Avstängd</string>
@@ -854,6 +859,9 @@
     <string name="remote_pc_check_ip">Hitta PC på den här adressen</string>
     <string name="remote_pc_desktop_addresses">Lokal PC-adress: %1$s</string>
     <string name="remote_pc_saved_devices">Tidigare parade datorer</string>
+    <string name="remote_pc_hero_hint">Öppna Telefonens fjärrkontroll på datorn. Använd samma konto och nätverk.</string>
+    <string name="remote_pc_saved_bluetooth">Bluetooth · ingen kod behövs</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · ber om bekräftelse</string>
     <string name="remote_pc_saved_notice">Sparade datorer är redo att återanslutas. Tidigare godkända Bluetooth-datorer behöver ingen annan kod när båda enheterna fortfarande har sina skyddade parningsnycklar. LAN-anslutningar kräver fortfarande bekräftelse.</string>
     <string name="remote_pc_forget">Glöm</string>
     <string name="remote_pc_wake">Wake PC</string>
@@ -926,6 +934,9 @@
     <string name="remote_window_status_connected">Telefon ansluten</string>
     <string name="remote_window_status_offline">Inte redo</string>
     <string name="remote_window_other_ways">Andra sätt att ansluta</string>
+    <string name="remote_window_local_address">Datorns lokala adress</string>
+    <string name="remote_window_copy_address">Kopiera adress</string>
+    <string name="remote_window_trouble_caption">Brandväggsregler, nätverkstyp och portar</string>
     <string name="remote_window_network_section">Nätverk</string>
     <string name="remote_firewall_checking">Kontrollerar Windows-brandväggen...</string>
     <string name="remote_discovery_unavailable">Automatisk UDP-upptäckt är inte tillgänglig. Du kan fortfarande para ihop genom att skanna QR-koden eller ange denna dators IP-adress.</string>
@@ -2285,6 +2296,7 @@
     <string name="cloud_library_play_not_connected">Molntjänsten är inte ansluten.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s är inte ansluten.</string>
     <string name="cloud_library_playable_file_count">%1$d spelbara filer</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d filer</string>
     <string name="cloud_library_provider_all">Alla</string>
     <string name="cloud_library_refresh">Uppdatera molnbiblioteket</string>
     <string name="cloud_library_search_label">Sök i molnbiblioteket</string>
@@ -2685,6 +2697,8 @@
     <string name="layout_random_episode_sub">Blanda avsnitt från alla serier. Om du stänger av detta pausas shuffle.</string>
     <string name="random_episode_unwatched">Osedda avsnitt</string>
     <string name="random_episode_include_watched">Alla avsnitt</string>
+    <string name="shuffle_pool_episode_count">%1$d avsnitt</string>
+    <string name="shuffle_pool_episode_count_all">%1$d avsnitt, inklusive sedda</string>
     <string name="random_episode_empty_subtitle">Inga avsnitt är tillgängliga att blanda.</string>
     <string name="random_episode_caught_up">Du har sett varje avsnitt. Välj Alla avsnitt för att se igen.</string>
     <string name="random_episode_loading">Laddar avsnitt...</string>
@@ -2817,7 +2831,10 @@
     <string name="account_credentials_password_step2">Ange koden från din e-post och välj sedan ett nytt lösenord. Koden upphör automatiskt.</string>
     <string name="account_credentials_email_step">Bekräfta ditt nuvarande lösenord för att begära ett nytt e-postmeddelande. Du måste godkänna länkar som skickas till båda e-postadresserna.</string>
     <string name="account_credentials_current_password">Aktuellt lösenord</string>
+    <string name="cd_show_password">Visa lösenord</string>
+    <string name="cd_hide_password">Dölj lösenord</string>
     <string name="account_credentials_verification_code">E-postverifieringskod</string>
+    <string name="account_credentials_code_placeholder">6-siffrig kod</string>
     <string name="account_credentials_new_password">Nytt lösenord</string>
     <string name="account_credentials_confirm_password">Bekräfta nytt lösenord</string>
     <string name="account_credentials_new_email">Ny e-postadress</string>
@@ -3056,4 +3073,5 @@
     <string name="changelog_view_github">Visa på GitHub</string>
     <string name="updates_whats_new">Vad är nytt</string>
     <string name="updates_download_size">%1$s ladda ner</string>
+    <string name="source_filter_result_count">%1$d av %2$d källor</string>
 </resources>

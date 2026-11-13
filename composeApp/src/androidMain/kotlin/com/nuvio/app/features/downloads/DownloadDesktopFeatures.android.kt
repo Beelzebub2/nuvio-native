@@ -2,38 +2,38 @@ package com.nuvio.app.features.downloads
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioSegment
+import com.nuvio.app.core.ui.NuvioSegmentedControl
+import com.nuvio.app.core.ui.NuvioSegmentedSize
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.surfaceInset
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.features.details.MetaDetails
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.downloads_mobile_parallel
-import nuvio.composeapp.generated.resources.downloads_mobile_pause_all
-import nuvio.composeapp.generated.resources.downloads_mobile_resume_all
 import org.jetbrains.compose.resources.stringResource
 
 internal actual object DownloadDesktopFeatures {
@@ -64,35 +64,34 @@ internal actual object DownloadDesktopFeatures {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** How many downloads run at once. Pause all and Resume all sit on the Active section header. */
 @Composable
 internal actual fun DownloadManagementControls() {
-    val state by DownloadsRepository.uiState.collectAsState()
     var parallel by remember { mutableIntStateOf(DownloadDesktopFeatures.parallelDownloads()) }
-    var showParallel by remember { mutableStateOf(false) }
-    val active = state.items.count { it.status == DownloadStatus.Downloading }
-    val paused = state.items.count { it.status == DownloadStatus.Paused }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (active > 0) TextButton(onClick = DownloadsRepository::pauseActiveDownloads) {
-                Text(stringResource(Res.string.downloads_mobile_pause_all))
-            }
-            if (paused > 0) TextButton(onClick = DownloadsRepository::resumeAll) {
-                Text(stringResource(Res.string.downloads_mobile_resume_all))
-            }
-            OutlinedButton(onClick = { showParallel = !showParallel }) {
-                Text(stringResource(Res.string.downloads_mobile_parallel, parallel))
-            }
-        }
-        if (showParallel) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (1..5).forEach { count ->
-                FilterChip(selected = parallel == count, onClick = {
+    val tokens = MaterialTheme.nuvio
+    NuvioGroup {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(Res.string.downloads_mobile_parallel, parallel),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = tokens.colors.textPrimary,
+            )
+            NuvioSegmentedControl(
+                segments = (1..5).map { count -> NuvioSegment(count, "$count") },
+                selected = parallel,
+                onSelect = { count ->
                     DownloadDesktopFeatures.setParallelDownloads(count)
                     parallel = count
-                    showParallel = false
-                }, label = { Text("$count") })
-            }
+                },
+                size = NuvioSegmentedSize.Dense,
+                containerColor = tokens.colors.surfaceInset,
+            )
         }
     }
 }

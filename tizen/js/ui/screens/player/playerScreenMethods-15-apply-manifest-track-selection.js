@@ -155,22 +155,28 @@ export function createPlayerScreenMethods15() {
                 <div id="playerEndsAt" class="player-ends-at${isLivePlayback ? " hidden" : ""}">${escapeHtml(t("player_ends_at", ["--:--"], "Ends at %1$s"))}</div>
               </div>
               <div class="player-controls-bottom">
-                <div class="player-meta">
+                <div class="player-meta${header.subtitle ? " has-episode" : ""}">
                   <div class="player-title">${escapeHtml(header.title)}</div>
                   <div id="playerPlaybackBadges" class="player-playback-badges" hidden></div>
                   ${header.subtitle ? `<div class="player-subtitle">${escapeHtml(header.subtitle)}</div>` : ""}
                   ${header.meta ? `<div class="player-meta-secondary">${escapeHtml(header.meta)}</div>` : ""}
                 </div>
                 <div class="player-controls-bar">
-                  <div id="playerProgressShell" class="player-progress-shell focusable${isLivePlayback ? " hidden" : ""}" role="slider" aria-label="${escapeAttribute(t("cd_seek_bar", {}, "Seek bar"))}" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="-1" data-player-pointer-action="progress">
+                  <div id="playerProgressShell" class="player-progress-shell has-chapter-ticks focusable${isLivePlayback ? " hidden" : ""}" role="slider" aria-label="${escapeAttribute(t("cd_seek_bar", {}, "Seek bar"))}" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="-1" data-player-pointer-action="progress">
                     <div class="player-progress-track">
                       <div id="playerProgressBuffered" class="player-progress-buffered"></div>
                       <div id="playerProgressFill" class="player-progress-fill"></div>
+                      <div id="playerProgressTicks" class="player-progress-ticks" aria-hidden="true"></div>
                     </div>
+                  </div>
+                  <div class="player-time-row${isLivePlayback ? " hidden" : ""}" aria-hidden="true">
+                    <span id="playerElapsedLabel" class="player-elapsed-label">0:00</span>
+                    <span id="playerChapterLabel" class="player-chapter-label"></span>
+                    <span id="playerRemainingLabel" class="player-remaining-label"></span>
                   </div>
                   <div class="player-controls-row">
                     <div id="playerControlButtons" class="player-control-buttons"></div>
-                    <div id="playerTimeLabel" class="player-time-label">${isLivePlayback ? escapeHtml(t("player_live_watched", ["0:00"], "LIVE  %1$s")) : "0:00 / 0:00"}</div>
+                    <div id="playerTimeLabel" class="player-time-label${isLivePlayback ? " is-live" : ""}">${isLivePlayback ? escapeHtml(t("player_live_watched", ["0:00"], "LIVE  %1$s")) : "0:00 / 0:00"}</div>
                   </div>
                 </div>
               </div>
@@ -246,6 +252,10 @@ export function createPlayerScreenMethods15() {
             progressFill: uiRoot.querySelector("#playerProgressFill"),
             controlButtons: uiRoot.querySelector("#playerControlButtons"),
             timeLabel: uiRoot.querySelector("#playerTimeLabel"),
+            elapsedLabel: uiRoot.querySelector("#playerElapsedLabel"),
+            remainingLabel: uiRoot.querySelector("#playerRemainingLabel"),
+            chapterLabel: uiRoot.querySelector("#playerChapterLabel"),
+            progressTicks: uiRoot.querySelector("#playerProgressTicks"),
             startupErrorButton: uiRoot.querySelector("#playerStartupErrorOverlay .player-startup-error-button")
           }
         : null;

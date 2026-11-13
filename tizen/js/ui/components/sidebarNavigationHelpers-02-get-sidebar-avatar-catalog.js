@@ -82,16 +82,36 @@ export function renderLegacySidebar({ selectedRoute = "home", profile = null, la
   const showProfileSelector = Boolean(profileState.showProfileSelector && profileState.activeProfileName);
   const collapsible = Boolean(layout?.collapseSidebar);
   const performanceConstrained = getTvRuntimePerformanceProfile().isPerformanceConstrained;
+  // Rail order top to bottom: brand mark, destinations, then Settings and the
+  // profile switcher pinned to the bottom. DOM order is the D-pad order.
+  const mainItems = items.filter((item) => item.action !== "gotoSettings");
+  const footerItems = items.filter((item) => item.action === "gotoSettings");
+  const renderNavItem = (item, index) => `
+          <button class="home-nav-item focusable${selectedItem.action === item.action ? " selected" : ""}"
+                  data-nav-zone="sidebar"
+                  data-nav-index="${index}"
+                  data-action="${item.action}"
+                  aria-label="${itemLabel(item)}">
+            <span class="home-nav-icon-wrap">${iconMarkup(item, "home-nav-icon")}</span>
+            <span class="home-nav-label">${itemLabel(item)}</span>
+          </button>
+        `;
   return `
     <aside class="home-sidebar root-sidebar root-sidebar-legacy${expanded ? " expanded content-expanded" : ""}${performanceConstrained ? " performance-constrained" : ""}"
            data-selected-route="${selectedRoute}"
            data-collapsible="${collapsible ? "true" : "false"}">
-      ${
-        showProfileSelector
-          ? `
+      <img class="home-rail-brand" src="assets/brand/app_logo_mark.png" alt="" aria-hidden="true" />
+      <div class="home-nav-list">
+        ${mainItems.map((item, index) => renderNavItem(item, index)).join("")}
+      </div>
+      <div class="home-nav-footer">
+        ${footerItems.map((item, index) => renderNavItem(item, mainItems.length + index)).join("")}
+        ${
+          showProfileSelector
+            ? `
         <button class="home-profile-pill focusable"
                 data-nav-zone="sidebar"
-                data-nav-index="0"
+                data-nav-index="${items.length}"
                 data-action="gotoAccount"
                 aria-label="${t("sidebar.switchProfile")}">
           <span class="home-profile-avatar" style="background:${profileState.activeProfileColorHex || getThemeAccentFallback()}">
@@ -104,23 +124,8 @@ export function renderLegacySidebar({ selectedRoute = "home", profile = null, la
           <span class="home-profile-name">${profileState.activeProfileName || t("sidebar.profileFallback")}</span>
         </button>
       `
-          : ""
-      }
-      <div class="home-nav-list">
-        ${items
-          .map(
-            (item, index) => `
-          <button class="home-nav-item focusable${selectedItem.action === item.action ? " selected" : ""}"
-                  data-nav-zone="sidebar"
-                  data-nav-index="${showProfileSelector ? index + 1 : index}"
-                  data-action="${item.action}"
-                  aria-label="${itemLabel(item)}">
-            <span class="home-nav-icon-wrap">${iconMarkup(item, "home-nav-icon")}</span>
-            <span class="home-nav-label">${itemLabel(item)}</span>
-          </button>
-        `
-          )
-          .join("")}
+            : ""
+        }
       </div>
     </aside>
   `;

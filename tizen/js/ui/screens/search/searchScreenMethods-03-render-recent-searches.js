@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./searchScreen.js";
+import { renderSearchKeyboard } from "./searchKeyboard.js";
 export function createSearchScreenMethods03() {
   const {
     ScreenUtils,
@@ -76,40 +77,54 @@ export function createSearchScreenMethods03() {
             })}
             <main class="home-main search-content">
               <section class="search-header${this.layoutPrefs?.discoverLocation === "in_search" ? "" : " no-discover"}${this.voiceSearchSupported ? "" : " no-voice"}">
-                ${
-                  this.layoutPrefs?.discoverLocation === "in_search"
-                    ? `
-                  <button class="search-discover-btn focusable" data-action="openDiscover">
-                    <span class="search-action-icon material-icons" aria-hidden="true">explore</span>
-                  </button>
-                `
-                    : ""
-                }
+                <div class="search-field">
+                  <svg class="search-field-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M16.5 16.5 21 21"></path></svg>
+                  <input
+                    id="searchInput"
+                    class="search-input-field focusable"
+                    type="text"
+                    data-action="searchInput"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="${escapeHtml(t("search_placeholder", {}, "Search movies & series"))}"
+                    value="${escapeHtml(queryText)}"
+                  />
+                  <span class="search-field-hint" aria-hidden="true">${escapeHtml(
+                    this.voiceSearchSupported
+                      ? t("search_hint_voice_button", {}, "Select the microphone to search by voice")
+                      : t("search_hint_tv_keyboard", {}, "Press OK here for your TV's own keyboard")
+                  )}</span>
+                </div>
                 ${
                   this.voiceSearchSupported
                     ? `<button
                   class="search-voice-btn focusable${this.voiceSearchActive ? " listening" : ""}"
                   data-action="openVoice"
-                  aria-label="Voice search"
+                  aria-label="${escapeHtml(t("search_voice", {}, "Voice search"))}"
                 >
                   <span class="search-action-icon material-icons" aria-hidden="true">mic</span>
                 </button>`
                     : ""
                 }
-                <input
-                  id="searchInput"
-                  class="search-input-field focusable"
-                  type="text"
-                  data-action="searchInput"
-                  autocomplete="off"
-                  autocapitalize="off"
-                  spellcheck="false"
-                  placeholder="${escapeHtml(t("search_placeholder", {}, "Search movies & series"))}"
-                  value="${escapeHtml(queryText)}"
-                />
+                ${
+                  this.layoutPrefs?.discoverLocation === "in_search"
+                    ? `
+                  <button class="search-discover-btn focusable" data-action="openDiscover" aria-label="${escapeHtml(t("discover_title", {}, "Discover"))}">
+                    <span class="search-action-icon material-icons" aria-hidden="true">explore</span>
+                  </button>
+                `
+                    : ""
+                }
               </section>
               ${this.renderRows()}
             </main>
+            <div class="search-keyboard-pane">${renderSearchKeyboard({
+              space: t("search_key_space", {}, "Space"),
+              backspace: t("search_key_backspace", {}, "Delete"),
+              clear: t("search_key_clear", {}, "Clear"),
+              keyboard: t("search_keyboard", {}, "Keyboard")
+            })}</div>
           </div>
         `;
       this.searchRouteEnterPending = false;
@@ -236,10 +251,19 @@ export function createSearchScreenMethods03() {
     },
     buildNavigationModel() {
       const header = [
-        this.container?.querySelector(".search-discover-btn.focusable"),
+        this.container?.querySelector("#searchInput.focusable"),
         this.container?.querySelector(".search-voice-btn.focusable"),
-        this.container?.querySelector("#searchInput.focusable")
+        this.container?.querySelector(".search-discover-btn.focusable")
       ].filter(Boolean);
+      const keyboard = [];
+      Array.from(this.container?.querySelectorAll(".search-keyboard .search-key.focusable") || []).forEach((node) => {
+        const row = Number(node.dataset.keyRow || 0);
+        const col = Number(node.dataset.keyCol || 0);
+        node.dataset.navZone = "keyboard";
+        node.dataset.navRow = String(row);
+        node.dataset.navCol = String(col);
+        (keyboard[row] = keyboard[row] || [])[col] = node;
+      });
       const resultRows = Array.from(this.container?.querySelectorAll(".search-results-row .search-results-track") || [])
         .map((track) => Array.from(track.querySelectorAll(".search-result-card.focusable")))
         .filter((row) => row.length > 0);
@@ -267,7 +291,7 @@ export function createSearchScreenMethods03() {
         recentClear.dataset.navZone = "recent-clear";
         recentClear.dataset.navCol = "0";
       }
-      this.navModel = { header, rows, recentClear };
+      this.navModel = { header, rows, recentClear, keyboard };
       if (!this.lastContentFocus) {
         const fallback = this.getDefaultHeaderFocusTarget() || rows[0]?.[0] || null;
         if (fallback) {
@@ -306,6 +330,9 @@ export function createSearchScreenMethods03() {
           ...(this.rowFocusedIndexByKey || {}),
           [rowKey]: Math.max(0, Number(node.dataset.navCol || 0))
         };
+      }
+      if (String(node.dataset.navZone || "") === "keyboard") {
+        this.lastSearchKeyboardFocus = { row: Number(node.dataset.navRow || 0), col: Number(node.dataset.navCol || 0) };
       }
       this.lastContentFocus = {
         zone: String(node.dataset.navZone || ""),

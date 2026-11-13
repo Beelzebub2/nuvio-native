@@ -30,6 +30,9 @@
     <string name="action_reset">Restablecer</string>
     <string name="action_resume">Reanudar</string>
     <string name="action_retry">Reintentar</string>
+    <string name="cd_decrease_value">Reducir %1$s</string>
+    <string name="cd_increase_value">Aumentar %1$s</string>
+    <string name="action_refresh">Actualizar</string>
     <string name="action_save">Guardar</string>
     <string name="action_saving">Guardando…</string>
     <string name="action_switch">Cambiar</string>
@@ -471,6 +474,8 @@
     <string name="compose_player_subtitle_delay">Retraso de subtítulos</string>
     <string name="compose_player_subtitles">Subtítulos</string>
     <string name="compose_player_text_opacity">Opacidad del texto</string>
+    <string name="compose_player_timing">Sincronización</string>
+    <string name="compose_player_text">Texto</string>
     <string name="compose_player_brightness_level">Brillo %1$s</string>
     <string name="compose_player_volume_level">Volumen %1$s</string>
     <string name="compose_player_muted">Silenciado</string>
@@ -1901,6 +1906,7 @@
     <string name="cloud_library_play_not_connected">El servicio en la nube no está conectado.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s no está conectado.</string>
     <string name="cloud_library_playable_file_count">%1$d archivos reproducibles</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d archivos</string>
     <string name="cloud_library_provider_all">Todo</string>
     <string name="cloud_library_refresh">Actualizar biblioteca en la nube</string>
     <string name="cloud_library_search_label">Buscar en biblioteca en la nube</string>

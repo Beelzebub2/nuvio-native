@@ -48,7 +48,8 @@ class EpisodeShuffleSheetTest {
     fun choosingUnwatchedShowsPreviewAndSpoilerProtection() {
         show()
         compose.onNodeWithText("Unwatched episodes").performClick()
-        compose.onNodeWithText("Your episode").assertIsDisplayed()
+        // The section label is drawn in capitals.
+        compose.onNodeWithText("Your episode".uppercase()).assertIsDisplayed()
         compose.onNodeWithText("The first episode").assertIsDisplayed()
         compose.onNodeWithText("Artwork hidden to avoid spoilers").assertIsDisplayed()
         compose.onNodeWithText("This is the only episode in your selection.").assertIsDisplayed()
