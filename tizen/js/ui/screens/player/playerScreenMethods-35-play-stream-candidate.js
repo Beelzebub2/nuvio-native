@@ -232,7 +232,11 @@ export function createPlayerScreenMethods35() {
                 : canUseP2p
                   ? t(
                       "player_error_failed_start_torrent",
-                      [t("player_error_playback_fallback", {}, "Playback error")],
+                      [
+                        canUseTizenP2p && resolveFailureDetail
+                          ? resolveFailureDetail
+                          : t("player_error_playback_fallback", {}, "Playback error")
+                      ],
                       "Failed to start torrent: %1$s"
                     )
                   : t("player_error_playback_fallback", {}, "Playback error"));
@@ -256,7 +260,13 @@ export function createPlayerScreenMethods35() {
             : !p2pEnabled && canResolveP2p
               ? t("player_error_p2p_disabled", {}, "P2P streaming is disabled. Enable P2P in Settings to play torrent streams.")
               : canUseP2p
-                ? t("stream.p2p.failed", {}, "Could not start this torrent stream.")
+                ? canUseTizenP2p && resolveFailureDetail
+                  ? t(
+                      "player_error_failed_start_torrent",
+                      [resolveFailureDetail],
+                      "Failed to start torrent: %1$s"
+                    )
+                  : t("stream.p2p.failed", {}, "Could not start this torrent stream.")
                 : fallbackError || t("stream.debrid.unavailable", {}, "This Debrid source needs a configured Debrid account.");
           this.sourcesError = this.formatPlaybackErrorForSources(sourceErrorMessage, {
             streamCandidate,
