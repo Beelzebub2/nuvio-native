@@ -1870,6 +1870,16 @@ JNIEXPORT jlong JNICALL NP(bufferedPositionMs)(JNIEnv *, jobject, jlong handle) 
     return static_cast<jlong>(buffered * 1000.0);
 }
 
+JNIEXPORT jlong JNICALL NP(videoDimensions)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p || !p->mpv) return 0;
+    int64_t width = 0, height = 0;
+    if (mpv_get_property(p->mpv, "video-params/w", MPV_FORMAT_INT64, &width) < 0 ||
+        mpv_get_property(p->mpv, "video-params/h", MPV_FORMAT_INT64, &height) < 0 ||
+        width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+    return static_cast<jlong>((static_cast<uint64_t>(width) << 32) | static_cast<uint64_t>(height));
+}
+
 JNIEXPORT jboolean JNICALL NP(isLoading)(JNIEnv *, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return JNI_TRUE;

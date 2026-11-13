@@ -1636,9 +1636,6 @@ button:disabled {
   display: none;
 }
 
-.time-pill {
-  display: none;
-}
 
 .action-row {
   margin-top: 16px;
@@ -1810,67 +1807,6 @@ button:disabled {
   background: var(--theme-accent-strong);
 }
 
-.action.rtx-compare-action {
-  position: relative;
-  touch-action: none;
-}
-
-.action.rtx-compare-action[aria-pressed="true"] {
-  background: var(--theme-selected-surface);
-  color: var(--theme-text-primary);
-}
-
-.action.rtx-compare-action:focus-visible {
-  outline: 2px solid var(--theme-focus);
-  outline-offset: -3px;
-}
-
-@media (min-width: 761px) {
-  .action.rtx-compare-action::after {
-    content: "RTX";
-    position: absolute;
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 9px;
-    font-weight: 750;
-    letter-spacing: .02em;
-    color: var(--theme-text-primary);
-  }
-
-  .action.rtx-compare-action svg {
-    transform: translateY(-4px);
-  }
-}
-
-/* On/off buttons: dimmed icon when off, accent bar under the icon when on. */
-.action.toggle-action {
-  position: relative;
-}
-
-.action.toggle-action[aria-pressed="false"] svg {
-  opacity: .45;
-}
-
-.action.toggle-action::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 7px;
-  width: 14px;
-  height: 3px;
-  margin-left: -7px;
-  border-radius: 2px;
-  background: var(--theme-accent);
-  opacity: 0;
-  transition: opacity .15s ease;
-  pointer-events: none;
-}
-
-.action.toggle-action[aria-pressed="true"]::after {
-  opacity: 1;
-}
-
 @media (min-width: 761px) {
   .action-row {
     justify-content: space-between;
@@ -1997,11 +1933,10 @@ button:disabled {
   }
 }
 
-/* The auto toggles also live in Settings, so they give way first when space runs out. */
+/* Medium windows: the volume slider gives way first; toggles live in Playback options. */
 @media (min-width: 761px) and (max-width: 959px) {
-  #autoSkipIntroButton,
-  #autoNextEpisodeButton {
-    display: none;
+  .action-group .volume-slider {
+    width: 84px;
   }
 }
 
@@ -3775,4 +3710,930 @@ svg {
   fill: currentColor;
   stroke: none;
   pointer-events: none;
+}
+
+/* ===== Control bar redesign (2026-11) =====================================
+   Title moves to the header, transport + volume sit left, library/tracks/view
+   sit right, and the on/off playback toggles live in one Playback options
+   popover. Icons share one 1.8px stroke family. */
+
+:root {
+  --overlay-bottom: calc(var(--slider-bottom) + 124px);
+  --bar-button: 44px;
+  --bar-icon: 22px;
+  --bar-play: 56px;
+  --popover-surface: rgba(17, 18, 23, .95);
+  --popover-border: rgba(255, 255, 255, .08);
+}
+
+.top-gradient {
+  height: 190px;
+  background: linear-gradient(to bottom, rgba(4, 5, 7, .7), rgba(4, 5, 7, 0));
+}
+
+.bottom-gradient {
+  height: 300px;
+  background: linear-gradient(to top, rgba(4, 5, 7, .9) 0%, rgba(4, 5, 7, .55) 45%, rgba(4, 5, 7, 0) 100%);
+}
+
+/* Header: back + title on the left, tools on the right. */
+.header {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.header-lead {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.header .metadata {
+  padding: 0;
+}
+
+.header .title {
+  -webkit-line-clamp: 1;
+  letter-spacing: -.01em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .45);
+}
+
+.episode-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.episode-row .episode {
+  margin-top: 0;
+  min-width: 0;
+  color: rgba(255, 255, 255, .82);
+}
+
+.status-chips {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+.player-chip {
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, .88);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-actions {
+  gap: 2px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(8, 9, 12, .38);
+}
+
+.header-button {
+  width: var(--bar-button);
+  height: var(--bar-button);
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, .92);
+}
+
+.header-button:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+
+.header-button:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+
+.header-button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.header-button.back-button {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .1);
+}
+
+.header-button.back-button:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+.header-button.back-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Seek bar: chapters split by 3px gaps, buffered range, hover time. */
+.progress {
+  bottom: calc(var(--slider-bottom) - 6px + env(safe-area-inset-bottom));
+  gap: 6px;
+}
+
+.scrub-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.scrub-row .time-pill {
+  flex: 0 0 auto;
+  min-width: 48px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
+}
+
+.scrub-row .time-label {
+  min-width: 56px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, .85);
+  text-align: right;
+  cursor: pointer;
+}
+
+.scrub-row .time-label:hover {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+}
+
+.scrub-wrap {
+  --progress: 0%;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+}
+
+.scrub-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  display: flex;
+  gap: 3px;
+  transform: translateY(-50%);
+  transition: height var(--motion-standard) var(--ease-out);
+  pointer-events: none;
+}
+
+.scrub-wrap:hover .scrub-rail,
+.scrub-wrap:focus-within .scrub-rail {
+  height: 6px;
+}
+
+.rail-seg {
+  position: relative;
+  flex: 1 1 0px;
+  min-width: 2px;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--theme-timeline-track);
+}
+
+.rail-buffer,
+.rail-played {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.rail-buffer {
+  width: 0;
+  background: rgba(255, 255, 255, .3);
+}
+
+.rail-played {
+  right: 0;
+  background: var(--theme-accent-gradient, linear-gradient(var(--theme-timeline-fill), var(--theme-timeline-fill)));
+  background-size: var(--seg-size, 100%) 100%;
+  background-position: var(--seg-pos, 0%) 0;
+  clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
+}
+
+.scrub-thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--progress, 0%);
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--theme-selected-ring), 0 2px 6px rgba(0, 0, 0, .5);
+  transform: scale(.8);
+  transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-standard) ease;
+  pointer-events: none;
+}
+
+.scrub-wrap:hover .scrub-thumb,
+.scrub-wrap:focus-within .scrub-thumb {
+  transform: scale(1);
+}
+
+.scrub-wrap:focus-within .scrub-thumb {
+  box-shadow: 0 0 0 3px var(--theme-focus), 0 2px 6px rgba(0, 0, 0, .5);
+}
+
+.scrub-wrap .scrub {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+
+.scrub-hover {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: var(--hover-x, 0px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(16, 17, 21, .94);
+  color: #fff;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--motion-fast) ease;
+  pointer-events: none;
+}
+
+.scrub-wrap.is-hovering .scrub-hover {
+  opacity: 1;
+}
+
+/* Control row */
+.action-row {
+  margin-top: 0;
+  gap: 16px;
+}
+
+.action-pill.action-group {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+/* Popovers anchor to the whole control area so they open above the seek bar. */
+.action-group-secondary {
+  position: static;
+}
+
+.action-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 24px;
+  margin: 0 8px;
+  background: rgba(255, 255, 255, .18);
+}
+
+.action-group .action {
+  position: relative;
+  width: var(--bar-button);
+  height: var(--bar-button);
+  min-width: var(--bar-button);
+  min-height: var(--bar-button);
+  display: grid;
+  place-items: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, .92);
+  transform: translateZ(0);
+}
+
+.action-group .action:hover,
+.action-group .action.focused:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  transform: translateZ(0);
+}
+
+.action-group .action.focused {
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, .92);
+}
+
+.action-group .action.is-open,
+.action-group .action.is-open:hover {
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+}
+
+.action-group .action:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+
+.action-group .action:active,
+.action-group .action.is-pressed,
+.action-group .action.focused:active,
+.action-group .action.focused.is-pressed {
+  transform: translateZ(0) scale(.94);
+}
+
+.action-group .action svg {
+  width: var(--bar-icon);
+  height: var(--bar-icon);
+}
+
+.action-group .action > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.action-group .action.playback-action,
+.action-group .action.playback-action.focused {
+  width: var(--bar-play);
+  height: var(--bar-play);
+  min-width: var(--bar-play);
+  min-height: var(--bar-play);
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+
+.action-group .action.playback-action:hover,
+.action-group .action.playback-action.focused:hover {
+  background: var(--theme-accent-strong);
+  color: var(--theme-on-accent);
+}
+
+.action-group .action.playback-action svg {
+  width: 24px;
+  height: 24px;
+}
+
+.seek-amount {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 7.5px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  pointer-events: none;
+}
+
+.action-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+.action-badge.speed-badge {
+  top: 2px;
+  right: -3px;
+  height: 14px;
+  border-radius: 6px;
+  line-height: 14px;
+}
+
+/* Volume: 0-200%; a tick marks 100% and boost fills in the accent. */
+.action-group .volume-control {
+  gap: 6px;
+}
+
+.action-group .volume-button {
+  position: relative;
+  width: var(--bar-button);
+  height: var(--bar-button);
+  margin: 0;
+  padding: 0;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, .92);
+}
+
+.action-group .volume-button:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  transform: translateZ(0);
+}
+
+.action-group .volume-button:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+
+.action-group .volume-control svg {
+  width: var(--bar-icon);
+  height: var(--bar-icon);
+  filter: none;
+}
+
+.action-group .volume-slider {
+  width: 112px;
+  height: 24px;
+}
+
+.action-group .volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 3px;
+  background:
+    linear-gradient(to right, transparent calc(50% - 1px), rgba(255, 255, 255, .55) calc(50% - 1px), rgba(255, 255, 255, .55) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(#fff, #fff) left center / min(var(--volume-position), 50%) 100% no-repeat,
+    var(--theme-accent-gradient, linear-gradient(var(--theme-accent), var(--theme-accent))) left center / var(--volume-position) 100% no-repeat,
+    rgba(255, 255, 255, .2);
+}
+
+.action-group .volume-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+}
+
+.volume-value {
+  min-width: 40px;
+  color: rgba(255, 255, 255, .72);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.volume-control.is-boosted .volume-value {
+  color: #fff;
+}
+
+/* Tooltips: label + shortcut, shown on hover and keyboard focus. */
+.has-tip {
+  position: relative;
+}
+
+.tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(16, 17, 21, .96);
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--motion-fast) ease;
+  pointer-events: none;
+}
+
+.tip b {
+  font-weight: 500;
+}
+
+.tip kbd,
+.option-row kbd {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .88);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.has-tip:hover > .tip,
+.has-tip:focus-visible > .tip {
+  opacity: 1;
+  transition-delay: 350ms;
+}
+
+.has-tip.is-open > .tip,
+.player.chrome-hidden .tip {
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
+[data-tip-align="start"] > .tip {
+  left: 0;
+  transform: none;
+}
+
+[data-tip-align="end"] > .tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.header .tip {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+/* Popovers: Playback options and the small-window More menu. */
+.options-anchor {
+  display: flex;
+}
+
+.options-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+  z-index: 35;
+  width: 344px;
+  max-width: calc(100vw - (var(--hp) * 2));
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--popover-border);
+  border-radius: 18px;
+  background: var(--popover-surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.more-menu {
+  width: 300px;
+}
+
+.options-popover {
+  max-height: calc(100vh - 132px);
+  scrollbar-width: thin;
+}
+
+.options-popover::-webkit-scrollbar {
+  width: 6px;
+}
+
+.options-popover::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .2);
+}
+
+.more-menu .option-row {
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.popover-heading {
+  padding: 8px 12px 6px;
+  color: rgba(255, 255, 255, .6);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.popover-divider {
+  height: 1px;
+  margin: 6px 12px;
+  background: var(--popover-border);
+}
+
+.option-row {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: #fff;
+  text-align: left;
+}
+
+.option-row:hover {
+  background: rgba(255, 255, 255, .07);
+}
+
+.option-row:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: -2px;
+}
+
+.option-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .85);
+}
+
+.more-menu .option-icon {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+}
+
+.option-row.toggle-action[aria-pressed="true"] .option-icon {
+  background: var(--theme-selected-surface);
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  color: var(--theme-accent);
+}
+
+.option-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Surround upmix shows its live route status under the title. */
+#surroundUpmixButton {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 0;
+}
+
+#surroundUpmixButton .option-icon {
+  grid-row: 1 / span 2;
+}
+
+#surroundUpmixButton .option-title {
+  grid-column: 2;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+#surroundUpmixButton .option-status {
+  grid-column: 2;
+  color: rgba(255, 255, 255, .65);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+#surroundUpmixButton .option-switch {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+#surroundUpmixButton[data-upmix-status="failed"] .option-status {
+  color: #ffb4a8;
+}
+
+.option-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .22);
+  transition: background-color var(--motion-standard) ease;
+}
+
+.option-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--motion-standard) var(--ease-out);
+}
+
+.option-row.toggle-action[aria-pressed="true"] .option-switch {
+  background: var(--theme-accent);
+}
+
+.option-row.toggle-action[aria-pressed="true"] .option-switch::after {
+  transform: translateX(16px);
+}
+
+.option-row.rtx-compare-action {
+  touch-action: none;
+}
+
+.option-hold {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .1);
+  font-size: 13px;
+  font-style: normal;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.option-row.rtx-compare-action[aria-pressed="true"] .option-hold {
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+}
+
+.option-value {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, .65);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.option-value:empty {
+  display: none;
+}
+
+.option-chevron {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, .6);
+}
+
+/* Skip prompt: a high-contrast pill with its key hint. */
+.skip-prompt {
+  border-radius: 14px;
+  background: #fff;
+  color: #111216;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+
+.skip-prompt:hover {
+  background: #eef0f3;
+}
+
+.skip-prompt-row {
+  gap: 10px;
+  padding: 12px 16px 12px 18px;
+}
+
+.skip-prompt-label {
+  padding-left: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.skip-prompt-key {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .08);
+  color: rgba(0, 0, 0, .65);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.skip-progress-track {
+  border-radius: 0;
+  background: rgba(0, 0, 0, .1);
+}
+
+.skip-progress-fill {
+  background: var(--theme-accent-gradient, var(--theme-accent));
+}
+
+/* Next episode card */
+.next-episode-card {
+  border-color: var(--popover-border);
+  border-radius: 18px;
+  background: rgba(17, 18, 23, .94);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .5);
+}
+
+.next-episode-card.playable .next-episode-action {
+  border-color: transparent;
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+  font-weight: 700;
+}
+
+/* Small windows fold library, tracks and view controls into More. */
+.more-anchor {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .more-anchor {
+    display: flex;
+  }
+
+  .action-group .compact-hide,
+  .action-group .action.optional,
+  .library-divider {
+    display: none;
+  }
+
+  .action-group .volume-slider {
+    width: 84px;
+  }
+}
+
+@media (max-width: 599px) {
+  .action-group .volume-slider,
+  .volume-value,
+  .status-chips,
+  .header-actions #submitIntroButton,
+  .header-actions #diagnosticsButton {
+    display: none;
+  }
+
+  .action-group .action.playback-action,
+  .action-group .action.playback-action.focused {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    margin-right: 4px;
+  }
+}
+
+.player.pip-mode .seek-action,
+.player.pip-mode .options-anchor,
+.player.pip-mode .more-anchor,
+.player.pip-mode #fullscreenButton,
+.player.pip-mode .action-divider,
+.player.pip-mode .volume-value,
+.player.pip-mode .status-chips,
+.player.pip-mode .scrub-row .time-pill {
+  display: none !important;
+}
+
+.player.pip-mode .action-group .action.playback-action {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  margin-right: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrub-rail,
+  .scrub-thumb,
+  .scrub-hover,
+  .tip,
+  .option-switch,
+  .option-switch::after {
+    transition-duration: 1ms;
+  }
 }

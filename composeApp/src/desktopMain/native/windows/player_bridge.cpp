@@ -1457,6 +1457,13 @@ public:
         return (long long)std::llround(std::max(buffered, 0.0) * 1000.0);
     }
 
+    long long videoDimensions() {
+        auto width = int64Property("video-params/w", 0);
+        auto height = int64Property("video-params/h", 0);
+        if (width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+        return (width << 32) | height;
+    }
+
     bool isLoading() {
         bool paused = isPaused();
         bool eofReached = isEnded();
@@ -3471,6 +3478,12 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_bufferedPositionMs(JNIEnv *, jobject, jlong handle) {
     auto player = playerFromHandle(handle);
     return player ? player->bufferedPositionMs() : 0;
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_videoDimensions(JNIEnv *, jobject, jlong handle) {
+    auto player = playerFromHandle(handle);
+    return player ? player->videoDimensions() : 0;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
