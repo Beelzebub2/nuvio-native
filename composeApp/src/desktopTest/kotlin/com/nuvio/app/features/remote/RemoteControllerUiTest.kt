@@ -44,7 +44,7 @@ class RemoteControllerUiTest {
         DesktopRemote.remotePlayback.value = RemotePlayback()
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
-        DesktopRemote.remembered.value = emptyList()
+        DesktopRemote.accountChanged(null)
     }
 
     private fun ComposeUiTest.capture(name: String) {
@@ -299,6 +299,26 @@ class RemoteControllerUiTest {
         onNodeWithText("Disconnect").assertIsDisplayed()
         capture("pc-controller-pcs-connected")
     }
+
+    @Test
+    fun pairedWifiAndBluetoothShowAsOnePcWithoutDuplicateDiscoveryRows() =
+        runDesktopComposeUiTest(width = 412, height = 900) {
+            val id = "0123456789abcdef0123456789abcdef"
+            val lan = RememberedRemoteDevice("Workstation", "192.168.1.60", 100L, trustedId = id)
+            val bluetooth = RememberedRemoteDevice(
+                "Workstation", "02:12:34:56:78:9A", 200L, bluetooth = true, pcId = id,
+            )
+            DesktopRemote.remembered.value = listOf(bluetooth, lan)
+            DesktopRemote.desktops.value = listOf(RemoteDesktop(lan.address, REMOTE_LAN_PORT, lan.name))
+            DesktopRemote.bluetoothDesktops.value = listOf(RemoteDesktop(bluetooth.address, 0, bluetooth.name, bluetooth = true))
+            show(desktopLayout = false)
+
+            onNodeWithTag("remote-saved-pc-${bluetooth.address}").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("remote-saved-pc-${lan.address}").assertDoesNotExist()
+            onAllNodesWithText("Workstation").assertCountEquals(1)
+            onNodeWithText("Auto-reconnect on app launch").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("remote-auto-reconnect-switch").assertIsDisplayed()
+        }
 
     @Test
     fun connectedPcIsLabeledAndCannotOfferASecondConnectAction() = runDesktopComposeUiTest(width = 412, height = 900) {
