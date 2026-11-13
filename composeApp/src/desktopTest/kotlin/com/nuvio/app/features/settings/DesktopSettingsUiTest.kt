@@ -103,6 +103,47 @@ class DesktopSettingsUiTest {
             onNodeWithTag("settings-search-focused").assertIsDisplayed()
         }
 
+    @Test
+    fun searchLocatesSettingsInAnotherLazySection() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            showSettings()
+            onNode(hasContentDescription("Search settings...")).performTextInput("App Language")
+            waitForIdle()
+            onNode(
+                hasText("App Language") and !hasContentDescription("Search settings..."),
+            ).performClick()
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("App Language").assertIsDisplayed() }.isSuccess
+            }
+            sidebar("Appearance").assertIsSelected()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun deepAdvancedSettingIsScrolledIntoViewAcrossLazyItems() =
+        runDesktopComposeUiTest(width = 700, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.Advanced,
+                key = "advanced-clear-cw-cache",
+                title = "Clear Continue Watching Cache",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsScreen(initialPageName = SettingsPage.Advanced.name)
+                }
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Clear Continue Watching Cache").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
     private fun ComposeUiTest.sidebar(label: String): SemanticsNodeInteraction =
         onNode(hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
 

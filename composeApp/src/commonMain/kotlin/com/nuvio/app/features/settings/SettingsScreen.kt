@@ -585,6 +585,7 @@ private fun MobileSettingsScreen(
         var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
         var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
         val listState = rememberLazyListState()
+        SettingsSearchLazyListFocus(page, listState)
         ScreenActivityEffect(listState) { active ->
             if (!active) listState.stopScroll()
         }
@@ -1170,6 +1171,7 @@ private fun TabletSettingsScreen(
                 }
 
                 val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                SettingsSearchLazyListFocus(effectivePage, listState)
                 ScreenActivityEffect(listState) { active ->
                     if (!active) listState.stopScroll()
                 }

@@ -3,6 +3,7 @@ package com.nuvio.app.features.settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
@@ -13,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
 import com.nuvio.app.core.ui.nuvio
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /** A single, short-lived request, also available to standalone mobile settings routes. */
 internal data class SettingsSearchFocusRequest(
@@ -47,6 +51,8 @@ internal object SettingsSearchFocus {
         return true
     }
 
+    fun isClaimed(request: SettingsSearchFocusRequest): Boolean = claimedId == request.id
+
     fun complete(request: SettingsSearchFocusRequest) {
         if (pending == request) {
             pending = null
@@ -57,6 +63,31 @@ internal object SettingsSearchFocus {
     fun clear() {
         pending = null
         claimedId = null
+    }
+}
+
+/** Resolve a target in an item that LazyColumn has not composed yet. */
+@Composable
+internal fun SettingsSearchLazyListFocus(page: SettingsPage, listState: LazyListState) {
+    val request = SettingsSearchFocus.pending?.takeIf { it.page == page }
+    LaunchedEffect(request?.id, listState, page) {
+        if (request == null) return@LaunchedEffect
+
+        // A new destination may not have measured its lazy items yet.
+        snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+        // Let immediately visible controls claim the request without moving the list.
+        withFrameNanos { }
+        if (SettingsSearchFocus.pending != request || SettingsSearchFocus.isClaimed(request)) return@LaunchedEffect
+
+        // Each setting section is one lazy item, sometimes with many controls within it.
+        // Visiting only uncomposed sections allows their row to request a precise bring-into-view.
+        var index = 0
+        while (index < listState.layoutInfo.totalItemsCount) {
+            if (SettingsSearchFocus.pending != request || SettingsSearchFocus.isClaimed(request)) break
+            listState.scrollToItem(index)
+            withFrameNanos { }
+            index++
+        }
     }
 }
 
