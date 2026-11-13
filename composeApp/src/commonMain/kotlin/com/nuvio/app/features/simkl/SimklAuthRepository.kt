@@ -1,14 +1,12 @@
 package com.nuvio.app.features.simkl
 
 import co.touchlab.kermit.Logger
-import com.nuvio.app.isDesktop
 import com.nuvio.app.features.tracking.TrackingAuthProvider
 import com.nuvio.app.features.tracking.TrackingCapability
 import com.nuvio.app.features.tracking.TrackingProviderDescriptor
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingProviderRegistry
 import com.nuvio.app.features.tracking.TrackingRefreshIntent
-import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -104,65 +102,28 @@ object SimklAuthRepository : TrackingAuthProvider {
             return null
         }
 
-        if (isDesktop) {
-            return startPinAuthorization()
-        }
-
-        val material = generateSimklPkceMaterial()
-        SimklAuthStorage.saveCodeVerifier(material.verifier)
-        storedState = storedState.copy(
-            pendingAuthorizationState = material.state,
-            pendingAuthorizationStartedAtEpochMs = SimklPlatformClock.nowEpochMs(),
-        )
-        persistMetadata()
-        publish(error = null)
-        return authorizationUrl(material)
+        // The registered public AUTH V2 app uses the device-code flow on every platform.
+        // Each user supplies their own Simkl account token, not an OAuth application ID.
+        return startPinAuthorization()
     }
 
     fun pendingAuthorizationUrl(): String? {
         ensureLoaded()
-        if (isDesktop) {
-            val verificationUrl = storedState.pendingPinVerificationUrl
-                ?.takeIf { storedState.hasPendingPinAuthorization }
-            if (verificationUrl == null) return null
-            if (isSimklPinAuthorizationExpired(
-                    expiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
-                    nowEpochMs = SimklPlatformClock.nowEpochMs(),
-                )
-            ) {
-                pinPollingJob?.cancel()
-                clearPendingAuthorization()
-                persistMetadata()
-                publish(error = SimklAuthError.AUTHORIZATION_EXPIRED)
-                return null
-            }
-            startPinPollingIfNeeded()
-            return verificationUrl
-        }
-        val state = storedState.pendingAuthorizationState?.takeIf(String::isNotBlank) ?: return null
-        val verifier = SimklAuthStorage.loadCodeVerifier()?.takeIf(String::isNotBlank) ?: run {
-            clearPendingAuthorization()
-            persistMetadata()
-            publish(error = SimklAuthError.AUTHORIZATION_EXPIRED)
-            return null
-        }
-        if (isSimklAuthorizationExpired(
-                startedAtEpochMs = storedState.pendingAuthorizationStartedAtEpochMs,
+        val verificationUrl = storedState.pendingPinVerificationUrl
+            ?.takeIf { storedState.hasPendingPinAuthorization } ?: return null
+        if (isSimklPinAuthorizationExpired(
+                expiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
                 nowEpochMs = SimklPlatformClock.nowEpochMs(),
             )
         ) {
+            pinPollingJob?.cancel()
             clearPendingAuthorization()
             persistMetadata()
             publish(error = SimklAuthError.AUTHORIZATION_EXPIRED)
             return null
         }
-        return authorizationUrl(
-            SimklPkceMaterial(
-                verifier = verifier,
-                challenge = SimklPkceCrypto.sha256(verifier.encodeToByteArray()).base64UrlWithoutPadding(),
-                state = state,
-            ),
-        )
+        startPinPollingIfNeeded()
+        return verificationUrl
     }
 
     fun onCancelAuthorization() {
@@ -174,23 +135,7 @@ object SimklAuthRepository : TrackingAuthProvider {
         publish(error = null)
     }
 
-    override fun handleAuthCallback(url: String): Boolean {
-        ensureLoaded()
-        if (isDesktop) return false
-        return when (val callback = parseSimklAuthCallback(url, SimklConfig.REDIRECT_URI)) {
-            SimklAuthCallback.NotSimkl -> false
-            SimklAuthCallback.Invalid -> {
-                clearPendingAuthorization()
-                persistMetadata()
-                publish(error = SimklAuthError.INVALID_CALLBACK)
-                true
-            }
-            is SimklAuthCallback.AuthorizationCode -> {
-                scope.launch { completeAuthorization(callback) }
-                true
-            }
-        }
-    }
+    override fun handleAuthCallback(url: String): Boolean = false
 
     fun onDisconnectRequested() {
         ensureLoaded()
@@ -198,6 +143,7 @@ object SimklAuthRepository : TrackingAuthProvider {
         profileGeneration += 1L
         accessToken = null
         SimklAuthStorage.saveAccessToken(null)
+        SimklAuthStorage.saveRefreshToken(null)
         clearPendingAuthorization()
         storedState = SimklStoredAuthState()
         persistMetadata()
@@ -208,12 +154,55 @@ object SimklAuthRepository : TrackingAuthProvider {
     internal fun authorizedAccessToken(): String? {
         ensureLoaded()
         val token = accessToken?.takeIf(String::isNotBlank) ?: return null
-        val expiresAt = storedState.tokenExpiresAtEpochMs
-        if (expiresAt != null && SimklPlatformClock.nowEpochMs() >= expiresAt - TOKEN_EXPIRY_SKEW_MS) {
-            invalidateCredentials(SimklAuthError.AUTHORIZATION_EXPIRED)
-            return null
-        }
         return token
+    }
+
+    internal suspend fun refreshAccessTokenIfNeeded() {
+        ensureLoaded()
+        val expiresAt = storedState.tokenExpiresAtEpochMs ?: return
+        if (accessToken.isNullOrBlank() || SimklPlatformClock.nowEpochMs() < expiresAt - TOKEN_EXPIRY_SKEW_MS) return
+        authorizationMutex.withLock {
+            val currentExpiry = storedState.tokenExpiresAtEpochMs ?: return@withLock
+            if (accessToken.isNullOrBlank() || SimklPlatformClock.nowEpochMs() < currentExpiry - TOKEN_EXPIRY_SKEW_MS) return@withLock
+            val previousRefresh = SimklAuthStorage.loadRefreshToken()?.takeIf(String::isNotBlank)
+            if (previousRefresh == null) {
+                invalidateCredentials(SimklAuthError.AUTHORIZATION_EXPIRED)
+                return@withLock
+            }
+            val generation = profileGeneration
+            val response = try {
+                SimklApi.client.execute(
+                    SimklApiRequest(
+                        method = SimklHttpMethod.POST,
+                        path = "/oauth2/token",
+                        body = json.encodeToString(
+                            SimklDeviceTokenRequest(
+                                clientId = SimklConfig.CLIENT_ID,
+                                grantType = "refresh_token",
+                                refreshToken = previousRefresh,
+                            ),
+                        ),
+                        requiresAuthentication = false,
+                        retryPolicy = SimklRetryPolicy.NEVER,
+                    ),
+                )
+            } catch (error: SimklApiException) {
+                if (error.errorCode in setOf("invalid_grant", "invalid_token")) {
+                    if (profileGeneration == generation) invalidateCredentials(SimklAuthError.AUTHORIZATION_REVOKED)
+                }
+                throw error
+            }
+            if (profileGeneration != generation) return@withLock
+            val credentials = runCatching { json.decodeFromString<SimklDeviceTokenResponse>(response.body) }
+                .getOrNull()?.toCredentials(SimklPlatformClock.nowEpochMs(), previousRefresh)
+                ?: throw SimklApiException(
+                    status = response.status,
+                    errorCode = "invalid_token_response",
+                    message = "Simkl returned an invalid refresh response",
+                )
+            saveCredentials(credentials)
+            publish(error = null)
+        }
     }
 
     internal fun onUnauthorizedResponse() {
@@ -270,8 +259,9 @@ object SimklAuthRepository : TrackingAuthProvider {
         val response = try {
             SimklApi.client.execute(
                 SimklApiRequest(
-                    method = SimklHttpMethod.GET,
-                    path = "/oauth/pin",
+                    method = SimklHttpMethod.POST,
+                    path = "/oauth2/device",
+                    body = json.encodeToString(SimklDeviceRequest(SimklConfig.CLIENT_ID)),
                     requiresAuthentication = false,
                     retryPolicy = SimklRetryPolicy.NEVER,
                 ),
@@ -286,7 +276,7 @@ object SimklAuthRepository : TrackingAuthProvider {
 
         val now = SimklPlatformClock.nowEpochMs()
         val pending = response
-            ?.let { runCatching { json.decodeFromString<SimklPinResponse>(it.body) }.getOrNull() }
+            ?.let { runCatching { json.decodeFromString<SimklDeviceResponse>(it.body) }.getOrNull() }
             ?.toPendingAuthorization(now)
         if (pending == null) {
             clearPendingAuthorization()
@@ -296,6 +286,7 @@ object SimklAuthRepository : TrackingAuthProvider {
         }
 
         SimklAuthStorage.saveCodeVerifier(null)
+        SimklAuthStorage.saveDeviceCode(pending.deviceCode)
         storedState = storedState.copy(
             pendingAuthorizationState = null,
             pendingAuthorizationStartedAtEpochMs = now,
@@ -310,7 +301,7 @@ object SimklAuthRepository : TrackingAuthProvider {
     }
 
     private fun startPinPollingIfNeeded() {
-        if (!isDesktop || !storedState.hasPendingPinAuthorization) return
+        if (!storedState.hasPendingPinAuthorization) return
         if (isSimklPinAuthorizationExpired(
                 expiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
                 nowEpochMs = SimklPlatformClock.nowEpochMs(),
@@ -321,17 +312,22 @@ object SimklAuthRepository : TrackingAuthProvider {
         }
         if (pinPollingJob?.isActive == true) return
         val userCode = storedState.pendingPinUserCode ?: return
+        val deviceCode = SimklAuthStorage.loadDeviceCode() ?: run {
+            expirePinAuthorization()
+            return
+        }
         val generation = profileGeneration
         pinPollingJob = scope.launch {
-            pollPinAuthorization(userCode, generation)
+            pollPinAuthorization(userCode, deviceCode, generation)
         }
     }
 
     private suspend fun pollPinAuthorization(
         userCode: String,
+        deviceCode: String,
         generation: Long,
     ) {
-        val intervalSeconds = storedState.pendingPinIntervalSeconds?.coerceAtLeast(1) ?: 5
+        var intervalSeconds = storedState.pendingPinIntervalSeconds?.coerceAtLeast(1) ?: 5
         while (isCurrentPinAuthorization(userCode, generation)) {
             if (isSimklPinAuthorizationExpired(
                     expiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
@@ -353,12 +349,17 @@ object SimklAuthRepository : TrackingAuthProvider {
                 return
             }
 
-            when (val result = pollPinAuthorizationOnce(userCode)) {
+            when (val result = pollPinAuthorizationOnce(deviceCode)) {
                 is SimklPinPollResult.Authorized -> {
-                    completePinAuthorization(result.accessToken, generation)
+                    completePinAuthorization(result.credentials, generation)
                     return
                 }
                 SimklPinPollResult.Pending -> publish(isLoading = false, error = null)
+                SimklPinPollResult.SlowDown -> {
+                    intervalSeconds = (intervalSeconds + 5).coerceAtMost(3_600)
+                    storedState = storedState.copy(pendingPinIntervalSeconds = intervalSeconds)
+                    persistMetadata()
+                }
                 SimklPinPollResult.Gone -> {
                     expirePinAuthorization()
                     return
@@ -373,38 +374,45 @@ object SimklAuthRepository : TrackingAuthProvider {
         }
     }
 
-    private suspend fun pollPinAuthorizationOnce(userCode: String): SimklPinPollResult {
+    private suspend fun pollPinAuthorizationOnce(deviceCode: String): SimklPinPollResult {
         val response = try {
             SimklApi.client.execute(
                 SimklApiRequest(
-                    method = SimklHttpMethod.GET,
-                    path = "/oauth/pin/${userCode.encodeURLParameter()}",
+                    method = SimklHttpMethod.POST,
+                    path = "/oauth2/token",
+                    body = json.encodeToString(
+                        SimklDeviceTokenRequest(
+                            clientId = SimklConfig.CLIENT_ID,
+                            grantType = SIMKL_DEVICE_GRANT,
+                            deviceCode = deviceCode,
+                        ),
+                    ),
                     requiresAuthentication = false,
                     retryPolicy = SimklRetryPolicy.NEVER,
                 ),
             )
         } catch (error: CancellationException) {
             throw error
+        } catch (error: SimklApiException) {
+            return simklPinOAuthError(error.errorCode)
         } catch (error: Throwable) {
-            log.w { "Failed to poll Simkl PIN authorization: ${error.message}" }
+            log.w { "Simkl PIN authorization polling failed" }
             return SimklPinPollResult.Failed
         }
-        return runCatching { json.decodeFromString<SimklPinResponse>(response.body) }
-            .getOrNull()
-            ?.toPollResult()
-            ?: SimklPinPollResult.Failed
+        val credentials = runCatching { json.decodeFromString<SimklDeviceTokenResponse>(response.body) }
+            .getOrNull()?.toCredentials(SimklPlatformClock.nowEpochMs())
+            ?: return SimklPinPollResult.Failed
+        return SimklPinPollResult.Authorized(credentials)
     }
 
     private suspend fun completePinAuthorization(
-        token: String,
+        credentials: SimklDeviceCredentials,
         generation: Long,
     ) = authorizationMutex.withLock {
         if (profileGeneration != generation) return@withLock
         publish(isLoading = true, error = null)
-        accessToken = token
-        SimklAuthStorage.saveAccessToken(token)
+        saveCredentials(credentials)
         clearPendingAuthorization()
-        storedState = storedState.copy(tokenExpiresAtEpochMs = null)
         persistMetadata()
         publish(isLoading = false, error = null)
         fetchAndStoreUserSettings()
@@ -417,11 +425,18 @@ object SimklAuthRepository : TrackingAuthProvider {
     private fun isCurrentPinAuthorization(
         userCode: String,
         generation: Long,
-    ): Boolean = isDesktop &&
-        profileGeneration == generation &&
+    ): Boolean = profileGeneration == generation &&
         storedState.pendingPinUserCode == userCode &&
         storedState.hasPendingPinAuthorization &&
         accessToken.isNullOrBlank()
+
+    private fun saveCredentials(credentials: SimklDeviceCredentials) {
+        SimklAuthStorage.saveRefreshToken(credentials.refreshToken)
+        SimklAuthStorage.saveAccessToken(credentials.accessToken)
+        accessToken = credentials.accessToken
+        storedState = storedState.copy(tokenExpiresAtEpochMs = credentials.expiresAtEpochMs)
+        persistMetadata()
+    }
 
     private fun expirePinAuthorization() {
         clearPendingAuthorization()
@@ -544,7 +559,8 @@ object SimklAuthRepository : TrackingAuthProvider {
             }
             ?: SimklStoredAuthState()
         accessToken = SimklAuthStorage.loadAccessToken()?.takeIf(String::isNotBlank)
-        if (accessToken != null && storedState.tokenExpiresAtEpochMs?.let { expiresAt ->
+        if (accessToken != null && SimklAuthStorage.loadRefreshToken().isNullOrBlank() &&
+            storedState.tokenExpiresAtEpochMs?.let { expiresAt ->
                 SimklPlatformClock.nowEpochMs() >= expiresAt - TOKEN_EXPIRY_SKEW_MS
             } == true
         ) {
@@ -553,11 +569,7 @@ object SimklAuthRepository : TrackingAuthProvider {
             storedState = SimklStoredAuthState()
             persistMetadata()
         }
-        val hasWrongPlatformAuthorization = if (isDesktop) {
-            !storedState.pendingAuthorizationState.isNullOrBlank()
-        } else {
-            storedState.hasPendingPinAuthorization
-        }
+        val hasWrongPlatformAuthorization = !storedState.pendingAuthorizationState.isNullOrBlank()
         val hasExpiredAuthorization = when {
             storedState.hasPendingPinAuthorization -> isSimklPinAuthorizationExpired(
                 expiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
@@ -582,6 +594,7 @@ object SimklAuthRepository : TrackingAuthProvider {
         profileGeneration += 1L
         accessToken = null
         SimklAuthStorage.saveAccessToken(null)
+        SimklAuthStorage.saveRefreshToken(null)
         clearPendingAuthorization()
         storedState = SimklStoredAuthState()
         persistMetadata()
@@ -591,6 +604,7 @@ object SimklAuthRepository : TrackingAuthProvider {
 
     private fun clearPendingAuthorization() {
         SimklAuthStorage.saveCodeVerifier(null)
+        SimklAuthStorage.saveDeviceCode(null)
         storedState = storedState.copy(
             pendingAuthorizationState = null,
             pendingAuthorizationStartedAtEpochMs = null,
@@ -623,7 +637,7 @@ object SimklAuthRepository : TrackingAuthProvider {
             accountId = storedState.accountId,
             tokenExpiresAtEpochMs = storedState.tokenExpiresAtEpochMs,
             pendingAuthorizationStartedAtEpochMs = storedState.pendingAuthorizationStartedAtEpochMs,
-            usesPinFlow = isDesktop,
+            usesPinFlow = true,
             pendingPinUserCode = storedState.pendingPinUserCode,
             pendingPinVerificationUrl = storedState.pendingPinVerificationUrl,
             pendingPinExpiresAtEpochMs = storedState.pendingPinExpiresAtEpochMs,
