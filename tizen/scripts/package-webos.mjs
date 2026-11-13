@@ -220,7 +220,7 @@ async function stageApp() {
 const starlitWebOsServiceIdentity = {
   name: "starlit-webos-identity",
   setup(builder) {
-    builder.onLoad({ filter: /\\.[cm]?js$/ }, async ({ path: sourcePath }) => {
+    builder.onLoad({ filter: /\.[cm]?js$/ }, async ({ path: sourcePath }) => {
       if (!sourcePath.startsWith(upstreamRootDir + path.sep)) return undefined;
       return {
         contents: (await readFile(sourcePath, "utf8")).replaceAll("space.nuvio.webos", appId),
