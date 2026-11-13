@@ -170,3 +170,5 @@ button:focus-visible, input:focus-visible, .source-choice:focus-within {
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
 }
+
+[hidden] { display: none !important; }
