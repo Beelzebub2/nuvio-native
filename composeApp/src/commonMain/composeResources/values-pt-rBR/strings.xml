@@ -1128,6 +1128,8 @@
     <string name="settings_playback_surround_section">ÁUDIO SURROUND · EXPERIMENTAL</string>
     <string name="settings_playback_surround_upmix">Converter estéreo em surround 5.1</string>
     <string name="settings_playback_surround_upmix_description">Converte áudio estéreo quando a saída padrão do Windows está configurada para caixas PCM 5.1. Faixas 5.1/7.1 nativas permanecem intactas. Saídas incompatíveis usam o áudio original. Desativado por padrão.</string>
+    <string name="settings_playback_surround_headset_upmix">Estéreo para 7.1 virtual no headset</string>
+    <string name="settings_playback_surround_headset_upmix_description">Experimental para headsets Corsair VOID compatíveis. Envia PCM 7.1 ao driver iCUE mesmo quando o Windows mistura em estéreo. Ative o surround virtual no iCUE separadamente. Não aplica outra espacialização. Outras saídas e faixas multicanal nativas permanecem intactas. Desativado por padrão.</string>
     <string name="settings_playback_section_subtitle_rendering">RENDERIZAÇÃO DE LEGENDA</string>
     <string name="settings_playback_selected_count">%1$d selecionado(s)</string>
     <string name="settings_playback_show_loading_overlay">Overlay de Carregamento</string>

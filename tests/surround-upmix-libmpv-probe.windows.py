@@ -1,7 +1,7 @@
-"""Windows-only offline check of the bundled stereo-to-5.1 libmpv filter.
+"""Windows-only offline check of the bundled stereo-to-5.1/7.1 libmpv filters.
 
 Uses synthetic test tones only: a null audio backend for live filter
-transitions, then a PCM file backend to verify that actual six-channel
+transitions, then a PCM file backend to verify actual six/eight-channel
 audio samples are produced. No sound is played through Windows speakers.
 This does not establish physical-speaker routing or subjective audio quality.
 """
@@ -15,8 +15,8 @@ import wave
 from pathlib import Path
 
 
-def check_pcm_surround_output(path: Path) -> None:
-    """Verify WAVEFORMATEXTENSIBLE 5.1 float PCM with centre/surround signal.
+def check_pcm_surround_output(path: Path, expected_channels: int, expected_mask: int) -> None:
+    """Verify WAVEFORMATEXTENSIBLE float PCM with centre/surround signal.
 
     The source contains different sine waves on L/R, so a correct surround
     matrix should produce distinguishable centre and surround samples while
@@ -35,7 +35,7 @@ def check_pcm_surround_output(path: Path) -> None:
             output_format = data[body:body + length]
         elif chunk == b"data":
             # One second is enough for per-channel level checks.
-            pcm_samples = data[body:body + min(length, 48000 * 6 * 4)]
+            pcm_samples = data[body:body + min(length, 48000 * expected_channels * 4)]
         offset = body + length + (length & 1)
 
     assert output_format is not None and len(output_format) >= 40, "No extended WAV format"
@@ -44,18 +44,20 @@ def check_pcm_surround_output(path: Path) -> None:
     speaker_mask = struct.unpack_from("<I", output_format, 20)[0]
     subtype = struct.unpack_from("<I", output_format, 24)[0]
     assert (format_code, channels, rate, bits_per_sample, speaker_mask, subtype) == (
-        0xFFFE, 6, 48000, 32, 0x060F, 3
-    ), "Wrong 5.1 PCM output format"
-    assert pcm_samples and len(pcm_samples) >= 48000 * 6 * 4, "PCM samples missing"
+        0xFFFE, expected_channels, 48000, 32, expected_mask, 3
+    ), "Wrong multichannel PCM output format"
+    assert pcm_samples and len(pcm_samples) >= 48000 * expected_channels * 4, "PCM samples missing"
     values = struct.unpack("<" + "f" * (len(pcm_samples) // 4), pcm_samples)
-    count = len(values) // 6
+    count = len(values) // expected_channels
     rms = [
-        math.sqrt(sum(values[frame * 6 + channel] ** 2 for frame in range(count)) / count)
-        for channel in range(6)
+        math.sqrt(sum(values[frame * expected_channels + channel] ** 2 for frame in range(count)) / count)
+        for channel in range(expected_channels)
     ]
     assert rms[0] > 0.005 and rms[1] > 0.005, "Front stereo channels are silent"
     assert rms[2] > 0.00001, "Centre signal was not generated"
     assert rms[4] > 0.00001 and rms[5] > 0.00001, "Surround signals were not generated"
+    if expected_channels == 8:
+        assert rms[6] > 0.00001 and rms[7] > 0.00001, "Rear channels were not generated"
     assert rms[3] < 0.000001, "LFE should be silent (system bass management)"
 
 
@@ -133,7 +135,7 @@ def main() -> None:
             time.sleep(0.25)
             assert get("audio-params/channels") == "stereo", "Stereo input missing"
             assert get("audio-out-params/channels") == "stereo", "Unexpected original layout"
-            for target in ("5.1(side)", "5.1"):
+            for target in ("5.1(side)", "5.1", "7.1"):
                 execute(
                     mpv,
                     "af",
@@ -151,34 +153,35 @@ def main() -> None:
         finally:
             terminate(mpv)
 
-        pcm_file = Path(directory) / "upmixed-5.1.wav"
-        pcm_player = create()
-        if not pcm_player:
-            raise AssertionError("PCM mpv_create failed")
-        try:
-            for key, value in (
-                ("config", "no"),
-                ("vo", "null"),
-                ("video", "no"),
-                ("ao", "pcm"),
-                ("ao-pcm-file", str(pcm_file)),
-                ("pause", "yes"),
-            ):
-                assert set_option(pcm_player, key.encode(), value.encode()) == 0, key
-            assert initialize(pcm_player) == 0
-            execute(
-                pcm_player, "af", "add",
-                "@starlit-surround:lavfi=[surround=chl_in=stereo:"
-                "chl_out=5.1(side):lfe=0:level_out=0.65]",
-            )
-            execute(pcm_player, "loadfile", str(test_file), "replace")
-            execute(pcm_player, "set", "pause", "no")
-            time.sleep(3.8)
-        finally:
-            terminate(pcm_player)
-        check_pcm_surround_output(pcm_file)
+        for target, channels, mask in (("5.1(side)", 6, 0x060F), ("7.1", 8, 0x063F)):
+            pcm_file = Path(directory) / f"upmixed-{channels}-channel.wav"
+            pcm_player = create()
+            if not pcm_player:
+                raise AssertionError("PCM mpv_create failed")
+            try:
+                for key, value in (
+                    ("config", "no"),
+                    ("vo", "null"),
+                    ("video", "no"),
+                    ("ao", "pcm"),
+                    ("ao-pcm-file", str(pcm_file)),
+                    ("pause", "yes"),
+                ):
+                    assert set_option(pcm_player, key.encode(), value.encode()) == 0, key
+                assert initialize(pcm_player) == 0
+                execute(
+                    pcm_player, "af", "add",
+                    "@starlit-surround:lavfi=[surround=chl_in=stereo:"
+                    f"chl_out={target}:lfe=0:level_out=0.65]",
+                )
+                execute(pcm_player, "loadfile", str(test_file), "replace")
+                execute(pcm_player, "set", "pause", "no")
+                time.sleep(3.8)
+            finally:
+                terminate(pcm_player)
+            check_pcm_surround_output(pcm_file, channels, mask)
 
-    print("PASS: bundled libmpv processes real six-channel PCM and restores stereo")
+    print("PASS: bundled libmpv processes six/eight-channel PCM and restores stereo")
 
 
 if __name__ == "__main__":

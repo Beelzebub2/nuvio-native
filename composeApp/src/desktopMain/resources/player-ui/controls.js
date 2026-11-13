@@ -919,7 +919,9 @@ const autoToggles = [
   },
 ];
 
-const autoToggleLabel = toggle => String(state[toggle.labelKey] || toggle.fallbackLabel);
+const autoToggleLabel = toggle => toggle.button === surroundUpmixButton
+  ? (state.surroundUpmixLabel === "7.1" ? "7.1" : "5.1")
+  : String(state[toggle.labelKey] || toggle.fallbackLabel);
 const autoToggleStateLabel = enabled => (enabled ? state.onLabel || "On" : state.offLabel || "Off");
 
 const syncAutoToggleButtons = () => {
@@ -935,19 +937,25 @@ const syncAutoToggleButtons = () => {
     if (text) text.textContent = label;
     if (toggle.button === surroundUpmixButton) {
       const status = Number(state.surroundUpmixStatus);
+      const target = autoToggleLabel(toggle);
+      const virtualHeadset = target === "7.1";
       const active = enabled && status === 2;
       const failed = enabled && status === -1;
       const description = !enabled
         ? "Original audio · upmix off"
         : active
-          ? "Stereo upmixed to 5.1 PCM"
+          ? virtualHeadset
+            ? "7.1 PCM sent to headset · enable surround in iCUE separately"
+            : "Stereo upmixed to 5.1 PCM"
           : failed
             ? "Upmix unavailable · audio output rejected the filter"
-            : "Upmix not active · requires a Windows output configured for 5.1 PCM";
+            : virtualHeadset
+              ? "Upmix not active · requires a compatible Corsair VOID headset and 7.1 PCM stream"
+              : "Upmix not active · requires a Windows output configured for 5.1 PCM";
       toggle.button.setAttribute("title", description);
       toggle.button.setAttribute("aria-label", description);
       toggle.button.setAttribute("data-upmix-status", active ? "active" : failed ? "failed" : enabled ? "waiting" : "off");
-      if (text) text.textContent = active ? "5.1 ✓" : failed ? "5.1 !" : enabled ? "5.1…" : "5.1";
+      if (text) text.textContent = active ? target + " ✓" : failed ? target + " !" : enabled ? target + "…" : target;
     }
   });
 };
