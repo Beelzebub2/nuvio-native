@@ -13,24 +13,38 @@ internal object SurroundUpmixSettings {
     )
     val enabled = enabledState.asStateFlow()
 
-    // Virtual 7.1 is a distinct, explicit mode. The two modes can never be
-    // active together, so one playback session only installs one named filter.
+    // Virtual 5.1, virtual 7.1 and physical 5.1 are mutually exclusive.
+    // Retain the existing 7.1 preference key for migration from the beta.
     private val headsetEnabledState = MutableStateFlow(
         if (isSupported) runCatching { SurroundUpmixPlatform.loadHeadsetEnabled() }.getOrDefault(false)
         else false,
     )
     val headsetEnabled = headsetEnabledState.asStateFlow()
+    private val headsetFivePointOneEnabledState = MutableStateFlow(
+        if (isSupported) runCatching { SurroundUpmixPlatform.loadHeadsetFivePointOneEnabled() }
+            .getOrDefault(false)
+        else false,
+    )
+    val headsetFivePointOneEnabled = headsetFivePointOneEnabledState.asStateFlow()
     private val preferHeadsetState = MutableStateFlow(
         if (isSupported) runCatching { SurroundUpmixPlatform.loadPreferHeadset() }.getOrDefault(false)
         else false,
     )
     val preferHeadset = preferHeadsetState.asStateFlow()
+    private val preferHeadsetFivePointOneState = MutableStateFlow(
+        if (isSupported) runCatching { SurroundUpmixPlatform.loadPreferHeadsetFivePointOne() }
+            .getOrDefault(false)
+        else false,
+    )
+    val preferHeadsetFivePointOne = preferHeadsetFivePointOneState.asStateFlow()
 
     fun setEnabled(enabled: Boolean) {
         if (!isSupported) return
         if (enabled) {
             SurroundUpmixPlatform.saveHeadsetEnabled(false)
             headsetEnabledState.value = false
+            SurroundUpmixPlatform.saveHeadsetFivePointOneEnabled(false)
+            headsetFivePointOneEnabledState.value = false
             SurroundUpmixPlatform.savePreferHeadset(false)
             preferHeadsetState.value = false
         }
@@ -43,11 +57,45 @@ internal object SurroundUpmixSettings {
         if (enabled) {
             SurroundUpmixPlatform.saveEnabled(false)
             enabledState.value = false
+            SurroundUpmixPlatform.saveHeadsetFivePointOneEnabled(false)
+            headsetFivePointOneEnabledState.value = false
             SurroundUpmixPlatform.savePreferHeadset(true)
             preferHeadsetState.value = true
+            SurroundUpmixPlatform.savePreferHeadsetFivePointOne(false)
+            preferHeadsetFivePointOneState.value = false
         }
         SurroundUpmixPlatform.saveHeadsetEnabled(enabled)
         headsetEnabledState.value = enabled
+    }
+
+    fun setHeadsetFivePointOneEnabled(enabled: Boolean) {
+        if (!isSupported) return
+        if (enabled) {
+            SurroundUpmixPlatform.saveEnabled(false)
+            enabledState.value = false
+            SurroundUpmixPlatform.saveHeadsetEnabled(false)
+            headsetEnabledState.value = false
+            SurroundUpmixPlatform.savePreferHeadset(true)
+            preferHeadsetState.value = true
+            SurroundUpmixPlatform.savePreferHeadsetFivePointOne(true)
+            preferHeadsetFivePointOneState.value = true
+        }
+        SurroundUpmixPlatform.saveHeadsetFivePointOneEnabled(enabled)
+        headsetFivePointOneEnabledState.value = enabled
+    }
+
+    /** Mode IDs are shared with Windows native policy; 3 is the new virtual 5.1 mode. */
+    val activeMode: Int get() = when {
+        headsetFivePointOneEnabledState.value -> 3
+        headsetEnabledState.value -> 2
+        enabledState.value -> 1
+        else -> 0
+    }
+
+    val preferredMode: Int get() = when {
+        !preferHeadsetState.value -> 1
+        preferHeadsetFivePointOneState.value -> 3
+        else -> 2
     }
 
     /** In-player toggle remembers the last selected target when switched off. */
@@ -56,10 +104,13 @@ internal object SurroundUpmixSettings {
         if (!enabled) {
             setEnabled(false)
             setHeadsetEnabled(false)
-        } else if (preferHeadsetState.value) {
-            setHeadsetEnabled(true)
+            setHeadsetFivePointOneEnabled(false)
         } else {
-            setEnabled(true)
+            when (preferredMode) {
+                3 -> setHeadsetFivePointOneEnabled(true)
+                2 -> setHeadsetEnabled(true)
+                else -> setEnabled(true)
+            }
         }
     }
 }
@@ -70,6 +121,10 @@ internal expect object SurroundUpmixPlatform {
     fun saveEnabled(enabled: Boolean)
     fun loadHeadsetEnabled(): Boolean
     fun saveHeadsetEnabled(enabled: Boolean)
+    fun loadHeadsetFivePointOneEnabled(): Boolean
+    fun saveHeadsetFivePointOneEnabled(enabled: Boolean)
     fun loadPreferHeadset(): Boolean
     fun savePreferHeadset(prefer: Boolean)
+    fun loadPreferHeadsetFivePointOne(): Boolean
+    fun savePreferHeadsetFivePointOne(prefer: Boolean)
 }

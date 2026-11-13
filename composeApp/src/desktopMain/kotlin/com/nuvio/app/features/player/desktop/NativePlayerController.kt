@@ -110,7 +110,7 @@ internal class NativePlayerController(
 
     fun setSurroundUpmixMode(mode: Int) {
         if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
-        val selectedMode = mode.coerceIn(0, 2)
+        val selectedMode = mode.coerceIn(0, 3)
         surroundUpmixMode = selectedMode
         val current = synchronized(lifecycleLock) { handle }
         if (current != 0L) {
@@ -541,10 +541,10 @@ internal class NativePlayerController(
         val isDiscordShareEnabled = showDiscordShare && DiscordShareModeSettings.enabled.value
         val showSurroundUpmix = DesktopHostOs.current == DesktopHostOs.WINDOWS
         val surroundUpmixEnabled = surroundUpmixMode != 0
-        val surroundUpmixLabel =
-            if (surroundUpmixMode == 2 || (surroundUpmixMode == 0 && SurroundUpmixSettings.preferHeadset.value)) {
-                "7.1"
-            } else "5.1"
+        val displayedSurroundMode =
+            if (surroundUpmixMode == 0) SurroundUpmixSettings.preferredMode else surroundUpmixMode
+        val surroundUpmixLabel = if (displayedSurroundMode == 2) "7.1" else "5.1"
+        val surroundUpmixHeadsetMode = displayedSurroundMode == 2 || displayedSurroundMode == 3
         val structureKey = NativeControlsStructureKey(
             state = stateWithVolume.nativeControlsStructureKey(),
             isFullscreen = isFullscreen,
@@ -555,6 +555,7 @@ internal class NativePlayerController(
             discordShareEnabled = isDiscordShareEnabled,
             surroundUpmixEnabled = surroundUpmixEnabled,
             surroundUpmixLabel = surroundUpmixLabel,
+            surroundUpmixHeadsetMode = surroundUpmixHeadsetMode,
             surroundUpmixStatus = surroundUpmixStatus,
         )
         if (structureKey == lastSentControlsStructureKey) return
@@ -577,6 +578,7 @@ internal class NativePlayerController(
                 showSurroundUpmix = showSurroundUpmix,
                 surroundUpmixEnabled = surroundUpmixEnabled,
                 surroundUpmixLabel = surroundUpmixLabel,
+                surroundUpmixHeadsetMode = surroundUpmixHeadsetMode,
                 surroundUpmixStatus = surroundUpmixStatus,
             ),
         )
@@ -655,9 +657,7 @@ internal class NativePlayerController(
                 if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
                     val enabled = value >= 0.5
                     SurroundUpmixSettings.setPlayerEnabled(enabled)
-                    setSurroundUpmixMode(
-                        if (!enabled) 0 else if (SurroundUpmixSettings.headsetEnabled.value) 2 else 1,
-                    )
+                    setSurroundUpmixMode(SurroundUpmixSettings.activeMode)
                 }
             }
             "surroundUpmixStatus" -> {
@@ -1475,6 +1475,7 @@ private data class NativeControlsStructureKey(
     val discordShareEnabled: Boolean,
     val surroundUpmixEnabled: Boolean,
     val surroundUpmixLabel: String,
+    val surroundUpmixHeadsetMode: Boolean,
     val surroundUpmixStatus: Int,
 )
 
@@ -1488,6 +1489,7 @@ private fun PlayerControlsState.toControlsJson(
     showSurroundUpmix: Boolean,
     surroundUpmixEnabled: Boolean,
     surroundUpmixLabel: String,
+    surroundUpmixHeadsetMode: Boolean,
     surroundUpmixStatus: Int,
 ): String =
     buildString {
@@ -1814,6 +1816,8 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("surroundUpmixEnabled", surroundUpmixEnabled)
         append(',')
         appendJsonField("surroundUpmixLabel", surroundUpmixLabel)
+        append(',')
+        appendJsonField("surroundUpmixHeadsetMode", surroundUpmixHeadsetMode)
         append(',')
         appendJsonField("surroundUpmixStatus", surroundUpmixStatus)
         append(',')

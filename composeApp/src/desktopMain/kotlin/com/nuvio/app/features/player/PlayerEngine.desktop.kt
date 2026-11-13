@@ -150,6 +150,7 @@ private fun NativePlayerSurface(
     val discordShareShowWindow by DiscordShareModeSettings.showWindow.collectAsState()
     val surroundUpmixEnabled by SurroundUpmixSettings.enabled.collectAsState()
     val virtualHeadsetUpmixEnabled by SurroundUpmixSettings.headsetEnabled.collectAsState()
+    val virtualHeadsetFivePointOneEnabled by SurroundUpmixSettings.headsetFivePointOneEnabled.collectAsState()
 
     SideEffect {
         onControllerReady(controller)
@@ -217,10 +218,11 @@ private fun NativePlayerSurface(
         }
     }
 
-    LaunchedEffect(controller, surroundUpmixEnabled, virtualHeadsetUpmixEnabled) {
+    LaunchedEffect(controller, surroundUpmixEnabled, virtualHeadsetUpmixEnabled, virtualHeadsetFivePointOneEnabled) {
         withContext(Dispatchers.IO) {
             controller.setSurroundUpmixMode(
                 when {
+                    virtualHeadsetFivePointOneEnabled -> 3
                     virtualHeadsetUpmixEnabled -> 2
                     surroundUpmixEnabled -> 1
                     else -> 0
