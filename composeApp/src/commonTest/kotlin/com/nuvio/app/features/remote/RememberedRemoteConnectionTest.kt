@@ -107,12 +107,18 @@ class RememberedRemoteConnectionTest {
     }
 
     @Test
-    fun automaticReconnectDoesNotPreferAnOlderBluetoothPcOverTheLatestLanPc() {
-        val lan = RememberedRemoteDevice("Office PC", "192.168.1.45", 200L)
-        val bluetooth = RememberedRemoteDevice("Old PC", "02:12:34:56:78:9A", 100L, bluetooth = true)
+    fun latestPairedPcRemainsFirstEvenWhenItHasMultipleTransports() {
+        val id = "0123456789abcdef0123456789abcdef"
+        val olderLan = RememberedRemoteDevice("Older", "192.168.1.45", 50L)
+        val currentBluetooth = RememberedRemoteDevice(
+            "Current", "02:12:34:56:78:9A", 200L, bluetooth = true, pcId = id,
+        )
+        val currentLan = RememberedRemoteDevice("Current", "192.168.1.46", 150L, trustedId = id)
+        val pcs = groupRememberedRemotePcs(listOf(currentBluetooth, olderLan, currentLan))
 
-        assertNull(preferredBluetoothReconnect(listOf(lan, bluetooth), bluetoothSupported = true))
-        assertEquals(bluetooth, preferredBluetoothReconnect(listOf(bluetooth, lan), bluetoothSupported = true))
-        assertNull(preferredBluetoothReconnect(listOf(bluetooth, lan), bluetoothSupported = false))
+        assertEquals(2, pcs.size)
+        assertEquals("Current", pcs.first().name)
+        assertEquals(2, pcs.first().devices.size)
+        assertEquals("Older", pcs.last().name)
     }
 }
