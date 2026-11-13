@@ -20,3 +20,4 @@ jobs:
         with:
           node-version: '24'
       - run: node .github/security-check.mjs
+      - run: node --test .github/tracking-provider-config.test.mjs
