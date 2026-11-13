@@ -1,3 +1,27 @@
+## Starlit 1.23.0
+
+### Interface and navigation
+
+- **Refreshed Starlit screens:** More consistent controls, spacing and visual hierarchy across Downloads, Library, collections, Sources, Settings, subtitle styling and watch-order screens. Updated status labels, action buttons, grouped rows and selection controls make options easier to find.
+- **Phone-to-PC remote experience:** Clearer PC connection and source-selection flows, updated control layouts and more legible playback and stream-quality information.
+- **Account and collection controls:** Improved account-security panels and dialogs, collection editing, subtitle preferences and poster settings, with localized text and layout regressions covered by tests.
+
+### Television experience
+
+- **Samsung Tizen UI preview:** Redesigned TV navigation, search, sign-in, sources and display settings with visible remote-control focus, an on-screen keyboard, screen scaling and overscan adjustments.
+- **TV display compatibility:** Reference-canvas scaling, native video-plane alignment and older Tizen CSS fallbacks improve layout consistency across screen sizes. Samsung Tizen distribution remains a development preview, not a signed public TV installer.
+
+### Library, subtitles and reliability
+
+- **Keep the existing library after connecting tracking accounts:** Unset or invalid tracking-source preferences continue to use the local library rather than silently switching to an external provider. Explicitly selected external sources remain supported.
+- **Improved ASS/SSA subtitles:** Preserve playback position and subtitle styling when Android's ASS renderer settings change, with safe fallback if initialization fails. Align Linux subtitle outline, background and scaling behavior.
+- **Reliable build verification:** Windows diagnostics and P2P tests use pinned native runtime objects stored in the release repository, with size and SHA-256 checks instead of relying on another repository's download quota.
+
+### Verification and limitations
+
+- The interface and TV changes passed Android, Windows, macOS, Linux, iOS Kotlin compilation, Android TV build/emulator, storage and source-security pull-request checks. Official Windows, signed Android phone/TV and Linux installers will publish only after the tagged release workflow and package checks succeed.
+- Physical Samsung TV/AVPlay, account integrations on real devices and representative subtitle playback still require acceptance tests. No signed Samsung Tizen package or iOS App Store release is included. Unmerged experimental features are not part of this version.
+
 ## Starlit 1.22.1
 
 ### Release packaging
