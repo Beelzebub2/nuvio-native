@@ -12,7 +12,8 @@ assert.match(html, /id="discordShareButton"[^>]+data-command="setDiscordShareEna
 assert.match(html, /id="surroundUpmixButton"[^>]+data-command="setSurroundUpmixEnabled"[^>]+aria-pressed="false"/);
 assert.match(html, /<symbol id="icon-discord"[^>]*>[\s\S]*?fill="currentColor"/);
 assert.ok(html.indexOf('data-command="audio"') < html.indexOf('id="discordShareButton"'));
-assert.ok(css.includes(".action.toggle-action[aria-pressed=\"true\"]::after"));
+assert.ok(css.includes(".option-row.toggle-action[aria-pressed=\"true\"] .option-switch"),
+  "playback toggles show their on state as a switch in Playback options");
 const mediumWindowRule = css.match(/@media \(min-width: 761px\) and \(max-width: 959px\) \{[\s\S]*?^\}/m)?.[0];
 assert.ok(mediumWindowRule, "medium-size player rules must be present");
 assert.doesNotMatch(mediumWindowRule, /discordShareButton|\.action\.toggle-action/,

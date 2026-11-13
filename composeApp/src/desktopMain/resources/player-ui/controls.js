@@ -192,6 +192,39 @@ const playerToast = document.getElementById("playerToast");
 const playerToastIcon = document.getElementById("playerToastIcon");
 const playerToastIconUse = document.getElementById("playerToastIconUse");
 const playerToastText = document.getElementById("playerToastText");
+const scrubWrap = document.getElementById("scrubWrap");
+const scrubRail = document.getElementById("scrubRail");
+const scrubHover = document.getElementById("scrubHover");
+const progressSection = document.querySelector(".progress");
+const seekBackButton = document.getElementById("seekBackButton");
+const seekForwardButton = document.getElementById("seekForwardButton");
+const seekBackAmount = document.getElementById("seekBackAmount");
+const seekForwardAmount = document.getElementById("seekForwardAmount");
+const volumeValue = document.getElementById("volumeValue");
+const statusChips = document.getElementById("statusChips");
+const subtitlesButton = document.getElementById("subtitlesButton");
+const subtitlesIcon = document.getElementById("subtitlesIcon");
+const audioButton = document.getElementById("audioButton");
+const speedButton = document.getElementById("speedButton");
+const speedBadge = document.getElementById("speedBadge");
+const resizeButton = document.getElementById("resizeButton");
+const libraryDivider = document.getElementById("libraryDivider");
+const optionsDivider = document.getElementById("optionsDivider");
+const playbackOptionsAnchor = document.getElementById("playbackOptionsAnchor");
+const playbackOptionsButton = document.getElementById("playbackOptionsButton");
+const playbackOptionsBadge = document.getElementById("playbackOptionsBadge");
+const playbackOptionsPopover = document.getElementById("playbackOptionsPopover");
+const playbackOptionsDivider = document.getElementById("playbackOptionsDivider");
+const moreButton = document.getElementById("moreButton");
+const moreMenu = document.getElementById("moreMenu");
+const moreEpisodes = document.getElementById("moreEpisodes");
+const moreSources = document.getElementById("moreSources");
+const moreLibraryDivider = document.getElementById("moreLibraryDivider");
+const moreSpeedValue = document.getElementById("moreSpeedValue");
+const moreResizeValue = document.getElementById("moreResizeValue");
+const moreOptions = document.getElementById("moreOptions");
+const moreOptionsValue = document.getElementById("moreOptionsValue");
+const rtxCompareHold = document.querySelector("#rtxCompareButton .option-hold");
 
 let state = {
   title: "",
@@ -471,6 +504,11 @@ let pendingSettingToastCommand = "";
 let pendingSettingToastToken = 0;
 let timeLabelShowRemaining = false;
 let isPipLocked = false;
+let optionsPopoverOpen = false;
+let moreMenuOpen = false;
+let scrubRailKey = "";
+let scrubRailSegments = [];
+let statusChipsKey = "";
 const pipLockButton = document.getElementById("pipLockButton");
 const pipLockOverlay = document.getElementById("pipLockOverlay");
 const pipLockBadge = document.getElementById("pipLockBadge");
@@ -480,7 +518,7 @@ const syncPipLockLabels = () => {
   const lockLabel = isPipLocked ? pipUnlockLabel() : pipLockLabel();
   if (pipLockButton) {
     pipLockButton.setAttribute("aria-label", lockLabel);
-    pipLockButton.setAttribute("title", lockLabel);
+    pipLockButton.setAttribute("data-tip", lockLabel);
   }
   if (pipLockBadge) {
     const unlockLabel = pipUnlockLabel();
@@ -545,7 +583,10 @@ const syncFullscreenButtons = () => {
   const label = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
   if (fullscreenIcon) fullscreenIcon.setAttribute("href", icon);
   if (openingFullscreenIcon) openingFullscreenIcon.setAttribute("href", icon);
-  if (fullscreenButton) fullscreenButton.setAttribute("aria-label", label);
+  if (fullscreenButton) {
+    fullscreenButton.setAttribute("aria-label", label);
+    fullscreenButton.setAttribute("data-tip", isFullscreen ? "Exit fullscreen" : "Fullscreen");
+  }
   if (openingFullscreenButton) openingFullscreenButton.setAttribute("aria-label", label);
 };
 
@@ -624,10 +665,12 @@ const syncVolumeControl = () => {
   volumeSlider.setAttribute("aria-valuetext", percent > 100 ? `${percent}%, boosted` : `${percent}%`);
   volumeSlider.setAttribute("title", label);
   volumeIcon.setAttribute("href", percent === 0 ? "#icon-volume-muted" : "#icon-volume");
+  volumeControl.classList.toggle("is-boosted", percent > 100);
+  if (volumeValue) volumeValue.textContent = `${percent}%`;
   if (volumeButton) {
     const btnLabel = percent === 0 ? "Unmute" : "Mute";
     volumeButton.setAttribute("aria-label", btnLabel);
-    volumeButton.setAttribute("title", btnLabel);
+    volumeButton.setAttribute("data-tip", btnLabel);
   }
 };
 
@@ -862,18 +905,94 @@ const setProgress = (positionMs, durationMs) => {
   const percent = durationMs > 0 ? Math.max(0, Math.min(100, positionMs / durationMs * 100)) : 0;
   seek.value = Math.round(percent * 10);
   seek.style.setProperty("--progress", `${percent}%`);
+  if (scrubWrap) scrubWrap.style.setProperty("--progress", `${percent}%`);
+  updateScrubRail(positionMs, durationMs);
   positionLabel.textContent = formatTime(positionMs);
   durationLabel.textContent = formatTime(durationMs);
   if (timeLabel) {
     durationMs = durationMs - (durationMs % 1000);
     if (timeLabelShowRemaining) {
       let remainingTimeMs = durationMs - positionMs + (positionMs % 1000 == 0 ? 0 : 1000);
-      timeLabel.textContent = `-${formatTime(remainingTimeMs)}`;
+      timeLabel.textContent = `−${formatTime(remainingTimeMs)}`;
     } else {
-      timeLabel.textContent = `${formatTime(positionMs)} / ${formatTime(durationMs)}`;
+      timeLabel.textContent = formatTime(durationMs);
     }
   }
 };
+
+// The seek bar is split into chapters (recap / intro / episode / credits) when
+// skip segments are known; otherwise it is one continuous rail.
+function scrubChapterLabel(type) {
+  return ({ recap: "Recap", intro: "Intro", outro: "Credits" })[type] || "";
+}
+
+function normalizedSkipSegments(durationMs) {
+  if (!Array.isArray(state.skipSegments) || durationMs <= 0) return [];
+  return state.skipSegments
+    .map(segment => ({
+      type: String(segment && segment.type || "").toLowerCase(),
+      startMs: Math.max(0, Number(segment && segment.startMs) || 0),
+      endMs: Math.min(durationMs, Number(segment && segment.endMs) || 0),
+    }))
+    .filter(segment => segment.endMs - segment.startMs >= 1000 && scrubChapterLabel(segment.type))
+    .sort((left, right) => left.startMs - right.startMs)
+    .reduce((kept, segment) => {
+      const previous = kept[kept.length - 1];
+      if (!previous || segment.startMs >= previous.endMs) kept.push(segment);
+      return kept;
+    }, []);
+}
+
+function scrubChapters(durationMs) {
+  const chapters = [];
+  let cursor = 0;
+  normalizedSkipSegments(durationMs).forEach(segment => {
+    if (segment.startMs - cursor >= 1000) chapters.push({ type: "content", startMs: cursor, endMs: segment.startMs });
+    chapters.push(segment);
+    cursor = segment.endMs;
+  });
+  if (!chapters.length || durationMs - cursor >= 1000) {
+    chapters.push({ type: "content", startMs: cursor, endMs: Math.max(cursor + 1, durationMs) });
+  }
+  return chapters;
+}
+
+function updateScrubRail(positionMs, durationMs) {
+  if (!scrubRail) return;
+  const chapters = scrubChapters(durationMs);
+  const key = chapters.map(chapter => `${chapter.type}:${chapter.startMs}:${chapter.endMs}`).join("|");
+  if (key !== scrubRailKey) {
+    scrubRailKey = key;
+    scrubRail.textContent = "";
+    const total = Math.max(1, durationMs);
+    scrubRailSegments = chapters.map(chapter => {
+      const segment = document.createElement("span");
+      segment.className = "rail-seg";
+      segment.dataset.type = chapter.type;
+      const length = Math.max(1, chapter.endMs - chapter.startMs);
+      const share = Math.min(1, length / total);
+      segment.style.flexGrow = String(length);
+      // Stretch accent gradients across the whole rail instead of restarting per chapter.
+      segment.style.setProperty("--seg-size", `${100 / share}%`);
+      segment.style.setProperty("--seg-pos", share < 1 ? `${(chapter.startMs / total) / (1 - share) * 100}%` : "0%");
+      const buffer = document.createElement("i");
+      buffer.className = "rail-buffer";
+      const played = document.createElement("i");
+      played.className = "rail-played";
+      segment.append(buffer, played);
+      scrubRail.appendChild(segment);
+      return { ...chapter, buffer, played };
+    });
+  }
+  const reportedBufferMs = Number(state.bufferedPositionMs) || 0;
+  const bufferedMs = Math.max(positionMs, reportedBufferMs);
+  scrubRailSegments.forEach(segment => {
+    const span = Math.max(1, segment.endMs - segment.startMs);
+    const fill = valueMs => Math.max(0, Math.min(100, (valueMs - segment.startMs) / span * 100));
+    segment.played.style.setProperty("--fill", `${durationMs > 0 ? fill(positionMs) : 0}%`);
+    segment.buffer.style.width = `${durationMs > 0 && reportedBufferMs > 0 ? fill(bufferedMs) : 0}%`;
+  });
+}
 
 const setText = (element, text) => {
   element.textContent = text || "";
@@ -907,7 +1026,7 @@ const autoToggles = [
     stateKey: "surroundUpmixEnabled",
     visibleKey: "showSurroundUpmix",
     fallbackLabel: "5.1",
-    icon: "icon-audio",
+    icon: "icon-surround",
   },
   {
     button: discordShareButton,
@@ -978,7 +1097,6 @@ const setActionButtonLabel = (command, label) => {
   const text = String(label || "").trim();
   if (!text) return;
   button.setAttribute("aria-label", text);
-  button.setAttribute("title", text);
 };
 
 const setImageVisualState = (element, stateName) => {
@@ -2365,11 +2483,12 @@ const syncSkipPromptPlacement = showSkip => {
     skipPrompt.style.getPropertyValue("--skip-prompt-lift"),
   ) || 0);
   let targetLift = 0;
-  if (showSkip && state.controlsVisible && (title.textContent || episode.textContent)) {
+  if (showSkip && state.controlsVisible && progressSection) {
+    // The title now lives in the header, so only the control bar can collide with the prompt.
     const rootTop = root.getBoundingClientRect().top;
-    const metadataTop = playbackMetadata.getBoundingClientRect().top - rootTop;
+    const barTop = progressSection.getBoundingClientRect().top - rootTop;
     const promptBottom = skipPrompt.offsetTop + skipPrompt.offsetHeight + currentLift;
-    const requiredLift = Math.max(0, Math.ceil(promptBottom - metadataTop + 14));
+    const requiredLift = Math.max(0, Math.ceil(promptBottom - barTop + 14));
     const availableLift = Math.max(0, skipPrompt.offsetTop + currentLift - 12);
     targetLift = Math.min(requiredLift, availableLift);
   }
@@ -2441,7 +2560,7 @@ const isChromeInteractionTarget = target =>
   Boolean(target && target.closest && target.closest(chromeInteractionSelector));
 
 const isInteractingWithChrome = () =>
-  Boolean(isChromePointerInside || isChromePointerDown || isChromeFocusInside);
+  Boolean(isChromePointerInside || isChromePointerDown || isChromeFocusInside || optionsPopoverOpen || moreMenuOpen);
 
 const canAutoHideChrome = showOpening => Boolean(
   state.controlsVisible &&
@@ -2571,6 +2690,205 @@ const finishChromePointerInteraction = event => {
   noteChromeActivity(true);
 };
 
+// ---- Redesigned control bar: tooltips, status chips, popovers -------------
+
+const tipTargets = () => Array.from(document.querySelectorAll("[data-tip]"));
+
+const initTips = () => {
+  tipTargets().forEach(element => {
+    if (element.querySelector(":scope > .tip")) return;
+    const tip = document.createElement("i");
+    tip.className = "tip";
+    tip.setAttribute("aria-hidden", "true");
+    tip.append(document.createElement("b"), document.createElement("kbd"));
+    element.appendChild(tip);
+    element.classList.add("has-tip");
+  });
+};
+
+// Custom tooltips replace native title tooltips so the two never stack.
+const syncTips = () => {
+  tipTargets().forEach(element => {
+    const tip = element.querySelector(":scope > .tip");
+    if (!tip) return;
+    const [label, key] = tip.children;
+    const text = element.getAttribute("data-tip") || "";
+    const shortcut = element.getAttribute("data-key") || "";
+    if (label.textContent !== text) label.textContent = text;
+    if (key.textContent !== shortcut) key.textContent = shortcut;
+    key.hidden = !shortcut;
+    if (element.hasAttribute("title")) element.removeAttribute("title");
+  });
+};
+
+const seekStepSeconds = () => {
+  const seconds = Number(state.shortSeekSeconds);
+  return Number.isFinite(seconds) && seconds >= 1 && seconds <= 120 ? Math.round(seconds) : 10;
+};
+
+const isDefaultSpeedLabel = label => /^1(\.0+)?\s*x\b/i.test(String(label || "1x").trim());
+
+const qualityLabel = () => {
+  const height = Number(state.videoHeight) || 0;
+  const width = Number(state.videoWidth) || 0;
+  if (height <= 0) return "";
+  // Letterboxed 1920x800 video still reads as 1080p.
+  const effective = Math.max(height, Math.round(width * 9 / 16));
+  if (effective >= 2000) return "4K";
+  if (effective >= 1400) return "1440p";
+  if (effective >= 1000) return "1080p";
+  if (effective >= 700) return "720p";
+  return `${Math.round(height)}p`;
+};
+
+const renderStatusChips = hideAll => {
+  if (!statusChips) return;
+  const chips = [];
+  if (!hideAll) {
+    const quality = qualityLabel();
+    if (quality) chips.push(quality);
+    if (state.videoHdr) chips.push("HDR");
+    const rtxActive = typeof state.rtxSuperResolutionActive === "boolean"
+      ? state.rtxSuperResolutionActive
+      : Boolean(state.rtxComparisonAvailable);
+    if (rtxActive) chips.push("RTX VSR");
+    if (state.showSurroundUpmix && state.surroundUpmixEnabled && Number(state.surroundUpmixStatus) === 2) {
+      chips.push(`${state.surroundUpmixLabel === "7.1" ? "7.1" : "5.1"} upmix`);
+    }
+    if (state.showDiscordShare && state.discordShareEnabled) chips.push("Discord audio");
+  }
+  const key = chips.join("|");
+  if (key === statusChipsKey) return;
+  statusChipsKey = key;
+  statusChips.textContent = "";
+  chips.forEach(label => {
+    const chip = document.createElement("span");
+    chip.className = "player-chip";
+    chip.textContent = label;
+    statusChips.appendChild(chip);
+  });
+  statusChips.hidden = chips.length === 0;
+};
+
+const setControlPopoverOpen = (button, popover, open) => {
+  if (!button || !popover) return;
+  popover.hidden = !open;
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.classList.toggle("is-open", open);
+};
+
+const closeMoreMenu = () => {
+  if (!moreMenuOpen) return;
+  moreMenuOpen = false;
+  setControlPopoverOpen(moreButton, moreMenu, false);
+};
+
+const closeOptionsPopover = () => {
+  if (!optionsPopoverOpen) return;
+  optionsPopoverOpen = false;
+  setControlPopoverOpen(playbackOptionsButton, playbackOptionsPopover, false);
+  if (playbackOptionsAnchor) playbackOptionsAnchor.classList.remove("is-open");
+};
+
+const closeControlPopovers = () => {
+  closeOptionsPopover();
+  closeMoreMenu();
+};
+
+const openOptionsPopover = () => {
+  closeMoreMenu();
+  optionsPopoverOpen = true;
+  setControlPopoverOpen(playbackOptionsButton, playbackOptionsPopover, true);
+  if (playbackOptionsAnchor) playbackOptionsAnchor.classList.add("is-open");
+  noteChromeActivity(true);
+};
+
+const openMoreMenu = () => {
+  closeOptionsPopover();
+  moreMenuOpen = true;
+  setControlPopoverOpen(moreButton, moreMenu, true);
+  noteChromeActivity(true);
+};
+
+const syncPlaybackOptions = () => {
+  if (!playbackOptionsAnchor) return;
+  const toggles = [autoSkipIntroButton, autoNextEpisodeButton, surroundUpmixButton, discordShareButton].filter(Boolean);
+  const visibleToggles = toggles.filter(button => !button.hidden);
+  const onCount = visibleToggles.filter(button => button.getAttribute("aria-pressed") === "true").length;
+  const hasRtx = Boolean(rtxCompareButton && !rtxCompareButton.hidden);
+  const hasVideoSettings = Boolean(videoSettingsButton && !videoSettingsButton.hidden);
+  const hasAny = visibleToggles.length > 0 || hasRtx || hasVideoSettings;
+  playbackOptionsAnchor.hidden = !hasAny;
+  if (optionsDivider) optionsDivider.hidden = !hasAny;
+  if (playbackOptionsDivider) playbackOptionsDivider.hidden = !(visibleToggles.length && (hasRtx || hasVideoSettings));
+  if (playbackOptionsBadge) {
+    playbackOptionsBadge.hidden = onCount === 0;
+    playbackOptionsBadge.textContent = String(onCount);
+  }
+  const label = onCount ? `Playback options, ${onCount} on` : "Playback options";
+  playbackOptionsButton.setAttribute("aria-label", label);
+  if (moreOptions) moreOptions.hidden = !hasAny;
+  if (moreOptionsValue) moreOptionsValue.textContent = onCount ? `${onCount} on` : "";
+  if (!hasAny) closeOptionsPopover();
+};
+
+const syncRedesignedChrome = hideStatus => {
+  const seconds = seekStepSeconds();
+  if (seekBackButton) {
+    seekBackAmount.textContent = String(seconds);
+    seekForwardAmount.textContent = String(seconds);
+    seekBackButton.setAttribute("aria-label", `Back ${seconds} seconds`);
+    seekBackButton.setAttribute("data-tip", `Back ${seconds} s`);
+    seekForwardButton.setAttribute("aria-label", `Forward ${seconds} seconds`);
+    seekForwardButton.setAttribute("data-tip", `Forward ${seconds} s`);
+  }
+  const speedText = state.playbackSpeedLabel || "1x";
+  const changedSpeed = !isDefaultSpeedLabel(speedText);
+  if (speedBadge) {
+    speedBadge.hidden = !changedSpeed;
+    speedBadge.textContent = speedText.replace(/\s*\(.*\)\s*$/, "").replace(/x$/i, "×");
+  }
+  if (speedButton) speedButton.setAttribute("data-tip", `Speed · ${speedText}`);
+  if (resizeButton) resizeButton.setAttribute("data-tip", `Aspect · ${state.resizeModeLabel || "Fit"}`);
+  if (subtitlesButton) {
+    const subtitlesOff = (state.selectedSubtitleLanguageKey || subtitleOffKey) === subtitleOffKey;
+    if (subtitlesIcon) subtitlesIcon.setAttribute("href", subtitlesOff ? "#icon-subs-off" : "#icon-subs");
+    subtitlesButton.setAttribute("data-tip", state.subtitlesPanelTitle || "Subtitles");
+  }
+  if (audioButton) audioButton.setAttribute("data-tip", state.audioTracksPanelTitle || "Audio");
+  if (episodesButton) episodesButton.setAttribute("data-tip", state.episodesLabel || "Episodes");
+  if (sourcesButton) sourcesButton.setAttribute("data-tip", state.sourcesLabel || "Sources");
+  if (backButton) backButton.setAttribute("data-tip", state.backLabel || "Back");
+  if (submitIntroButton) submitIntroButton.setAttribute("data-tip", state.submitIntroLabel || "Submit intro");
+  const hasLibrary = Boolean(state.showEpisodes || state.showSources);
+  if (libraryDivider) libraryDivider.hidden = !hasLibrary;
+  if (moreEpisodes) moreEpisodes.hidden = !state.showEpisodes;
+  if (moreSources) moreSources.hidden = !state.showSources;
+  if (moreLibraryDivider) moreLibraryDivider.hidden = !hasLibrary;
+  if (moreSpeedValue) moreSpeedValue.textContent = speedText;
+  if (moreResizeValue) moreResizeValue.textContent = state.resizeModeLabel || "Fit";
+  syncPlaybackOptions();
+  renderStatusChips(hideStatus);
+  if (hideStatus || !state.controlsVisible || activeModal) closeControlPopovers();
+  syncTips();
+};
+
+const updateScrubHover = clientX => {
+  const durationMs = Math.max(0, Number(state.durationMs) || 0);
+  if (!scrubWrap || !scrubHover || durationMs <= 0) return;
+  const rect = scrubWrap.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const hoverMs = ratio * durationMs;
+  const chapter = scrubRailSegments.find(segment => hoverMs >= segment.startMs && hoverMs < segment.endMs);
+  const chapterLabel = chapter ? scrubChapterLabel(chapter.type) : "";
+  scrubHover.textContent = chapterLabel ? `${formatTime(hoverMs)} · ${chapterLabel}` : formatTime(hoverMs);
+  const halfWidth = scrubHover.offsetWidth / 2;
+  const x = Math.max(halfWidth, Math.min(rect.width - halfWidth, ratio * rect.width));
+  scrubHover.style.setProperty("--hover-x", `${x}px`);
+  scrubWrap.classList.add("is-hovering");
+};
+
 const renderChrome = () => {
   const durationMs = Math.max(0, Number(state.durationMs) || 0);
   const positionMs = isScrubbing ? scrubPositionMs : Math.max(0, Number(state.positionMs) || 0);
@@ -2609,7 +2927,7 @@ const renderChrome = () => {
   setVisible(rtxCompareButton, showRtxCompare);
   if (rtxCompareButton) {
     const original = Boolean(state.rtxShowingOriginal);
-    const label = original ? "Original" : "Hold: Original";
+    const label = original ? "Showing original video" : "RTX Super Resolution";
     const hint = original
       ? "Showing original video without RTX. Release to request the enhancement."
       : "Hold to bypass the RTX filter and compare the same video. NVIDIA App confirms driver activation.";
@@ -2617,6 +2935,7 @@ const renderChrome = () => {
     rtxCompareButton.setAttribute("aria-label", hint);
     rtxCompareButton.setAttribute("title", hint);
     rtxCompareLabel.textContent = label;
+    if (rtxCompareHold) rtxCompareHold.textContent = original ? "Release" : "Hold";
   }
   if (rtxCompareStatus) {
     const compareFailed = Boolean(state.rtxComparisonFailed);
@@ -2628,7 +2947,7 @@ const renderChrome = () => {
   if (pipButton) {
     const pipLabel = String(state.pipLabel || "").trim();
     pipButton.setAttribute("aria-label", pipLabel);
-    pipButton.setAttribute("title", pipLabel);
+    if (pipLabel) pipButton.setAttribute("data-tip", pipLabel);
     pipButton.hidden = !pipLabel;
   }
   syncPipLockLabels();
@@ -2646,6 +2965,7 @@ const renderChrome = () => {
   const playPauseLabel = isPlaying ? state.pauseLabel : state.playLabel;
   if (toggle) {
     toggle.setAttribute("aria-label", playPauseLabel || (isPlaying ? "Pause" : "Play"));
+    toggle.setAttribute("data-tip", playPauseLabel || (isPlaying ? "Pause" : "Play"));
   }
   if (toggleIcon) {
     toggleIcon.setAttribute("href", isPlaying ? "#icon-pause" : "#icon-play");
@@ -2657,7 +2977,7 @@ const renderChrome = () => {
     nextEpisodeButton.hidden = !state.nextEpisodePlayable;
     const nextLabel = state.nextEpisodeHeaderLabel || "Next episode";
     nextEpisodeButton.setAttribute("aria-label", nextLabel);
-    nextEpisodeButton.setAttribute("title", nextLabel);
+    nextEpisodeButton.setAttribute("data-tip", nextLabel);
     if (nextEpisodeButtonLabel) nextEpisodeButtonLabel.textContent = nextLabel;
   }
   syncFullscreenButtons();
@@ -2673,6 +2993,7 @@ const renderChrome = () => {
   } else {
     renderNativePlaybackPrompts();
   }
+  syncRedesignedChrome(Boolean(showError || showOpening));
   syncChromeAutoHideTimer(showOpening);
 };
 
@@ -3003,11 +3324,14 @@ window.addEventListener("blur", () => {
 document.querySelectorAll("[data-command]").forEach(button => {
   button.addEventListener("click", event => {
     event.stopPropagation();
-    if (button.closest(".action-pill")) {
+    if (button.classList.contains("action") && button.closest(".action-pill")) {
       setFocusedActionButton(button, { focus: false });
     }
     noteChromeActivity(true);
     const command = button.dataset.command;
+    // Menu rows act once and close their menu; playback toggles stay open so several can be flipped.
+    if (moreMenu && moreMenu.contains(button)) closeMoreMenu();
+    if (command === "videoSettings") closeOptionsPopover();
     if (command === "rtxCompare") return; // Held via pointer/keyboard, never latched by a click.
     if (command === "toggle") {
       if (event.detail !== 0 && suppressNextPointerToggleClick) {
@@ -3054,7 +3378,11 @@ document.querySelectorAll("[data-command]").forEach(button => {
       togglePlayerFullscreen();
       return;
     }
-    if (toggleAutoSetting(command)) return;
+    if (toggleAutoSetting(command)) {
+      syncPlaybackOptions();
+      renderStatusChips(false);
+      return;
+    }
     showCommandToast(command);
     send(command, 0);
   });
@@ -3383,6 +3711,47 @@ timeLabel.addEventListener("click", () => {
   timeLabelShowRemaining = !timeLabelShowRemaining;
   renderChrome();
 });
+
+if (playbackOptionsButton) {
+  playbackOptionsButton.addEventListener("click", event => {
+    event.stopPropagation();
+    setFocusedActionButton(playbackOptionsButton, { focus: false });
+    if (optionsPopoverOpen) closeOptionsPopover();
+    else openOptionsPopover();
+  });
+}
+
+if (moreButton) {
+  moreButton.addEventListener("click", event => {
+    event.stopPropagation();
+    setFocusedActionButton(moreButton, { focus: false });
+    if (moreMenuOpen) closeMoreMenu();
+    else openMoreMenu();
+  });
+}
+
+if (moreOptions) {
+  moreOptions.addEventListener("click", event => {
+    event.stopPropagation();
+    openOptionsPopover();
+  });
+}
+
+// A press outside an open menu only closes it; it must not also toggle playback.
+document.addEventListener("pointerdown", event => {
+  if (!optionsPopoverOpen && !moreMenuOpen) return;
+  if (event.target.closest && event.target.closest(".options-anchor")) return;
+  closeControlPopovers();
+  if (!isInteractiveControlTarget(event.target)) setSuppressNextRootClick();
+}, true);
+
+if (scrubWrap) {
+  scrubWrap.addEventListener("pointermove", event => updateScrubHover(event.clientX));
+  scrubWrap.addEventListener("pointerleave", () => scrubWrap.classList.remove("is-hovering"));
+}
+
+initTips();
+syncTips();
 
 window.playerUpdate = update => {
   diagnosticsSession.update(update);
@@ -3859,6 +4228,12 @@ document.addEventListener("keyup", event => {
 });
 
 document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && (optionsPopoverOpen || moreMenuOpen)) {
+    event.preventDefault();
+    closeControlPopovers();
+    focusShortcutRoot();
+    return;
+  }
   if (event.key === "Escape" && activeModal) {
     clearSpaceHoldTimerAndStopSpeedBoost();
     event.preventDefault();
