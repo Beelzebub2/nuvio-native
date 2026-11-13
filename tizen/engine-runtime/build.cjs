@@ -37,7 +37,7 @@ var index = patch('index.js', [
 ]);
 // The final identical marker above verifies the lifecycle call without changing it.
 var metadata = patch('lib/exchange-metadata.js', [
-  ['var METADATA_MAX_SIZE = 1 << 22', 'var METADATA_MAX_SIZE = 256 * 1024'],
+  ['var METADATA_MAX_SIZE = 1 << 22', 'var METADATA_MAX_SIZE = 2 * 1024 * 1024'],
   ['      var size = handshake.metadata_size', '      var size = handshake.metadata_size\n      if (typeof size !== "number" || size % 1 || size <= 0 || size > METADATA_MAX_SIZE) return'],
   ['        if (piece < 0) return', '        if (typeof piece !== "number" || piece % 1 || piece < 0 || piece >= Math.ceil(size / METADATA_BLOCK_SIZE)) return\n        if (ext.length > METADATA_BLOCK_SIZE + 1024) return'],
   ['          metadataPieces[piece] = ext.slice(delimiter + 2)', '          var payload = ext.slice(delimiter + 2)\n          if (payload.length !== Math.min(METADATA_BLOCK_SIZE, size - piece * METADATA_BLOCK_SIZE)) return\n          metadataPieces[piece] = payload'],
@@ -79,11 +79,11 @@ b.transform(function (file) {
     if (file === require.resolve('peer-wire-protocol')) {
       text = once(text, 'if (length) return self._parse(length, onmessage);', 'if (length > 262144) return self.destroy();\n\t\tif (length) return self._parse(length, onmessage);');
       text = once(text, 'switch (buffer[0]) {', 'var minimum = { 4: 5, 6: 13, 7: 9, 8: 13, 9: 3, 20: 2 };\n\t\tif (minimum[buffer[0]] && buffer.length < minimum[buffer[0]]) return self.destroy();\n\t\tswitch (buffer[0]) {');
-      text = once(text, 'Wire.prototype._onhave = function(i) {', 'Wire.prototype._onhave = function(i) {\n\tif (i >= 16384) return this.destroy();');
-      text = once(text, 'Wire.prototype._onbitfield = function(buffer) {', 'Wire.prototype._onbitfield = function(buffer) {\n\tif (buffer.length > 2048) return this.destroy();');
+      text = once(text, 'Wire.prototype._onhave = function(i) {', 'Wire.prototype._onhave = function(i) {\n\tif (i >= 65536) return this.destroy();');
+      text = once(text, 'Wire.prototype._onbitfield = function(buffer) {', 'Wire.prototype._onbitfield = function(buffer) {\n\tif (buffer.length > 8192) return this.destroy();');
     }
     if (/[\\/]bncode[\\/](bncode|bencode)\.js$/.test(file)) {
-      text = once(text, 'str = new Buffer(strLen)', 'if (strLen > 262144) throw new Error("Bencode string limit");\n            str = new Buffer(strLen)');
+      text = once(text, 'str = new Buffer(strLen)', 'if (strLen > 2097152) throw new Error("Bencode string limit");\n            str = new Buffer(strLen)');
       text = once(text, /depth \+= 1/g, 'depth += 1; if (depth > 32) throw new Error("Bencode nesting limit")');
       text = once(text, /dic\s*=\s*\{\}/, 'dic = Object.create(null)');
     }

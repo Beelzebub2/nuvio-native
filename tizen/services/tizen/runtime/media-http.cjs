@@ -5751,7 +5751,7 @@ function BdecodeSMachine (cb, cb_list, cb_dict, cb_end) {
             strLen *= 10
             strLen += buffer[pos] - 0x30
           } else {
-            if (strLen > 262144) throw new Error("Bencode string limit");
+            if (strLen > 2097152) throw new Error("Bencode string limit");
             str = new Buffer(strLen)
             pos -=1
             state = STATE_COLON
@@ -11205,7 +11205,7 @@ Wire.prototype._onunchoke = function() {
 };
 
 Wire.prototype._onbitfield = function(buffer) {
-	if (buffer.length > 2048) return this.destroy();
+	if (buffer.length > 8192) return this.destroy();
 	var pieces = bitfield(buffer);
 	for (var i = 0; i < 8 * buffer.length; i++) {
 		this.peerPieces[i] = pieces.get(i);
@@ -11214,7 +11214,7 @@ Wire.prototype._onbitfield = function(buffer) {
 };
 
 Wire.prototype._onhave = function(i) {
-	if (i >= 16384) return this.destroy();
+	if (i >= 65536) return this.destroy();
 	this.peerPieces[i] = true;
 	this.emit('have', i);
 };
@@ -11490,7 +11490,7 @@ var BdecodeSMachine = function (cb, cb_list, cb_dict, cb_end) {
             strLen *= 10
             strLen += buffer[pos] - 0x30
           } else {
-            if (strLen > 262144) throw new Error("Bencode string limit");
+            if (strLen > 2097152) throw new Error("Bencode string limit");
             str = new Buffer(strLen)
             pos -=1
             state = COLON
@@ -15521,7 +15521,7 @@ var bncode = require('bncode')
 var crypto = require('crypto')
 
 var METADATA_BLOCK_SIZE = 1 << 14
-var METADATA_MAX_SIZE = 256 * 1024
+var METADATA_MAX_SIZE = 2 * 1024 * 1024
 var EXTENSIONS = {
   m: {
     ut_metadata: 1
@@ -15828,8 +15828,30 @@ function extend(target) {
 var http = require('http'), url = require('url'), crypto = require('crypto'), Readable = require('stream').Readable;
 var torrentStream = require('torrent-stream'), createCache = require('./bounded-store.cjs');
 var networkPolicy = require('./network-policy.cjs'), net = require('net');
-var MAX_CACHE = 48 * 1024 * 1024, MAX_PIECE = 2 * 1024 * 1024;
+var MAX_CACHE = 48 * 1024 * 1024, MAX_PIECE = 32 * 1024 * 1024;
+var MAX_FILES = 1024, MAX_PIECES = 65536, MAX_TORRENT_BYTES = 1024 * 1024 * 1024 * 1024;
 var PROBE = new Buffer('starlit-range-probe-v1');
+function validateTorrent(t) {
+  if (!t || !Array.isArray(t.files) || !Array.isArray(t.pieces) || !t.files.length || !t.pieces.length) {
+    throw new Error('Invalid torrent file or piece metadata');
+  }
+  if (t.files.length > MAX_FILES) throw new Error('Torrent exceeds streaming limits: more than 1024 files');
+  if (t.pieces.length > MAX_PIECES) throw new Error('Torrent exceeds streaming limits: more than 65536 pieces');
+  if (!isFinite(t.pieceLength) || t.pieceLength % 1 || t.pieceLength < 16384 || t.pieceLength > MAX_PIECE) {
+    throw new Error('Torrent exceeds streaming limits: piece size must be between 16 KiB and 32 MiB');
+  }
+  if (!isFinite(t.length) || t.length % 1 || t.length < 1 || t.length > MAX_TORRENT_BYTES) {
+    throw new Error('Torrent exceeds streaming limits: invalid size or larger than 1 TiB');
+  }
+  t.files.forEach(function (f) {
+    if (!f || !isFinite(f.length) || f.length < 0 || f.length % 1 ||
+        !isFinite(f.offset) || f.offset < 0 || f.offset % 1 ||
+        typeof f.path !== 'string' || f.path.length > 2048 ||
+        typeof f.name !== 'string' || f.name.length > 512) {
+      throw new Error('Invalid torrent file metadata');
+    }
+  });
+}
 function start(options, callback) {
   options = options || {};
   if (!/^[a-f0-9]{64}$/.test(options.controlToken || '')) throw new Error('Trusted bridge control token required');
@@ -15853,13 +15875,9 @@ function start(options, callback) {
     if (!entry.tickets[selected]) entry.tickets[selected] = crypto.randomBytes(32).toString('hex');
     return { infoHash: entry.hash, files: files, guessedFileIdx: guessed, fileIdx: selected, filename: files[selected].name, playbackTicket: entry.tickets[selected], ticketFileIdx: selected, memoryOnly: true };
   }
-  function validate(t) {
-    if (!t || !t.files || !t.files.length || t.files.length > 256 || !t.pieces || !t.pieces.length || t.pieces.length > 16384 || t.pieceLength < 16384 || t.pieceLength > MAX_PIECE || t.pieceLength % 1 || !isFinite(t.length) || t.length < 1 || t.length > 1024 * 1024 * 1024 * 1024) throw new Error('Torrent exceeds streaming limits');
-    t.files.forEach(function (f) { if (!isFinite(f.length) || f.length < 0 || f.length % 1 || !isFinite(f.offset) || f.offset < 0 || typeof f.path !== 'string' || f.path.length > 2048 || f.name.length > 512) throw new Error('Invalid torrent file'); });
-  }
   function create(hash, body, res) {
     if (!body.torrent || body.torrent.infoHash !== hash) return json(res, 400, { error: 'Info hash mismatch' });
-    if (body.fileIdx !== undefined && (typeof body.fileIdx !== 'number' || body.fileIdx < 0 || body.fileIdx % 1 || body.fileIdx >= 256)) return json(res, 400, { error: 'Invalid file index' });
+    if (body.fileIdx !== undefined && (typeof body.fileIdx !== 'number' || body.fileIdx < 0 || body.fileIdx % 1 || body.fileIdx >= MAX_FILES)) return json(res, 400, { error: 'Invalid file index' });
     res._starlitFileIdx = body.fileIdx;
     if (active && active.hash === hash) { if (active.ready) return json(res, 200, listing(active, body.fileIdx)); if (active.pending.length >= 8) return json(res, 429, { error: 'Create already pending' }); active.pending.push(res); return; }
     var serial = generation + 1;
@@ -15882,7 +15900,7 @@ function start(options, callback) {
       var cache = createCache(Math.min(options.cacheBytes || MAX_CACHE, MAX_CACHE), function (index) { if (entry.engine && entry.engine.invalidate) entry.engine.invalidate(index); });
       entry.cache = cache; active = entry;
       try {
-        entry.engine = torrentStream('magnet:?xt=urn:btih:' + hash, { storage: cache.factory, memoryOnly: true, validateTorrent: validate, verify: false, connections: 12, uploads: false, trackers: trackers, dht: options.dht !== false, tracker: trackers.length > 0, validPeer: function (address) { var host = address.split(':')[0]; return options.allowPrivatePeers === true || (net.isIP(host) === 4 && !networkPolicy.blockedAddress(host)); } });
+        entry.engine = torrentStream('magnet:?xt=urn:btih:' + hash, { storage: cache.factory, memoryOnly: true, validateTorrent: validateTorrent, verify: false, connections: 12, uploads: false, trackers: trackers, dht: options.dht !== false, tracker: trackers.length > 0, validPeer: function (address) { var host = address.split(':')[0]; return options.allowPrivatePeers === true || (net.isIP(host) === 4 && !networkPolicy.blockedAddress(host)); } });
       } catch (err) { active = null; return json(res, 400, { error: err.message }); }
       entry.engine.on('error', function (err) {
         entry.error = String(err.message || err);
@@ -15966,7 +15984,7 @@ function start(options, callback) {
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     var pathname = url.parse(req.url).pathname;
     if (options.proxyHandler && options.proxyHandler(req, res)) return;
-    if (pathname === '/settings' && req.method === 'GET') return json(res, 200, { values: { cacheSize: MAX_CACHE }, version: 'starlit-torrent-1', memoryOnly: true, capabilities: { torrent: true, httpRange: true, offline: false } });
+    if (pathname === '/settings' && req.method === 'GET') return json(res, 200, { values: { cacheSize: MAX_CACHE }, version: 'starlit-torrent-1', memoryOnly: true, capabilities: { torrent: true, httpRange: true, offline: false }, limits: { files: MAX_FILES, pieces: MAX_PIECES, maxPieceBytes: MAX_PIECE, maxMetadataBytes: 2 * 1024 * 1024, cacheBytes: MAX_CACHE } });
     if (pathname === '/range-probe' && (req.method === 'GET' || req.method === 'HEAD')) { var probe = headers(res, req, PROBE.length, 'application/octet-stream'); if (probe) res.end(req.method === 'HEAD' ? undefined : PROBE.slice(probe.start, probe.end + 1)); return; }
     if ((pathname === '/removeAll' || /\/[a-f0-9]{40}\/remove$/.test(pathname)) && req.method === 'POST') {
       if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
@@ -15995,7 +16013,7 @@ function start(options, callback) {
   server.listen(port, '127.0.0.1', callback);
   return { server: server, stop: function (cb) { stopping = true; remove(function () { sockets.slice().forEach(function (s) { s.destroy(); }); server.close(cb); }); } };
 }
-module.exports = { start: start, version: 'starlit-torrent-1' };
+module.exports = { start: start, validateTorrent: validateTorrent, version: 'starlit-torrent-1' };
 
 },{"./bounded-store.cjs":1,"./network-policy.cjs":2,"crypto":undefined,"http":undefined,"net":undefined,"stream":undefined,"torrent-stream":83,"url":undefined}],91:[function(require,module,exports){
 'use strict';
