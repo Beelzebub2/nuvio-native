@@ -243,6 +243,7 @@ private fun MetaSectionReorderableList(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val lazyListState = rememberLazyListState()
+    SettingsSearchLazyListFocus(SettingsPage.MetaScreen, lazyListState)
     val reorderableLazyListState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
     ) { from, to ->

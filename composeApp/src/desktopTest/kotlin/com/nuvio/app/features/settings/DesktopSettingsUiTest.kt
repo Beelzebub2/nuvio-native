@@ -144,6 +144,30 @@ class DesktopSettingsUiTest {
             onNodeWithTag("settings-search-focused").assertIsDisplayed()
         }
 
+    @Test
+    fun standaloneMobileSettingsLocateDeepNestedSetting() =
+        runDesktopComposeUiTest(width = 430, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.MetaScreen,
+                key = "meta-more-like-this",
+                title = "More like this",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsSearchPageScope(SettingsPage.MetaScreen) {
+                        MetaScreenSettingsScreen(onBack = {})
+                    }
+                }
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("More like this").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
     private fun ComposeUiTest.sidebar(label: String): SemanticsNodeInteraction =
         onNode(hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
 

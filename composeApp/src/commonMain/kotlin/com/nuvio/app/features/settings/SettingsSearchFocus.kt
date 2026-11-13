@@ -3,7 +3,9 @@ package com.nuvio.app.features.settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
@@ -22,6 +24,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
+import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.nuvio
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -89,6 +92,18 @@ internal fun SettingsSearchLazyListFocus(page: SettingsPage, listState: LazyList
             index++
         }
     }
+}
+
+/** Shared mobile settings scaffold with lazy-list search navigation enabled. */
+@Composable
+internal fun SearchableSettingsNuvioScreen(
+    page: SettingsPage,
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    val listState = rememberLazyListState()
+    SettingsSearchLazyListFocus(page, listState)
+    NuvioScreen(modifier = modifier, listState = listState, content = content)
 }
 
 private val LocalSettingsSearchPage = compositionLocalOf<SettingsPage?> { null }
