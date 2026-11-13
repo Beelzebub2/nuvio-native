@@ -12,7 +12,9 @@ const requiredFiles = [
   "services/webos/package.json", "services/webos/services.json",
   "services/webos/src/index.js", "services/webos/src/serverHost.js",
   "services/webos/plugin/src/index.js", "services/webos/plugin/services.json",
-  "services/webos/runtime/media-http.cjs", "services/webos/runtime/dts/ffmpeg-core.wasm"
+  "services/webos/runtime/media-http.cjs", "services/webos/runtime/dts/ffmpeg-core.wasm",
+  "services/tizen/runtime/proxy-redirect-report-patch.cjs",
+  "services/tizen/runtime/enginefs-cache-routes-patch.cjs"
 ];
 async function git(args, cwd) {
   await new Promise((resolve, reject) => {
@@ -49,7 +51,9 @@ export async function fetchPinnedWebOsServices() {
     await git(["init", "-q"], temporary);
     await git(["remote", "add", "origin", sourceURL], temporary);
     await git(["sparse-checkout", "init", "--no-cone"], temporary);
-    await git(["sparse-checkout", "set", "--no-cone", "/services/webos/", "/services/plugin-http.cjs", "/LICENSE"], temporary);
+    await git(["sparse-checkout", "set", "--no-cone", "/services/webos/", "/services/plugin-http.cjs",
+      "/services/tizen/runtime/proxy-redirect-report-patch.cjs",
+      "/services/tizen/runtime/enginefs-cache-routes-patch.cjs", "/LICENSE"], temporary);
     await git(["-c", "protocol.version=2", "fetch", "--no-tags", "--depth", "1", "--filter=blob:none", "origin", upstream.commit], temporary);
     await git(["checkout", "--detach", "FETCH_HEAD"], temporary);
     const head = await new Promise((resolve, reject) => {
