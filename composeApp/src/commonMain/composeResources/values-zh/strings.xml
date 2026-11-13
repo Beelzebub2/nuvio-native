@@ -34,6 +34,9 @@
     <string name="action_reset">重置为默认值</string>
     <string name="action_resume">简历</string>
     <string name="action_retry">重试</string>
+    <string name="cd_decrease_value">减小%1$s</string>
+    <string name="cd_increase_value">增大%1$s</string>
+    <string name="action_refresh">刷新</string>
     <string name="action_save">保存</string>
     <string name="action_saving">正在保存...</string>
     <string name="action_switch">开关</string>
@@ -544,6 +547,8 @@
     <string name="compose_player_subtitle_delay">字幕延迟</string>
     <string name="compose_player_subtitles">字幕</string>
     <string name="compose_player_text_opacity">文本不透明度</string>
+    <string name="compose_player_timing">时间</string>
+    <string name="compose_player_text">文本</string>
     <string name="compose_player_brightness_level">亮度 %1$s</string>
     <string name="compose_player_volume_level">音量 %1$s</string>
     <string name="compose_player_muted">静音</string>
@@ -860,6 +865,9 @@
     <string name="remote_pc_check_ip">在此地址查找 PC</string>
     <string name="remote_pc_desktop_addresses">本地 PC 地址：%1$s</string>
     <string name="remote_pc_saved_devices">之前配对的电脑</string>
+    <string name="remote_pc_hero_hint">在电脑上打开手机遥控器。使用相同的账户和网络。</string>
+    <string name="remote_pc_saved_bluetooth">蓝牙 · 无需代码</string>
+    <string name="remote_pc_saved_wifi">Wi-Fi · 需要确认</string>
     <string name="remote_pc_saved_notice">已保存的电脑已准备好重新连接。当两个设备仍具有受保护的配对密钥时，之前批准的 Bluetooth PC 不需要另一个代码。 LAN 连接仍需要确认。</string>
     <string name="remote_pc_forget">忘记了</string>
     <string name="remote_pc_wake">唤醒电脑</string>
@@ -932,6 +940,9 @@
     <string name="remote_window_status_connected">电话已连接</string>
     <string name="remote_window_status_offline">未准备好</string>
     <string name="remote_window_other_ways">其他连接方式</string>
+    <string name="remote_window_local_address">电脑本地地址</string>
+    <string name="remote_window_copy_address">复制地址</string>
+    <string name="remote_window_trouble_caption">防火墙规则、网络类型和端口</string>
     <string name="remote_window_network_section">网络</string>
     <string name="remote_firewall_checking">检查 Windows 防火墙...</string>
     <string name="remote_discovery_unavailable">自动 UDP 发现不可用。您仍然可以通过扫描 QR 代码或输入此电脑的 IP 地址进行配对。</string>
@@ -2304,6 +2315,7 @@
     <string name="cloud_library_play_not_connected">云服务未连接。</string>
     <string name="cloud_library_play_provider_not_connected">%1$s 未连接。</string>
     <string name="cloud_library_playable_file_count">%1$d 可播放文件</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d 个文件</string>
     <string name="cloud_library_provider_all">全部</string>
     <string name="cloud_library_refresh">刷新云库</string>
     <string name="cloud_library_search_label">搜索云库</string>
@@ -2710,6 +2722,8 @@
     <string name="layout_random_episode_sub">随机播放任何系列中的剧集。关闭此功能会暂停随机播放。</string>
     <string name="random_episode_unwatched">未观看的剧集</string>
     <string name="random_episode_include_watched">所有剧集</string>
+    <string name="shuffle_pool_episode_count">%1$d 集</string>
+    <string name="shuffle_pool_episode_count_all">%1$d 集，包括已观看的</string>
     <string name="random_episode_empty_subtitle">没有可随机播放的剧集。</string>
     <string name="random_episode_caught_up">您已观看每一集。选择要再次观看的所有剧集。</string>
     <string name="random_episode_loading">正在加载剧集...</string>
@@ -2843,7 +2857,10 @@
     <string name="account_credentials_password_step2">输入电子邮件中的代码，然后选择新密码。该代码自动过期。</string>
     <string name="account_credentials_email_step">确认您当前的密码以请求新电子邮件。您必须批准发送到这两个电子邮件地址的链接。</string>
     <string name="account_credentials_current_password">当前密码</string>
+    <string name="cd_show_password">显示密码</string>
+    <string name="cd_hide_password">隐藏密码</string>
     <string name="account_credentials_verification_code">邮箱验证码</string>
+    <string name="account_credentials_code_placeholder">6 位数字验证码</string>
     <string name="account_credentials_new_password">新密码</string>
     <string name="account_credentials_confirm_password">确认新密码</string>
     <string name="account_credentials_new_email">新电子邮件地址</string>
@@ -3083,4 +3100,5 @@
     <string name="changelog_view_github">在 GitHub 上查看</string>
     <string name="updates_whats_new">新增内容</string>
     <string name="updates_download_size">%1$s 下载</string>
+    <string name="source_filter_result_count">%1$d / %2$d 个来源</string>
 </resources>

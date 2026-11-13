@@ -1,5 +1,6 @@
 import { ensureHeroMdbListRatings } from "./homeHeroMdbListLoad.js";
 import { registerHomeDomNodes } from "./homeDomUpdate.js";
+import { syncHeroEyebrow } from "./homeHeroEyebrow.js";
 import { createHeroDescriptionAutoScroller } from "./heroDescriptionAutoScroll.js";
 import * as internals from "./homeScreenContext.js";
 export function createHomeScreenMethods05() {
@@ -89,6 +90,7 @@ export function createHomeScreenMethods05() {
       } else if (logoNode) {
         logoNode.remove();
       }
+      syncHeroEyebrow(this.container, hero);
       const titleNode = heroNode.querySelector(".home-hero-title-text");
       if (titleNode) {
         titleNode.textContent = display.title || "Untitled";
@@ -286,6 +288,10 @@ export function createHomeScreenMethods05() {
       return focused;
     },
     setCurrentFocusedNode(node = null) {
+      // The eyebrow names the focused row, so it follows focus right away.
+      if (this.layoutMode === "modern") {
+        syncHeroEyebrow(this.container, this.heroItem || this.heroCandidates?.[0] || null, node);
+      }
       this.currentFocusedNode = node instanceof HTMLElement ? node : null;
     },
     setFocusedNode(target, { suppressDelegatedFocus = false } = {}) {

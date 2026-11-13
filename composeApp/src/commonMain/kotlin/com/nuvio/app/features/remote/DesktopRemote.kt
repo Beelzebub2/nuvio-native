@@ -78,6 +78,10 @@ internal data class RemotePlayback(
     val downloads: List<RemoteDownloadStatus> = emptyList(),
     val capabilities: List<String> = emptyList(),
     val sourcePicker: RemoteSourcePicker = RemoteSourcePicker(),
+    // Optional now-playing details. Older PCs send only [title]; older phones ignore these.
+    val mediaTitle: String = "",
+    val episodeLine: String = "",
+    val poster: String = "",
 )
 
 internal fun RemotePlayback.effectiveVolumeMax(): Float =

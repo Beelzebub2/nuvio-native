@@ -30,6 +30,9 @@
     <string name="action_reset">Standaardinstellingen herstellen</string>
     <string name="action_resume">Hervatten</string>
     <string name="action_retry">Opnieuw proberen</string>
+    <string name="cd_decrease_value">%1$s verlagen</string>
+    <string name="cd_increase_value">%1$s verhogen</string>
+    <string name="action_refresh">Vernieuwen</string>
     <string name="action_save">Opslaan</string>
     <string name="action_saving">Bezig met opslaan...</string>
     <string name="action_switch">Wisselen</string>
@@ -468,6 +471,8 @@
     <string name="compose_player_subtitle_delay">Ondertitelvertraging</string>
     <string name="compose_player_subtitles">Ondertitels</string>
     <string name="compose_player_text_opacity">Tekstdekking</string>
+    <string name="compose_player_timing">Timing</string>
+    <string name="compose_player_text">Tekst</string>
     <string name="compose_player_brightness_level">Helderheid %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Gedempt</string>
@@ -1854,6 +1859,7 @@
     <string name="cloud_library_play_not_connected">Cloudservice is niet verbonden.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s is niet verbonden.</string>
     <string name="cloud_library_playable_file_count">%1$d afspeelbare bestanden</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d bestanden</string>
     <string name="cloud_library_provider_all">Alle</string>
     <string name="cloud_library_refresh">Cloudbibliotheek vernieuwen</string>
     <string name="cloud_library_search_label">Cloudbibliotheek doorzoeken</string>

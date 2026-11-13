@@ -30,6 +30,9 @@
     <string name="action_reset">Върни по подразбиране</string>
     <string name="action_resume">Продължи</string>
     <string name="action_retry">Опитай отново</string>
+    <string name="cd_decrease_value">Намали %1$s</string>
+    <string name="cd_increase_value">Увеличи %1$s</string>
+    <string name="action_refresh">Обнови</string>
     <string name="action_save">Запази</string>
     <string name="action_saving">Запазване…</string>
     <string name="action_switch">Превключи</string>
@@ -468,6 +471,8 @@
     <string name="compose_player_subtitle_delay">Закъснение на субтитрите</string>
     <string name="compose_player_subtitles">Субтитри</string>
     <string name="compose_player_text_opacity">Непрозрачност на текста</string>
+    <string name="compose_player_timing">Синхронизация</string>
+    <string name="compose_player_text">Текст</string>
     <string name="compose_player_brightness_level">Яркост %1$s</string>
     <string name="compose_player_volume_level">Сила на звука %1$s</string>
     <string name="compose_player_muted">Заглушен</string>
@@ -1835,6 +1840,7 @@
     <string name="cloud_library_play_not_connected">Облачната услуга не е свързана.</string>
     <string name="cloud_library_play_provider_not_connected">%1$s не е свързан.</string>
     <string name="cloud_library_playable_file_count">%1$d файла за пускане</string>
+    <string name="cloud_library_provider_file_count">%1$s · %2$d файла</string>
     <string name="cloud_library_provider_all">Всички</string>
     <string name="cloud_library_refresh">Обнови облачната библиотека</string>
     <string name="cloud_library_search_label">Търсене в облачната библиотека</string>

@@ -31,6 +31,22 @@ export function createPlayerScreenMethods28() {
           primary: true
         }
       ];
+      if (this.isSeekBarAvailable() && this.isLivePlayback?.() !== true) {
+        base.push(
+          {
+            action: "seekBack10",
+            icon: "assets/icons/ic_player_replay_10.svg",
+            useMask: true,
+            title: t("player_seek_back_10", {}, "Back 10 seconds")
+          },
+          {
+            action: "seekForward10",
+            icon: "assets/icons/ic_player_forward_10.svg",
+            useMask: true,
+            title: t("player_seek_forward_10", {}, "Forward 10 seconds")
+          }
+        );
+      }
       if (nextEpisode?.hasAired && !this.nextEpisodeLaunching) {
         base.push({
           action: "playNextEpisode",
@@ -43,7 +59,9 @@ export function createPlayerScreenMethods28() {
         base.push({
           action: "subtitleDialog",
           icon: "assets/icons/ic_player_subtitles.svg",
-          title: t("subtitle_dialog_title", {}, "Subtitles")
+          useMask: true,
+          title: t("subtitle_dialog_title", {}, "Subtitles"),
+          text: t("subtitle_dialog_title", {}, "Subtitles")
         });
       if (this.hasAudioTracksAvailable())
         base.push({
@@ -53,25 +71,32 @@ export function createPlayerScreenMethods28() {
               ? "assets/icons/ic_player_audio_filled.svg"
               : "assets/icons/ic_player_audio_outline.svg",
           useMask: true,
-          title: t("audio_dialog_title", {}, "Audio")
+          title: t("audio_dialog_title", {}, "Audio"),
+          text: t("audio_dialog_title", {}, "Audio")
         });
       if (Array.isArray(this.playerChapters) && this.playerChapters.length > 1 && this.isLivePlayback?.() !== true) {
         base.push({
           action: "chapters",
           icon: "assets/icons/ic_player_chapters.svg",
-          title: t("player_chapters", {}, "Chapters")
+          useMask: true,
+          title: t("player_chapters", {}, "Chapters"),
+          text: t("player_chapters", {}, "Chapters")
         });
       }
       base.push({
         action: "source",
         icon: "assets/icons/ic_player_source.svg",
-        title: t("sources_title", {}, "Sources")
+        useMask: true,
+        title: t("sources_title", {}, "Sources"),
+        text: t("sources_title", {}, "Sources")
       });
       if (Array.isArray(uiState.episodesAll) && uiState.episodesAll.length) {
         base.push({
           action: "episodes",
           icon: "assets/icons/ic_player_episodes.svg",
-          title: t("episodes_panel_title", {}, "Episodes")
+          useMask: true,
+          title: t("episodes_panel_title", {}, "Episodes"),
+          text: t("episodes_panel_title", {}, "Episodes")
         });
       }
       if (this.isPartyButtonAvailable?.()) {
@@ -122,7 +147,8 @@ export function createPlayerScreenMethods28() {
           control.title || "",
           Boolean(control.primary),
           Boolean(control.useMask),
-          control.className || ""
+          control.className || "",
+          control.text || ""
         ])
       );
     },
@@ -151,10 +177,12 @@ export function createPlayerScreenMethods28() {
         mountedButtons.length === controls.length &&
         mountedButtons.every((button, index) => button.dataset.action === String(controls[index]?.action || ""));
       if (!controlsMatchDom || this.renderedControlSignature !== controlRenderSignature) {
+        // The first labelled button starts the track group on the right.
+        const firstTextIndex = controls.findIndex((control) => control.text);
         wrap.innerHTML = controls
           .map(
-            (control) => `
-            <button class="player-control-btn focusable${control.primary ? " is-primary" : ""}${control.className ? ` ${escapeHtml(control.className)}` : ""}"
+            (control, controlIndex) => `
+            <button class="player-control-btn focusable${control.primary ? " is-primary" : ""}${control.text ? " has-track-label" : ""}${controlIndex === firstTextIndex ? " is-track-start" : ""}${control.className ? ` ${escapeHtml(control.className)}` : ""}"
                     data-action="${control.action}"
                     title="${escapeHtml(control.title || "")}">
               ${
@@ -163,7 +191,7 @@ export function createPlayerScreenMethods28() {
                     ? `<span class="player-control-icon player-control-icon-mask" style="-webkit-mask-image:url('${escapeHtml(control.icon)}');mask-image:url('${escapeHtml(control.icon)}');" aria-hidden="true"></span>`
                     : `<img class="player-control-icon" src="${control.icon}" alt="" aria-hidden="true" />`
                   : `<span class="player-control-label">${escapeHtml(control.label || "")}</span>`
-              }
+              }${control.text ? `<span class="player-control-text">${escapeHtml(control.text)}</span>` : ""}
             </button>
           `
           )

@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -57,13 +58,17 @@ fun <T> NuvioSegmentedControl(
     modifier: Modifier = Modifier,
     size: NuvioSegmentedSize = NuvioSegmentedSize.Regular,
     onSecondaryClick: ((T) -> Unit)? = null,
+    /** Stretch the segments to share the control's width equally (tab bars, full-width choices). */
+    fillWidth: Boolean = false,
+    /** The control's own fill. Pass a darker inset when it sits on a sheet or card. */
+    containerColor: Color = MaterialTheme.nuvio.colors.surface,
 ) {
     val colors = MaterialTheme.nuvio.colors
     val containerShape = RoundedCornerShape(NuvioTokens.Radius.lg)
     Row(
         modifier = modifier
             .clip(containerShape)
-            .background(colors.surface)
+            .background(containerColor)
             .border(NuvioTokens.Border.thin, colors.borderSubtle, containerShape)
             .padding(NuvioTokens.Space.s4)
             .selectableGroup(),
@@ -76,8 +81,8 @@ fun <T> NuvioSegmentedControl(
             val hovered by interactionSource.collectIsHoveredAsState()
             val background by animateColorAsState(
                 targetValue = when {
-                    isSelected -> lerp(colors.surface, colors.textPrimary, 0.12f)
-                    hovered -> lerp(colors.surface, colors.textPrimary, 0.05f)
+                    isSelected -> lerp(containerColor, colors.textPrimary, 0.12f)
+                    hovered -> lerp(containerColor, colors.textPrimary, 0.05f)
                     else -> Color.Transparent
                 },
                 animationSpec = tween(NuvioTokens.Motion.fastMillis),
@@ -85,6 +90,7 @@ fun <T> NuvioSegmentedControl(
             )
             Row(
                 modifier = Modifier
+                    .then(if (fillWidth) Modifier.weight(1f) else Modifier)
                     .height(size.height)
                     .clip(RoundedCornerShape(NuvioTokens.Radius.md))
                     .background(background)
@@ -102,16 +108,21 @@ fun <T> NuvioSegmentedControl(
                             Modifier.semantics { contentDescription = description }
                         } ?: Modifier,
                     )
-                    .padding(horizontal = size.horizontalPadding),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                    .padding(horizontal = if (fillWidth) NuvioTokens.Space.s6 else size.horizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(
+                    if (fillWidth) NuvioTokens.Space.s6 else NuvioTokens.Space.s8,
+                    Alignment.CenterHorizontally,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = segment.label,
+                    modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
                     color = if (isSelected) colors.textPrimary else colors.textSecondary,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 segment.count?.let { count ->
                     Text(

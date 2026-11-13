@@ -12,6 +12,7 @@ import { compatibilityPolicy } from "./compatibilityPolicy.mjs";
 import { writeRuntimeEnvScriptFile } from "./envProperties.mjs";
 import { buildI18nBundles } from "./buildI18nBundles.mjs";
 import { assSubtitleRuntimeSource } from "./assSubtitleRuntime.mjs";
+import { referenceCanvasPlugin } from "./referenceCanvasCss.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
@@ -399,6 +400,9 @@ async function buildCSS() {
     if (body) {
       const result = await postcss([
         postcssGlobalData({ files: [path.join(cssDir, "base.css")] }),
+        // Resolve window-relative lengths to the 1080-tall reference canvas
+        // before any fallback is derived from them.
+        referenceCanvasPlugin(),
         autoprefixer({
           overrideBrowserslist: [`Chrome ${compatibilityPolicy.chromiumVersion}`],
           grid: "autoplace"
@@ -568,8 +572,16 @@ async function buildBundle() {
   }
   console.log("bundle build complete");
 }
+const cssOnly = /^(1|true|yes|on)$/i.test(String(process.env.STARLIT_BUILD_CSS_ONLY || ""));
 async function runBuild() {
   try {
+    if (cssOnly) {
+      // Stylesheet iteration: refresh dist/css/bundle.css in an existing build.
+      await buildCSS();
+      console.log(`
+stylesheet rebuilt in: ${distDir}`);
+      return;
+    }
     console.log("cleaning dist directory...");
     await rm(distDir, { recursive: true, force: true });
     await mkdir(distDir, { recursive: true });

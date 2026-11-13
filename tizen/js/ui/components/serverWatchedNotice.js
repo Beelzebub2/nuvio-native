@@ -1,3 +1,4 @@
+import { getTvCanvasRoot } from "../../platform/tvViewport.js";
 import { I18n } from "../../i18n/index.js";
 let timer = null;
 document.addEventListener("nuvio:server-watched-failed", () => {
@@ -7,7 +8,7 @@ document.addEventListener("nuvio:server-watched-failed", () => {
     notice.id = "server-watched-notice";
     notice.className = "server-watched-notice";
     notice.setAttribute("role", "status");
-    document.body.appendChild(notice);
+    getTvCanvasRoot().appendChild(notice);
   }
   notice.textContent = I18n.t("servers_watched_failed");
   clearTimeout(timer);

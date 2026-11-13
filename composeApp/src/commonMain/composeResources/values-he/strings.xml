@@ -17,6 +17,8 @@
     <string name="action_reset">אפס לברירת מחדל</string>
     <string name="action_resume">המשך</string>
     <string name="action_retry">נסה שוב</string>
+    <string name="cd_decrease_value">הקטנת %1$s</string>
+    <string name="cd_increase_value">הגדלת %1$s</string>
     <string name="action_save">שמור</string>
     <string name="action_saving">שומר\u2026</string>
     <string name="action_switch">החלף</string>
@@ -224,6 +226,8 @@
     <string name="compose_player_subtitle_delay">עיכוב כתוביות</string>
     <string name="compose_player_subtitles">כתוביות</string>
     <string name="compose_player_text_opacity">שקיפות טקסט</string>
+    <string name="compose_player_timing">תזמון</string>
+    <string name="compose_player_text">טקסט</string>
     <string name="compose_player_brightness_level">בהירות %1$s</string>
     <string name="compose_player_volume_level">עוצמת קול %1$s</string>
     <string name="compose_player_muted">הושתק</string>

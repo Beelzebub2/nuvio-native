@@ -5,11 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,10 +22,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.NuvioActionLabel
+import com.nuvio.app.core.ui.NuvioGroup
+import com.nuvio.app.core.ui.NuvioGroupDivider
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.NuvioPillButton
+import com.nuvio.app.core.ui.NuvioPillButtonStyle
+import com.nuvio.app.core.ui.NuvioSectionLabel
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.nuvioTypeScale
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.myanimelist.isLikelyMyAnimeListAnime
 import com.nuvio.app.features.watched.WatchedRepository
@@ -55,6 +64,7 @@ internal fun WatchOrderSection(
         completedMalIdsFromWatched(watched.items) +
             if (currentTitleCompleted) setOfNotNull(currentMalId) else emptySet()
     }
+    val tokens = MaterialTheme.nuvio
 
     LaunchedEffect(meta.id, meta.imdbId, meta.links, retryKey) {
         loading = true
@@ -76,52 +86,70 @@ internal fun WatchOrderSection(
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val loaded = order
+        val required = loaded?.steps?.filter { it.required }.orEmpty()
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
             Text(
                 text = stringResource(Res.string.watch_order_title),
                 modifier = Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.nuvioTypeScale.titleMd,
+                color = tokens.colors.textPrimary,
             )
-            val malId = currentMalId
-            if (malId != null && order != null && onOpenFullOrder != null) {
-                TextButton(onClick = { onOpenFullOrder(malId, currentTitleCompleted) }) {
-                    Text(stringResource(Res.string.watch_order_view_all))
-                }
+            if (!loading && loaded != null) {
+                Text(
+                    text = stringResource(Res.string.watch_order_summary, required.size),
+                    style = MaterialTheme.nuvioTypeScale.bodySm,
+                    color = tokens.colors.textMuted,
+                )
             }
         }
         if (loading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            Text(
-                text = stringResource(Res.string.watch_order_loading),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                NuvioLoadingIndicator(Modifier.size(18.dp), color = tokens.colors.accent, size = 18.dp)
+                Text(
+                    text = stringResource(Res.string.watch_order_loading),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.colors.textMuted,
+                )
+            }
             return@Column
         }
-        val loaded = order
         if (loaded == null) {
             Text(
                 text = if (currentMalId == null) stringResource(Res.string.watch_order_no_mapping)
                     else stringResource(Res.string.watch_order_unavailable),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = tokens.colors.textMuted,
             )
-            TextButton(onClick = { retryKey++ }) {
-                Text(stringResource(Res.string.action_retry))
-            }
+            NuvioPillButton(
+                text = stringResource(Res.string.action_retry),
+                onClick = { retryKey++ },
+                icon = Icons.Rounded.Refresh,
+            )
             return@Column
         }
-        Text(
-            text = stringResource(Res.string.watch_order_summary, loaded.steps.count { it.required }) +
-                " · " + watchOrderConfidenceLabel(loaded.confidence),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WatchOrderConfidenceBadge(loaded.confidence, Modifier.weight(1f, fill = false))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
+                val malId = currentMalId
+                if (malId != null && onOpenFullOrder != null) {
+                    NuvioActionLabel(
+                        text = stringResource(Res.string.watch_order_view_all),
+                        onClick = { onOpenFullOrder(malId, currentTitleCompleted) },
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
+                }
+            }
+        }
         val next = if (currentTitleCompleted) {
             currentMalId?.let {
                 loaded.nextUnwatchedAfter(
@@ -133,47 +161,65 @@ internal fun WatchOrderSection(
             }
         } else null
         if (next != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = stringResource(Res.string.watch_order_next),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = next.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (onFindTitle != null) {
-                    FilledTonalButton(onClick = { onFindTitle(next.title) }) {
-                        Text(stringResource(Res.string.watch_order_find_in_starlit))
-                    }
-                }
-            }
+            WatchOrderNextUp(title = next.title, onFindTitle = onFindTitle)
         }
         val visible = watchOrderPreviewWindow(
-            steps = loaded.steps.filter { it.required },
+            steps = required,
             currentMalId = currentMalId,
             limit = 3,
         )
-        visible.forEachIndexed { index, entry ->
-            WatchOrderStepRow(
-                step = entry,
-                position = loaded.steps.filter { it.required }.indexOf(entry) + 1,
-                isCurrent = entry.malId == currentMalId,
-                isCompleted = entry.malId in completed,
-                onFindTitle = onFindTitle,
-            )
+        if (visible.isNotEmpty()) {
+            NuvioGroup {
+                visible.forEachIndexed { index, entry ->
+                    if (index > 0) NuvioGroupDivider()
+                    WatchOrderStepRow(
+                        step = entry,
+                        position = required.indexOf(entry) + 1,
+                        isCurrent = entry.malId == currentMalId,
+                        isCompleted = entry.malId in completed,
+                        onFindTitle = onFindTitle,
+                    )
+                }
+            }
         }
         if (onOpenFullOrder == null) {
             Text(
                 text = stringResource(Res.string.watch_order_disclaimer),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.nuvioTypeScale.labelSm.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                color = tokens.colors.textMuted,
             )
+        }
+    }
+}
+
+/** "Next in watch order" with the title and a Find in Starlit action. */
+@Composable
+internal fun WatchOrderNextUp(title: String, onFindTitle: ((String) -> Unit)?) {
+    val tokens = MaterialTheme.nuvio
+    NuvioGroup {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                NuvioSectionLabel(stringResource(Res.string.watch_order_next).uppercase())
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = tokens.colors.textPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onFindTitle != null) {
+                NuvioPillButton(
+                    text = stringResource(Res.string.watch_order_find_in_starlit),
+                    onClick = { onFindTitle(title) },
+                    style = NuvioPillButtonStyle.Primary,
+                    icon = Icons.Rounded.Search,
+                )
+            }
         }
     }
 }

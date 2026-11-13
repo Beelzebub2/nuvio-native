@@ -112,6 +112,25 @@ export function createSettingsScreenMethods14() {
         this.applyFocus();
       }
     },
+    /**
+     * Rows that carry a value (Display & scaling) step it with Left/Right.
+     * Returns false when the row has no stepper or is already at that end, so
+     * the key keeps its usual meaning (Left then returns to the section list).
+     */
+    async adjustFocusedContentRow(delta) {
+      const current = this.container?.querySelector?.(".settings-content-focusable.focused");
+      const adjustKey = String(current?.dataset?.adjustKey || "");
+      const adjust = adjustKey ? this.adjustMap?.get(adjustKey) : null;
+      if (typeof adjust !== "function" || !adjust(delta)) {
+        return false;
+      }
+      this.contentFocusKey = String(current.dataset.focusKey || adjustKey);
+      this.suppressNextContentFocusScroll = true;
+      await this.render({ refreshModel: true });
+      this.focusZone = "content";
+      this.applyFocus();
+      return true;
+    },
     async onKeyDown(event) {
       if (Platform.isBackEvent(event)) {
         event?.preventDefault?.();
@@ -274,6 +293,9 @@ export function createSettingsScreenMethods14() {
               this.focusZone = "nav";
               this.applyFocus();
             }
+            return;
+          }
+          if ((code === 37 || code === 39) && (await this.adjustFocusedContentRow(code === 37 ? -1 : 1))) {
             return;
           }
           if (code === 37) {
