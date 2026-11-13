@@ -274,6 +274,7 @@ internal fun RemoteSourcePickerDialog(
     pcName: String,
     onDismiss: () -> Unit,
     onOpenController: () -> Unit,
+    onRetry: (() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
@@ -283,12 +284,11 @@ internal fun RemoteSourcePickerDialog(
     val filteredSources = remember(state.sources, sourceFilters) {
         filterRemoteSourceChoices(state.sources, sourceFilters)
     }
-    LaunchedEffect(requestId, matches, connected) {
-        if (matches) {
-            noResponse = false
-        } else if (connected && requestId.isNotEmpty()) {
-            delay(20_000L)
-            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.requestId != requestId
+    LaunchedEffect(requestId, matches, state.phase, state.sources.size, connected) {
+        noResponse = false
+        if (connected && state.isAwaitingSources(requestId)) {
+            delay(if (matches) REMOTE_SOURCE_RESULTS_TIMEOUT_MS else REMOTE_SOURCE_ACK_TIMEOUT_MS)
+            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.isAwaitingSources(requestId)
         }
     }
     val searching = connected && !noResponse && (!matches || state.phase == "searching")
@@ -334,7 +334,7 @@ internal fun RemoteSourcePickerDialog(
             when {
                 !connected -> SourcePickerStatus(Icons.Rounded.LinkOff, NuvioIconChipTone.Danger,
                     stringResource(Res.string.remote_source_picker_disconnected))
-                noResponse && !matches -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
+                noResponse -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
                     stringResource(Res.string.remote_source_picker_timeout))
                 playing -> SourcePickerStatus(Icons.Rounded.CheckCircle, NuvioIconChipTone.Success,
                     stringResource(Res.string.remote_source_picker_playing))
@@ -344,6 +344,9 @@ internal fun RemoteSourcePickerDialog(
                     stringResource(Res.string.remote_source_picker_empty))
                 matches && state.phase == "error" -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Danger,
                     state.message.ifBlank { stringResource(Res.string.remote_source_picker_error) })
+                matches && state.phase == "ready" && state.sources.isEmpty() ->
+                    SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
+                        state.message.ifBlank { stringResource(Res.string.remote_source_picker_empty) })
                 searching && !showSources -> SourcePickerStatus(Icons.Rounded.Search, NuvioIconChipTone.Accent,
                     stringResource(Res.string.remote_source_picker_searching), busy = true)
                 searching -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -352,7 +355,9 @@ internal fun RemoteSourcePickerDialog(
                         style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
                 }
             }
-            if (connected && matches && state.message.isNotBlank() && state.phase !in setOf("playing", "error")) {
+            if (connected && matches && state.message.isNotBlank() &&
+                state.phase !in setOf("playing", "error") &&
+                !(state.phase == "ready" && state.sources.isEmpty())) {
                 DialogHint(state.message)
             }
             if (showSources) {
@@ -404,6 +409,16 @@ internal fun RemoteSourcePickerDialog(
                         }
                     }
                 }
+            }
+            if (connected && onRetry != null &&
+                (noResponse || (matches && (state.phase in setOf("empty", "error") ||
+                    (state.phase == "ready" && state.sources.isEmpty()))))) {
+                DialogButton(
+                    text = stringResource(Res.string.action_retry),
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = DialogButtonStyle.Primary,
+                )
             }
             DialogButton(
                 text = stringResource(Res.string.remote_source_picker_controller),

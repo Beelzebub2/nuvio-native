@@ -109,6 +109,28 @@ class RemoteControllerUiTest {
         }
 
     @Test
+    fun failedPcSourceSearchOffersAnActionableRetry() = runDesktopComposeUiTest(width = 360, height = 780) {
+        val requestId = "4d6f2801-16ee-493c-bcc9-0bfa5efad34b"
+        var retries = 0
+        setContent {
+            NuvioTheme {
+                RemoteSourcePickerDialog(
+                    requestId = requestId,
+                    state = RemoteSourcePicker(requestId, "Test title", "error", message = "Network lookup failed."),
+                    connected = true,
+                    pcName = "Test PC",
+                    onDismiss = {},
+                    onOpenController = {},
+                    onRetry = { retries++ },
+                )
+            }
+        }
+        onNodeWithText("Network lookup failed.").assertIsDisplayed()
+        onNodeWithText("Retry").assertIsDisplayed().performClick()
+        runOnIdle { assertEquals(1, retries) }
+    }
+
+    @Test
     fun phoneControllerIsAFullPageWithConnectOptions() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.status.value = "Connect to a desktop on the same Wi-Fi or Ethernet network."
         DesktopRemote.desktops.value = listOf(RemoteDesktop("192.168.1.50", REMOTE_LAN_PORT, "Living room PC"))

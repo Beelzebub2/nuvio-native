@@ -1,6 +1,7 @@
 package com.nuvio.app.features.watchorder
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -22,6 +24,7 @@ import com.nuvio.app.core.ui.NuvioGroup
 import com.nuvio.app.core.ui.NuvioGroupDivider
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioTheme
+import com.nuvio.app.features.details.DetailOverviewStack
 import com.nuvio.app.features.search.SearchPrefill
 import com.nuvio.app.navigation.DetailRoute
 import com.nuvio.app.navigation.NuvioNavigator
@@ -32,9 +35,40 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class WatchOrderLayoutUiTest {
+    @Test
+    fun synopsisAndWatchOrderAreSeparatedInsideCompactAndWideDetailContainers() {
+        listOf(360 to 780, 1100 to 800).forEach { (width, height) ->
+            runDesktopComposeUiTest(width = width, height = height) {
+                setContent {
+                    NuvioTheme {
+                        NuvioScreen {
+                            item {
+                                Box(Modifier.fillMaxWidth()) {
+                                    DetailOverviewStack(
+                                        overview = {
+                                            Column {
+                                                Text("2026")
+                                                Text("A long synopsis that should wrap on a narrow phone rather than overlap the viewing order section below it.")
+                                            }
+                                        },
+                                        watchOrder = { Text("Watch order") },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                val synopsis = onNodeWithText("A long synopsis", substring = true).getUnclippedBoundsInRoot()
+                val order = onNodeWithText("Watch order").getUnclippedBoundsInRoot()
+                assertTrue(order.top >= synopsis.bottom, "Watch order overlaps the synopsis at width $width")
+            }
+        }
+    }
     @Test
     fun searchHandoffEscapesTheNestedDetailRouteWithoutDuplicatingRoot() {
         val route = WatchOrderRoute(

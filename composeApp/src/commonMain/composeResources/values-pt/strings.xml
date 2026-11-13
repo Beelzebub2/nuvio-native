@@ -802,14 +802,14 @@
     <string name="remote_playback_find_subtitles">Procurar legendas nos addons</string>
     <string name="remote_playback_sources">Fontes do episódio</string>
     <string name="remote_source_picker_title">Escolher fonte para o PC</string>
-    <string name="remote_source_picker_device">Reproduzir em %1$s</string>
+    <string name="remote_source_picker_device">Ligado a %1$s</string>
     <string name="remote_source_picker_searching">A procurar fontes no PC…</string>
     <string name="remote_source_picker_preparing">A abrir a fonte escolhida no PC…</string>
     <string name="remote_source_picker_playing">O player do PC está pronto. Podes controlá-lo pelo telemóvel.</string>
     <string name="remote_source_picker_disconnected">O PC desligou-se. Volta a ligar para tentares novamente.</string>
     <string name="remote_source_picker_empty">Não foram encontradas fontes reproduzíveis no PC. Verifica os add-ons e as definições P2P.</string>
     <string name="remote_source_picker_error">Não foi possível obter as fontes. Tenta novamente na página do conteúdo.</string>
-    <string name="remote_source_picker_timeout">O PC não respondeu. Fecha esta janela e tenta novamente.</string>
+    <string name="remote_source_picker_timeout">A procura de fontes no PC expirou. Verifica os add-ons e a ligação e volta a tentar.</string>
     <string name="remote_source_picker_controller">Abrir comando do PC</string>
     <string name="remote_source_quality_stars">Qualidade da resolução: %1$d de 5 estrelas</string>
     <string name="remote_source_quality_hint">As estrelas indicam a resolução, não avaliações de utilizadores nem a fiabilidade da reprodução.</string>
@@ -2322,6 +2322,7 @@
     <string name="watch_order_attribution">Dados das franquias: Junban (ODbL)</string>
     <string name="watch_order_view_all">Ver ordem completa</string>
     <string name="watch_order_summary">%1$d títulos</string>
+    <string name="watch_order_summary_one">1 título</string>
     <string name="watch_order_no_mapping">Ainda não existe um identificador de anime confirmado para este título.</string>
     <string name="watch_order_partial">Ordem parcial · relações indisponíveis</string>
     <string name="watch_order_choose_mode">Ordem de visualização</string>

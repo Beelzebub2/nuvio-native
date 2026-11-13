@@ -22,6 +22,22 @@ class RemotePlaybackHandoffTest {
     )
 
     @Test
+    fun acknowledgedSearchStillNeedsAResultOrTerminalState() {
+        val requestId = "4d6f2801-16ee-493c-bcc9-0bfa5efad34b"
+        assertTrue(RemoteSourcePicker().isAwaitingSources(requestId))
+        assertTrue(RemoteSourcePicker("other", "Title", "searching").isAwaitingSources(requestId))
+        assertTrue(RemoteSourcePicker(requestId, "Title", "searching").isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker(requestId, "Title", "ready").isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker(requestId, "Title", "empty").isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker(requestId, "Title", "error").isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker(requestId, "Title", "preparing").isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker(requestId, "Title", "searching",
+            listOf(RemoteChoice("opaque", "1080p"))).isAwaitingSources(requestId))
+        assertFalse(RemoteSourcePicker().isAwaitingSources(""))
+        assertTrue(REMOTE_SOURCE_ACK_TIMEOUT_MS < REMOTE_SOURCE_RESULTS_TIMEOUT_MS)
+    }
+
+    @Test
     fun volumeBoostNegotiationIsBackwardCompatibleWithOldPcSnapshots() {
         // A v1.14.0 desktop has no volumeMax field, so the phone must send at most 100%.
         val oldPc = Json.decodeFromString<RemotePlayback>("""{"playbackId":"legacy","volume":0.7}""")

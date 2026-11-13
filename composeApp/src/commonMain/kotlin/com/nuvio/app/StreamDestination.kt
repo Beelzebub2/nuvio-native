@@ -35,6 +35,7 @@ import com.nuvio.app.features.player.resolveContentLanguage
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
 import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.REMOTE_SOURCE_RESULTS_TIMEOUT_MS
 import com.nuvio.app.features.remote.RemoteSourcePicker
 import com.nuvio.app.features.remote.isEligibleForRemotePlayback
 import com.nuvio.app.features.remote.newRemotePlaybackId
@@ -93,6 +94,19 @@ internal fun StreamDestination(
         return
     }
     val remoteRequestId = launch.remoteSourceRequestId
+    LaunchedEffect(route.launchId, remoteRequestId) {
+        if (remoteRequestId == null) return@LaunchedEffect
+        delay(REMOTE_SOURCE_RESULTS_TIMEOUT_MS)
+        val current = DesktopRemote.sourcePicker.value
+        if (DesktopRemote.sourceRequestId.value == remoteRequestId &&
+            current.requestId == remoteRequestId &&
+            current.phase == "searching" && current.sources.isEmpty()) {
+            DesktopRemote.sourcePicker.value = current.copy(
+                phase = "error",
+                message = "PC source search timed out. Check the PC's add-ons and connection, then retry.",
+            )
+        }
+    }
     val currentRemoteSourceRequestId by DesktopRemote.sourceRequestId.collectAsStateWithLifecycle()
     LaunchedEffect(route, remoteRequestId, currentRemoteSourceRequestId) {
         if (remoteRequestId != null && currentRemoteSourceRequestId != remoteRequestId &&
