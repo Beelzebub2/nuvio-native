@@ -90,4 +90,21 @@ context.state.surroundUpmixEnabled = false;
 context.state.surroundUpmixStatus = 0;
 vm.runInContext("syncAutoToggleButtons()", context);
 assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "off");
+
+// Virtual headset mode uses the same single toggle but must not claim that
+// the vendor's headphone spatializer is enabled or physically verified.
+context.state.surroundUpmixLabel = "7.1";
+context.state.surroundUpmixEnabled = true;
+context.state.surroundUpmixStatus = 1;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1…");
+assert.match(context.surroundUpmixButton.attributes.title, /compatible Corsair VOID headset/);
+context.state.surroundUpmixStatus = 2;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1 ✓");
+assert.match(context.surroundUpmixButton.attributes.title, /enable surround in iCUE separately/);
+context.state.surroundUpmixEnabled = false;
+context.state.surroundUpmixStatus = 0;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1");
 console.log("Discord player button: visibility, on/off commands, and state re-sync passed.");
