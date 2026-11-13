@@ -10,9 +10,10 @@ Install Node 24, Git and the webOS CLI. From `tizen/`:
 
 ```sh
 npm ci --ignore-scripts
-npm install --no-save --ignore-scripts @webos-tools/cli@3.2.4
+npm install --no-save --ignore-scripts @webos-tools/cli@3.2.4 @resvg/resvg-js@2.6.2
 npm run lint
 npm test
+npm run test:webos
 npm run package:webos
 npm run verify:package:webos
 ```
