@@ -1129,8 +1129,10 @@
     <string name="settings_playback_surround_section">ÁUDIO SURROUND · EXPERIMENTAL</string>
     <string name="settings_playback_surround_upmix">Converter estéreo em surround 5.1</string>
     <string name="settings_playback_surround_upmix_description">Converte áudio estéreo quando a saída padrão do Windows está configurada para caixas PCM 5.1. Faixas 5.1/7.1 nativas permanecem intactas. Saídas incompatíveis usam o áudio original. Desativado por padrão.</string>
-    <string name="settings_playback_surround_headset_upmix">Estéreo para 7.1 virtual no headset</string>
-    <string name="settings_playback_surround_headset_upmix_description">Experimental para headsets Corsair VOID compatíveis. Envia PCM 7.1 ao driver iCUE mesmo quando o Windows mistura em estéreo. Ative o surround virtual no iCUE separadamente. Não aplica outra espacialização. Outras saídas e faixas multicanal nativas permanecem intactas. Desativado por padrão.</string>
+    <string name="settings_playback_surround_headset_5_1">Estéreo para PCM 5.1 no headset (experimental)</string>
+    <string name="settings_playback_surround_headset_5_1_description">Para drivers de headset com surround virtual 5.1. Envia seis canais PCM se o Windows aceitar o formato; ative o processamento espacial no software do headset. O Starlit não aplica HRTF, e a conversão para estéreo não garante surround virtual. Desativado por padrão.</string>
+    <string name="settings_playback_surround_headset_upmix">Estéreo para PCM 7.1 no headset (experimental)</string>
+    <string name="settings_playback_surround_headset_upmix_description">Para drivers de headset que aceitam PCM 7.1, inclusive outras marcas. Ative o surround virtual no software do headset. O Starlit não aplica processamento binaural/HRTF nem verifica se o driver virtualiza o sinal. Desativado por padrão.</string>
     <string name="settings_playback_section_subtitle_rendering">RENDERIZAÇÃO DE LEGENDA</string>
     <string name="settings_playback_selected_count">%1$d selecionado(s)</string>
     <string name="settings_playback_show_loading_overlay">Overlay de Carregamento</string>

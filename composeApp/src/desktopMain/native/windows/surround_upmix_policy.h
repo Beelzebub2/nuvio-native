@@ -1,8 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cwctype>
-#include <string>
 #include <string_view>
 
 namespace starlit_surround {
@@ -14,11 +12,12 @@ constexpr uint32_t kFivePointOneSideMask = 0x060f;
 constexpr uint32_t kSevenPointOneMask = 0x063f;
 constexpr uint32_t kStereoMask = 0x0003;
 
-// Exposed to Kotlin as off=0, physical speakers=1, headset 7.1=2.
+// Keep existing native/Kotlin mode numbers stable for saved settings.
 enum class Mode : int {
     off = 0,
     speakersFivePointOne = 1,
     virtualHeadsetSevenPointOne = 2,
+    virtualHeadsetFivePointOne = 3,
 };
 
 enum class Layout {
@@ -26,6 +25,8 @@ enum class Layout {
     fivePointOneBack,
     fivePointOneSide,
     virtualHeadsetSevenPointOne,
+    virtualHeadsetFivePointOneBack,
+    virtualHeadsetFivePointOneSide,
 };
 
 inline Layout configuredLayout(unsigned channels, uint32_t speakerMask) {
@@ -35,22 +36,32 @@ inline Layout configuredLayout(unsigned channels, uint32_t speakerMask) {
     return Layout::unsupported;
 }
 
-// A stereo mix format does not mean the driver's per-stream surround APO
-// cannot accept 7.1 PCM. Never infer this from IsFormatSupported alone:
-// ordinary stereo endpoints can also accept and silently downmix eight channels.
+// A headset driver can accept 5.1/7.1 PCM and virtualize it through its own
+// APO even when the shared-mode mix is stereo. Selection is deliberately
+// explicit, not brand-based: format support alone does NOT prove that the
+// driver provides HRTF rather than ordinary stereo downmixing.
 inline Layout configuredVirtualHeadsetLayout(
-    unsigned channels, uint32_t speakerMask,
-    std::wstring_view endpointName, bool acceptsExactSevenPointOne
+    Mode mode, unsigned channels, uint32_t speakerMask,
+    bool acceptsFivePointOneSide, bool acceptsFivePointOneBack,
+    bool acceptsSevenPointOne
 ) {
-    if (!acceptsExactSevenPointOne) return Layout::unsupported;
-    std::wstring name(endpointName);
-    for (auto &letter : name) letter = static_cast<wchar_t>(std::towlower(letter));
-    // Restrict the initial opt-in to the verified family with a 7.1 iCUE DSP.
-    if (name.find(L"corsair") == std::wstring::npos ||
-        name.find(L"void") == std::wstring::npos) return Layout::unsupported;
-    if ((channels == 2 && speakerMask == kStereoMask) ||
-        (channels == 8 && speakerMask == kSevenPointOneMask)) {
-        return Layout::virtualHeadsetSevenPointOne;
+    const bool stereoMix = channels == 2 && speakerMask == kStereoMask;
+    if (mode == Mode::virtualHeadsetSevenPointOne) {
+        if (acceptsSevenPointOne &&
+            (stereoMix || (channels == 8 && speakerMask == kSevenPointOneMask))) {
+            return Layout::virtualHeadsetSevenPointOne;
+        }
+    } else if (mode == Mode::virtualHeadsetFivePointOne) {
+        // Preserve the actual 5.1 speaker mask when the mix is six channels,
+        // preferring the common 5.1(side) route for a stereo-mix headset.
+        if (acceptsFivePointOneSide &&
+            (stereoMix || (channels == 6 && speakerMask == kFivePointOneSideMask))) {
+            return Layout::virtualHeadsetFivePointOneSide;
+        }
+        if (acceptsFivePointOneBack &&
+            (stereoMix || (channels == 6 && speakerMask == kFivePointOneBackMask))) {
+            return Layout::virtualHeadsetFivePointOneBack;
+        }
     }
     return Layout::unsupported;
 }
@@ -63,6 +74,8 @@ inline std::string_view mpvOutputLayout(Layout layout) {
     switch (layout) {
         case Layout::fivePointOneSide: return "5.1(side)";
         case Layout::fivePointOneBack: return "5.1";
+        case Layout::virtualHeadsetFivePointOneSide: return "5.1(side)";
+        case Layout::virtualHeadsetFivePointOneBack: return "5.1";
         case Layout::virtualHeadsetSevenPointOne: return "7.1";
         default: return {};
     }
@@ -73,8 +86,10 @@ inline std::string_view mpvOutputLayout(Layout layout) {
 inline const char *mpvFilter(Layout layout) {
     switch (layout) {
         case Layout::fivePointOneSide:
+        case Layout::virtualHeadsetFivePointOneSide:
             return "@starlit-surround:lavfi=[surround=chl_in=stereo:chl_out=5.1(side):lfe=0:level_out=0.65]";
         case Layout::fivePointOneBack:
+        case Layout::virtualHeadsetFivePointOneBack:
             return "@starlit-surround:lavfi=[surround=chl_in=stereo:chl_out=5.1:lfe=0:level_out=0.65]";
         case Layout::virtualHeadsetSevenPointOne:
             return "@starlit-surround:lavfi=[surround=chl_in=stereo:chl_out=7.1:lfe=0:level_out=0.65]";

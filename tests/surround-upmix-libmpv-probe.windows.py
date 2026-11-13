@@ -153,8 +153,12 @@ def main() -> None:
         finally:
             terminate(mpv)
 
-        for target, channels, mask in (("5.1(side)", 6, 0x060F), ("7.1", 8, 0x063F)):
-            pcm_file = Path(directory) / f"upmixed-{channels}-channel.wav"
+        for target, channels, mask in (
+            ("5.1(side)", 6, 0x060F),
+            ("5.1", 6, 0x003F),
+            ("7.1", 8, 0x063F),
+        ):
+            pcm_file = Path(directory) / f"upmixed-{target.replace('(', '-').replace(')', '')}.wav"
             pcm_player = create()
             if not pcm_player:
                 raise AssertionError("PCM mpv_create failed")
@@ -181,7 +185,7 @@ def main() -> None:
                 terminate(pcm_player)
             check_pcm_surround_output(pcm_file, channels, mask)
 
-    print("PASS: bundled libmpv processes six/eight-channel PCM and restores stereo")
+    print("PASS: bundled libmpv processes both 5.1 layouts and 7.1 PCM; restores stereo")
 
 
 if __name__ == "__main__":
