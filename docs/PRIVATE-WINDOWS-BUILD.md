@@ -2,7 +2,7 @@
 
 Starlit is made by [Beelzebub2](https://github.com/Beelzebub2) and based on Nuvio by Tapframe and friends. It was called Nuvio Native up to version 1.0.14.
 
-Source: https://github.com/Beelzebub2/nuvio-native (public client source; account-server implementation is maintained separately)
+Source: https://github.com/Beelzebub2/starlit (public client source; account-server implementation is maintained separately)
 
 Upstream baseline: NuvioMedia/NuvioDesktop Dev, commit 25390defed025a871f6a3239427b4507f2fafb35. GPLv3 and upstream copyright notices are retained.
 
@@ -24,7 +24,7 @@ The updater compatibility release was published as **v1.11.1** while the reposit
 
 Desktop accepts release installer URLs from **both** `Beelzebub2/nuvio-native` and `Beelzebub2/starlit`, but still requires HTTPS, the exact GitHub hostname, a permitted release path, and a verified SHA-256 digest before installing. Android Play Store builds continue to use store updates. Do not change installer identities, application/package IDs, persisted data paths, or login callback schemes as part of the repository rename.
 
-The source preparation in [PR #29](https://github.com/Beelzebub2/nuvio-native/pull/29) is merged; the GitHub repository rename is **not** done. Before renaming, publish the remaining TV compatibility bridge under the old slug and complete the checks in [the cutover checklist](REPOSITORY-RENAME-CUTOVER.md). Older desktop binaries that did not install the compatibility release may reject the new asset URLs, even if GitHub redirects the old link; those users will need to run a new Starlit installer once (their existing app data is retained). Leave the old slug unused so GitHub's repository redirects keep working. These changes do not rename the repository or publish a release by themselves.
+The source preparation in [PR #29](https://github.com/Beelzebub2/starlit/pull/29) is merged, and the **existing GitHub repository was renamed to `Beelzebub2/starlit` on November 13, 2026** without changing its repository ID or default branch. Older desktop binaries that did not install the compatibility release may reject the new asset URLs, even if GitHub redirects the old link; those users will need to run a new Starlit installer once (their existing app data is retained). Leave the old slug unused so GitHub's repository redirects keep working. The [cutover checklist](REPOSITORY-RENAME-CUTOVER.md) tracks follow-up release, device and live-website verification separately from the completed GitHub rename.
 
 ## Built-in Airing Now
 
