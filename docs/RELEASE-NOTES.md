@@ -1,3 +1,19 @@
+## Starlit 1.25.0
+
+### Desktop player interface
+
+- **Redesigned playback controls:** Place the title and episode details in a clearer header, group transport, volume and media actions, and adapt the controls to compact player windows with a More menu.
+- **Playback options together:** Access automatic intro skipping, next-episode playback, surround upmix, Discord audio, RTX original comparison and video settings from a single options panel when those capabilities are available.
+- **More useful timeline:** Show known recap, intro and credits segments along the seek bar, buffered playback progress, hover time and seek shortcuts; use a continuous timeline when segment data is unavailable.
+- **Playback at a glance:** Display available resolution, HDR, RTX and audio status indicators; indicate adjusted speed and volume above 100% without obscuring playback.
+- **Clearer interaction:** Improve accessible action labels, keyboard shortcut hints, skip prompts and next-episode overlays.
+
+### Compatibility and verification
+
+- Desktop native players on Windows, Linux and macOS report video dimensions to the controls when available; older native libraries safely omit this optional information.
+- Android phone and Android TV playback controls are unchanged by this desktop-specific interface update. Samsung Tizen and LG webOS distribution remains separate from the published desktop/Android packages.
+- Stable installers are published only after Windows, signed Android and TV, Linux packaging, checksum and release-provenance gates pass. Live playback and hardware-specific controls still require testing on representative devices.
+
 ## Starlit 1.24.1
 
 ### Playback and subtitles
