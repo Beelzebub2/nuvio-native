@@ -15,7 +15,13 @@
     "verify:release": "node scripts/starlit-release-gate.mjs",
     "serve": "node ./scripts/serve.mjs",
     "build:engine": "node scripts/build-engine-runtime.mjs",
-    "test:browser": "node scripts/browser-smoke.mjs"
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "fetch:webos": "node scripts/fetch-webos-services.mjs",
+    "package:webos": "npm run build && npm run fetch:webos && node scripts/package-webos.mjs && node scripts/starlit-webos-artifacts.mjs",
+    "verify:package:webos": "node scripts/starlit-webos-artifacts.mjs --verify",
+    "install:webos": "node scripts/ares-install-webos.mjs",
+    "inspect:webos": "node scripts/ares-inspect-webos.mjs",
+    "verify:release:webos": "node scripts/starlit-webos-release-gate.mjs"
   },
   "devDependencies": {
     "@csstools/postcss-global-data": "^4.0.0",

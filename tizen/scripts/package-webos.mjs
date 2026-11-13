@@ -7,18 +7,22 @@ import { readAppMetadata, syncVersionFiles } from "./appMetadata.mjs";
 import { compatibilityPolicy } from "./compatibilityPolicy.mjs";
 import { runWebOsToolsBinary } from "./aresCli.mjs";
 import { pruneCssFileForPlatform } from "./pruneCssForPlatform.mjs";
+import { fetchPinnedWebOsServices } from "./fetch-webos-services.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 const cacheDir = path.join(rootDir, ".cache");
 const stagingDir = path.join(cacheDir, "webos-package");
 const appStageDir = path.join(stagingDir, "app");
-const serviceStageDir = path.join(stagingDir, "space.nuvio.webos.service");
-const pluginServiceStageDir = path.join(stagingDir, "space.nuvio.webos.plugin.service");
-const appName = "Nuvio TV";
-const webOsServiceId = "space.nuvio.webos.service";
-const webOsPluginServiceId = "space.nuvio.webos.plugin.service";
-const webOsServiceSourceDir = path.join(rootDir, "services", "webos");
+const serviceStageDir = path.join(stagingDir, "app.starlit.webos.service");
+const pluginServiceStageDir = path.join(stagingDir, "app.starlit.webos.plugin.service");
+const appName = "Starlit TV";
+const webOsServiceId = "app.starlit.webos.service";
+const webOsPluginServiceId = "app.starlit.webos.plugin.service";
+const upstreamRootDir = path.join(cacheDir, "webos-upstream");
+const webOsServiceSourceDir = path.join(upstreamRootDir, "services", "webos");
+const artifactsDir = path.join(rootDir, "artifacts");
+const appId = "app.starlit.webos";
 const webOsPluginServiceSourceDir = path.join(rootDir, "services", "webos", "plugin");
 const webOsRuntimeScriptPath = "assets/libs/webOSTV.js";
 async function assertDistExists() {
@@ -165,7 +169,10 @@ async function stageApp() {
   await pruneCssFileForPlatform(path.join(appStageDir, "css", "bundle.css"), "webos");
   const appInfoPath = path.join(appStageDir, "appinfo.json");
   const appInfo = JSON.parse(await readFile(appInfoPath, "utf8"));
+  appInfo.id = appId;
   appInfo.title = appName;
+  appInfo.vendor = "Starlit contributors";
+  appInfo.appDescription = "Watch your own sources with Starlit on LG webOS.";
   appInfo.version = version;
   appInfo.icon = "icon.png";
   appInfo.largeIcon = "largeIcon.png";
@@ -201,17 +208,34 @@ async function stageApp() {
     cp(path.join(rootDir, "assets", "images", "splash.png"), path.join(appStageDir, "splash.png"))
   ]);
   const webOsScriptPath = await resolveWebOsScriptPath(appStageDir);
+  await cp(path.join(rootDir, "LICENSE"), path.join(appStageDir, "LICENSE"));
+  await cp(path.join(rootDir, "UPSTREAM.json"), path.join(appStageDir, "UPSTREAM.json"));
   await writeFile(
     path.join(appStageDir, "index.html"),
     buildWebOsIndexHtml({ webOsScriptPath }),
     "utf8"
   );
 }
+// The exact upstream service revision is adapted during bundling; source remains immutable.
+const starlitWebOsServiceIdentity = {
+  name: "starlit-webos-identity",
+  setup(builder) {
+    builder.onLoad({ filter: /\\.[cm]?js$/ }, async ({ path: sourcePath }) => {
+      if (!sourcePath.startsWith(upstreamRootDir + path.sep)) return undefined;
+      return {
+        contents: (await readFile(sourcePath, "utf8")).replaceAll("space.nuvio.webos", appId),
+        loader: "js"
+      };
+    });
+  }
+};
+
 async function stageService() {
   const packageJsonPath = path.join(webOsServiceSourceDir, "package.json");
   const servicesManifestPath = path.join(webOsServiceSourceDir, "services.json");
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-  const servicesManifest = JSON.parse(await readFile(servicesManifestPath, "utf8"));
+  packageJson.name = webOsServiceId;
+  const servicesManifest = JSON.parse((await readFile(servicesManifestPath, "utf8")).replaceAll("space.nuvio.webos", appId));
   validateWebOsServiceManifest(servicesManifest);
   await mkdir(path.join(serviceStageDir, "src"), { recursive: true });
   await mkdir(path.join(serviceStageDir, "runtime"), { recursive: true });
@@ -244,6 +268,7 @@ async function stageService() {
     format: "cjs",
     target: [`node${compatibilityPolicy.webOsServiceNodeVersion}`],
     external: ["webos-service"],
+    plugins: [starlitWebOsServiceIdentity],
     logLevel: "silent"
   });
 }
@@ -251,7 +276,8 @@ async function stagePluginService() {
   const packageJsonPath = path.join(webOsPluginServiceSourceDir, "package.json");
   const servicesManifestPath = path.join(webOsPluginServiceSourceDir, "services.json");
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-  const servicesManifest = JSON.parse(await readFile(servicesManifestPath, "utf8"));
+  packageJson.name = webOsPluginServiceId;
+  const servicesManifest = JSON.parse((await readFile(servicesManifestPath, "utf8")).replaceAll("space.nuvio.webos", appId));
   validateWebOsServiceManifest(servicesManifest, webOsPluginServiceId);
   await mkdir(path.join(pluginServiceStageDir, "src"), { recursive: true });
   await Promise.all([
@@ -274,41 +300,28 @@ async function stagePluginService() {
     format: "cjs",
     target: [`node${compatibilityPolicy.webOsServiceNodeVersion}`],
     external: ["webos-service"],
+    plugins: [starlitWebOsServiceIdentity],
     logLevel: "silent"
   });
 }
 async function packageWebOs() {
   await syncVersionFiles();
   await assertDistExists();
+  await fetchPinnedWebOsServices();
   console.log("staging webOS package files...");
   await rm(stagingDir, { recursive: true, force: true });
   await mkdir(stagingDir, { recursive: true });
+  await mkdir(artifactsDir, { recursive: true });
   await Promise.all([stageApp(), stageService(), stagePluginService()]);
   console.log("creating webOS IPK...");
-  try {
-    await runWebOsToolsBinary("ares-package", [
-      appStageDir,
-      serviceStageDir,
-      pluginServiceStageDir,
-      "--outdir",
-      rootDir
-    ]);
-  } catch (error) {
-    const { version } = await readAppMetadata();
-    const expectedIpk = path.join(rootDir, `space.nuvio.webos_${version}_all.ipk`);
-    if (await pathExists(expectedIpk)) {
-      console.warn(
-        `ares-package exited with an error, but ${expectedIpk} was created successfully. Continuing.`
-      );
-    } else {
-      throw error;
-    }
-  }
+  await runWebOsToolsBinary("ares-package", [
+    appStageDir, serviceStageDir, pluginServiceStageDir, "--outdir", artifactsDir
+  ]);
 }
 try {
   await packageWebOs();
 } catch (error) {
   console.error("\nwebOS packaging failed:");
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 }
