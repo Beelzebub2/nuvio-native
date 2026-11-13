@@ -75,6 +75,18 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:Input
     abstract val traktRedirectUri: Property<String>
 
+    @get:Input
+    abstract val simklClientId: Property<String>
+
+    @get:Input
+    abstract val simklRedirectUri: Property<String>
+
+    @get:Input
+    abstract val simklAppName: Property<String>
+
+    @get:Input
+    abstract val mdbListClientId: Property<String>
+
     @TaskAction
     fun generate() {
         val props = Properties()
@@ -146,9 +158,9 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.simkl
                 |
                 |object SimklConfig {
-                |    const val CLIENT_ID = "${props.getProperty("SIMKL_CLIENT_ID", "")}"
-                |    const val REDIRECT_URI = "${props.getProperty("SIMKL_REDIRECT_URI", "nuvio://auth/simkl")}"
-                |    const val APP_NAME = "${props.getProperty("SIMKL_APP_NAME", "nuvio")}"
+                |    const val CLIENT_ID = "${simklClientId.get()}"
+                |    const val REDIRECT_URI = "${simklRedirectUri.get()}"
+                |    const val APP_NAME = "${simklAppName.get()}"
                 |}
                 """.trimMargin()
             )
@@ -174,7 +186,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.mdblist
                 |
                 |object MdbListConfig {
-                |    const val CLIENT_ID = "${props.getProperty("MDBLIST_CLIENT_ID", "")}" 
+                |    const val CLIENT_ID = "${mdbListClientId.get()}"
                 |}
                 """.trimMargin()
             )
@@ -658,6 +670,10 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     traktClientId.set(runtimeConfigValue("TRAKT_CLIENT_ID"))
     // Leave blank until a production HTTPS app/universal link is verified on its domain.
     traktRedirectUri.set(runtimeConfigValue("TRAKT_REDIRECT_URI"))
+    simklClientId.set(runtimeConfigValue("SIMKL_CLIENT_ID"))
+    simklRedirectUri.set(runtimeConfigValue("SIMKL_REDIRECT_URI", "nuvio://auth/simkl"))
+    simklAppName.set(runtimeConfigValue("SIMKL_APP_NAME", "nuvio"))
+    mdbListClientId.set(runtimeConfigValue("MDBLIST_CLIENT_ID"))
     sentryEnvironment.set(
         when {
             requestedGradleTasks.any { "benchmark" in it } -> "benchmark"
