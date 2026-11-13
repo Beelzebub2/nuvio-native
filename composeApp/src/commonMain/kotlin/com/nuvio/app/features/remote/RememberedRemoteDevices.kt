@@ -66,12 +66,6 @@ internal fun connectRememberedRemoteDevice(transport: DesktopRemoteTransport, sa
     }
 }
 
-/** Reconnect automatically only when Bluetooth is the most recently used transport. */
-internal fun preferredBluetoothReconnect(
-    remembered: List<RememberedRemoteDevice>,
-    bluetoothSupported: Boolean,
-): RememberedRemoteDevice? = remembered.firstOrNull()?.takeIf { it.bluetooth && bluetoothSupported }
-
 internal expect object RememberedRemoteDeviceStore {
     fun read(account: RemoteAccount): List<RememberedRemoteDevice>
     fun write(account: RemoteAccount, devices: List<RememberedRemoteDevice>)
@@ -100,10 +94,11 @@ internal fun rememberRemoteDevice(
         ?: existing.firstOrNull { it.bluetooth == bluetooth && it.vpn == vpn && it.address == safeAddress }
     val latest = RememberedRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
-        wakeMac = if (bluetooth) null else prior?.wakeMac?.takeIf {
-            (safePcId != null && (prior.pcId == safePcId || prior.trustedId == safePcId)) ||
-                (safePcId == null && prior.pcId == null && prior.trustedId == null && prior.address == safeAddress)
-        },
+        wakeMac = if (bluetooth) null else prior?.takeIf { previous ->
+            (safePcId != null && (previous.pcId == safePcId || previous.trustedId == safePcId)) ||
+                (safePcId == null && previous.pcId == null && previous.trustedId == null &&
+                    previous.address == safeAddress)
+        }?.wakeMac,
         bluetooth = bluetooth,
         // A reused IP/MAC cannot inherit a previous PC's verified identity.
         trustedId = if (bluetooth) null else safeId,
