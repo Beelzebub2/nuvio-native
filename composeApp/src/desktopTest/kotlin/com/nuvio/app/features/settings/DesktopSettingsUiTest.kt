@@ -18,10 +18,12 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -55,6 +57,43 @@ class DesktopSettingsUiTest {
         }
         waitForIdle()
     }
+
+    @Test
+    fun searchOpensAndEmphasizesTheExactSettingInsteadOfOnlyItsPage() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            showSettings()
+            val field = onNode(hasContentDescription("Search settings..."))
+            field.performTextInput("Auto-play Next Episode")
+            waitForIdle()
+
+            onNodeWithText("Auto-play Next Episode").performClick()
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            sidebar("Playback").assertIsSelected()
+            onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun narrowSettingsLayoutBringsARequestedControlIntoView() =
+        runDesktopComposeUiTest(width = 700, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.Playback,
+                key = "playback-auto-play-next",
+                title = "Auto-play Next Episode",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsScreen(initialPageName = SettingsPage.Playback.name)
+                }
+            }
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
 
     private fun ComposeUiTest.sidebar(label: String): SemanticsNodeInteraction =
         onNode(hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))

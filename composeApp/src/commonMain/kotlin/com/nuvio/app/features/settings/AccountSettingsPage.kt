@@ -214,7 +214,7 @@ private fun AccountSettingsBody(
 
             if (authState is AuthState.Authenticated) {
                 MobileAccountSectionHeading(stringResource(Res.string.settings_account_section_actions))
-                NuvioSurfaceCard {
+                NuvioSurfaceCard(modifier = Modifier.settingsSearchTarget(stringResource(Res.string.settings_account_sign_out))) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -372,7 +372,7 @@ private fun MobileAccountOverview(authState: AuthState) {
         HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.55f))
         Spacer(Modifier.height(12.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(Res.string.settings_account_status)),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -946,7 +946,7 @@ private fun DeleteAccountCard(
 ) {
     val tokens = MaterialTheme.nuvio
 
-    NuvioSurfaceCard {
+    NuvioSurfaceCard(modifier = Modifier.settingsSearchTarget(stringResource(Res.string.settings_account_delete_account))) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),

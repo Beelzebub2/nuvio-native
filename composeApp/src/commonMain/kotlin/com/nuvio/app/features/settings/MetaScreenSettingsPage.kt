@@ -310,6 +310,7 @@ private fun MetaSectionRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(stringResource(item.key.titleRes))
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
     ) {
         Row(

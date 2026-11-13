@@ -226,6 +226,7 @@ private fun SettingsSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .padding(horizontal = horizontalPadding, vertical = 10.dp)
             .alpha(if (enabled) 1f else 0.55f),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -534,6 +535,7 @@ private fun PlaybackSettingsSection(
             SettingsGroup(isTablet = isTablet) {
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_playback_preferred_audio_language),
+                    searchKey = "playback-preferred-audio",
                     description = when (preferredAudioLanguage) {
                         AudioLanguageOption.DEFAULT -> stringResource(Res.string.settings_playback_option_default)
                         AudioLanguageOption.DEVICE -> stringResource(Res.string.settings_playback_option_device_language)
@@ -547,6 +549,7 @@ private fun PlaybackSettingsSection(
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_playback_secondary_audio_language),
+                    searchKey = "playback-secondary-audio",
                     description = languageLabelForCode(secondaryPreferredAudioLanguage),
                     enabled = audioLanguageEnabled,
                     isTablet = isTablet,
@@ -555,6 +558,7 @@ private fun PlaybackSettingsSection(
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_playback_preferred_subtitle_language),
+                    searchKey = "playback-preferred-subtitles",
                     description = when (preferredSubtitleLanguage) {
                         SubtitleLanguageOption.NONE -> stringResource(Res.string.settings_playback_option_none)
                         SubtitleLanguageOption.DEVICE -> stringResource(Res.string.settings_playback_option_device_language)
@@ -568,6 +572,7 @@ private fun PlaybackSettingsSection(
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_playback_secondary_subtitle_language),
+                    searchKey = "playback-secondary-subtitles",
                     description = languageLabelForCode(secondaryPreferredSubtitleLanguage),
                     enabled = subtitleLanguageEnabled,
                     isTablet = isTablet,

@@ -225,6 +225,7 @@ private fun TmdbApiKeyRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(stringResource(Res.string.settings_tmdb_personal_api_key))
             .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = if (isTablet) 16.dp else 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -274,6 +275,7 @@ private fun TmdbLanguageRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(stringResource(Res.string.settings_tmdb_preferred_language))
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

@@ -215,7 +215,10 @@ internal fun DesktopAccountCard(
     val server by ServerConfigurationRepository.active.collectAsState()
     SettingsGroup(isTablet = true) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+            modifier = Modifier.fillMaxWidth()
+                .settingsSearchTarget(stringResource(Res.string.settings_account_status))
+                .settingsSearchTarget(stringResource(Res.string.settings_account_sign_out))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -341,7 +344,9 @@ internal fun DesktopDeleteAccountRow(
     val tokens = MaterialTheme.nuvio
     SettingsGroup(isTablet = true) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth()
+                .settingsSearchTarget(stringResource(Res.string.settings_account_delete_account))
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -259,6 +259,7 @@ private fun LinkedPlainRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .settingsSearchTarget(title)
             .clickable(onClick = onOpen)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.Top,

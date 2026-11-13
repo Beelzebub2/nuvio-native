@@ -353,6 +353,7 @@ fun SettingsScreen(
 
         if (isSelectedTab || page == SettingsPage.Root) {
             pageStateHolder.SaveableStateProvider("content") {
+        SettingsSearchPageScope(page) {
         if (maxWidth >= 960.dp) {
             TabletSettingsScreen(
                 page = page,
@@ -497,6 +498,7 @@ fun SettingsScreen(
                 onCollectionsClick = onCollectionsClick,
             )
         }
+        }
             }
         }
     }
@@ -603,7 +605,13 @@ private fun MobileSettingsScreen(
         }
         fun openSearchTarget(target: SettingsSearchTarget) {
             when (target) {
-                is SettingsSearchTarget.Page -> when (target.page) {
+                is SettingsSearchTarget.Page -> {
+                    if (target.focusKey != null && target.focusTitle != null) {
+                        SettingsSearchFocus.request(target.page, target.focusKey, target.focusTitle)
+                    } else {
+                        SettingsSearchFocus.clear()
+                    }
+                    when (target.page) {
                     SettingsPage.Account -> onAccountClick()
                     SettingsPage.SupportersContributors -> {
                         if (AppFeaturePolicy.supportersContributorsPageEnabled) {
@@ -621,6 +629,7 @@ private fun MobileSettingsScreen(
                     SettingsPage.Homescreen -> onHomescreenClick()
                     SettingsPage.MetaScreen -> onMetaScreenClick()
                     else -> onPageChange(target.page)
+                    }
                 }
                 SettingsSearchTarget.Collections -> onCollectionsClick()
                 SettingsSearchTarget.SwitchProfile -> onSwitchProfile?.invoke()
@@ -1138,6 +1147,11 @@ private fun TabletSettingsScreen(
                     when (target) {
                         is SettingsSearchTarget.Page -> {
                             if (target.page.isEnabledByPolicy()) {
+                                if (target.focusKey != null && target.focusTitle != null) {
+                                    SettingsSearchFocus.request(target.page, target.focusKey, target.focusTitle)
+                                } else {
+                                    SettingsSearchFocus.clear()
+                                }
                                 if (isDesktop) {
                                     // Opening a result ends the search, like picking a sidebar entry.
                                     settingsSearchQuery = ""
