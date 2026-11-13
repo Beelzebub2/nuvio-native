@@ -18,10 +18,12 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -55,6 +57,116 @@ class DesktopSettingsUiTest {
         }
         waitForIdle()
     }
+
+    @Test
+    fun searchOpensAndEmphasizesTheExactSettingInsteadOfOnlyItsPage() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            showSettings()
+            val field = onNode(hasContentDescription("Search settings..."))
+            field.performTextInput("Auto-play Next Episode")
+            waitForIdle()
+
+            onNode(
+                hasText("Auto-play Next Episode") and !hasContentDescription("Search settings..."),
+            ).performClick()
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Auto-play Next Episode").assertIsDisplayed() }.isSuccess
+            }
+            sidebar("Playback").assertIsSelected()
+            onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun narrowSettingsLayoutBringsARequestedControlIntoView() =
+        runDesktopComposeUiTest(width = 700, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.Playback,
+                key = "playback-auto-play-next",
+                title = "Auto-play Next Episode",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsScreen(initialPageName = SettingsPage.Playback.name)
+                }
+            }
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Auto-play Next Episode").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithText("Auto-play Next Episode").assertIsDisplayed()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun searchLocatesSettingsInAnotherLazySection() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            showSettings()
+            onNode(hasContentDescription("Search settings...")).performTextInput("App Language")
+            waitForIdle()
+            onNode(
+                hasText("App Language") and !hasContentDescription("Search settings..."),
+            ).performClick()
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("App Language").assertIsDisplayed() }.isSuccess
+            }
+            sidebar("Appearance").assertIsSelected()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun deepAdvancedSettingIsScrolledIntoViewAcrossLazyItems() =
+        runDesktopComposeUiTest(width = 700, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.Advanced,
+                key = "advanced-clear-cw-cache",
+                title = "Clear Continue Watching Cache",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsScreen(initialPageName = SettingsPage.Advanced.name)
+                }
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("Clear Continue Watching Cache").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun standaloneMobileSettingsLocateDeepNestedSetting() =
+        runDesktopComposeUiTest(width = 430, height = 760) {
+            SettingsSearchFocus.request(
+                page = SettingsPage.MetaScreen,
+                key = "meta-more-like-this",
+                title = "More like this",
+            )
+            setContent {
+                NuvioTheme {
+                    SettingsSearchPageScope(SettingsPage.MetaScreen) {
+                        MetaScreenSettingsScreen(onBack = {})
+                    }
+                }
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            waitUntil(timeoutMillis = 8_000) {
+                runCatching { onNodeWithText("More like this").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
 
     private fun ComposeUiTest.sidebar(label: String): SemanticsNodeInteraction =
         onNode(hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))

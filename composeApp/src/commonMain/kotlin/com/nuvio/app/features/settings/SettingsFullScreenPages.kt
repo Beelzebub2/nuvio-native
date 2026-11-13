@@ -8,7 +8,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -62,7 +61,8 @@ fun HomescreenSettingsScreen(
         HomeCatalogSettingsRepository.syncCollections(collections)
     }
 
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.Homescreen,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -93,7 +93,8 @@ fun MetaScreenSettingsScreen(
         MetaScreenSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
 
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.MetaScreen,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -118,7 +119,8 @@ fun ContinueWatchingSettingsScreen(
         ContinueWatchingPreferencesRepository.uiState
     }.collectAsStateWithLifecycle()
 
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.ContinueWatching,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -152,7 +154,8 @@ fun AddonsSettingsScreen(
         AddonRepository.initialize()
     }
 
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.Addons,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -178,7 +181,8 @@ fun PluginsSettingsScreen(
         PluginRepository.initialize()
     }
 
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.Plugins,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
@@ -195,7 +199,8 @@ fun PluginsSettingsScreen(
 fun AccountSettingsScreen(
     onBack: () -> Unit,
 ) {
-    NuvioScreen(
+    SearchableSettingsNuvioScreen(
+        page = SettingsPage.Account,
         modifier = Modifier.fillMaxSize(),
     ) {
         stickyHeader {
