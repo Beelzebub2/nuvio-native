@@ -1,0 +1,35 @@
+name: Starlit TV Installer (Samsung and LG)
+on:
+  pull_request:
+    paths: ['tv-installer/**', '.github/workflows/webos-installer.yml']
+  push:
+    branches: [Dev]
+    paths: ['tv-installer/**', '.github/workflows/webos-installer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tv-installer-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tv-installer
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tv-installer/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Starlit-TV-Installer-Windows-unverified
+          path: tv-installer/dist/Starlit-TV-Installer-Windows-*.exe
+          if-no-files-found: error

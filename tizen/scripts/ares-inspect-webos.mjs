@@ -1,5 +1,5 @@
 import { runAresCli } from "./aresCli.mjs";
-const defaultAppId = "space.nuvio.webos";
+const defaultAppId = "app.starlit.webos";
 function hasAppOrServiceArg(args) {
   return args.some((arg, index) => {
     if (arg === "-s" || arg === "--service" || arg === "-a" || arg === "--app") {

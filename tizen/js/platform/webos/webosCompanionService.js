@@ -1,5 +1,5 @@
 import { WebOsLunaService } from "./webosLunaService.js";
-const WEBOS_COMPANION_SERVICE_ID = "space.nuvio.webos.service";
+const WEBOS_COMPANION_SERVICE_ID = "app.starlit.webos.service";
 const RECOVERABLE_METHODS = new Set(["ping", "status"]);
 function waitBeforeRecoveryRetry() {
   return new Promise((resolve) => setTimeout(resolve, 100));

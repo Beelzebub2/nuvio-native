@@ -1,0 +1,12 @@
+{
+  "githubRepo": "Beelzebub2/nuvio-native",
+  "webos": {
+    "appId": "app.starlit.webos",
+    "assetPattern": "^Starlit-WebOS-\\d+\\.\\d+\\.\\d+\\.ipk$"
+  },
+  "tizen": {
+    "appId": "StarlitTV1.StarlitTV",
+    "packageId": "StarlitTV1",
+    "assetPattern": "^Starlit-Tizen-\\d+\\.\\d+\\.\\d+\\.wgt$"
+  }
+}
