@@ -21,7 +21,6 @@ import {
 } from "../js/core/update/appUpdateService.js";
 
 const APP_ID = "StarlitTV1.StarlitTV";
-const RELEASE_ASSET_BASE = "https://github.com/Beelzebub2/nuvio-native/releases/download";
 const MAX_WGT_BYTES = 64 * 1024 * 1024;
 const MAX_SUMS_BYTES = 32 * 1024;
 
@@ -52,7 +51,13 @@ export function releaseAssetUrls(update) {
     update.assetName !== `Starlit-Tizen-${update.tag.slice(1)}.wgt`) {
     throw new Error("Release and package versions do not match");
   }
-  const prefix = `${RELEASE_ASSET_BASE}/${update.tag}/`;
+  const url = update.releaseUrl ||
+    `https://github.com/Beelzebub2/nuvio-native/releases/tag/${update.tag}`;
+  const trusted = /^https:\/\/github\.com\/Beelzebub2\/(nuvio-native|starlit)\/releases\/tag\/(v\d+\.\d+\.\d+)$/.exec(url);
+  if (!trusted || trusted[2] !== update.tag) {
+    throw new Error("Untrusted TV release URL");
+  }
+  const prefix = `https://github.com/Beelzebub2/${trusted[1]}/releases/download/${update.tag}/`;
   return {
     wgt: prefix + update.assetName,
     checksums: prefix + "SHA256SUMS-Tizen"
