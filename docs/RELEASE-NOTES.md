@@ -1,3 +1,27 @@
+## Starlit 1.24.1
+
+### Playback and subtitles
+
+- **Optional 5.1/7.1 headset routing:** Improve opt-in device-supported multi-channel PCM on Windows with safe output fallbacks; stereo playback does not become discrete surround without compatible hardware.
+- **Local subtitles:** Accept validated subtitle file drops and preserve authored ASS/SSA subtitle styling in the desktop player.
+
+### Navigation, accounts and remote control
+
+- **Settings search:** Navigate to and highlight the exact requested control.
+- **Details and phone-to-PC handoff:** Prevent overlapping panels and provide bounded source-search timeouts with retry.
+- **Private-network remote:** Add opt-in private VPN remote access and reject malformed elevated firewall-task arguments before executing any privileged Windows operation.
+- **Tracking sign-in:** Bundle configured public OAuth IDs safely and support the updated Simkl device sign-in and refresh flow.
+
+### Update and platform compatibility
+
+- **GitHub repository rename preparation:** Keep Windows, Android and Samsung Tizen update discovery compatible with the old and replacement official repository paths. Preserve installed application identities and user data.
+- **Safe release recovery:** The v1.24.0 tag did not publish installers because a Windows security regression test failed. This release includes its merged improvements and the corrected elevated-task argument validation.
+
+### Verification and limitations
+
+- Stable installers require the tagged Windows, signed Android and Android TV, Linux, provenance and checksum release gates to pass.
+- Samsung Tizen and LG webOS packages remain developer previews requiring same-certificate/physical-device acceptance before public release. Real hardware checks for surround audio, VPN remote control and tracking authorization remain outstanding.
+
 ## Starlit 1.24.0
 
 ### Playback, audio and subtitles

@@ -31,16 +31,26 @@ private const val EXIT_UNKNOWN_TASK = 64
 internal fun runElevatedHelperTask(args: Array<String>): Int? {
     if (args.firstOrNull() != ELEVATED_TASK_ARGUMENT) return null
     if (args.size !in 2..3 || !System.getProperty("os.name", "").startsWith("Windows")) return EXIT_UNKNOWN_TASK
+    // Reject unexpected arguments before dispatching any privileged operation.
+    // Extra arguments are an unknown command, not an operation that failed.
+    val expectedSize = when (args[1]) {
+        PHONE_REMOTE_FIREWALL_TASK,
+        PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK,
+        PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK -> 2
+        PHONE_REMOTE_VPN_FIREWALL_TASK -> 3
+        else -> return EXIT_UNKNOWN_TASK
+    }
+    if (args.size != expectedSize) return EXIT_UNKNOWN_TASK
     return when (args[1]) {
         PHONE_REMOTE_FIREWALL_TASK ->
-            if (args.size == 2 && runCatching { allowPhoneRemoteThroughWindowsFirewall() }.isSuccess) EXIT_OK else EXIT_FAILED
+            if (runCatching { allowPhoneRemoteThroughWindowsFirewall() }.isSuccess) EXIT_OK else EXIT_FAILED
         PHONE_REMOTE_PUBLIC_ETHERNET_FIREWALL_TASK ->
-            if (args.size == 2 && runCatching { allowPhoneRemoteThroughWindowsFirewall(publicEthernet = true) }.isSuccess) EXIT_OK else EXIT_FAILED
+            if (runCatching { allowPhoneRemoteThroughWindowsFirewall(publicEthernet = true) }.isSuccess) EXIT_OK else EXIT_FAILED
         PHONE_REMOTE_VPN_FIREWALL_TASK ->
-            if (args.size == 3 && runCatching { allowPrivateVpnRemoteThroughWindowsFirewall(args[2]) }.isSuccess)
+            if (runCatching { allowPrivateVpnRemoteThroughWindowsFirewall(args[2]) }.isSuccess)
                 EXIT_OK else EXIT_FAILED
         PHONE_REMOTE_VPN_FIREWALL_REMOVE_TASK ->
-            if (args.size == 2 && runCatching { removePrivateVpnRemoteThroughWindowsFirewall() }.isSuccess)
+            if (runCatching { removePrivateVpnRemoteThroughWindowsFirewall() }.isSuccess)
                 EXIT_OK else EXIT_FAILED
         else -> EXIT_UNKNOWN_TASK
     }
