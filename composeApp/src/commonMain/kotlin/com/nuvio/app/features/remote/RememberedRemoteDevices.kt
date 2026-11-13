@@ -100,11 +100,15 @@ internal fun rememberRemoteDevice(
         ?: existing.firstOrNull { it.bluetooth == bluetooth && it.vpn == vpn && it.address == safeAddress }
     val latest = RememberedRemoteDevice(
         safeName, safeAddress, nowEpochMs.coerceAtLeast(0L),
-        wakeMac = if (bluetooth) null else prior?.wakeMac,
+        wakeMac = if (bluetooth) null else prior?.wakeMac?.takeIf {
+            (safePcId != null && (prior.pcId == safePcId || prior.trustedId == safePcId)) ||
+                (safePcId == null && prior.pcId == null && prior.trustedId == null && prior.address == safeAddress)
+        },
         bluetooth = bluetooth,
-        trustedId = if (bluetooth) null else safeId ?: prior?.trustedId,
+        // A reused IP/MAC cannot inherit a previous PC's verified identity.
+        trustedId = if (bluetooth) null else safeId,
         vpn = vpn && !bluetooth,
-        pcId = safePcId ?: prior?.pcId,
+        pcId = safePcId,
     )
     return (listOf(latest) + existing.filterNot {
         it.bluetooth == bluetooth && it.vpn == vpn && (it.address == safeAddress ||
