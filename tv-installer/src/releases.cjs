@@ -21,9 +21,10 @@ function expectedReleaseAssets(release) {
 }
 function approvedAssetUrl(raw, tag, filename) {
   const address = new URL(String(raw || ""));
-  const prefix = "/" + REPO + "/releases/download/" + tag + "/";
+  const permittedPaths = [REPO, "Beelzebub2/starlit"].map(repo =>
+    "/" + repo + "/releases/download/" + tag + "/" + filename);
   if (address.protocol !== "https:" || address.hostname !== "github.com" ||
-      address.pathname !== prefix + filename || address.username || address.password) {
+      !permittedPaths.includes(address.pathname) || address.username || address.password) {
     throw new Error("Untrusted Starlit release asset URL");
   }
   return address.toString();
