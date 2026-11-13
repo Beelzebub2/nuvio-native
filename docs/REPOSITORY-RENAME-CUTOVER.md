@@ -1,11 +1,31 @@
 # GitHub repository rename: cutover checklist
 
-**Status: PREPARATION ONLY. The repository has not been renamed.**
+**Status: GITHUB REPOSITORY RENAMED 2026-11-13; post-cutover release,
+website deployment and installed-device acceptance remain distinct checks.**
 
-Planned move: `Beelzebub2/nuvio-native` to `Beelzebub2/starlit`.
+Completed move: `Beelzebub2/nuvio-native` to `Beelzebub2/starlit`.
 The application repository uses `Dev` as its default branch. Do not create a
-new repository at the old slug after the rename: GitHub redirects require it
+new repository at the old slug: GitHub redirects require it
 to remain unused.
+
+## Verified GitHub rename state
+
+- The existing GitHub repository was renamed through its repository settings
+  API, not recreated or transferred. GitHub repository ID remains
+  `1404793587` and the default branch remains `Dev`.
+- GitHub REST lookups by both the old and new names return the same repository
+  identity. The old and new Git remote URLs both resolve the same `Dev` SHA.
+- App/TV rename compatibility [PR #292](https://github.com/Beelzebub2/starlit/pull/292)
+  was already merged. Windows/Android fallback first shipped in v1.11.1.
+- The previously tagged v1.24.0 release did **not** publish installers because
+  the Windows elevation argument-validation test failed. It must not be
+  represented as a published download. Follow the separately verified
+  recovery release and updater checks.
+- The production website's previous build still needs its canonical-link
+  release deployment verified. GitHub code merges are not deployments.
+- Real-world Linux AppImageUpdate and Samsung TV in-place update behavior
+  have not been physically verified as a consequence of renaming. Keep manual
+  update paths available and retain old GitHub redirects.
 
 ## Compatibility available before cutover
 
@@ -23,12 +43,11 @@ to remain unused.
   slug. Existing AppImages retain their embedded old-slug update information;
   test a real old-version update after cutover and provide a manual replacement
   if AppImageUpdate does not follow the GitHub rename.
-- The public website's release-feed loader and browser-side feed validation
-  accept both official names. Until cutover, its static public links still
-  default to the old slug; a post-cutover website build can set
-  `STARLIT_PUBLIC_REPO=Beelzebub2/starlit`.
+- The public website source release-feed loader and browser-side feed
+  validation accept both official names. The canonical website build defaults
+  to `Beelzebub2/starlit` once its own source and deployment are updated.
 
-## Before the GitHub Settings rename
+## Original pre-rename acceptance checklist (historical)
 
 1. Recheck the current `Dev` head, open PRs, required CI, published release
    assets and default-branch protection. Merge the compatibility changes
@@ -47,11 +66,9 @@ to remain unused.
    application package identities, signers, login callback schemes, or
    persisted data directories as part of the repository rename.
 
-## Cutover (intentional separate operation)
+## Post-rename acceptance checklist
 
-1. Rename the existing GitHub repository in its Settings from `nuvio-native`
-   to `starlit`. Do **not** transfer or recreate it.
-2. Verify `https://github.com/Beelzebub2/starlit`, the default `Dev` branch,
+1. Confirm `https://github.com/Beelzebub2/starlit`, the default `Dev` branch,
    PRs, issues, tags, releases, and old GitHub HTML/Git URL redirects.
 3. Probe old and new GitHub REST release endpoints and installer/WGT asset
    downloads. Validate checksums, not only HTTP status codes. Verify a normal
