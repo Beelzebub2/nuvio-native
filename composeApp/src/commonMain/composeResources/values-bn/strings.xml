@@ -2411,4 +2411,10 @@
     <string name="movie_status_rumored">গুজব</string>
     <string name="movie_status_in_production">প্রোডাকশনে</string>
     <string name="movie_status_post_production">পোস্ট-প্রোডাকশনে</string>
+    <string name="remote_tv_starlit_code">টিভি জোড়ার কোড</string>
+    <string name="remote_tv_starlit_hint">টিভিতে ফোন দিয়ে পরিচালনা খুলুন। এখানে কোড লিখুন এবং টিভিতে অনুমোদন দিন।</string>
+    <string name="remote_tv_starlit_approve">টিভিতে মিলে যাওয়া কোডটি অনুমোদন করুন:</string>
+    <string name="remote_tv_starlit_failed">সংযোগ ব্যর্থ হয়েছে। কোড যাচাই করে আবার চেষ্টা করুন।</string>
+    <string name="remote_handoff_choose_target">একটি ডিভাইস বেছে নিন</string>
+    <string name="remote_handoff_to_device">ডিভাইসে চালান</string>
 </resources>

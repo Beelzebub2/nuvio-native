@@ -101,6 +101,14 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(PcControllerTab.Remote) }
     // Until a PC is paired, the useful page is finding one, so that is where the tabs start.
     var offlineTab by rememberSaveable { mutableStateOf(PcControllerTab.Pcs) }
+    val tvControllerRequested by StarlitTvPlayback.openTvTabOnController.collectAsState()
+    LaunchedEffect(tvControllerRequested) {
+        if (tvControllerRequested) {
+            tab = PcControllerTab.Tv
+            offlineTab = PcControllerTab.Tv
+            StarlitTvPlayback.openTvTabOnController.value = false
+        }
+    }
     LaunchedEffect(connected) {
         if (!connected) offlineTab = if (tab == PcControllerTab.Tv) PcControllerTab.Tv else PcControllerTab.Pcs
     }

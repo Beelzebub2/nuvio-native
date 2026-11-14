@@ -3074,4 +3074,10 @@
     <string name="updates_whats_new">Nini kipya</string>
     <string name="updates_download_size">%1$s pakua</string>
     <string name="source_filter_result_count">Vyanzo %1$d kati ya %2$d</string>
+    <string name="remote_tv_starlit_code">Msimbo wa kuoanisha TV</string>
+    <string name="remote_tv_starlit_hint">Kwenye TV, fungua Dhibiti kwa simu. Ingiza msimbo hapa kisha idhinisha kwenye TV.</string>
+    <string name="remote_tv_starlit_approve">Idhinisha msimbo unaolingana kwenye TV:</string>
+    <string name="remote_tv_starlit_failed">Muunganisho umeshindikana. Angalia msimbo ujaribu tena.</string>
+    <string name="remote_handoff_choose_target">Chagua kifaa</string>
+    <string name="remote_handoff_to_device">Cheza kwenye kifaa</string>
 </resources>

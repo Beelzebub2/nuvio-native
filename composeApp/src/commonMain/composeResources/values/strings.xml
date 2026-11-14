@@ -3089,4 +3089,10 @@
     <string name="remote_tv_volume_up">Volume up</string>
     <string name="remote_tv_mute">Mute</string>
     <string name="remote_tv_controls_hint">Uses your television’s built-in remote API. Controls work in Starlit and other TV screens when supported.</string>
+    <string name="remote_tv_starlit_code">TV pairing code</string>
+    <string name="remote_tv_starlit_hint">On the TV, open Manage with phone. Enter its code here, then approve on the TV.</string>
+    <string name="remote_tv_starlit_approve">Approve the matching code on your TV:</string>
+    <string name="remote_tv_starlit_failed">Connection failed. Check the code and try again.</string>
+    <string name="remote_handoff_choose_target">Choose a device</string>
+    <string name="remote_handoff_to_device">Play on device</string>
 </resources>

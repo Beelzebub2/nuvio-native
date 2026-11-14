@@ -1875,4 +1875,10 @@
     <string name="remote_tv_volume_up">Aumentar volume</string>
     <string name="remote_tv_mute">Silenciar</string>
     <string name="remote_tv_controls_hint">Usa o controle remoto integrado da TV. Os comandos funcionam no Starlit e em outras telas, quando compatíveis.</string>
+    <string name="remote_tv_starlit_code">Código de pareamento da TV</string>
+    <string name="remote_tv_starlit_hint">Na TV, abra Gerenciar pelo celular. Digite o código aqui e aprove na TV.</string>
+    <string name="remote_tv_starlit_approve">Aprove o código correspondente na TV:</string>
+    <string name="remote_tv_starlit_failed">Falha na conexão. Verifique o código e tente novamente.</string>
+    <string name="remote_handoff_choose_target">Escolha um dispositivo</string>
+    <string name="remote_handoff_to_device">Reproduzir no dispositivo</string>
 </resources>

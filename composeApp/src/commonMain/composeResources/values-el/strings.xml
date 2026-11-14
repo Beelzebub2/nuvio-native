@@ -2374,4 +2374,10 @@
     <string name="movie_status_rumored">Φημολογούμενο</string>
     <string name="movie_status_in_production">Σε παραγωγή</string>
     <string name="movie_status_post_production">Μετά την παραγωγή</string>
+    <string name="remote_tv_starlit_code">Κωδικός σύζευξης τηλεόρασης</string>
+    <string name="remote_tv_starlit_hint">Στην τηλεόραση άνοιξε τη Διαχείριση με τηλέφωνο. Πληκτρολόγησε εδώ τον κωδικό και ενέκρινε στην τηλεόραση.</string>
+    <string name="remote_tv_starlit_approve">Ενέκρινε τον αντίστοιχο κωδικό στην τηλεόραση:</string>
+    <string name="remote_tv_starlit_failed">Η σύνδεση απέτυχε. Έλεγξε τον κωδικό και δοκίμασε ξανά.</string>
+    <string name="remote_handoff_choose_target">Επίλεξε συσκευή</string>
+    <string name="remote_handoff_to_device">Αναπαραγωγή στη συσκευή</string>
 </resources>

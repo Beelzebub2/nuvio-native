@@ -15,33 +15,51 @@ const connectionError = () => tr("tv_phone_connection_error", "Could not connect
 export const TvPhoneSetupScreen = {
   async mount() {
     this.container = document.getElementById("tvPhoneSetup");
-    this.profile = String(ProfileManager.getActiveProfileId());
-    this.executor = createTvSetupExecutor(this.profile);
-    this.client = createTvSetupRelayClient();
-    this.generation = (this.generation || 0) + 1;
-    this.phase = "starting";
-    this.qr = null;
-    this.verification = "";
-    this.lastAction = "";
-    this.error = "";
-    this.pendingAck = null;
-    this.networkFailures = 0;
-    this.polling = false;
-    this.lastCommandId = 0;
+    const profile = String(ProfileManager.getActiveProfileId());
+    const existingSession = this.phase === "connected" && this.client?.active === true &&
+      this.profile === profile;
+    if (!existingSession) {
+      this.profile = profile;
+      this.executor = createTvSetupExecutor(this.profile);
+      this.client = createTvSetupRelayClient();
+      this.generation = (this.generation || 0) + 1;
+      this.phase = "starting";
+      this.qr = null;
+      this.verification = "";
+      this.lastAction = "";
+      this.error = "";
+      this.pendingAck = null;
+      this.networkFailures = 0;
+      this.polling = false;
+      this.lastCommandId = 0;
+    }
     ScreenUtils.show(this.container);
     this.onClickBound = (event) => {
       const action = event.target?.closest?.("[data-phone-action]")?.dataset.phoneAction;
       if (action === "approve") void this.approve();
       else if (action === "retry") void this.restart();
-      else if (action === "back") void Router.back();
+      else if (action === "continue") void Router.back();
+      else if (action === "back") this.disconnect();
     };
     this.container.addEventListener("click", this.onClickBound);
     this.render();
-    await this.start(this.generation);
+    if (!existingSession) await this.start(this.generation);
+  },
+  visible() {
+    return Boolean(this.container) && Router.getCurrent() === "tvPhoneSetup";
   },
   active(generation) {
-    return this.generation === generation && Router.getCurrent() === "tvPhoneSetup" &&
+    return this.generation === generation && (this.phase === "connected" || this.visible()) &&
       String(ProfileManager.getActiveProfileId()) === this.profile;
+  },
+  disconnect() {
+    this.generation++;
+    clearTimeout(this.timer);
+    const client = this.client;
+    this.client = null;
+    this.phase = "disconnected";
+    void client?.stop().catch(() => client.forget());
+    if (this.visible()) void Router.back();
   },
   async start(generation) {
     try {
@@ -98,6 +116,11 @@ export const TvPhoneSetupScreen = {
     }
   },
   async poll(generation) {
+    if (this.phase === "connected" &&
+        String(ProfileManager.getActiveProfileId()) !== this.profile) {
+      this.disconnect();
+      return;
+    }
     if (!this.active(generation) || this.polling) return;
     this.polling = true;
     try {
@@ -140,7 +163,7 @@ export const TvPhoneSetupScreen = {
           await this.client.ack(this.pendingAck.id, this.pendingAck.result);
           this.pendingAck = null;
           if (!this.active(generation)) return;
-          this.render();
+          if (this.visible()) this.render();
         }
         await this.client.state(this.executor.state());
       }
@@ -154,7 +177,7 @@ export const TvPhoneSetupScreen = {
         } else {
           this.lastAction = connectionError();
         }
-        this.render();
+        if (this.visible()) this.render();
       }
     } finally {
       this.polling = false;
@@ -185,7 +208,7 @@ export const TvPhoneSetupScreen = {
             ${this.phase === "starting" ? `<h2>${escape(tr("tv_phone_preparing", "Preparing a secure connection…"))}</h2>` : ""}
             ${this.phase === "waiting" ? `<h2>${escape(tr("tv_phone_waiting", "Waiting for your phone"))}</h2><p>${escape(tr("tv_phone_approval_required", "Approve on the TV before the phone can make changes."))}</p>` : ""}
             ${this.phase === "approve" || this.phase === "approving" ? `<h2>${escape(tr("tv_phone_verify_title", "Approve this phone?"))}</h2><p>${escape(tr("tv_phone_verify_code", "Only approve if your phone shows the same code:"))}</p><strong class="tv-phone-verify">${escape(this.verification)}</strong><button class="focusable tv-phone-primary" data-phone-action="approve" ${this.phase === "approving" ? "disabled" : ""}>${escape(tr("tv_phone_approve", "Approve connection"))}</button>` : ""}
-            ${this.phase === "connected" ? `<h2>${escape(tr("tv_phone_connected", "Phone connected"))}</h2><p>${escape(tr("tv_phone_connected_hint", "Manage extensions on your phone. Keep this TV screen open."))}</p>${this.lastAction ? `<p class="tv-phone-last">${escape(this.lastAction)}</p>` : ""}` : ""}
+            ${this.phase === "connected" ? `<h2>${escape(tr("tv_phone_connected", "Phone connected"))}</h2>${this.lastAction ? `<p class="tv-phone-last">${escape(this.lastAction)}</p>` : ""}<button class="focusable" data-phone-action="continue">${escape(tr("action_back", "Back"))}</button>` : ""}
             ${this.phase === "error" ? `<h2>${escape(tr("tv_phone_unavailable", "Connection unavailable"))}</h2><p>${escape(this.error)}</p><button class="focusable" data-phone-action="retry">${escape(tr("action_retry", "Try again"))}</button>` : ""}
             <button class="focusable tv-phone-back" data-phone-action="back">${escape(tr("tv_phone_disconnect", "Disconnect and go back"))}</button>
           </section>
@@ -216,12 +239,18 @@ export const TvPhoneSetupScreen = {
     }
   },
   cleanup() {
+    this.container?.removeEventListener("click", this.onClickBound);
+    if (this.container) ScreenUtils.hide(this.container);
+    this.container = null;
+    if (this.phase === "connected" && this.client?.active) {
+      // The already-approved connection is shared with TV source selection and
+      // playback, so navigating out of Settings must not revoke the phone.
+      return;
+    }
     this.generation++;
     clearTimeout(this.timer);
     const client = this.client;
     this.client = null;
     void client?.stop().catch(() => client.forget());
-    this.container?.removeEventListener("click", this.onClickBound);
-    if (this.container) ScreenUtils.hide(this.container);
   }
 };

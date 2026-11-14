@@ -2285,4 +2285,10 @@
     <string name="movie_status_rumored">Gerucht</string>
     <string name="movie_status_in_production">In productie</string>
     <string name="movie_status_post_production">Postproductie</string>
+    <string name="remote_tv_starlit_code">Koppelcode voor tv</string>
+    <string name="remote_tv_starlit_hint">Open Beheren met telefoon op de tv. Voer hier de code in en keur goed op de tv.</string>
+    <string name="remote_tv_starlit_approve">Keur de overeenkomende code goed op de tv:</string>
+    <string name="remote_tv_starlit_failed">Verbinding mislukt. Controleer de code en probeer opnieuw.</string>
+    <string name="remote_handoff_choose_target">Kies een apparaat</string>
+    <string name="remote_handoff_to_device">Afspelen op apparaat</string>
 </resources>

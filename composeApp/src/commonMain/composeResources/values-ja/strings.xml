@@ -1936,4 +1936,10 @@
     <string name="movie_status_rumored">噂</string>
     <string name="movie_status_in_production">製作中</string>
     <string name="movie_status_post_production">ポストプロダクション</string>
+    <string name="remote_tv_starlit_code">テレビのペアリングコード</string>
+    <string name="remote_tv_starlit_hint">テレビで「スマートフォンで管理」を開きます。ここにコードを入力し、テレビで承認してください。</string>
+    <string name="remote_tv_starlit_approve">テレビに表示された一致するコードを承認してください:</string>
+    <string name="remote_tv_starlit_failed">接続に失敗しました。コードを確認して再試行してください。</string>
+    <string name="remote_handoff_choose_target">デバイスを選択</string>
+    <string name="remote_handoff_to_device">デバイスで再生</string>
 </resources>

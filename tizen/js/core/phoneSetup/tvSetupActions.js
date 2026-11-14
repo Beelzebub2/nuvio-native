@@ -4,6 +4,7 @@ import { ProfileManager } from "../profile/profileManager.js";
 import { PluginManager } from "../player/pluginManager.js";
 import { isVideoEasyScraper } from "../player/pluginModels.js";
 import { PluginStore, getEffectivePluginProfileId } from "../../data/local/pluginStore.js";
+import { createTvMediaHandoff } from "./tvMediaHandoff.js";
 
 // A paired phone may request only well-typed actions. The television remains
 // authoritative for permissions and installation; the relay never fetches or
@@ -60,7 +61,7 @@ const nameFromUrl = raw => {
   try { return new URL(raw).hostname; } catch { return "Add-on"; }
 };
 
-export function tvSetupState(revision = 0) {
+export function tvSetupState(revision = 0, sourcePicker = null) {
   const addons = addonRepository.getInstalledAddonUrls();
   const summary = PluginManager.getSummary();
   const capability = summary.runtime || {};
@@ -82,7 +83,8 @@ export function tvSetupState(revision = 0) {
       id: "provider:" + index, name: String(provider.name || "Provider").slice(0, 80),
       enabled: provider.enabled !== false
     })),
-    revision
+    revision,
+    sourcePicker
   };
 }
 function targetIndex(target, prefix, length) {
@@ -91,14 +93,14 @@ function targetIndex(target, prefix, length) {
   return Number(match[1]);
 }
 
-export function createTvSetupExecutor(profileId) {
+export function createTvSetupExecutor(profileId, { media = createTvMediaHandoff() } = {}) {
   const previewed = new Map();
   let revision = 0;
   let snapshot = "";
   const current = () => {
     if (String(ProfileManager.getActiveProfileId()) !== String(profileId))
       throw new Error("TV profile changed; pair again");
-    const state = tvSetupState(revision);
+    const state = tvSetupState(revision, media.state());
     const fingerprint = JSON.stringify({
       a: addonRepository.getInstalledAddonUrls(),
       e: addonRepository.getAddonEnabledStates(),
@@ -116,6 +118,9 @@ export function createTvSetupExecutor(profileId) {
       const state = current();
       if (!command || !Number.isSafeInteger(command.id))
         throw new Error("Invalid command");
+      if (command.op === "handoffSearch") return media.search(command.media);
+      if (command.op === "handoffSelect") return media.select(command.requestId, command.sourceId);
+      if (command.op === "handoffCancel") return media.cancel(command.requestId);
       if (command.revision !== state.revision)
         throw new Error("List changed. Refresh the phone.");
       const op = String(command.op || "");

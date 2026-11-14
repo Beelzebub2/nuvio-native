@@ -1971,4 +1971,10 @@
     <string name="movie_status_rumored">Solo voci</string>
     <string name="movie_status_in_production">In produzione</string>
     <string name="movie_status_post_production">Post-produzione</string>
+    <string name="remote_tv_starlit_code">Codice di abbinamento TV</string>
+    <string name="remote_tv_starlit_hint">Sulla TV apri Gestisci con il telefono. Inserisci qui il codice e approva sulla TV.</string>
+    <string name="remote_tv_starlit_approve">Approva il codice corrispondente sulla TV:</string>
+    <string name="remote_tv_starlit_failed">Connessione non riuscita. Controlla il codice e riprova.</string>
+    <string name="remote_handoff_choose_target">Scegli un dispositivo</string>
+    <string name="remote_handoff_to_device">Riproduci sul dispositivo</string>
 </resources>

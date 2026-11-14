@@ -3074,4 +3074,10 @@
     <string name="updates_whats_new">새로운 소식</string>
     <string name="updates_download_size">%1$s 다운로드</string>
     <string name="source_filter_result_count">소스 %2$d개 중 %1$d개</string>
+    <string name="remote_tv_starlit_code">TV 페어링 코드</string>
+    <string name="remote_tv_starlit_hint">TV에서 휴대전화로 관리를 엽니다. 여기에 코드를 입력한 뒤 TV에서 승인하세요.</string>
+    <string name="remote_tv_starlit_approve">TV에 표시된 일치하는 코드를 승인하세요:</string>
+    <string name="remote_tv_starlit_failed">연결에 실패했습니다. 코드를 확인한 후 다시 시도하세요.</string>
+    <string name="remote_handoff_choose_target">기기 선택</string>
+    <string name="remote_handoff_to_device">기기에서 재생</string>
 </resources>

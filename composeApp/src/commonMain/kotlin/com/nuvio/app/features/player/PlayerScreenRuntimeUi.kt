@@ -19,6 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.StarlitRemoteHandoff
+import com.nuvio.app.features.remote.StarlitTvPlayback
 import com.nuvio.app.features.remote.RemoteChoice
 import com.nuvio.app.features.remote.RemotePlayback
 import com.nuvio.app.features.remote.RemotePlaybackHandoff
@@ -751,6 +753,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
     val isInPip = rememberIsInPictureInPicture()
     val controlToggles = playerControlToggles()
     val remoteConnected = DesktopRemote.connected.collectAsState().value
+    val tvRemoteConnected = StarlitTvPlayback.connected.collectAsState().value
     val handoffSentText = stringResource(Res.string.remote_handoff_sent)
     val handoffUnavailableText = stringResource(Res.string.remote_handoff_unavailable)
     var showPlaybackDiagnostics by remember(activePlaybackKey) { mutableStateOf(false) }
@@ -856,7 +859,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
-            onHandoffClick = if (!privatePlayback && !isDesktop && !isIos && remoteConnected &&
+            onHandoffClick = if (!privatePlayback && !isDesktop && !isIos &&
+                (remoteConnected || tvRemoteConnected) &&
                 !activeVideoId.isNullOrBlank() && contentType in setOf("movie", "series")) {
                 {
                     val request = RemotePlaybackHandoff(
@@ -869,8 +873,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                         episode = activeEpisodeNumber,
                         resumePositionMs = playbackSnapshot.positionMs.coerceIn(0L, 43_200_000L),
                     )
-                    val sent = DesktopRemote.requestHandoff(request)
-                    if (!sent) NuvioToastController.show(DesktopRemote.status.value)
+                    val sent = StarlitRemoteHandoff.request(request)
+                    if (!sent) NuvioToastController.show(handoffUnavailableText)
                 }
             } else null,
             onDiagnosticsClick = { showPlaybackDiagnostics = true },

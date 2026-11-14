@@ -2324,4 +2324,10 @@
     <string name="movie_status_rumored">Plotki</string>
     <string name="movie_status_in_production">W produkcji</string>
     <string name="movie_status_post_production">Postprodukcja</string>
+    <string name="remote_tv_starlit_code">Kod parowania telewizora</string>
+    <string name="remote_tv_starlit_hint">Na telewizorze otwórz Zarządzaj telefonem. Wpisz tutaj kod i zatwierdź na telewizorze.</string>
+    <string name="remote_tv_starlit_approve">Zatwierdź zgodny kod na telewizorze:</string>
+    <string name="remote_tv_starlit_failed">Połączenie nieudane. Sprawdź kod i spróbuj ponownie.</string>
+    <string name="remote_handoff_choose_target">Wybierz urządzenie</string>
+    <string name="remote_handoff_to_device">Odtwórz na urządzeniu</string>
 </resources>

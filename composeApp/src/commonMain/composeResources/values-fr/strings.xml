@@ -1992,4 +1992,10 @@
     <string name="movie_status_rumored">Rumeur</string>
     <string name="movie_status_in_production">En production</string>
     <string name="movie_status_post_production">En post-production</string>
+    <string name="remote_tv_starlit_code">Code d’appairage du téléviseur</string>
+    <string name="remote_tv_starlit_hint">Sur le téléviseur, ouvre Gérer avec le téléphone. Saisis le code ici, puis approuve sur le téléviseur.</string>
+    <string name="remote_tv_starlit_approve">Approuve le code correspondant sur le téléviseur :</string>
+    <string name="remote_tv_starlit_failed">Échec de la connexion. Vérifie le code et réessaie.</string>
+    <string name="remote_handoff_choose_target">Choisir un appareil</string>
+    <string name="remote_handoff_to_device">Lire sur un appareil</string>
 </resources>

@@ -3078,4 +3078,10 @@
     <string name="updates_whats_new">موارد جدید</string>
     <string name="updates_download_size">%1$s دانلود</string>
     <string name="source_filter_result_count">%1$d از %2$d منبع</string>
+    <string name="remote_tv_starlit_code">کد جفت‌سازی تلویزیون</string>
+    <string name="remote_tv_starlit_hint">در تلویزیون مدیریت با تلفن را باز کنید. کد را اینجا وارد کرده و در تلویزیون تأیید کنید.</string>
+    <string name="remote_tv_starlit_approve">کد یکسان را در تلویزیون تأیید کنید:</string>
+    <string name="remote_tv_starlit_failed">اتصال ناموفق بود. کد را بررسی کنید و دوباره تلاش کنید.</string>
+    <string name="remote_handoff_choose_target">انتخاب دستگاه</string>
+    <string name="remote_handoff_to_device">پخش در دستگاه</string>
 </resources>

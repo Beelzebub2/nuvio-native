@@ -2334,4 +2334,10 @@ Du bruker denne funksjonen helt på eget ansvar. P2P kan deaktiveres når som he
     <string name="movie_status_rumored">Ryktet</string>
     <string name="movie_status_in_production">I produksjon</string>
     <string name="movie_status_post_production">Postproduksjon</string>
+    <string name="remote_tv_starlit_code">TV-paringskode</string>
+    <string name="remote_tv_starlit_hint">Åpne Administrer med telefon på TV-en. Skriv inn koden her og godkjenn på TV-en.</string>
+    <string name="remote_tv_starlit_approve">Godkjenn koden som samsvarer på TV-en:</string>
+    <string name="remote_tv_starlit_failed">Tilkoblingen mislyktes. Kontroller koden og prøv igjen.</string>
+    <string name="remote_handoff_choose_target">Velg en enhet</string>
+    <string name="remote_handoff_to_device">Spill av på enhet</string>
 </resources>

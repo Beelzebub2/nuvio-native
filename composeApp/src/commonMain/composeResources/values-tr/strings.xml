@@ -2177,4 +2177,10 @@ Bu özelliği tamamen kendi sorumluluğunuzda kullanırsınız. P2P istediğiniz
     <string name="movie_status_rumored">Söylenti</string>
     <string name="movie_status_in_production">Yapım Aşamasında</string>
     <string name="movie_status_post_production">Post Prodüksiyon</string>
+    <string name="remote_tv_starlit_code">TV eşleştirme kodu</string>
+    <string name="remote_tv_starlit_hint">TV’de Telefonla yönet seçeneğini açın. Kodu buraya girip TV’den onaylayın.</string>
+    <string name="remote_tv_starlit_approve">Eşleşen kodu TV’de onaylayın:</string>
+    <string name="remote_tv_starlit_failed">Bağlantı başarısız. Kodu kontrol edip tekrar deneyin.</string>
+    <string name="remote_handoff_choose_target">Cihaz seçin</string>
+    <string name="remote_handoff_to_device">Cihazda oynat</string>
 </resources>

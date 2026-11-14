@@ -2148,4 +2148,10 @@
     <string name="movie_status_rumored">إشاعة</string>
     <string name="movie_status_in_production">قيد الانتاج</string>
     <string name="movie_status_post_production">مابعد الانتاج</string>
+    <string name="remote_tv_starlit_code">رمز إقران التلفاز</string>
+    <string name="remote_tv_starlit_hint">افتح الإدارة بالهاتف على التلفاز. أدخل الرمز هنا ثم وافق على التلفاز.</string>
+    <string name="remote_tv_starlit_approve">وافق على الرمز المطابق على التلفاز:</string>
+    <string name="remote_tv_starlit_failed">فشل الاتصال. تحقق من الرمز وحاول مجددًا.</string>
+    <string name="remote_handoff_choose_target">اختر جهازًا</string>
+    <string name="remote_handoff_to_device">تشغيل على جهاز</string>
 </resources>

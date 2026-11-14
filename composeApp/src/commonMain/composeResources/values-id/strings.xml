@@ -1471,4 +1471,10 @@
     <string name="movie_status_rumored">Desas-desus</string>
     <string name="movie_status_in_production">Dalam Produksi</string>
     <string name="movie_status_post_production">Pasca Produksi</string>
+    <string name="remote_tv_starlit_code">Kode penyandingan TV</string>
+    <string name="remote_tv_starlit_hint">Di TV, buka Kelola dengan ponsel. Masukkan kode di sini, lalu setujui di TV.</string>
+    <string name="remote_tv_starlit_approve">Setujui kode yang cocok di TV:</string>
+    <string name="remote_tv_starlit_failed">Koneksi gagal. Periksa kode lalu coba lagi.</string>
+    <string name="remote_handoff_choose_target">Pilih perangkat</string>
+    <string name="remote_handoff_to_device">Putar di perangkat</string>
 </resources>

@@ -2,6 +2,8 @@
 
 This first-party service implements short-lived QR pairing for TV add-ons and native JavaScript plugin repositories. It is separate from account sign-in and the Samsung/LG developer installer.
 
+It also powers the Android Starlit remote's **Play on device** workflow. After on-TV approval, the phone sends metadata-only title/episode identifiers through `handoffSearch`. The TV resolves available sources using its own installed add-ons and providers. The phone sees descriptive source labels and opaque `source:N` handles; `handoffSelect` makes the TV play the selected original stream object. `handoffCancel` clears the request. No streaming links, credentials, torrent metadata or DRM material are sent to or stored by the relay. This is intentionally separate from manufacturer TV key controls.
+
 ## User flow
 
 On Starlit TV open Settings > Content & Discovery > Manage with phone, or the button in Add-ons / Plugins. Scan the QR code or enter its short code using a phone. Verify the matching verification code and **approve on the TV**. The phone can then preview/add/remove/enable add-ons and, on compatible devices, plugin repositories and providers.
@@ -22,6 +24,7 @@ At the repository root:
 
     node --test tv-setup-server/test/*.test.mjs
     node --test tizen/tests/starlit-phone-setup.test.mjs
+    node --test tizen/tests/starlit-phone-handoff.test.mjs
     npm --prefix tizen run lint
     npm --prefix tizen run build
 

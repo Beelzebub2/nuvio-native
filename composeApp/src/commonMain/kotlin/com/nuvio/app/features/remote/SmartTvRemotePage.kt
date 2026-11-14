@@ -64,6 +64,8 @@ internal fun SmartTvRemotePage() {
         return
     }
 
+    StarlitTvPairingCard()
+
     LaunchedEffect(Unit) {
         if (active == null && discovered.isEmpty() && !scanning) transport.discover()
     }
@@ -141,6 +143,67 @@ internal fun SmartTvRemotePage() {
         }
     }
     SmartTvManualConnection(transport, connecting)
+}
+
+/** Starlit-native pairing for metadata-only source selection and TV playback. */
+@Composable
+private fun StarlitTvPairingCard() {
+    val remote = remember { StarlitTvPlayback.transport }
+    val connected by StarlitTvPlayback.connected.collectAsState()
+    val pairing by StarlitTvPlayback.pairing.collectAsState()
+    val name by StarlitTvPlayback.name.collectAsState()
+    val verification by StarlitTvPlayback.verification.collectAsState()
+    val error by StarlitTvPlayback.error.collectAsState()
+    val colors = MaterialTheme.nuvio.colors
+    var code by rememberSaveable { mutableStateOf("") }
+
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(stringResource(
+            if (connected) Res.string.remote_tv_connected_title else Res.string.remote_tv_find_title),
+            style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
+        if (connected) {
+            Text(name.ifBlank { stringResource(Res.string.remote_tv_connected_title) },
+                color = colors.textSecondary)
+            DialogButton(
+                text = stringResource(Res.string.remote_disconnect),
+                onClick = remote::disconnect,
+                style = DialogButtonStyle.Destructive,
+                modifier = Modifier.testTag("starlit-tv-unpair"),
+            )
+        } else {
+            Text(stringResource(Res.string.remote_tv_starlit_hint),
+                style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary)
+            if (verification.isNotBlank() && pairing) {
+                Text(
+                    stringResource(Res.string.remote_tv_starlit_approve) + " " + verification,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.textPrimary,
+                    modifier = Modifier.testTag("starlit-tv-verification"),
+                )
+            } else if (error) {
+                Text(stringResource(Res.string.remote_tv_starlit_failed),
+                    color = colors.textSecondary)
+            }
+            if (!pairing) {
+                NuvioLabeledField(label = stringResource(Res.string.remote_tv_starlit_code)) {
+                    NuvioInputField(
+                        value = code,
+                        onValueChange = {
+                            code = it.uppercase().filter { char -> char in 'A'..'Z' || char in '2'..'9' }.take(8)
+                        },
+                        placeholder = "ABCDEFGH",
+                        modifier = Modifier.testTag("starlit-tv-pair-code"),
+                    )
+                }
+            }
+            DialogButton(
+                text = stringResource(if (pairing) Res.string.action_cancel else Res.string.remote_pc_connect),
+                onClick = if (pairing) remote::disconnect else ({ remote.pair(code) }),
+                enabled = pairing || code.length == 8,
+                modifier = Modifier.testTag(if (pairing) "starlit-tv-pair-cancel" else "starlit-tv-pair"),
+            )
+        }
+    }
 }
 
 @Composable
