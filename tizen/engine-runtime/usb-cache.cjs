@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Starlit contributors. SPDX-License-Identifier: MIT.
 // Removable, disposable torrent-piece cache for the legacy Node 4 TV service.
 var fs = require('fs'), path = require('path'), crypto = require('crypto');
-var memoryCache = require('./bounded-store.cjs');
+var memoryCache = require('./bounded-store.cjs'), createRecency = require('./recency-list.cjs');
 var MiB = 1024 * 1024, GiB = 1024 * MiB;
 var RAM_LIMIT = 48 * MiB, HOT_LIMIT = 16 * MiB;
 var DIR_NAME = 'Starlit-Torrent-Cache', MARKER = '.starlit-owned-v1';
@@ -142,32 +142,36 @@ function probe(root, free, total, cb) {
 }
 function create(config, evict, onFailure) {
   var session = crypto.randomBytes(12).toString('hex'), sequence = 0;
-  var entries = Object.create(null), owned = Object.create(null), order = [];
-  var hot = Object.create(null), hotOrder = [], hotBytes = 0;
+  var entries = Object.create(null), owned = Object.create(null), order = createRecency();
+  var hot = Object.create(null), hotOrder = createRecency(), hotBytes = 0;
   var bytes = 0, pending = 0, closed = false, finishing = false, mode = 'usb', closeCallbacks = [];
   var stats = { mode: 'usb', bytes: 0, limit: config.cacheBytes, ramBytes: 0,
-    ramLimit: HOT_LIMIT, evictions: 0, hits: 0, misses: 0, reason: null };
+    ramLimit: HOT_LIMIT, evictions: 0, hits: 0, misses: 0,
+    diskReadBytes: 0, diskReadOps: 0, ownedFiles: 0, reason: null };
   var fallback = memoryCache(RAM_LIMIT, evict), fallbackStore = null;
-  function touch(list, index) {
-    var at = list.indexOf(index);
-    if (at >= 0) list.splice(at, 1);
-    list.push(index);
-  }
   function unhot(index) {
     if (!hot[index]) return;
     hotBytes -= hot[index].length;
     delete hot[index];
-    var at = hotOrder.indexOf(index);
-    if (at >= 0) hotOrder.splice(at, 1);
+    hotOrder.remove(index);
     stats.ramBytes = hotBytes;
   }
   function keepHot(index, data) {
     unhot(index);
     if (data.length > HOT_LIMIT) return;
     hot[index] = data; hotBytes += data.length;
-    touch(hotOrder, index);
-    while (hotBytes > HOT_LIMIT) unhot(hotOrder[0]);
+    hotOrder.touch(index);
+    while (hotBytes > HOT_LIMIT) unhot(hotOrder.oldest());
     stats.ramBytes = hotBytes;
+  }
+  function eraseOwnedFile(file, callback) {
+    fs.unlink(file, function (err) {
+      if ((!err || err.code === 'ENOENT') && owned[file]) {
+        delete owned[file];
+        stats.ownedFiles--;
+      }
+      if (callback) callback(err);
+    });
   }
   function discard(index, notify) {
     var item = entries[index];
@@ -176,17 +180,16 @@ function create(config, evict, onFailure) {
     bytes -= item.length;
     stats.bytes = bytes;
     unhot(index);
-    var at = order.indexOf(index);
-    if (at >= 0) order.splice(at, 1);
-    fs.unlink(item.file, function () {});
+    order.remove(index);
+    eraseOwnedFile(item.file);
     if (notify) { stats.evictions++; evict(Number(index)); }
   }
   function degrade(reason) {
     if (mode !== 'usb') return;
     mode = 'memory'; stats.mode = 'memory'; stats.reason = reason || 'USB disconnected';
     Object.keys(entries).forEach(function (index) { discard(index, true); });
-    entries = Object.create(null); order = []; bytes = 0; stats.bytes = 0;
-    hot = Object.create(null); hotOrder = []; hotBytes = 0; stats.ramBytes = 0;
+    entries = Object.create(null); order.clear(); bytes = 0; stats.bytes = 0;
+    hot = Object.create(null); hotOrder.clear(); hotBytes = 0; stats.ramBytes = 0;
     stats.limit = RAM_LIMIT;
     if (typeof onFailure === 'function') onFailure(stats.reason);
   }
@@ -201,9 +204,34 @@ function create(config, evict, onFailure) {
           callbacks.forEach(function (cb) { if (cb) cb(); });
         });
       }
-      fs.unlink(names.pop(), function () { next(); });
+      eraseOwnedFile(names.pop(), function () { next(); });
     }
     next();
+  }
+  function readPieceRange(item, offset, length, callback) {
+    // Avoid reading a 32 MiB torrent piece just to serve a tiny AVPlay Range.
+    // Validate the full file size before reading only the requested bytes.
+    fs.open(item.file, 'r', function (openError, fd) {
+      if (openError) return callback(openError);
+      function finish(error, result) {
+        fs.close(fd, function (closeError) { callback(error || closeError, result); });
+      }
+      fs.fstat(fd, function (statError, info) {
+        if (statError || !info || !info.isFile() || info.size !== item.length) {
+          return finish(statError || new Error('USB cache piece length changed'));
+        }
+        var result = new Buffer(length), received = 0;
+        function next() {
+          if (received === length) return finish(null, result);
+          fs.read(fd, result, received, length - received, offset + received, function (readError, n) {
+            if (readError || !n) return finish(readError || new Error('USB short read'));
+            received += n; stats.diskReadBytes += n; stats.diskReadOps++;
+            next();
+          });
+        }
+        next();
+      });
+    });
   }
   return {
     stats: stats,
@@ -221,7 +249,7 @@ function create(config, evict, onFailure) {
           if (data.length > config.cacheBytes) return process.nextTick(function () { cb(new Error('Piece too large')); });
           pending++;
           var file = path.join(config.dir, 'p-' + session + '-' + (sequence++) + '.piece');
-          owned[file] = true;
+          owned[file] = true; stats.ownedFiles++;
           fs.writeFile(file, data, { flag: 'wx', mode: 384 }, function (err) {
             pending--;
             if (closed) { if (cb) cb(new Error('Cache closed')); return finalizeClose(); }
@@ -233,7 +261,7 @@ function create(config, evict, onFailure) {
               });
             }
             if (mode !== 'usb') {
-              fs.unlink(file, function () {});
+              eraseOwnedFile(file);
               return fallbackStore.put(index, data, function (memErr) {
                 stats.bytes = fallback.stats.bytes; stats.ramBytes = fallback.stats.bytes;
                 if (cb) cb(memErr);
@@ -241,10 +269,10 @@ function create(config, evict, onFailure) {
             }
             discard(index, false);
             entries[index] = { file: file, length: data.length };
-            order.push(String(index));
+            order.touch(String(index));
             bytes += data.length; stats.bytes = bytes;
             keepHot(index, data);
-            while (bytes > config.cacheBytes && order.length) discard(order[0], true);
+            while (bytes > config.cacheBytes && order.length()) discard(order.oldest(), true);
             if (cb) cb();
           });
         },
@@ -254,25 +282,32 @@ function create(config, evict, onFailure) {
           if (mode !== 'usb') return fallbackStore.get(index, opts, cb);
           var item = entries[index];
           if (!item) { stats.misses++; return process.nextTick(function () { cb(new Error('Piece absent')); }); }
+          var start = opts && opts.offset || 0;
+          var length = opts && opts.length ? opts.length : item.length - start;
+          if (!isFinite(start) || start < 0 || start % 1 || !isFinite(length) ||
+              length < 0 || length % 1 || start + length > item.length) {
+            return process.nextTick(function () { cb(new Error('Invalid USB piece range')); });
+          }
           var cached = hot[index];
           if (cached) {
-            stats.hits++; touch(hotOrder, index); touch(order, String(index));
-            return process.nextTick(function () { cb(null, opts ? cached.slice(opts.offset || 0, opts.length ? (opts.offset || 0) + opts.length : undefined) : cached); });
+            stats.hits++; hotOrder.touch(index); order.touch(String(index));
+            return process.nextTick(function () { cb(null, opts ? cached.slice(start, start + length) : cached); });
           }
           pending++;
-          fs.readFile(item.file, function (err, data) {
+          readPieceRange(item, start, length, function (err, data) {
             pending--;
             if (closed) { cb(new Error('Cache closed')); return finalizeClose(); }
             if (mode !== 'usb') return fallbackStore.get(index, opts, cb);
-            if (err || !data || data.length !== item.length) {
+            if (err || !data || data.length !== length) {
               stats.misses++;
               if (err && err.code === 'ENOENT' && entries[index] !== item) return cb(new Error('Piece evicted'));
               degrade('USB read failed: ' + presentError(err || new Error('short read')));
               return cb(new Error('USB cache read failed'));
             }
             if (entries[index] !== item) return cb(new Error('Piece evicted'));
-            stats.hits++; touch(order, String(index)); keepHot(index, data);
-            cb(null, opts ? data.slice(opts.offset || 0, opts.length ? (opts.offset || 0) + opts.length : undefined) : data);
+            stats.hits++; order.touch(String(index));
+            if (start === 0 && length === item.length) keepHot(index, data);
+            cb(null, data);
           });
         },
         close: function (cb) { closed = true; if (cb) closeCallbacks.push(cb); finalizeClose(); },

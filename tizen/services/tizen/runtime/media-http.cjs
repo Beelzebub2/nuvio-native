@@ -1,10 +1,10 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.StarlitTorrentRuntime = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 'use strict';
 // MIT. Bounded piece cache; eviction restores download eligibility in the engine.
+var createRecency = require('./recency-list.cjs');
 module.exports = function (limit, evict) {
-  var items = Object.create(null), order = [], bytes = 0, closed = false;
+  var items = Object.create(null), order = createRecency(), bytes = 0, closed = false;
   var stats = { bytes: 0, limit: limit, evictions: 0, hits: 0, misses: 0 };
-  function touch(index) { var p = order.indexOf(index); if (p >= 0) order.splice(p, 1); order.push(index); }
   function done(cb, err, data) { process.nextTick(function () { if (cb) cb(err, data); }); }
   return {
     stats: stats,
@@ -16,9 +16,11 @@ module.exports = function (limit, evict) {
           if (closed) return done(cb, new Error('Cache closed'));
           if (buf.length > limit) return done(cb, new Error('Piece exceeds cache capacity'));
           if (items[index]) bytes -= items[index].length;
-          items[index] = buf; bytes += buf.length; touch(index);
+          items[index] = buf; bytes += buf.length; order.touch(index);
           while (bytes > limit) {
-            var old = order.shift(); bytes -= items[old].length; delete items[old];
+            var old = order.oldest();
+            order.remove(old);
+            bytes -= items[old].length; delete items[old];
             stats.evictions++; evict(old);
           }
           stats.bytes = bytes; done(cb);
@@ -27,18 +29,18 @@ module.exports = function (limit, evict) {
           if (typeof opts === 'function') { cb = opts; opts = null; }
           var buf = items[index];
           if (!buf || closed) { stats.misses++; return done(cb, new Error('Piece absent')); }
-          stats.hits++; touch(index);
+          stats.hits++; order.touch(index);
           var start = opts && opts.offset || 0;
           done(cb, null, opts ? buf.slice(start, opts.length ? start + opts.length : undefined) : buf);
         },
-        close: function (cb) { closed = true; items = Object.create(null); order = []; bytes = stats.bytes = 0; done(cb); },
+        close: function (cb) { closed = true; items = Object.create(null); order.clear(); bytes = stats.bytes = 0; done(cb); },
         destroy: function (cb) { this.close(cb); }
       };
     }
   };
 };
 
-},{}],2:[function(require,module,exports){
+},{"./recency-list.cjs":90}],2:[function(require,module,exports){
 /* MIT. Public-address DNS policy for outbound service requests. */
 "use strict";
 var dns = require("dns");
@@ -14211,7 +14213,7 @@ function filter (source, events) {
 
 },{"events":undefined}],75:[function(require,module,exports){
 module.exports = require("../../tracker-http.cjs");
-},{"../../tracker-http.cjs":91}],76:[function(require,module,exports){
+},{"../../tracker-http.cjs":92}],76:[function(require,module,exports){
 function hash(value) { return require("crypto").createHash("sha1").update(value).digest("hex"); }
 function asyncHash(value, callback) { var result = hash(value); process.nextTick(function () { callback(result); }); }
 module.exports = asyncHash; module.exports.sync = hash;
@@ -15824,6 +15826,59 @@ function extend(target) {
 
 },{}],90:[function(require,module,exports){
 'use strict';
+// Copyright (c) 2026 Starlit contributors. SPDX-License-Identifier: MIT.
+// O(1) recency tracking for numeric torrent piece indices on legacy Node 4.
+module.exports = function () {
+  var nodes = Object.create(null), oldest = null, newest = null, count = 0;
+  function unlink(node) {
+    if (node.previous) node.previous.next = node.next;
+    else oldest = node.next;
+    if (node.next) node.next.previous = node.previous;
+    else newest = node.previous;
+    node.previous = null;
+    node.next = null;
+  }
+  function touch(index) {
+    var key = String(index);
+    var node = nodes[key];
+    if (node === newest) return;
+    if (node) unlink(node);
+    else {
+      node = { key: index, previous: null, next: null };
+      nodes[key] = node;
+      count++;
+    }
+    node.previous = newest;
+    if (newest) newest.next = node;
+    else oldest = node;
+    newest = node;
+  }
+  function remove(index) {
+    var key = String(index);
+    var node = nodes[key];
+    if (!node) return false;
+    unlink(node);
+    delete nodes[key];
+    count--;
+    return true;
+  }
+  function clear() {
+    nodes = Object.create(null);
+    oldest = null;
+    newest = null;
+    count = 0;
+  }
+  return {
+    touch: touch,
+    remove: remove,
+    oldest: function () { return oldest ? oldest.key : null; },
+    length: function () { return count; },
+    clear: clear
+  };
+};
+
+},{}],91:[function(require,module,exports){
+'use strict';
 // Copyright (c) 2026 Starlit contributors. SPDX-License-Identifier: MIT
 var http = require('http'), url = require('url'), crypto = require('crypto'), Readable = require('stream').Readable;
 var torrentStream = require('torrent-stream'), createCache = require('./bounded-store.cjs');
@@ -15962,13 +16017,22 @@ function start(options, callback) {
     function notify() {
       if (dead || !waiting || selected < 0 || !engine.bitfield.get(selected)) return;
       var piece = selected; waiting = false;
-      engine.store.get(piece, function (err, buffer) {
+      var pieceStart = piece * engine.torrent.pieceLength;
+      var offset = position - pieceStart;
+      var pieceBytes = Math.min(engine.torrent.pieceLength, engine.torrent.length - pieceStart);
+      var count = Math.min(pieceBytes - offset, end - position + 1);
+      if (offset < 0 || count <= 0) return stream.destroy();
+      // A small AVPlay HTTP range should not read a whole large cached piece
+      // from removable storage. The torrent engine has already verified it.
+      engine.store.get(piece, { offset: offset, length: count }, function (err, buffer) {
         if (dead) return;
-        if (err) { engine.invalidate(piece); waiting = true; return engine.select(piece, piece, true, notify); }
+        if (err || !buffer || buffer.length !== count) {
+          engine.invalidate(piece);
+          waiting = true;
+          return engine.select(piece, piece, true, notify);
+        }
         deselect();
-        var offset = position - piece * engine.torrent.pieceLength;
-        var count = Math.min(buffer.length - offset, end - position + 1);
-        position += count; stream.push(buffer.slice(offset, offset + count));
+        position += count; stream.push(buffer);
         if (position > end) stream.push(null);
       });
     }
@@ -16074,7 +16138,7 @@ function start(options, callback) {
 }
 module.exports = { start: start, validateTorrent: validateTorrent, version: 'starlit-torrent-1' };
 
-},{"./bounded-store.cjs":1,"./network-policy.cjs":2,"./usb-cache.cjs":92,"crypto":undefined,"http":undefined,"net":undefined,"stream":undefined,"torrent-stream":83,"url":undefined}],91:[function(require,module,exports){
+},{"./bounded-store.cjs":1,"./network-policy.cjs":2,"./usb-cache.cjs":93,"crypto":undefined,"http":undefined,"net":undefined,"stream":undefined,"torrent-stream":83,"url":undefined}],92:[function(require,module,exports){
 'use strict';
 // MIT. Only the concat API used by the tracker client is implemented.
 var http = require('http'), https = require('https'), url = require('url'), policy = require('./network-policy.cjs');
@@ -16104,12 +16168,12 @@ exports.concat = function (destination, callback) {
   fetch(destination); return { abort: abort };
 };
 
-},{"./network-policy.cjs":2,"http":undefined,"https":undefined,"url":undefined}],92:[function(require,module,exports){
+},{"./network-policy.cjs":2,"http":undefined,"https":undefined,"url":undefined}],93:[function(require,module,exports){
 'use strict';
 // Copyright (c) 2026 Starlit contributors. SPDX-License-Identifier: MIT.
 // Removable, disposable torrent-piece cache for the legacy Node 4 TV service.
 var fs = require('fs'), path = require('path'), crypto = require('crypto');
-var memoryCache = require('./bounded-store.cjs');
+var memoryCache = require('./bounded-store.cjs'), createRecency = require('./recency-list.cjs');
 var MiB = 1024 * 1024, GiB = 1024 * MiB;
 var RAM_LIMIT = 48 * MiB, HOT_LIMIT = 16 * MiB;
 var DIR_NAME = 'Starlit-Torrent-Cache', MARKER = '.starlit-owned-v1';
@@ -16249,32 +16313,36 @@ function probe(root, free, total, cb) {
 }
 function create(config, evict, onFailure) {
   var session = crypto.randomBytes(12).toString('hex'), sequence = 0;
-  var entries = Object.create(null), owned = Object.create(null), order = [];
-  var hot = Object.create(null), hotOrder = [], hotBytes = 0;
+  var entries = Object.create(null), owned = Object.create(null), order = createRecency();
+  var hot = Object.create(null), hotOrder = createRecency(), hotBytes = 0;
   var bytes = 0, pending = 0, closed = false, finishing = false, mode = 'usb', closeCallbacks = [];
   var stats = { mode: 'usb', bytes: 0, limit: config.cacheBytes, ramBytes: 0,
-    ramLimit: HOT_LIMIT, evictions: 0, hits: 0, misses: 0, reason: null };
+    ramLimit: HOT_LIMIT, evictions: 0, hits: 0, misses: 0,
+    diskReadBytes: 0, diskReadOps: 0, ownedFiles: 0, reason: null };
   var fallback = memoryCache(RAM_LIMIT, evict), fallbackStore = null;
-  function touch(list, index) {
-    var at = list.indexOf(index);
-    if (at >= 0) list.splice(at, 1);
-    list.push(index);
-  }
   function unhot(index) {
     if (!hot[index]) return;
     hotBytes -= hot[index].length;
     delete hot[index];
-    var at = hotOrder.indexOf(index);
-    if (at >= 0) hotOrder.splice(at, 1);
+    hotOrder.remove(index);
     stats.ramBytes = hotBytes;
   }
   function keepHot(index, data) {
     unhot(index);
     if (data.length > HOT_LIMIT) return;
     hot[index] = data; hotBytes += data.length;
-    touch(hotOrder, index);
-    while (hotBytes > HOT_LIMIT) unhot(hotOrder[0]);
+    hotOrder.touch(index);
+    while (hotBytes > HOT_LIMIT) unhot(hotOrder.oldest());
     stats.ramBytes = hotBytes;
+  }
+  function eraseOwnedFile(file, callback) {
+    fs.unlink(file, function (err) {
+      if ((!err || err.code === 'ENOENT') && owned[file]) {
+        delete owned[file];
+        stats.ownedFiles--;
+      }
+      if (callback) callback(err);
+    });
   }
   function discard(index, notify) {
     var item = entries[index];
@@ -16283,17 +16351,16 @@ function create(config, evict, onFailure) {
     bytes -= item.length;
     stats.bytes = bytes;
     unhot(index);
-    var at = order.indexOf(index);
-    if (at >= 0) order.splice(at, 1);
-    fs.unlink(item.file, function () {});
+    order.remove(index);
+    eraseOwnedFile(item.file);
     if (notify) { stats.evictions++; evict(Number(index)); }
   }
   function degrade(reason) {
     if (mode !== 'usb') return;
     mode = 'memory'; stats.mode = 'memory'; stats.reason = reason || 'USB disconnected';
     Object.keys(entries).forEach(function (index) { discard(index, true); });
-    entries = Object.create(null); order = []; bytes = 0; stats.bytes = 0;
-    hot = Object.create(null); hotOrder = []; hotBytes = 0; stats.ramBytes = 0;
+    entries = Object.create(null); order.clear(); bytes = 0; stats.bytes = 0;
+    hot = Object.create(null); hotOrder.clear(); hotBytes = 0; stats.ramBytes = 0;
     stats.limit = RAM_LIMIT;
     if (typeof onFailure === 'function') onFailure(stats.reason);
   }
@@ -16308,9 +16375,34 @@ function create(config, evict, onFailure) {
           callbacks.forEach(function (cb) { if (cb) cb(); });
         });
       }
-      fs.unlink(names.pop(), function () { next(); });
+      eraseOwnedFile(names.pop(), function () { next(); });
     }
     next();
+  }
+  function readPieceRange(item, offset, length, callback) {
+    // Avoid reading a 32 MiB torrent piece just to serve a tiny AVPlay Range.
+    // Validate the full file size before reading only the requested bytes.
+    fs.open(item.file, 'r', function (openError, fd) {
+      if (openError) return callback(openError);
+      function finish(error, result) {
+        fs.close(fd, function (closeError) { callback(error || closeError, result); });
+      }
+      fs.fstat(fd, function (statError, info) {
+        if (statError || !info || !info.isFile() || info.size !== item.length) {
+          return finish(statError || new Error('USB cache piece length changed'));
+        }
+        var result = new Buffer(length), received = 0;
+        function next() {
+          if (received === length) return finish(null, result);
+          fs.read(fd, result, received, length - received, offset + received, function (readError, n) {
+            if (readError || !n) return finish(readError || new Error('USB short read'));
+            received += n; stats.diskReadBytes += n; stats.diskReadOps++;
+            next();
+          });
+        }
+        next();
+      });
+    });
   }
   return {
     stats: stats,
@@ -16328,7 +16420,7 @@ function create(config, evict, onFailure) {
           if (data.length > config.cacheBytes) return process.nextTick(function () { cb(new Error('Piece too large')); });
           pending++;
           var file = path.join(config.dir, 'p-' + session + '-' + (sequence++) + '.piece');
-          owned[file] = true;
+          owned[file] = true; stats.ownedFiles++;
           fs.writeFile(file, data, { flag: 'wx', mode: 384 }, function (err) {
             pending--;
             if (closed) { if (cb) cb(new Error('Cache closed')); return finalizeClose(); }
@@ -16340,7 +16432,7 @@ function create(config, evict, onFailure) {
               });
             }
             if (mode !== 'usb') {
-              fs.unlink(file, function () {});
+              eraseOwnedFile(file);
               return fallbackStore.put(index, data, function (memErr) {
                 stats.bytes = fallback.stats.bytes; stats.ramBytes = fallback.stats.bytes;
                 if (cb) cb(memErr);
@@ -16348,10 +16440,10 @@ function create(config, evict, onFailure) {
             }
             discard(index, false);
             entries[index] = { file: file, length: data.length };
-            order.push(String(index));
+            order.touch(String(index));
             bytes += data.length; stats.bytes = bytes;
             keepHot(index, data);
-            while (bytes > config.cacheBytes && order.length) discard(order[0], true);
+            while (bytes > config.cacheBytes && order.length()) discard(order.oldest(), true);
             if (cb) cb();
           });
         },
@@ -16361,25 +16453,32 @@ function create(config, evict, onFailure) {
           if (mode !== 'usb') return fallbackStore.get(index, opts, cb);
           var item = entries[index];
           if (!item) { stats.misses++; return process.nextTick(function () { cb(new Error('Piece absent')); }); }
+          var start = opts && opts.offset || 0;
+          var length = opts && opts.length ? opts.length : item.length - start;
+          if (!isFinite(start) || start < 0 || start % 1 || !isFinite(length) ||
+              length < 0 || length % 1 || start + length > item.length) {
+            return process.nextTick(function () { cb(new Error('Invalid USB piece range')); });
+          }
           var cached = hot[index];
           if (cached) {
-            stats.hits++; touch(hotOrder, index); touch(order, String(index));
-            return process.nextTick(function () { cb(null, opts ? cached.slice(opts.offset || 0, opts.length ? (opts.offset || 0) + opts.length : undefined) : cached); });
+            stats.hits++; hotOrder.touch(index); order.touch(String(index));
+            return process.nextTick(function () { cb(null, opts ? cached.slice(start, start + length) : cached); });
           }
           pending++;
-          fs.readFile(item.file, function (err, data) {
+          readPieceRange(item, start, length, function (err, data) {
             pending--;
             if (closed) { cb(new Error('Cache closed')); return finalizeClose(); }
             if (mode !== 'usb') return fallbackStore.get(index, opts, cb);
-            if (err || !data || data.length !== item.length) {
+            if (err || !data || data.length !== length) {
               stats.misses++;
               if (err && err.code === 'ENOENT' && entries[index] !== item) return cb(new Error('Piece evicted'));
               degrade('USB read failed: ' + presentError(err || new Error('short read')));
               return cb(new Error('USB cache read failed'));
             }
             if (entries[index] !== item) return cb(new Error('Piece evicted'));
-            stats.hits++; touch(order, String(index)); keepHot(index, data);
-            cb(null, opts ? data.slice(opts.offset || 0, opts.length ? (opts.offset || 0) + opts.length : undefined) : data);
+            stats.hits++; order.touch(String(index));
+            if (start === 0 && length === item.length) keepHot(index, data);
+            cb(null, data);
           });
         },
         close: function (cb) { closed = true; if (cb) closeCallbacks.push(cb); finalizeClose(); },
@@ -16390,5 +16489,5 @@ function create(config, evict, onFailure) {
 }
 module.exports = { probe: probe, policy: policy, create: create };
 
-},{"./bounded-store.cjs":1,"crypto":undefined,"fs":undefined,"path":undefined}]},{},[90])(90)
+},{"./bounded-store.cjs":1,"./recency-list.cjs":90,"crypto":undefined,"fs":undefined,"path":undefined}]},{},[91])(91)
 });

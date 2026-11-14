@@ -137,13 +137,22 @@ function start(options, callback) {
     function notify() {
       if (dead || !waiting || selected < 0 || !engine.bitfield.get(selected)) return;
       var piece = selected; waiting = false;
-      engine.store.get(piece, function (err, buffer) {
+      var pieceStart = piece * engine.torrent.pieceLength;
+      var offset = position - pieceStart;
+      var pieceBytes = Math.min(engine.torrent.pieceLength, engine.torrent.length - pieceStart);
+      var count = Math.min(pieceBytes - offset, end - position + 1);
+      if (offset < 0 || count <= 0) return stream.destroy();
+      // A small AVPlay HTTP range should not read a whole large cached piece
+      // from removable storage. The torrent engine has already verified it.
+      engine.store.get(piece, { offset: offset, length: count }, function (err, buffer) {
         if (dead) return;
-        if (err) { engine.invalidate(piece); waiting = true; return engine.select(piece, piece, true, notify); }
+        if (err || !buffer || buffer.length !== count) {
+          engine.invalidate(piece);
+          waiting = true;
+          return engine.select(piece, piece, true, notify);
+        }
         deselect();
-        var offset = position - piece * engine.torrent.pieceLength;
-        var count = Math.min(buffer.length - offset, end - position + 1);
-        position += count; stream.push(buffer.slice(offset, offset + count));
+        position += count; stream.push(buffer);
         if (position > end) stream.push(null);
       });
     }

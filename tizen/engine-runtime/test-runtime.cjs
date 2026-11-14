@@ -28,6 +28,19 @@ function jsonRequest(path, method, body) {return request(path,method,body,{'X-St
 function create(fileIdx) {fileIdx = typeof fileIdx === 'number' ? fileIdx : 1; return jsonRequest('/'+hash+'/create','POST',{torrent:{infoHash:hash},fileIdx:fileIdx,peerSearch:{sources:[]}}).then(function(r){assert.equal(r.status,200,r.body.toString());assert.equal(r.json.files.length,2);assert.equal(r.json.guessedFileIdx,1);ticket=r.json.playbackTicket;assert(/^[a-f0-9]{64}$/.test(ticket));return r;});}
 function media(start,end,file) {file=file===undefined?1:file;var source=file?second:first;return request('/'+hash+'/'+file+'?ticket='+ticket,'GET',null,{Range:'bytes='+start+'-'+end}).then(function(r){assert.equal(r.status,206);assert.equal(r.headers['content-range'],'bytes '+start+'-'+end+'/'+source.length);assert.equal(r.body.length,end-start+1);assert(r.body.equals(source.slice(start,end+1)),'Range bytes differ');return r;});}
 function stats(){return jsonRequest('/'+hash+'/stats').then(function(r){assert.equal(r.status,200);assert(r.json.cache.bytes<=65536);assert(Number.isInteger(r.json.activeRanges));assert(r.json.activeRanges>=0&&r.json.activeRanges<=4);return r.json;});}
+function verifyRangeUsesPartialCacheReads() {
+  var engine = engines[engines.length - 1], originalGet = engine.store.get, seen = [];
+  engine.store.get = function (index, options, callback) {
+    if (options && typeof options === 'object') seen.push({ offset: options.offset, length: options.length });
+    return originalGet.apply(this, arguments);
+  };
+  return media(7, 60000).then(function () {
+    engine.store.get = originalGet;
+    assert(seen.length >= 2, 'A multifile HTTP range should request several piece slices');
+    assert(seen.some(function (read) { return read.offset > 0 && read.length < 16384; }),
+      'HTTP byte-range requests must only retrieve the necessary bytes from the piece cache');
+  }, function (error) { engine.store.get = originalGet; throw error; });
+}
 function concurrentRanges() {
   // AVPlay can issue a second range while the first is still downloading.
   // Wait for the first response headers before starting the second request,
@@ -134,7 +147,7 @@ new Promise(function(resolve){seed.listen(0,'127.0.0.1',resolve);}).then(functio
   return new Promise(function(resolve){service=runtime.start({port:0,controlToken:token,cacheBytes:65536,dht:false,allowPrivatePeers:true,metadataTimeout:5000,onEngine:function(engine){engines.push(engine);engine.connect('127.0.0.1:'+seedPort);}},resolve);});
 }).then(function(){port=service.server.address().port;return request('/settings');}).then(function(r){assert.equal(r.status,200);return request('/range-probe','GET',null,{Range:'bytes=2-6',Origin:'http://127.0.0.1:'+port});}).then(function(r){assert.equal(r.status,206);assert.equal(r.body.toString(),'arlit');assert.equal(r.headers['content-range'],'bytes 2-6/22');assert.equal(r.headers['access-control-allow-origin'],'http://127.0.0.1:'+port);assert(/\bContent-Range\b/i.test(r.headers['access-control-expose-headers']||''),'Range header must be visible to the TV app');return request('/removeAll','POST');}).then(function(r){assert.equal(r.status,403);return request('/settings','GET',null,{Host:'evil.example:'+port});}).then(function(r){assert.equal(r.status,403);return request('/settings','GET',null,{Origin:'https://evil.example'});}).then(function(r){assert.equal(r.status,403);return request('/settings','GET',null,{Origin:'null'});}).then(function(r){assert.equal(r.status,403);return create();}).then(function(){
   assert.equal(requested.length,0,'Create preloaded media');return boundedConcurrentRanges().then(concurrentRanges).then(function(){return request('/'+hash+'/1');});
-}).then(function(r){assert.equal(r.status,403);return media(7,60000);}).then(function(){return create(0).then(function(){return media(0,100,0);}).then(function(){return create(1);});}).then(function(){return media(1000000,1100000);}).then(function(){return stats();}).then(function(s){assert(s.cache.evictions>0,'No cache eviction');var count=requested.length;return media(7,60000).then(function(){assert(requested.length>count,'Evicted pieces not refetched');});}).then(function(){
+}).then(function(r){assert.equal(r.status,403);return verifyRangeUsesPartialCacheReads();}).then(function(){return create(0).then(function(){return media(0,100,0);}).then(function(){return create(1);});}).then(function(){return media(1000000,1100000);}).then(function(){return stats();}).then(function(s){assert(s.cache.evictions>0,'No cache eviction');var count=requested.length;return media(7,60000).then(function(){assert(requested.length>count,'Evicted pieces not refetched');});}).then(function(){
   return request('/'+hash+'/1?ticket='+ticket,'HEAD',null,{Range:'bytes=10-20'});
 }).then(function(r){assert.equal(r.status,206);assert.equal(r.body.length,0);assert.equal(r.headers['content-length'],'11');return request('/'+hash+'/1?ticket='+ticket,'GET',null,{Range:'bytes=-17'});}).then(function(r){assert.equal(r.status,206);assert(r.body.equals(second.slice(second.length-17)));return request('/'+hash+'/1?ticket='+ticket,'GET',null,{Range:'bytes=999999999-'});}).then(function(r){assert.equal(r.status,416);
   return new Promise(function(resolve,reject){var req=http.get({host:'127.0.0.1',port:port,path:'/'+hash+'/1?ticket='+ticket},function(res){res.once('data',function(){req.abort();resolve();});});req.on('error',function(err){if(err.code!=='ECONNRESET')reject(err);});});

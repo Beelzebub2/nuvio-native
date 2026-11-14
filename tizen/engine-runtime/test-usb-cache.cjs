@@ -18,8 +18,10 @@ function probe(root, free, total) { return new Promise(function (resolve, reject
 function put(store, index, data) { return new Promise(function (resolve, reject) {
   store.put(index, data, function (err) { if (err) reject(err); else resolve(); });
 }); }
-function get(store, index) { return new Promise(function (resolve, reject) {
-  store.get(index, function (err, buffer) { if (err) reject(err); else resolve(buffer); });
+function get(store, index, opts) { return new Promise(function (resolve, reject) {
+  function done(err, buffer) { if (err) reject(err); else resolve(buffer); }
+  if (opts) store.get(index, opts, done);
+  else store.get(index, done);
 }); }
 function close(store) { return new Promise(function (resolve, reject) {
   store.close(function (err) { if (err) reject(err); else resolve(); });
@@ -70,6 +72,67 @@ probe(dir, 3 * GiB, 4 * GiB).then(function (result) {
       }).then(function () {
         assert.equal(fs.readdirSync(cacheDir).filter(function (name) { return /\.piece$/.test(name); }).length, 0, 'Temporary pieces must be erased');
       });
+  });
+}).then(function () {
+  // A cold 32 MiB piece must serve a 4 KiB native-player range without
+  // reading 32 MiB from removable storage or polluting the 16 MiB hot cache.
+  var big = new Buffer(32 * MiB); big.fill(45);
+  var largeCache = usb.create({ dir: cacheDir, cacheBytes: 64 * MiB }, function () {});
+  var largeStore = largeCache.factory(big.length);
+  return put(largeStore, 0, big).then(function () {
+    assert.equal(largeCache.stats.ramBytes, 0);
+    return get(largeStore, 0, { offset: MiB, length: 4096 });
+  }).then(function (data) {
+    assert(data.equals(big.slice(MiB, MiB + 4096)));
+    assert.equal(largeCache.stats.diskReadBytes, 4096, 'Small range must only read the requested bytes');
+    assert.equal(largeCache.stats.ramBytes, 0, 'Partial range must not be cached as a full piece');
+    return get(largeStore, 0, { offset: big.length - 4096, length: 4096 });
+  }).then(function (data) {
+    assert(data.equals(big.slice(big.length - 4096)));
+    assert.equal(largeCache.stats.diskReadBytes, 8192);
+    return get(largeStore, 0, { offset: big.length - 1, length: 4096 }).then(function () {
+      throw new Error('Out-of-bounds read unexpectedly succeeded');
+    }, function (error) {
+      assert(/Invalid USB piece range/.test(error.message));
+    });
+  }).then(function () {
+    assert.equal(largeCache.stats.mode, 'usb', 'Invalid range must not disable a healthy cache');
+    var piece = fs.readdirSync(cacheDir).filter(function (name) { return /\.piece$/.test(name); })[0];
+    assert(piece, 'Expected temporary large piece');
+    fs.truncateSync(path.join(cacheDir, piece), 4096);
+    return get(largeStore, 0, { offset: 0, length: 1024 }).then(function () {
+      throw new Error('Truncated cached file unexpectedly succeeded');
+    }, function (error) {
+      assert(/USB cache read failed/.test(error.message));
+      assert.equal(largeCache.stats.mode, 'memory', 'Corrupt disk cache must fall back to RAM');
+    });
+  }).then(function () { return close(largeStore); }).then(function () {
+    assert.equal(largeCache.stats.ownedFiles, 0, 'Closing a cache must release owned file records');
+  });
+}).then(function () {
+  // A long stream must not keep every past evicted filename in memory.
+  var churnCache = usb.create({ dir: cacheDir, cacheBytes: 2 * 65536 }, function () {});
+  var churnStore = churnCache.factory(65536);
+  var piece = new Buffer(65536); piece.fill(17);
+  var tasks = Promise.resolve();
+  for (var n = 0; n < 48; n++) {
+    (function (index) { tasks = tasks.then(function () { return put(churnStore, index, piece); }); })(n);
+  }
+  function waitForCleanup(attempts) {
+    if (churnCache.stats.ownedFiles <= 2) return Promise.resolve();
+    if (attempts >= 40) throw new Error('Evicted filenames were retained after unlink');
+    return new Promise(function (resolve) { setTimeout(resolve, 25); }).then(function () {
+      return waitForCleanup(attempts + 1);
+    });
+  }
+  return tasks.then(function () {
+    assert(churnCache.stats.evictions >= 46);
+    return waitForCleanup(0);
+  }).then(function () {
+    assert.equal(churnCache.stats.ownedFiles, 2, 'Only the live disk pieces should remain tracked');
+    return close(churnStore);
+  }).then(function () {
+    assert.equal(churnCache.stats.ownedFiles, 0, 'Stopping playback must release all filename records');
   });
 }).then(function () {
   var occupied = path.join(dir, 'Starlit-Torrent-Cache');
