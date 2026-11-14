@@ -1998,4 +1998,6 @@
     <string name="remote_tv_starlit_failed">Échec de la connexion. Vérifie le code et réessaie.</string>
     <string name="remote_handoff_choose_target">Choisir un appareil</string>
     <string name="remote_handoff_to_device">Lire sur un appareil</string>
+    <string name="settings_tracking_anime_id_title">Identifiant d’anime préféré</string>
+    <string name="settings_tracking_anime_id_subtitle">Choisissez l’identifiant externe utilisé comme identifiant principal pour les fiches d’anime.</string>
 </resources>

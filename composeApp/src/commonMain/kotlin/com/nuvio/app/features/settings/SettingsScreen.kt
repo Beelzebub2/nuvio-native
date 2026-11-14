@@ -96,8 +96,10 @@ import com.nuvio.app.features.player.AndroidPlaybackEngine
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklAuthUiState
+import com.nuvio.app.features.simkl.SimklConnectionMode
 import com.nuvio.app.features.trakt.TraktAuthUiState
 import com.nuvio.app.features.trakt.TraktAuthRepository
+import com.nuvio.app.features.trakt.TraktConnectionMode
 import com.nuvio.app.features.trakt.TraktCommentsSettings
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.TrackingSettingsUiState
@@ -691,6 +693,8 @@ private fun MobileSettingsScreen(
                                 liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
                                 switchProfileAvailable = onSwitchProfile != null,
                                 checkForUpdatesAvailable = onCheckForUpdatesClick != null,
+                                traktConnected = traktAuthUiState.mode == TraktConnectionMode.CONNECTED,
+                                simklConnected = simklAuthUiState.mode == SimklConnectionMode.CONNECTED,
                             )
                         },
                         isTablet = false,
@@ -1142,6 +1146,8 @@ private fun TabletSettingsScreen(
                         liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
                         switchProfileAvailable = onSwitchProfile != null,
                         checkForUpdatesAvailable = onCheckForUpdatesClick != null,
+                        traktConnected = traktAuthUiState.mode == TraktConnectionMode.CONNECTED,
+                        simklConnected = simklAuthUiState.mode == SimklConnectionMode.CONNECTED,
                     )
                 }
                 fun openSearchTarget(target: SettingsSearchTarget) {

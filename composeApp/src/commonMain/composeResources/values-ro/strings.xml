@@ -1956,4 +1956,6 @@
     <string name="remote_tv_starlit_failed">Conexiunea a eșuat. Verifică codul și încearcă din nou.</string>
     <string name="remote_handoff_choose_target">Alege un dispozitiv</string>
     <string name="remote_handoff_to_device">Redă pe dispozitiv</string>
+    <string name="settings_tracking_anime_id_title">ID anime preferat</string>
+    <string name="settings_tracking_anime_id_subtitle">Alege ID-ul extern folosit ca identificator principal pentru intrările anime.</string>
 </resources>
