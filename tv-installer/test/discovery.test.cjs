@@ -106,6 +106,7 @@ test("LG discovery listens on private interfaces, deduplicates and validates des
     },
     socketFactory: factory,
     durationMs: 5,
+    listSavedDevices: async () => [{ name: "living-room-lg", host: "192.168.1.55" }],
     readDescription: async url => url.hostname === "192.168.1.55"
       ? LG_XML : "<root><manufacturer>Acme Corp</manufacturer></root>"
   });
@@ -115,6 +116,7 @@ test("LG discovery listens on private interfaces, deduplicates and validates des
   assert.deepEqual(result.devices.map(tv => tv.ip), ["192.168.1.55"]);
   assert.equal(result.devices[0].platform, "webos");
   assert.equal(result.devices[0].name, "Living Room LG webOS TV");
+  assert.equal(result.devices[0].savedDeviceName, "living-room-lg");
   assert.equal(result.devices[0].ready, false);
 });
 
