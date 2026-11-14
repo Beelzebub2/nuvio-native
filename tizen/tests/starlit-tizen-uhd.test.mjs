@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { getTizenCapabilities, readUhdPanelSupported } from "../js/platform/tizen/tizenCapabilities.js";
 import { shouldPreferTizenUhdHls } from "../js/core/player/tizenUhdPlaybackPolicy.js";
+import { chooseSamsungAudioFallbackTrack } from "../js/core/player/tizenAudioFallbackPolicy.js";
 import {
   createSamsungPlaybackProfile,
   describePlaysBest,
@@ -109,4 +110,26 @@ test("controller engine candidates preserve normal HLS but put AVPlay first for 
   controller.currentStreamResolution = "4k";
   capabilities.uhdPanelSupported = null;
   assert.deepEqual(candidates(), ["hls.js", "avplay"]);
+});
+
+test("audio fallback only substitutes known-decodable tracks for unsupported Samsung defaults", () => {
+  const tracks = [
+    { avplayTrackIndex: 0, codec: "DTS-HD MA", language: "eng" },
+    { avplayTrackIndex: 1, codec: "AC-3", language: "spa" },
+    { avplayTrackIndex: 2, codec: "E-AC-3", language: "eng" },
+    { avplayTrackIndex: 3, codec: "AAC", language: "eng" }
+  ];
+  assert.equal(chooseSamsungAudioFallbackTrack(tracks, 0, { tizenMajorVersion: 5 }), 2);
+  assert.equal(chooseSamsungAudioFallbackTrack(tracks, 0, { tizenMajorVersion: 3 }), -1);
+  assert.equal(chooseSamsungAudioFallbackTrack(tracks, 2, { tizenMajorVersion: 5 }), -1);
+  assert.equal(chooseSamsungAudioFallbackTrack(tracks.slice(0, 1), 0, { tizenMajorVersion: 5 }), -1);
+  assert.equal(chooseSamsungAudioFallbackTrack([
+    { avplayTrackIndex: 0, codec: "TrueHD", language: "eng" },
+    { avplayTrackIndex: 1, codec: "", language: "eng" },
+    { avplayTrackIndex: 2, codec: "AAC", language: "eng" }
+  ], 0, { tizenMajorVersion: 5 }), 2);
+  assert.equal(chooseSamsungAudioFallbackTrack([
+    { avplayTrackIndex: 0, codec: "DTS", language: "eng" },
+    { avplayTrackIndex: 1, codec: "", language: "eng" }
+  ], 0, { tizenMajorVersion: 5 }), -1);
 });
