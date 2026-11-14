@@ -18,6 +18,15 @@ export function renderPlaybackP2pBody(
   const cacheSizeLabelKey = cacheSize === "NONE" ? "settings_p2p_cache_none" : `settings_p2p_cache_${cacheSize.replace("GB_", "")}_gb`;
   const cacheAvailable = p2pCacheSupported && !tizenP2pUnsupported;
   const cacheState = p2pCacheState || null;
+  const usbEnabled = cacheState?.usbEnabled ?? internals.P2pCacheService.usbEnabled();
+  const usbStatus = !usbEnabled
+    ? t("settings_usb_cache_off", {}, "Disabled; torrents use a bounded RAM cache.")
+    : cacheState?.usbConfigured
+      ? t("settings_usb_cache_active", {}, "Automatic USB cache: ") +
+        formatByteSize(cacheState.cacheSizeBytes) + " · " +
+        Number(cacheState.usbWriteMBps || 0).toFixed(1) + " MB/s write"
+      : cacheState?.usbReason ||
+        t("settings_usb_cache_waiting", {}, "Waiting for a writable USB drive; RAM fallback is active.");
   let cacheSubtitle = t(
     "settings_p2p_clear_cache_usage_pending",
     {},
@@ -63,7 +72,14 @@ export function renderPlaybackP2pBody(
               value: t(`settings_p2p_profile_${profile.toLowerCase()}`, {}, profile),
               disabled: tizenP2pUnsupported
             })}
-            <p>Streaming uses a bounded temporary memory buffer. No offline files are retained.</p>
+            ${this.renderToggleRow({
+              focusKey: "playback:usbCacheEnabled",
+              title: t("settings_usb_cache_title", {}, "Automatic USB torrent cache"),
+              subtitle: usbStatus,
+              checked: usbEnabled,
+              disabled: tizenP2pUnsupported
+            })}
+            <p>When enabled, temporary torrent pieces use a Starlit-owned folder on a writable USB drive. Existing USB files are untouched. RAM is used if USB storage is missing or too slow.</p>
           </div>
         `;
 }

@@ -28,6 +28,24 @@ the gate at `NOT DEVICE-VERIFIED` until the complete matrix passes.
 two-profile sync, signed update preservation, standby/low-storage recovery,
 other Tizen generations or the final physical release acceptance.
 
+## Additional USB torrent-cache acceptance (pending hardware verification)
+
+- On Tizen 4/5/6, connect FAT32, exFAT and read-only external volumes. Verify
+  that only mounted writable devices are eligible and the displayed capacity
+  does not accidentally include internal storage.
+- Explicitly enable USB caching under Playback > P2P. Verify that the TV can
+  resolve an absolute native mount path shared with the packaged Node service.
+  Confirm the benchmark writes and verifies temporary bytes, and the capacity
+  policy reserves free space before choosing a disk-backed cache.
+- Test slow drives (RAM fallback), simultaneous drives (fastest usable
+  selection), FAT32 files under 4 GiB, 30-minute streaming, repeated seeks,
+  and removal/disconnection during both playback and the speed probe.
+- Verify app-owned files are removed at stop, crash or next probe, while
+  existing media and unknown files remain unchanged. A custom preexisting
+  folder without a valid Starlit ownership marker must remain untouched.
+- Verify unplugging or out-of-space I/O degrades to RAM and refetches pieces
+  without crashing the UI; streaming safety limits still apply.
+
 ## Additional Tizen 5.0 development test (11 November 2026)
 
 The unsigned WGT with SHA-256

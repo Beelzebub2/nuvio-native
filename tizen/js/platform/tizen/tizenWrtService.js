@@ -4,7 +4,7 @@
 const START_GRACE_MS = 1500;
 
 export function getWrtServiceClass(bridge = globalThis.__NUVIO_TIZEN_WRT_SERVICE__) {
-  const Service = bridge?.Service || bridge?.default?.Service;
+  const Service = bridge?.Service || bridge?.default?.Service || bridge?.default || bridge;
   return typeof Service === "function" ? Service : null;
 }
 

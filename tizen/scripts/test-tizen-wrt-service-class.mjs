@@ -100,6 +100,8 @@ try {
     class Service {}
     assert.equal(getWrtServiceClass({ Service }), Service);
     assert.equal(getWrtServiceClass({ default: { Service } }), Service);
+    assert.equal(getWrtServiceClass({ default: Service }), Service);
+    assert.equal(getWrtServiceClass(Service), Service);
     assert.equal(getWrtServiceClass({ startService() {} }), null);
     assert.equal(getWrtServiceClass(null), null);
   });
@@ -134,14 +136,12 @@ try {
   await test("Tizen 10 PluginService starts through a default-exported class", async () => {
     installDevice({ major: 10, webService: false });
     globalThis.__NUVIO_TIZEN_WRT_SERVICE__ = {
-      default: {
-        Service: class Service {
-          constructor(id) { assert.equal(id, "TestPkg.PluginService"); }
-          start() {
-            wrtStarts++;
-            activeService = "TestPkg.PluginService";
-            return new Promise(() => {});
-          }
+      default: class Service {
+        constructor(id) { assert.equal(id, "TestPkg.PluginService"); }
+        start() {
+          wrtStarts++;
+          activeService = "TestPkg.PluginService";
+          return new Promise(() => {});
         }
       }
     };

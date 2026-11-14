@@ -900,6 +900,13 @@
     <string name="remote_playback_play">Play</string>
     <string name="remote_playback_pause">Pause</string>
     <string name="remote_playback_volume">Volume</string>
+    <string name="remote_pc_manage">Manage PCs</string>
+    <string name="remote_pc_tab_downloads_active">%1$d active</string>
+    <string name="remote_playback_pc_window">PC window</string>
+    <string name="remote_playback_waiting_on">Waiting for playback on %1$s</string>
+    <string name="remote_playback_window_fullscreen">Starlit is fullscreen</string>
+    <string name="remote_playback_window_windowed">Starlit is in a window</string>
+    <string name="remote_playback_volume_boost">Boost</string>
     <string name="remote_playback_mute">Mute or unmute</string>
     <string name="remote_playback_skip">Skip intro or credits</string>
     <string name="remote_playback_previous">Previous episode</string>
