@@ -179,6 +179,25 @@ export function createSearchScreenMethods06() {
         }
         return;
       }
+      const nativeCode = Number(event?.originalKeyCode || code);
+      if (Platform.isTizen() && (nativeCode === 65376 || nativeCode === 65385)) {
+        const input = this.container?.querySelector("#searchInput");
+        if (input && this.isSearchInputEditingActive(event)) {
+          // Samsung's IME Done/Cancel keys are distinct from remote OK/Back.
+          // End editing before the next Back can reach the app navigation.
+          this.imeDismissed = true;
+          if (nativeCode === 65376) {
+            this.cancelScheduledInputSearch();
+            await this.runSearchFromInput(input, {
+              autoFocusResults: true,
+              rememberToHistory: true
+            });
+          } else {
+            input.blur?.();
+          }
+          return;
+        }
+      }
       if (this.keepSearchInputEditingKey(event, code)) {
         return;
       }
