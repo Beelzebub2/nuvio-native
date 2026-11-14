@@ -6,7 +6,10 @@ import {
   resetArtworkRescaler,
   shouldRescaleHomeArtwork
 } from "./tvPosterRescaler.js";
-import { getTvArtworkPixelRatio } from "../../platform/tvRuntimePerformance.js";
+import {
+  getTvArtworkPixelRatio,
+  getTvRuntimePerformanceProfile
+} from "../../platform/tvRuntimePerformance.js";
 import { registerSessionTeardownHandler } from "../../core/auth/sessionLifecycle.js";
 // Poster surfaces outside Home. Home already has its own bounded hydrator, so
 // these are only the screens that used to decode at the source size.
@@ -71,14 +74,22 @@ function hydrate(image) {
   image.dataset.artworkPending = "1";
   const token = String(Number(image.dataset.artworkToken || 0) + 1);
   image.dataset.artworkToken = token;
+  const finish = () => {
+    delete image.dataset.artworkPending;
+  };
+  // Tizen 5 / Chromium 63 has IntersectionObserver but no OffscreenCanvas.
+  // Still defer offscreen posters instead of downloading and decoding every
+  // result on screen mount. Never run the main-thread canvas fallback.
+  if (!shouldRescaleHomeArtwork()) {
+    finish();
+    setArtworkSource(image, source);
+    return;
+  }
   const rect = image.getBoundingClientRect();
   const fit = getHomeArtworkObjectFit(image);
   const ratio = getTvArtworkPixelRatio();
   const width = Math.round(Number(rect.width || 0) * ratio);
   const height = Math.round(Number(rect.height || 0) * ratio);
-  const finish = () => {
-    delete image.dataset.artworkPending;
-  };
   if (!isRescalableArtworkFit(fit) || !(width > 0) || !(height > 0)) {
     finish();
     setArtworkSource(image, source);
@@ -181,7 +192,15 @@ function onMutations(records) {
 }
 /** Start the shared lazy artwork pass once per app run. */
 export function startTvArtworkLazyLoader() {
-  if (started || !shouldRescaleHomeArtwork()) return false;
+  if (started) return false;
+  const canRescale = shouldRescaleHomeArtwork();
+  // Older TV engines cannot resize images in workers, but Tizen 5 has a
+  // native IntersectionObserver. Keep the lightweight visibility gate on
+  // those devices; leave truly old engines without that API untouched.
+  const canDeferLegacyArt =
+    getTvRuntimePerformanceProfile().isTvRuntime &&
+    typeof globalThis.IntersectionObserver === "function";
+  if (!canRescale && !canDeferLegacyArt) return false;
   if (!globalThis.document?.body) return false;
   started = true;
   if (typeof globalThis.IntersectionObserver === "function") {
