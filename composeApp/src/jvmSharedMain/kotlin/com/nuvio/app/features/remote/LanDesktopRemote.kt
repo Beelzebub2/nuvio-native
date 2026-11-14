@@ -325,6 +325,7 @@ internal class LanDesktopRemote(
         bluetoothListener = null
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
+        DesktopRemote.pairedBluetoothDesktops.value = emptyList()
         DesktopRemote.scanning.value = false
     }
 
@@ -363,6 +364,7 @@ internal class LanDesktopRemote(
         runCatching { bluetoothClient?.stop() }
         DesktopRemote.scanning.value = false
         DesktopRemote.bluetoothDesktops.value = emptyList()
+        DesktopRemote.pairedBluetoothDesktops.value = emptyList()
     }
 
     override fun cancelStartupReconnect() {
@@ -465,7 +467,9 @@ internal class LanDesktopRemote(
             DesktopRemote.status.value = when {
                 found.isNotEmpty() -> "Choose your PC."
                 failure != null -> failure
-                else -> "No Bluetooth PCs found. Pair your phone with the PC in Bluetooth settings and try again."
+                DesktopRemote.pairedBluetoothDesktops.value.isNotEmpty() ->
+                    "Previously paired PCs are listed below, but may be offline. Open Phone remote on the PC and choose one."
+                else -> "No Bluetooth PCs found. Pair the PC in Android Bluetooth settings or make Windows discoverable, then try again."
             }
             if (found.isNotEmpty()) currentScope.launch(uiDispatcher) {
                 // Inquiry results are a momentary observation, not proof that a
@@ -475,8 +479,12 @@ internal class LanDesktopRemote(
             }
         }
         DesktopRemote.scanning.value = true
-        // Do not display a PC from a previous scan as if it is still nearby.
+        // Live inquiry and OS-paired entries have different reachability semantics.
+        // A paired PC is a connection hint, never proof that it is online or trusted.
         DesktopRemote.bluetoothDesktops.value = emptyList()
+        DesktopRemote.pairedBluetoothDesktops.value = runCatching {
+            activeClient.pairedPcs().distinctBy { it.address.uppercase(Locale.ROOT) }
+        }.getOrDefault(emptyList())
         DesktopRemote.status.value = "Searching nearby Bluetooth PCs…"
         watchdog = currentScope.launch(uiDispatcher) {
             delay(BLUETOOTH_SEARCH_TIMEOUT_MS)

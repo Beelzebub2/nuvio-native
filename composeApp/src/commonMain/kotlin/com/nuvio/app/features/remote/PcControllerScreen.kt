@@ -276,6 +276,7 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val connecting by DesktopRemote.connecting.collectAsState()
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
+    val pairedBluetoothDesktops by DesktopRemote.pairedBluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
     val autoReconnect by DesktopRemote.autoReconnect.collectAsState()
     val groupedPcs = groupRememberedRemotePcs(savedPcs)
@@ -285,6 +286,10 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     }
     val visibleBluetooth = bluetoothDesktops.filterNot { found ->
         savedPcs.any { it.bluetooth && it.address.equals(found.address, ignoreCase = true) }
+    }
+    val visiblePairedBluetooth = pairedBluetoothDesktops.filterNot { paired ->
+        bluetoothDesktops.any { it.address.equals(paired.address, ignoreCase = true) } ||
+            savedPcs.any { it.bluetooth && it.address.equals(paired.address, ignoreCase = true) }
     }
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
     val tokens = MaterialTheme.nuvio
@@ -432,6 +437,19 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
         )
     }
 
+    if (visiblePairedBluetooth.isNotEmpty()) {
+        val bluetoothLabel = stringResource(Res.string.remote_bluetooth_device, "%s")
+        FoundPcGroup(
+            title = stringResource(Res.string.remote_bluetooth_paired_devices),
+            devices = visiblePairedBluetooth,
+            icon = RemoteIcons.Bluetooth,
+            connected = connected,
+            connecting = connecting,
+            activeDesktop = activeDesktop,
+            detail = { bluetoothLabel.replace("%s", it.address) },
+        )
+    }
+
     // A concurrent discovery can update the search message, but never replace
     // the connected PC's identity in the status hero.
     ConnectOptions(busy = busy, scanStatus = status.takeIf { connected && scanning })
@@ -465,7 +483,8 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     }
     if (!connected) {
         TroubleshootingCard(
-            expandByDefault = searched && !busy && desktops.isEmpty() && bluetoothDesktops.isEmpty(),
+            expandByDefault = searched && !busy && desktops.isEmpty() &&
+                bluetoothDesktops.isEmpty() && pairedBluetoothDesktops.isEmpty(),
         )
     }
 }
