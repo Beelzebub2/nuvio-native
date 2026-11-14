@@ -11,6 +11,7 @@ let pending = null;
 let listenerId = null;
 let generation = 0;
 let state = { mode: "memory", reason: "USB cache disabled" };
+const storageChangeSubscribers = new Set();
 
 function callTizen(method, args = []) {
   return new Promise((resolve, reject) => {
@@ -121,10 +122,23 @@ function watchStorage() {
           }
         }, 500);
       }
+      for (const subscriber of storageChangeSubscribers) {
+        try { subscriber(storage); } catch (_) {
+          // TV storage notifications must not be blocked by a UI listener.
+        }
+      }
     });
+    if (listenerId == null) listenerId = true;
   } catch (_) { listenerId = null; }
 }
 export const TizenUsbTorrentCache = {
+  subscribeStorageChanges(listener) {
+    if (typeof listener !== "function") return () => {};
+    storageChangeSubscribers.add(listener);
+    // Mount notifications must be available even before caching is enabled.
+    watchStorage();
+    return () => storageChangeSubscribers.delete(listener);
+  },
   isEnabled() {
     try { return globalThis.localStorage?.getItem(KEY) === "true"; }
     catch (_) { return false; }
