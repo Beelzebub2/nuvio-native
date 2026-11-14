@@ -3074,4 +3074,10 @@
     <string name="updates_whats_new">Mitä uutta</string>
     <string name="updates_download_size">%1$s lataus</string>
     <string name="source_filter_result_count">%1$d / %2$d lähdettä</string>
+    <string name="remote_tv_starlit_code">TV:n parituskoodi</string>
+    <string name="remote_tv_starlit_hint">Avaa televisiossa Hallitse puhelimella. Syötä koodi tähän ja hyväksy televisiossa.</string>
+    <string name="remote_tv_starlit_approve">Hyväksy vastaava koodi televisiossa:</string>
+    <string name="remote_tv_starlit_failed">Yhteys epäonnistui. Tarkista koodi ja yritä uudelleen.</string>
+    <string name="remote_handoff_choose_target">Valitse laite</string>
+    <string name="remote_handoff_to_device">Toista laitteella</string>
 </resources>

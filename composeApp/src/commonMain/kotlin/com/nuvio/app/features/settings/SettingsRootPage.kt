@@ -7,6 +7,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
@@ -132,7 +133,7 @@ internal fun LazyListScope.settingsRootContent(
                                     Res.string.remote_pc_controller_description
                                 else Res.string.remote_pc_unsupported
                             ),
-                            icon = Icons.Rounded.DesktopWindows,
+                            icon = Icons.Rounded.Devices,
                             isTablet = isTablet,
                             onClick = { DesktopRemote.open() },
                         )

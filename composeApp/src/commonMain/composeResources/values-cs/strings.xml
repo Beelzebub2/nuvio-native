@@ -2280,4 +2280,10 @@
     <string name="movie_status_rumored">Fáma</string>
     <string name="movie_status_in_production">Ve výrobě</string>
     <string name="movie_status_post_production">Postprodukce</string>
+    <string name="remote_tv_starlit_code">Kód párování TV</string>
+    <string name="remote_tv_starlit_hint">Na televizi otevřete Správu telefonem. Zadejte sem kód a potvrďte ho na TV.</string>
+    <string name="remote_tv_starlit_approve">Potvrďte shodný kód na televizi:</string>
+    <string name="remote_tv_starlit_failed">Připojení selhalo. Zkontrolujte kód a zkuste to znovu.</string>
+    <string name="remote_handoff_choose_target">Vyberte zařízení</string>
+    <string name="remote_handoff_to_device">Přehrát na zařízení</string>
 </resources>

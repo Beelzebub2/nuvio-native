@@ -1,6 +1,7 @@
 import { TMDB_API_KEY } from "../../config.js";
 import { PluginServiceClient } from "../../platform/pluginServiceClient.js";
 import { PLUGIN_QUOTAS } from "./pluginPolicy.js";
+import { isTizen5PluginPreviewEnabled } from "../../platform/tizen/tizenCapabilities.js";
 import { PluginStore } from "../../data/local/pluginStore.js";
 import {
   diagnosticError,
@@ -73,7 +74,7 @@ export const PluginRuntime = {
   },
   async selfTest({ quota = PLUGIN_QUOTAS.limited } = {}) {
     if (typeof Worker !== "function") throw new Error("Worker API unavailable");
-    if (typeof WebAssembly !== "object") throw new Error("WebAssembly API unavailable");
+    if (typeof WebAssembly !== "object" && !isTizen5PluginPreviewEnabled()) throw new Error("WebAssembly API unavailable");
     if (!runtimeTestPromise) {
       runtimeTestPromise = this.executePlugin({
         code: "module.exports.getStreams = function(){ return []; };",
@@ -279,6 +280,7 @@ export const PluginRuntime = {
       try {
         worker.postMessage({
           type: "execute",
+          runtimeVariant: isTizen5PluginPreviewEnabled() ? "asmjs" : "wasm",
           executionId,
           code: String(code || ""),
           filename,

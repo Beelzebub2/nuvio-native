@@ -3101,4 +3101,10 @@
     <string name="updates_whats_new">มีอะไรใหม่</string>
     <string name="updates_download_size">%1$s ดาวน์โหลด</string>
     <string name="source_filter_result_count">%1$d จาก %2$d แหล่ง</string>
+    <string name="remote_tv_starlit_code">รหัสจับคู่ทีวี</string>
+    <string name="remote_tv_starlit_hint">บนทีวี เปิดจัดการด้วยโทรศัพท์ กรอกรหัสที่นี่แล้วอนุมัติบนทีวี</string>
+    <string name="remote_tv_starlit_approve">อนุมัติรหัสที่ตรงกันบนทีวี:</string>
+    <string name="remote_tv_starlit_failed">เชื่อมต่อไม่สำเร็จ ตรวจสอบรหัสแล้วลองอีกครั้ง</string>
+    <string name="remote_handoff_choose_target">เลือกอุปกรณ์</string>
+    <string name="remote_handoff_to_device">เล่นบนอุปกรณ์</string>
 </resources>

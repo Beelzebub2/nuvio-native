@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerController.js";
 export function createPlayerControllerMethods04() {
-  const { Platform, logTizenAvPlayDebug, isValidAvPlayAudioTrackSelectionState } = internals;
+  const { Platform, logTizenAvPlayDebug, isValidAvPlayAudioTrackSelectionState, TizenCapabilities, chooseSamsungAudioFallbackTrack } = internals;
   return {
     syncAvPlayTrackInfo(options = {}) {
       if (!this.isUsingAvPlay()) {
@@ -133,6 +133,37 @@ export function createPlayerControllerMethods04() {
         this.selectedAvPlayAudioTrackIndex = this.avplayAudioTracks[0].avplayTrackIndex;
       } else if (!this.avplayAudioTracks.length) {
         this.selectedAvPlayAudioTrackIndex = -1;
+      }
+      // A 2018+ Samsung decoder cannot handle DTS/TrueHD. If the native
+      // default audio track is known to be unsupported, select a known
+      // AAC/AC-3/DD+ alternative once. Never undo a manual audio choice.
+      if (
+        Platform.isTizen() &&
+        !this.avplayAudioSelectionExplicit &&
+        !desiredAudioActive &&
+        typeof chooseSamsungAudioFallbackTrack === "function" &&
+        Number(this.avplayAutoAudioFallbackAttemptedToken ?? -1) !== Number(this.playRequestToken ?? 0)
+      ) {
+        const major = Number(TizenCapabilities?.get?.()?.tizenMajorVersion || 0);
+        const fallbackIndex = chooseSamsungAudioFallbackTrack(
+          this.avplayAudioTracks,
+          this.selectedAvPlayAudioTrackIndex,
+          { tizenMajorVersion: major }
+        );
+        if (fallbackIndex >= 0) {
+          const requestToken = Number(this.playRequestToken || 0);
+          this.avplayAutoAudioFallbackAttemptedToken = requestToken;
+          // setAvPlayAudioTrack() triggers another sync, so schedule after the
+          // current metadata read and guard against a later playback session.
+          setTimeout(() => {
+            if (
+              Number(this.playRequestToken || 0) !== requestToken ||
+              !this.isUsingAvPlay() ||
+              this.avplayAudioSelectionExplicit
+            ) return;
+            this.setAvPlayAudioTrack(fallbackIndex, { automatic: true });
+          }, 0);
+        }
       }
       const desiredSubtitleIndex = Number(this.desiredAvPlaySubtitleTrackIndex);
       const desiredSubtitleActive = Number.isFinite(desiredSubtitleIndex) && Date.now() < Number(this.desiredAvPlaySubtitleTrackUntil || 0);

@@ -3394,4 +3394,20 @@
     <string name="stream_test_label_parallel16">Paralel Bağlantı (16 MB Parçalar)</string>
     <string name="stream_test_error_connection">Bağlantı başarısız. Son oynatılan video linkinin süresi dolmuş veya sunucuya erişilemiyor olabilir. Lütfen videoyu tekrar oynatıp testi yeniden deneyin.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Telefondan yönet</string>
+    <string name="tv_phone_scan_instruction">Eklentileri yönetmek için QR kodunu tara.</string>
+    <string name="tv_phone_pairing_code">Kod: {{code}}</string>
+    <string name="tv_phone_preparing">Bağlanıyor…</string>
+    <string name="tv_phone_waiting">Telefon bekleniyor</string>
+    <string name="tv_phone_approval_required">Telefonu bu TV'de onayla.</string>
+    <string name="tv_phone_verify_title">Telefon onaylansın mı?</string>
+    <string name="tv_phone_verify_code">Bu kodu telefonundaki kodla karşılaştır:</string>
+    <string name="tv_phone_approve">Onayla</string>
+    <string name="tv_phone_connected">Telefon bağlandı</string>
+    <string name="tv_phone_connected_hint">Eklentileri telefonundan yönet.</string>
+    <string name="tv_phone_change_applied">Değişiklik uygulandı.</string>
+    <string name="tv_phone_action_failed">Değişiklik uygulanamadı.</string>
+    <string name="tv_phone_unavailable">Bağlantı kullanılamıyor</string>
+    <string name="tv_phone_disconnect">Bağlantıyı kes</string>
+    <string name="tv_phone_connection_error">Bağlantıyı kontrol edip tekrar dene.</string>
 </resources>

@@ -3116,4 +3116,10 @@ Had permintaan</string>
     <string name="updates_whats_new">Perkara baharu</string>
     <string name="updates_download_size">%1$s muat turun</string>
     <string name="source_filter_result_count">%1$d daripada %2$d sumber</string>
+    <string name="remote_tv_starlit_code">Kod pasangan TV</string>
+    <string name="remote_tv_starlit_hint">Pada TV, buka Urus dengan telefon. Masukkan kod di sini dan luluskan pada TV.</string>
+    <string name="remote_tv_starlit_approve">Luluskan kod yang sepadan pada TV:</string>
+    <string name="remote_tv_starlit_failed">Sambungan gagal. Semak kod dan cuba lagi.</string>
+    <string name="remote_handoff_choose_target">Pilih peranti</string>
+    <string name="remote_handoff_to_device">Main pada peranti</string>
 </resources>

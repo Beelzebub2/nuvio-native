@@ -2272,4 +2272,10 @@
     <string name="movie_status_rumored">Слухи</string>
     <string name="movie_status_in_production">В производстве</string>
     <string name="movie_status_post_production">Пост-продакшн</string>
+    <string name="remote_tv_starlit_code">Код сопряжения с ТВ</string>
+    <string name="remote_tv_starlit_hint">На телевизоре откройте Управление с телефона. Введите код здесь и подтвердите на ТВ.</string>
+    <string name="remote_tv_starlit_approve">Подтвердите совпадающий код на телевизоре:</string>
+    <string name="remote_tv_starlit_failed">Не удалось подключиться. Проверьте код и попробуйте снова.</string>
+    <string name="remote_handoff_choose_target">Выберите устройство</string>
+    <string name="remote_handoff_to_device">Воспроизвести на устройстве</string>
 </resources>

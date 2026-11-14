@@ -130,6 +130,8 @@ export function createPlayerControllerMethods08() {
       this.avplayActive = false;
       this.avplayUrl = "";
       this.avplayAudioTracks = [];
+      this.avplayAudioSelectionExplicit = false;
+      this.avplayAutoAudioFallbackAttemptedToken = -1;
       this.avplaySubtitleTracks = [];
       this.selectedAvPlayAudioTrackIndex = -1;
       this.selectedAvPlaySubtitleTrackIndex = -1;

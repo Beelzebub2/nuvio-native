@@ -2405,4 +2405,10 @@
     <string name="movie_status_rumored">Đang đồn đoán</string>
     <string name="movie_status_in_production">Đang sản xuất</string>
     <string name="movie_status_post_production">Hậu kỳ</string>
+    <string name="remote_tv_starlit_code">Mã ghép đôi TV</string>
+    <string name="remote_tv_starlit_hint">Trên TV, mở Quản lý bằng điện thoại. Nhập mã vào đây và phê duyệt trên TV.</string>
+    <string name="remote_tv_starlit_approve">Phê duyệt mã trùng khớp trên TV:</string>
+    <string name="remote_tv_starlit_failed">Kết nối thất bại. Kiểm tra mã và thử lại.</string>
+    <string name="remote_handoff_choose_target">Chọn thiết bị</string>
+    <string name="remote_handoff_to_device">Phát trên thiết bị</string>
 </resources>

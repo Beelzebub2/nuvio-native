@@ -3118,4 +3118,10 @@ Nagbalik ang</string>
     <string name="updates_whats_new">Ano ang bago</string>
     <string name="updates_download_size">%1$s download</string>
     <string name="source_filter_result_count">%1$d sa %2$d source</string>
+    <string name="remote_tv_starlit_code">Code sa pagpares ng TV</string>
+    <string name="remote_tv_starlit_hint">Sa TV, buksan ang Pamahalaan gamit ang telepono. Ilagay ang code dito at aprubahan sa TV.</string>
+    <string name="remote_tv_starlit_approve">Aprubahan ang magkaparehong code sa TV:</string>
+    <string name="remote_tv_starlit_failed">Hindi kumonekta. Tingnan ang code at subukang muli.</string>
+    <string name="remote_handoff_choose_target">Pumili ng device</string>
+    <string name="remote_handoff_to_device">I-play sa device</string>
 </resources>

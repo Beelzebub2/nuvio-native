@@ -3387,4 +3387,20 @@
     <string name="stream_test_label_parallel16">Parallel Connect (16 MB Chunks)</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">फ़ोन से प्रबंधित करें</string>
+    <string name="tv_phone_scan_instruction">ऐड-ऑन और प्लगइन प्रबंधित करने के लिए QR कोड स्कैन करें।</string>
+    <string name="tv_phone_pairing_code">कोड: {{code}}</string>
+    <string name="tv_phone_preparing">कनेक्ट हो रहा है…</string>
+    <string name="tv_phone_waiting">फ़ोन की प्रतीक्षा</string>
+    <string name="tv_phone_approval_required">इस टीवी पर फ़ोन को अनुमति दें।</string>
+    <string name="tv_phone_verify_title">फ़ोन को अनुमति दें?</string>
+    <string name="tv_phone_verify_code">इस कोड को अपने फ़ोन पर मिलाएँ:</string>
+    <string name="tv_phone_approve">अनुमति दें</string>
+    <string name="tv_phone_connected">फ़ोन कनेक्ट हो गया</string>
+    <string name="tv_phone_connected_hint">फ़ोन से ऐड-ऑन और प्लगइन प्रबंधित करें।</string>
+    <string name="tv_phone_change_applied">बदलाव लागू हुआ।</string>
+    <string name="tv_phone_action_failed">बदलाव लागू नहीं हो सका।</string>
+    <string name="tv_phone_unavailable">कनेक्शन उपलब्ध नहीं</string>
+    <string name="tv_phone_disconnect">डिस्कनेक्ट करें</string>
+    <string name="tv_phone_connection_error">कनेक्शन जाँचकर फिर कोशिश करें।</string>
 </resources>

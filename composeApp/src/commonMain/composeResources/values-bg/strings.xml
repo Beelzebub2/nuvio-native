@@ -2258,4 +2258,10 @@
     <string name="movie_status_rumored">Слух</string>
     <string name="movie_status_in_production">В продукция</string>
     <string name="movie_status_post_production">След продукция</string>
+    <string name="remote_tv_starlit_code">Код за сдвояване с телевизора</string>
+    <string name="remote_tv_starlit_hint">На телевизора отворете Управление с телефон. Въведете кода тук и потвърдете на телевизора.</string>
+    <string name="remote_tv_starlit_approve">Потвърдете съвпадащия код на телевизора:</string>
+    <string name="remote_tv_starlit_failed">Връзката не бе успешна. Проверете кода и опитайте отново.</string>
+    <string name="remote_handoff_choose_target">Изберете устройство</string>
+    <string name="remote_handoff_to_device">Пусни на устройство</string>
 </resources>

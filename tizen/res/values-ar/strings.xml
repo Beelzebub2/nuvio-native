@@ -3390,4 +3390,20 @@
     <string name="stream_test_label_parallel16">اتصال متوازٍ (قطع 16 م.ب)</string>
     <string name="stream_test_error_connection">فشل الاتصال. رابط آخر بث قد تكون انتهت صلاحيته أو غير قابل للوصول. شغّل الفيديو من جديد وأعد المحاولة.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">الإدارة من الهاتف</string>
+    <string name="tv_phone_scan_instruction">امسح رمز QR لإدارة الإضافات والمكونات الإضافية.</string>
+    <string name="tv_phone_pairing_code">الرمز: {{code}}</string>
+    <string name="tv_phone_preparing">جارٍ الاتصال…</string>
+    <string name="tv_phone_waiting">في انتظار الهاتف</string>
+    <string name="tv_phone_approval_required">وافق على الهاتف من هذا التلفاز.</string>
+    <string name="tv_phone_verify_title">الموافقة على الهاتف؟</string>
+    <string name="tv_phone_verify_code">طابق هذا الرمز مع الرمز على هاتفك:</string>
+    <string name="tv_phone_approve">موافقة</string>
+    <string name="tv_phone_connected">تم توصيل الهاتف</string>
+    <string name="tv_phone_connected_hint">أدر الإضافات والمكونات الإضافية من هاتفك.</string>
+    <string name="tv_phone_change_applied">تم تطبيق التغيير.</string>
+    <string name="tv_phone_action_failed">تعذر تطبيق التغيير.</string>
+    <string name="tv_phone_unavailable">الاتصال غير متاح</string>
+    <string name="tv_phone_disconnect">قطع الاتصال</string>
+    <string name="tv_phone_connection_error">تحقق من الاتصال وحاول مجددًا.</string>
 </resources>

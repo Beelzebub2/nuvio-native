@@ -213,8 +213,10 @@ function start(options, callback) {
         var body;
         try { body = JSON.parse(Buffer.concat(probeChunks).toString('utf8')); }
         catch (_) { return json(res, 400, { error: 'Invalid cache probe' }); }
+        var missingCapacity = body && body.freeBytes === null && body.totalBytes === null;
         if (!body || typeof body.root !== 'string' || body.root.length > 700 ||
-            typeof body.freeBytes !== 'number' || typeof body.totalBytes !== 'number') return json(res, 400, { error: 'Invalid storage details' });
+            (!missingCapacity && (typeof body.freeBytes !== 'number' ||
+              typeof body.totalBytes !== 'number'))) return json(res, 400, { error: 'Invalid storage details' });
         usbProbing = true;
         usbCache.probe(body.root, body.freeBytes, body.totalBytes, function (error, result) {
           usbProbing = false;

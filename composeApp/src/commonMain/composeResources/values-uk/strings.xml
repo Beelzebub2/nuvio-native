@@ -3114,4 +3114,10 @@
     <string name="updates_whats_new">Що нового</string>
     <string name="updates_download_size">%1$s завантажити</string>
     <string name="source_filter_result_count">%1$d з %2$d джерел</string>
+    <string name="remote_tv_starlit_code">Код сполучення з телевізором</string>
+    <string name="remote_tv_starlit_hint">На телевізорі відкрийте Керування з телефона. Введіть код тут і підтвердьте на телевізорі.</string>
+    <string name="remote_tv_starlit_approve">Підтвердьте відповідний код на телевізорі:</string>
+    <string name="remote_tv_starlit_failed">Не вдалося підключитися. Перевірте код і повторіть спробу.</string>
+    <string name="remote_handoff_choose_target">Виберіть пристрій</string>
+    <string name="remote_handoff_to_device">Відтворити на пристрої</string>
 </resources>

@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import java.io.IOException
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,40 @@ internal object AndroidBluetoothRemoteClient : RemoteBluetoothClient {
             listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
         else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
         return required.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
+    }
+
+    /**
+     * Windows PCs usually stop being discoverable after OS pairing. Keep the
+     * bonded candidates distinct from live inquiry hits; the user still has to
+     * connect and pass Starlit's encrypted, account-verified handshake.
+     */
+    @SuppressLint("MissingPermission")
+    override fun pairedPcs(): List<RemoteDesktop> {
+        val bt = adapter() ?: return emptyList()
+        if (!permissionsGranted() || !bt.isEnabled) return emptyList()
+        return runCatching {
+            bt.bondedDevices.mapNotNull { device ->
+                val address = runCatching { device.address }.getOrNull() ?: return@mapNotNull null
+                val name = runCatching { device.name }.getOrNull().orEmpty()
+                val majorClass = runCatching { device.bluetoothClass?.majorDeviceClass }.getOrNull()
+                val savedPc = DesktopRemote.remembered.value.any {
+                    it.bluetooth && it.address.equals(address, ignoreCase = true)
+                }
+                val serviceAdvertised = runCatching {
+                    device.uuids?.any {
+                        it.uuid.toString().equals(REMOTE_BLUETOOTH_SERVICE, ignoreCase = true)
+                    }
+                }.getOrDefault(false) == true
+                val unknownClass = majorClass == null ||
+                    majorClass == BluetoothClass.Device.Major.UNCATEGORIZED
+                if (!isBluetoothPcCandidate(
+                        name, majorClass == BluetoothClass.Device.Major.COMPUTER,
+                        savedPc, serviceAdvertised, unknownClass,
+                    )) return@mapNotNull null
+                RemoteDesktop(address, 0, name.ifBlank { "Paired Bluetooth PC" }, bluetooth = true)
+            }.distinctBy { it.address.uppercase(Locale.ROOT) }
+                .sortedBy { it.name.lowercase(Locale.ROOT) }
+        }.getOrDefault(emptyList())
     }
 
     @SuppressLint("MissingPermission")

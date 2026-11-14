@@ -3074,4 +3074,10 @@
     <string name="updates_whats_new">Vad är nytt</string>
     <string name="updates_download_size">%1$s ladda ner</string>
     <string name="source_filter_result_count">%1$d av %2$d källor</string>
+    <string name="remote_tv_starlit_code">Parkopplingskod för TV</string>
+    <string name="remote_tv_starlit_hint">Öppna Hantera med telefon på TV:n. Ange koden här och godkänn på TV:n.</string>
+    <string name="remote_tv_starlit_approve">Godkänn den matchande koden på TV:n:</string>
+    <string name="remote_tv_starlit_failed">Anslutningen misslyckades. Kontrollera koden och försök igen.</string>
+    <string name="remote_handoff_choose_target">Välj en enhet</string>
+    <string name="remote_handoff_to_device">Spela upp på enhet</string>
 </resources>

@@ -47,7 +47,7 @@ export const EssentialAddonSetupScreen = {
         { replaceHistory: true, skipStackPush: true }
       );
     } else {
-      await Router.navigate("plugin", { essentialSetup: true });
+      await Router.navigate("tvPhoneSetup", { essentialSetup: true });
     }
   },
   async onClick(event) {

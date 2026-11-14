@@ -244,47 +244,23 @@ test("control row shows available audio/subtitles and reports the actual play/pa
     getPlaybackControlPaused: () => false,
     getPlayerUiState: () => ({}),
     resolveNextEpisodeInfo: () => null,
+    isSeekBarAvailable: () => false,
     hasSubtitleTracksAvailable: () => false,
     hasAudioTracksAvailable: () => false
   };
   assert.deepEqual(
     s.getControlDefinitions().map((c) => c.action),
-    ["playPause", "source", "more"]
+    ["playPause", "source", "aspect", "streamInfo"]
   );
   assert.equal(s.getControlDefinitions()[0].title, "Pause");
   s.hasSubtitleTracksAvailable = () => true;
   s.hasAudioTracksAvailable = () => true;
   assert.deepEqual(
     s.getControlDefinitions().map((c) => c.action),
-    ["playPause", "subtitleDialog", "audioTrack", "source", "more"]
+    ["playPause", "source", "subtitleDialog", "audioTrack", "aspect", "streamInfo"]
   );
   s.getPlaybackControlPaused = () => true;
   assert.equal(s.getControlDefinitions()[0].title, "Play");
-});
-const { createPlayerScreenMethods68 } =
-  await import("../js/ui/screens/player/playerScreenMethods-68-load-subtitles.js");
-test("More opens the first supported extra action and closes onto Play/Pause", () => {
-  for (const speeds of [[1], [1, 2]]) {
-    const s = {
-      ...createPlayerScreenMethods28(),
-      ...createPlayerScreenMethods68(),
-      getPlaybackControlPaused: () => false,
-      getPlayerUiState: () => ({}),
-      resolveNextEpisodeInfo: () => null,
-      hasSubtitleTracksAvailable: () => false,
-      hasAudioTracksAvailable: () => false,
-      getPlaybackSpeed: () => 1,
-      getPlaybackSpeedOptions: () => speeds,
-      renderControlButtons() {}
-    };
-    s.performControlAction("more");
-    assert.equal(
-      s.getControlDefinitions()[s.controlFocusIndex].action,
-      speeds.length > 1 ? "speed" : "aspect"
-    );
-    s.performControlAction("backFromMore");
-    assert.equal(s.getControlDefinitions()[s.controlFocusIndex].action, "playPause");
-  }
 });
 const { createPlayerScreenMethods36 } =
   await import("../js/ui/screens/player/playerScreenMethods-36-reset-playback-engine-validation.js");
@@ -456,7 +432,7 @@ test("initial live markup never flashes a VOD bar, end time or removed source li
   s.renderPlayerUi();
   assert.match(
     root.innerHTML,
-    /id="playerProgressShell" class="player-progress-shell focusable hidden"/
+    /id="playerProgressShell" class="player-progress-shell has-chapter-ticks focusable hidden"/
   );
   assert.match(root.innerHTML, /id="playerEndsAt" class="player-ends-at hidden"/);
   assert.match(root.innerHTML, /LIVE  0:00/);

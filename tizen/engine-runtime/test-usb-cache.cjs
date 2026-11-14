@@ -11,6 +11,12 @@ assert.equal(usb.policy(2 * GiB, 4 * GiB, 40).cacheBytes, GiB);
 assert.equal(usb.policy(4 * GiB, 4 * GiB, 80).cacheBytes, 2 * GiB);
 assert.equal(usb.policy(400 * MiB, 4 * GiB, 50), null);
 assert.equal(usb.policy(-1, 4 * GiB, 50), null);
+assert.deepEqual(usb.parseDiskSpace('Filesystem 1024-blocks Used Available Capacity Mounted on\n' +
+  '/dev/sda1 4194304 1048576 3145728 25% /media/USB Drive\n'),
+  { totalBytes: 4 * GiB, freeBytes: 3 * GiB });
+assert.equal(usb.parseDiskSpace('Filesystem 1024-blocks Used Available Capacity Mounted on\n' +
+  '/dev/root 1024 512 2048 100% /\n'), null, 'Impossible free-space figures must be rejected');
+assert.equal(usb.parseDiskSpace('not a filesystem'), null);
 function read(file) { return fs.readFileSync(file); }
 function probe(root, free, total) { return new Promise(function (resolve, reject) {
   usb.probe(root, free, total, function (err, result) { if (err) reject(err); else resolve(result); });
@@ -38,7 +44,36 @@ function cleanup() {
 }
 var failures = [], store, cache;
 fs.mkdirSync(dir);
-probe(dir, 3 * GiB, 4 * GiB).then(function (result) {
+var observedCommand;
+usb.readDiskSpace(dir, function (err, metrics) {
+  assert.ifError(err);
+  assert.deepEqual(metrics, { totalBytes: 4 * GiB, freeBytes: 3 * GiB });
+  assert.deepEqual(observedCommand, ['df', '-Pk', fs.realpathSync(dir)]);
+}, function (command, args, options, callback) {
+  observedCommand = [command].concat(args);
+  assert(options.timeout <= 3000 && options.maxBuffer <= 8192);
+  process.nextTick(function () {
+    callback(null, 'Filesystem 1024-blocks Used Available Capacity Mounted on\n' +
+      '/dev/sda1 4194304 1048576 3145728 25% /mnt/usb\n');
+  });
+});
+var childProcess = require('child_process'), originalExecFile = childProcess.execFile;
+childProcess.execFile = function (command, args, options, done) {
+  assert.equal(command, 'df');
+  assert.deepEqual(args, ['-Pk', fs.realpathSync(dir)]);
+  process.nextTick(function () {
+    done(null, 'Filesystem 1024-blocks Used Available Capacity Mounted on\n' +
+      '/dev/sda1 4194304 1048576 3145728 25% /mnt/usb\n');
+  });
+};
+probe(dir, null, null).then(function (fallbackResult) {
+  childProcess.execFile = originalExecFile;
+  assert.equal(fallbackResult.mode, 'usb', 'Missing SystemInfo capacity must use per-mount measurement');
+  return probe(dir, 3 * GiB, 4 * GiB);
+}, function (error) {
+  childProcess.execFile = originalExecFile;
+  throw error;
+}).then(function (result) {
   assert.equal(result.mode, 'usb', 'Fast test disk should allow USB cache');
   assert(result.writeMBps > 0 && result.readMBps > 0);
   assert(fs.existsSync(path.join(cacheDir, '.starlit-owned-v1')));

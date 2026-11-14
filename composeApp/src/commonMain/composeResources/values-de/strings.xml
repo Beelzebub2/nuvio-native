@@ -1246,4 +1246,10 @@
     <string name="movie_status_rumored">Gerüchte</string>
     <string name="movie_status_in_production">In Produktion</string>
     <string name="movie_status_post_production">Postproduktion</string>
+    <string name="remote_tv_starlit_code">TV-Kopplungscode</string>
+    <string name="remote_tv_starlit_hint">Öffne auf dem Fernseher Mit Telefon verwalten. Gib den Code hier ein und bestätige am TV.</string>
+    <string name="remote_tv_starlit_approve">Bestätige den passenden Code am Fernseher:</string>
+    <string name="remote_tv_starlit_failed">Verbindung fehlgeschlagen. Prüfe den Code und versuche es erneut.</string>
+    <string name="remote_handoff_choose_target">Gerät auswählen</string>
+    <string name="remote_handoff_to_device">Auf Gerät abspielen</string>
 </resources>

@@ -2377,4 +2377,10 @@
     <string name="movie_status_rumored">افواہ</string>
     <string name="movie_status_in_production">زیرِ تیاری</string>
     <string name="movie_status_post_production">بعد از تیاری</string>
+    <string name="remote_tv_starlit_code">ٹی وی جوڑنے کا کوڈ</string>
+    <string name="remote_tv_starlit_hint">ٹی وی پر فون سے انتظام کھولیں۔ یہاں کوڈ درج کریں اور ٹی وی پر منظوری دیں۔</string>
+    <string name="remote_tv_starlit_approve">ٹی وی پر مماثل کوڈ کی منظوری دیں:</string>
+    <string name="remote_tv_starlit_failed">کنکشن ناکام ہو گیا۔ کوڈ چیک کریں اور دوبارہ کوشش کریں۔</string>
+    <string name="remote_handoff_choose_target">ڈیوائس منتخب کریں</string>
+    <string name="remote_handoff_to_device">ڈیوائس پر چلائیں</string>
 </resources>

@@ -357,6 +357,10 @@ internal fun RemoteSourcePickerDialog(
     onDismiss: () -> Unit,
     onOpenController: () -> Unit,
     onRetry: (() -> Unit)? = null,
+    onSelectSource: (String) -> Unit = { DesktopRemote.selectPhoneSource(it) },
+    isAwaitingSources: () -> Boolean = {
+        DesktopRemote.remotePlayback.value.sourcePicker.isAwaitingSources(requestId)
+    },
 ) {
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
@@ -370,7 +374,7 @@ internal fun RemoteSourcePickerDialog(
         noResponse = false
         if (connected && state.isAwaitingSources(requestId)) {
             delay(if (matches) REMOTE_SOURCE_RESULTS_TIMEOUT_MS else REMOTE_SOURCE_ACK_TIMEOUT_MS)
-            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.isAwaitingSources(requestId)
+            noResponse = isAwaitingSources()
         }
     }
     val searching = connected && !noResponse && (!matches || state.phase == "searching")
@@ -478,7 +482,7 @@ internal fun RemoteSourcePickerDialog(
                                 RemoteSourceOption(
                                     source = source,
                                     isRecommended = index == 0 && source.recommended,
-                                    onClick = { DesktopRemote.selectPhoneSource(source.id) },
+                                    onClick = { onSelectSource(source.id) },
                                 )
                             }
                         }

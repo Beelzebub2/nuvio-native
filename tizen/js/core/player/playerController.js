@@ -11,6 +11,7 @@ import {
 import { Platform } from "../../platform/index.js";
 import { nativeRectToCanvas } from "../../platform/tvViewport.js";
 import { TizenPlaybackProxy } from "../../platform/tizen/tizenPlaybackProxy.js";
+import { TizenCapabilities } from "../../platform/tizen/tizenCapabilities.js";
 import { WebOsPlaybackProxy } from "../../platform/webos/webosPlaybackProxy.js";
 import { WatchProgressSyncService } from "../profile/watchProgressSyncService.js";
 import { nativeVideoEngine } from "./engines/nativeVideoEngine.js";
@@ -26,6 +27,8 @@ import { WebOSPlayerExtensions } from "../../platform/webos/webosPlayerExtension
 import { loadStreamingLibs } from "../../runtime/loadStreamingLibs.js";
 import { WATCH_PROGRESS_UNKNOWN_DURATION_PERCENT } from "../../domain/model/watchProgress.js";
 import { parseAspectRatio } from "./playerAspect.js";
+import { shouldPreferTizenUhdHls } from "./tizenUhdPlaybackPolicy.js";
+import { chooseSamsungAudioFallbackTrack } from "./tizenAudioFallbackPolicy.js";
 import { createPlayerControllerMethods01 } from "./playerControllerMethods-01-is-expected-play-interruption.js";
 import { createPlayerControllerMethods02 } from "./playerControllerMethods-02-is-likely-direct-file-url.js";
 import { createPlayerControllerMethods03 } from "./playerControllerMethods-03-start-av-play-tick-timer.js";
@@ -76,6 +79,9 @@ export {
   CloudLibraryPlaybackSessionStore,
   cloudPlaybackFileForSession,
   Platform,
+  TizenCapabilities,
+  shouldPreferTizenUhdHls,
+  chooseSamsungAudioFallbackTrack,
   TizenPlaybackProxy,
   WebOsPlaybackProxy,
   WatchProgressSyncService,
@@ -306,6 +312,9 @@ export const PlayerController = {
   currentPlaybackUrl: "",
   currentPlaybackHeaders: {},
   currentPlaybackMediaSourceType: null,
+  currentStreamResolution: "",
+  avplayAudioSelectionExplicit: false,
+  avplayAutoAudioFallbackAttemptedToken: -1,
   webOsPlaybackKeepAliveHandle: null,
   webOsPlaybackKeepAliveToken: "",
   webOsServiceKeepAliveHandle: null,

@@ -1,8 +1,24 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerController.js";
 export function createPlayerControllerMethods12() {
-  const { Platform, nativeVideoEngine, WEBOS_MEDIA_TYPE_PROBE_TIMEOUT_MS } = internals;
+  const { Platform, nativeVideoEngine, WEBOS_MEDIA_TYPE_PROBE_TIMEOUT_MS, TizenCapabilities, shouldPreferTizenUhdHls } = internals;
   return {
+    shouldPreferNativeUhdHls(url, sourceType = null) {
+      if (!Platform.isTizen() || !this.canUseAvPlay() || typeof shouldPreferTizenUhdHls !== "function") {
+        return false;
+      }
+      const capabilities = TizenCapabilities?.get?.() || {};
+      const normalizedSourceType = String(sourceType || this.guessMediaMimeType(url) || "").trim();
+      return shouldPreferTizenUhdHls({
+        isTizen: true,
+        isHls: this.isLikelyHlsMimeType(normalizedSourceType),
+        hasAvPlay: true,
+        uhdPanelSupported: capabilities.uhdPanelSupported,
+        tizenVersion: capabilities.tizenVersion,
+        chromiumMajorVersion: capabilities.chromiumMajorVersion,
+        sourceResolution: this.currentStreamResolution
+      });
+    },
     getPlaybackEngineCandidates(url, sourceType = null, itemType = this.currentItemType) {
       const normalizedSourceType = String(sourceType || this.guessMediaMimeType(url) || "").trim();
       const avplayEngine = this.getPlatformAvplayEngineName();
@@ -24,6 +40,11 @@ export function createPlayerControllerMethods12() {
       };
       if (this.isLikelyHlsMimeType(normalizedSourceType)) {
         const candidates = [];
+        // Native AVPlay can decode UHD on early Samsung UHD sets while their
+        // MSE/hls.js path is limited to FHD. Leave normal HLS preference alone.
+        if (isTizenRuntime && canUseAvPlay && this.shouldPreferNativeUhdHls?.(url, normalizedSourceType)) {
+          pushCandidate(candidates, avplayEngine);
+        }
         if (isTizenRuntime && canUseHlsJs) {
           // Match Android's single HLS media pipeline when MSE is available.
           // This also avoids the long AVPlay connection-failure path observed

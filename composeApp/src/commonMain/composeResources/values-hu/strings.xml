@@ -2154,4 +2154,10 @@
     <string name="movie_status_rumored">Pletyka</string>
     <string name="movie_status_in_production">Gyártás alatt</string>
     <string name="movie_status_post_production">Utómunka</string>
+    <string name="remote_tv_starlit_code">TV párosítási kód</string>
+    <string name="remote_tv_starlit_hint">A tévén nyisd meg a Kezelés telefonnal menüt. Írd be a kódot, majd hagyd jóvá a tévén.</string>
+    <string name="remote_tv_starlit_approve">Hagyd jóvá az egyező kódot a tévén:</string>
+    <string name="remote_tv_starlit_failed">A csatlakozás sikertelen. Ellenőrizd a kódot, és próbáld újra.</string>
+    <string name="remote_handoff_choose_target">Válassz eszközt</string>
+    <string name="remote_handoff_to_device">Lejátszás eszközön</string>
 </resources>

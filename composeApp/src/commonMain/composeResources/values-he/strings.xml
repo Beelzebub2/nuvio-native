@@ -759,4 +759,10 @@
     <string name="movie_status_rumored">בשמועות</string>
     <string name="movie_status_in_production">בהפקה</string>
     <string name="movie_status_post_production">בשלבי גימור</string>
+    <string name="remote_tv_starlit_code">קוד צימוד לטלוויזיה</string>
+    <string name="remote_tv_starlit_hint">בטלוויזיה פתח ניהול מהטלפון. הזן את הקוד כאן ואשר בטלוויזיה.</string>
+    <string name="remote_tv_starlit_approve">אשר את הקוד התואם בטלוויזיה:</string>
+    <string name="remote_tv_starlit_failed">החיבור נכשל. בדוק את הקוד ונסה שוב.</string>
+    <string name="remote_handoff_choose_target">בחר מכשיר</string>
+    <string name="remote_handoff_to_device">נגן במכשיר</string>
 </resources>

@@ -3395,4 +3395,20 @@
     <string name="stream_test_label_parallel16">Połączenie równoległe (fragmenty 16 MB)</string>
     <string name="stream_test_error_connection">Połączenie nie powiodło się. Link do ostatniego strumienia mógł wygasnąć lub jest nieosiągalny. Odtwórz wideo ponownie i spróbuj jeszcze raz.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Zarządzaj telefonem</string>
+    <string name="tv_phone_scan_instruction">Zeskanuj kod QR, aby zarządzać dodatkami i wtyczkami.</string>
+    <string name="tv_phone_pairing_code">Kod: {{code}}</string>
+    <string name="tv_phone_preparing">Łączenie…</string>
+    <string name="tv_phone_waiting">Oczekiwanie na telefon</string>
+    <string name="tv_phone_approval_required">Zatwierdź telefon na tym telewizorze.</string>
+    <string name="tv_phone_verify_title">Zatwierdzić telefon?</string>
+    <string name="tv_phone_verify_code">Sprawdź ten kod na telefonie:</string>
+    <string name="tv_phone_approve">Zatwierdź</string>
+    <string name="tv_phone_connected">Telefon połączony</string>
+    <string name="tv_phone_connected_hint">Zarządzaj dodatkami i wtyczkami na telefonie.</string>
+    <string name="tv_phone_change_applied">Zmiana zastosowana.</string>
+    <string name="tv_phone_action_failed">Nie udało się zastosować zmiany.</string>
+    <string name="tv_phone_unavailable">Połączenie niedostępne</string>
+    <string name="tv_phone_disconnect">Rozłącz</string>
+    <string name="tv_phone_connection_error">Sprawdź połączenie i spróbuj ponownie.</string>
 </resources>

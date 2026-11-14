@@ -3101,4 +3101,10 @@
     <string name="updates_whats_new">新增內容</string>
     <string name="updates_download_size">%1$s 下載</string>
     <string name="source_filter_result_count">%1$d / %2$d 個來源</string>
+    <string name="remote_tv_starlit_code">電視配對碼</string>
+    <string name="remote_tv_starlit_hint">在電視上開啟使用手機管理。在此輸入代碼，然後在電視上核准。</string>
+    <string name="remote_tv_starlit_approve">請在電視上核准相符的代碼：</string>
+    <string name="remote_tv_starlit_failed">連線失敗。請檢查代碼並重試。</string>
+    <string name="remote_handoff_choose_target">選擇裝置</string>
+    <string name="remote_handoff_to_device">在裝置上播放</string>
 </resources>
