@@ -27,6 +27,8 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import nuvio.composeapp.generated.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable private fun rememberMalConnection(): MalConnectionState {
     val profile by ProfileRepository.state.collectAsState()
@@ -54,6 +56,8 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
     val connection = rememberMalConnection()
     var setup by remember { mutableStateOf(false) }
     val syncScope = rememberCoroutineScope()
+    val tvSyncSuccessText = stringResource(Res.string.mal_tv_sync_success)
+    val tvSyncFailureText = stringResource(Res.string.mal_tv_sync_failure)
     var tvSyncMessage by remember(connection.profileId) { mutableStateOf<String?>(null) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -69,12 +73,12 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
             if (connection.connected) {
                 TextButton(enabled = !connection.busy, onClick = {
                     syncScope.launch {
-                        tvSyncMessage = try { MyAnimeListRepository.syncConnectionToAccount(); "Connection synced to this Starlit profile. Load it from MyAnimeList settings on your TV." }
+                        tvSyncMessage = try { MyAnimeListRepository.syncConnectionToAccount(); tvSyncSuccessText }
                         catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { "Unable to sync MyAnimeList. Sign in to Starlit and retry." }
+                        catch (_: Exception) { tvSyncFailureText }
                     }
-                }) { Text("Sync connection to linked TVs") }
-                Text("Shares this profile's MyAnimeList tokens through private account provider sync. Account server administrators are trusted.", style = MaterialTheme.typography.bodySmall)
+                }) { Text(stringResource(Res.string.mal_tv_sync_button)) }
+                Text(stringResource(Res.string.mal_tv_sync_description), style = MaterialTheme.typography.bodySmall)
                 tvSyncMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
