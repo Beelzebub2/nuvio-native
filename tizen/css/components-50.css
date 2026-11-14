@@ -157,6 +157,9 @@
 
 .legacy-webos .stream-route-list.manual-scroll > * {
   transform: translateY(var(--stream-route-manual-scroll, 0));
+  /* The manual scroller must update instantly; the constrained tier's global
+     transition otherwise makes held remote keys lag and overshoot. */
+  transition: none !important;
 }
 
 .legacy-tizen .stream-route-shell {
