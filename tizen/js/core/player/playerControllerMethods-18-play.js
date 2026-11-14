@@ -22,6 +22,7 @@ export function createPlayerControllerMethods18() {
         episodeTitle = null,
         requestHeaders = {},
         mediaSourceType = null,
+        streamResolution = null,
         forceEngine = null,
         streamIdentity = null,
         cloudSessionToken = null,
@@ -72,6 +73,7 @@ export function createPlayerControllerMethods18() {
       this.currentPlaybackUrl = requestedUrl;
       this.currentPlaybackHeaders = { ...(requestHeaders || {}) };
       this.currentPlaybackMediaSourceType = this.resolveRuntimeSourceType(mediaSourceType);
+      this.currentStreamResolution = String(streamResolution || "").trim().toLowerCase();
       this.lastPlaybackErrorCode = 0;
       this.lastHlsErrorDiagnostic = null;
       let sourceType = this.currentPlaybackMediaSourceType || this.resolveRuntimeSourceType(this.guessMediaMimeType(url)) || null;
@@ -82,7 +84,7 @@ export function createPlayerControllerMethods18() {
           return;
         }
       }
-      if (!forceEngine && this.isTizenHlsSource(url, sourceType)) {
+      if (!forceEngine && this.isTizenHlsSource(url, sourceType) && !this.shouldPreferNativeUhdHls?.(url, sourceType)) {
         // Load hls.js before choosing the engine so getPlaybackEngineCandidates()
         // can distinguish a supported MSE path from a platform that needs the
         // existing AVPlay/native-HLS fallback ladder.
