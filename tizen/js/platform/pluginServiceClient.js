@@ -31,6 +31,11 @@ let lastHealthDiagnostic = "";
 // Set by the app shell: while it returns true (for example during playback)
 // the watchdog skips its periodic probe so the player keeps the main thread.
 let lifecycleMonitorPauseWhen = null;
+// On Chrome 63 there is no native AbortController. Keep timed-out requests
+// counted until the underlying fetch settles, so a provider cannot start
+// unbounded network work while the TV retains those connections.
+const LEGACY_MAX_ACTIVE_FETCHES = 3;
+const legacyActiveFetches = new Map();
 export const PLUGIN_PROTOCOL_VERSION = 1;
 function serviceForPlatform() {
   if (Platform.isTizen()) return TizenPluginService;
@@ -273,12 +278,17 @@ async function directBrowserFetch(request) {
 }
 // No Node service on legacy Tizen. CORS-compatible providers may run in
 // QuickJS; unsupported origins fail closed without a permissive LAN proxy.
-async function legacyCorsFetch(request) {
+export async function legacyCorsFetch(request) {
   const limit = Math.min(512 * 1024, Math.max(1, Number(request.maxBodyBytes || 512 * 1024)));
   const validation = validatePluginFetchRequest(request, { maxBodyBytes: limit });
   if (!validation.ok) throw new Error(validation.reason);
   const safeUrl = validateLegacyCorsPluginUrl(validation.url);
   if (!safeUrl.ok) throw new Error(safeUrl.reason);
+  if (request.signal?.aborted) throw new Error("Plugin execution cancelled");
+  const requestId = String(request.requestId || `${Date.now()}-${Math.random()}`);
+  if (legacyActiveFetches.has(requestId) || legacyActiveFetches.size >= LEGACY_MAX_ACTIVE_FETCHES) {
+    throw new Error("Plugin network service unavailable");
+  }
   if (typeof fetch !== "function" || typeof TextDecoder !== "function") {
     throw new Error("Safe legacy browser fetch APIs are unavailable");
   }
@@ -292,10 +302,22 @@ async function legacyCorsFetch(request) {
     ? Uint8Array.from(atob(validation.bodyBase64), (char) => char.charCodeAt(0))
     : validation.bodyKind === "text" ? validation.body : undefined;
   const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const abort = () => controller?.abort();
   let timer = 0;
   let activeReader = null;
-  request.signal?.addEventListener?.("abort", abort, { once: true });
+  const stopNetwork = () => {
+    controller?.abort();
+    if (activeReader) Promise.resolve(activeReader.cancel()).catch(() => {});
+  };
+  let cancelPending;
+  const cancellation = new Promise((_, reject) => {
+    cancelPending = () => {
+      stopNetwork();
+      reject(new Error("Plugin execution cancelled"));
+    };
+  });
+  const onAbort = () => cancelPending();
+  request.signal?.addEventListener?.("abort", onAbort, { once: true });
+  legacyActiveFetches.set(requestId, cancelPending);
   const maxBytes = Math.min(limit, Math.max(1, Number(request.maxResponseBytes || limit)));
   const execute = async () => {
     const response = await fetch(validation.url, {
@@ -354,19 +376,30 @@ async function legacyCorsFetch(request) {
   const deadlineMs = Math.min(15000, Math.max(1, Number(request.timeoutMs || 15000)));
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      abort();
-      if (activeReader) Promise.resolve(activeReader.cancel()).catch(() => {});
+      stopNetwork();
       reject(new Error("Legacy plugin HTTPS request timed out"));
     }, deadlineMs);
   });
+  // Unlike the user-facing timeout/cancel race, keep the connection counted
+  // until fetch itself settles. Old browsers cannot cancel a pending fetch;
+  // this keeps memory and outstanding sockets bounded by the preview quota.
+  const ongoing = execute();
+  ongoing.then(
+    () => legacyActiveFetches.delete(requestId),
+    () => legacyActiveFetches.delete(requestId)
+  );
   try {
-    // Chrome 63 predates native AbortController. Promise.race still bounds
-    // the caller, while streaming limits bound memory; native cancel is best-effort.
-    return await Promise.race([execute(), timeout]);
+    return await Promise.race([ongoing, timeout, cancellation]);
   } finally {
     clearTimeout(timer);
-    request.signal?.removeEventListener?.("abort", abort);
+    request.signal?.removeEventListener?.("abort", onAbort);
   }
+}
+export function cancelLegacyPluginRequest(requestId) {
+  const cancel = legacyActiveFetches.get(String(requestId || ""));
+  if (!cancel) return false;
+  cancel();
+  return true;
 }
 function legacyCorsHealth() {
   const ready = typeof fetch === "function" &&
@@ -654,7 +687,7 @@ export const PluginServiceClient = {
     }
   },
   cancel(requestId) {
-    if (isTizen5PluginPreviewEnabled()) return Promise.resolve(false);
+    if (isTizen5PluginPreviewEnabled()) return Promise.resolve(cancelLegacyPluginRequest(requestId));
     if (!areTizenPluginsSupported()) return Promise.resolve(false);
     const service = serviceForPlatform();
     if (!service || !requestId) return Promise.resolve(false);
