@@ -154,3 +154,40 @@ test("only explicitly trusted Cloudflare client addresses receive independent an
     }
   }
 });
+
+test("large but bounded TV provider catalogs do not break paired phone state", async () => {
+  const started = await request("/tv/api/start", {
+    method:"POST",body:{name:"Big TV",profile:"1"}
+  });
+  assert.equal(started.status,200);
+  const tv = started.body;
+  const claim = await request("/tv/api/claim",{
+    method:"POST",origin:ORIGIN,body:{code:tv.code}
+  });
+  assert.equal(claim.status,200);
+  assert.equal((await request("/tv/api/approve?id="+tv.id,{
+    method:"POST",token:tv.tvToken,body:{accept:true}
+  })).status,200);
+  const many = Array.from({length:240}, (_,index) => ({
+    id:"provider:"+index, name:"Source group for provider "+index+" / category release 2160p",
+    enabled:true
+  }));
+  const state = await request("/tv/api/state?id="+tv.id,{
+    method:"POST",token:tv.tvToken,body:{
+      profile:"1",revision:1,providers:many,addons:[],repositories:[]
+    }
+  });
+  assert.equal(state.status,200,"normal large provider lists must be accepted");
+  const phone = await request("/tv/api/phone?id="+tv.id,{
+    phone:claim.body.claimToken
+  });
+  assert.equal(phone.status,200);
+  assert.equal(phone.body.state.providers.length,240);
+  const oversized = await request("/tv/api/state?id="+tv.id,{
+    method:"POST",token:tv.tvToken,body:{
+      profile:"1",providers:many,unexpected:"x".repeat(68_000)
+    }
+  });
+  assert.equal(oversized.status,413,"arbitrary oversized state must still be blocked");
+  await request("/tv/api/stop?id="+tv.id,{method:"POST",token:tv.tvToken,body:{}});
+});

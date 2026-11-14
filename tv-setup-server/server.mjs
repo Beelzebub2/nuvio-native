@@ -13,7 +13,10 @@ const files = new Map([
 ]);
 const staticFiles = new Map([...files].map(([url, [path, type]]) =>
   [url, { body: readFileSync(fileURLToPath(new URL(path, import.meta.url))), type }]));
-const MAX_BODY = 18_000;
+// A TV with many installed add-ons/providers can legitimately publish 30-50KB
+// of bounded descriptive metadata. Keep the limit above that envelope while
+// rejecting large arbitrary uploads before JSON parsing.
+const MAX_BODY = 64_000;
 const CORS_TV_PATHS = new Set([
   "/tv/api/start", "/tv/api/tv", "/tv/api/approve", "/tv/api/state",
   "/tv/api/ack", "/tv/api/stop"
