@@ -1,10 +1,11 @@
 import { Platform } from "./index.js";
-import { TizenCapabilities } from "./tizen/tizenCapabilities.js";
+import { TizenCapabilities, isTizen5PluginPreviewEnabled } from "./tizen/tizenCapabilities.js";
 import { TizenPluginService } from "./tizen/tizenPluginService.js";
 import { WebOsPluginService } from "./webos/webosPluginService.js";
 import {
   normalizePluginHeaders,
-  validatePluginFetchRequest
+  validatePluginFetchRequest,
+  validateLegacyCorsPluginUrl
 } from "../core/player/pluginSecurity.js";
 import {
   diagnosticError,
@@ -270,6 +271,122 @@ async function directBrowserFetch(request) {
     request.signal?.removeEventListener?.("abort", abort);
   }
 }
+// No Node service on legacy Tizen. CORS-compatible providers may run in
+// QuickJS; unsupported origins fail closed without a permissive LAN proxy.
+async function legacyCorsFetch(request) {
+  const limit = Math.min(512 * 1024, Math.max(1, Number(request.maxBodyBytes || 512 * 1024)));
+  const validation = validatePluginFetchRequest(request, { maxBodyBytes: limit });
+  if (!validation.ok) throw new Error(validation.reason);
+  const safeUrl = validateLegacyCorsPluginUrl(validation.url);
+  if (!safeUrl.ok) throw new Error(safeUrl.reason);
+  if (typeof fetch !== "function" || typeof TextDecoder !== "function") {
+    throw new Error("Safe legacy browser fetch APIs are unavailable");
+  }
+  const headers = normalizePluginHeaders(validation.headers, { addDefaultUserAgent: false });
+  Object.keys(headers).forEach((name) => {
+    if (/^(?:host|origin|referer|user-agent|cookie|connection|accept-encoding|content-length|proxy-.*|sec-.*)$/i.test(name)) {
+      delete headers[name];
+    }
+  });
+  const requestBody = validation.bodyKind === "base64"
+    ? Uint8Array.from(atob(validation.bodyBase64), (char) => char.charCodeAt(0))
+    : validation.bodyKind === "text" ? validation.body : undefined;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const abort = () => controller?.abort();
+  let timer = 0;
+  let activeReader = null;
+  request.signal?.addEventListener?.("abort", abort, { once: true });
+  const maxBytes = Math.min(limit, Math.max(1, Number(request.maxResponseBytes || limit)));
+  const execute = async () => {
+    const response = await fetch(validation.url, {
+      method: validation.method,
+      headers,
+      body: requestBody,
+      redirect: "error",
+      credentials: "omit",
+      mode: "cors",
+      referrerPolicy: "no-referrer",
+      ...(controller ? { signal: controller.signal } : {})
+    });
+    const responseUrl = validateLegacyCorsPluginUrl(response.url || validation.url);
+    if (!responseUrl.ok || responseUrl.url !== validation.url)
+      throw new Error("Redirected or unsafe legacy plugin response");
+    const length = Number(response.headers?.get?.("content-length") || 0);
+    if (length > maxBytes) throw new Error("Plugin response exceeds legacy limit");
+    if (response.body && typeof response.body.getReader !== "function")
+      throw new Error("Bounded HTTP streaming unavailable on this TV");
+    if (!response.body && response.status !== 204 && response.status !== 205)
+      throw new Error("Bounded HTTP streaming unavailable on this TV");
+    const chunks = [];
+    let total = 0;
+    if (response.body) {
+      activeReader = response.body.getReader();
+      for (;;) {
+        const part = await activeReader.read();
+        if (part.done) break;
+        total += part.value.byteLength;
+        if (total > maxBytes) throw new Error("Plugin response exceeds legacy limit");
+        chunks.push(part.value);
+      }
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    chunks.forEach((chunk) => { bytes.set(chunk, offset); offset += chunk.byteLength; });
+    let bodyBase64;
+    if (request.responseEncoding === "base64") {
+      const segments = [];
+      for (let index = 0; index < bytes.length; index += 8192) {
+        segments.push(String.fromCharCode.apply(null, bytes.subarray(index, index + 8192)));
+      }
+      bodyBase64 = btoa(segments.join(""));
+    }
+    return normalizeResponse({
+      returnValue: true,
+      status: response.status,
+      statusText: response.statusText,
+      url: response.url,
+      body: new TextDecoder("utf-8").decode(bytes),
+      ...(bodyBase64 === undefined ? {} : { bodyBase64 }),
+      headers: {},
+      truncated: false
+    }, validation.url);
+  };
+  const deadlineMs = Math.min(15000, Math.max(1, Number(request.timeoutMs || 15000)));
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      abort();
+      if (activeReader) Promise.resolve(activeReader.cancel()).catch(() => {});
+      reject(new Error("Legacy plugin HTTPS request timed out"));
+    }, deadlineMs);
+  });
+  try {
+    // Chrome 63 predates native AbortController. Promise.race still bounds
+    // the caller, while streaming limits bound memory; native cancel is best-effort.
+    return await Promise.race([execute(), timeout]);
+  } finally {
+    clearTimeout(timer);
+    request.signal?.removeEventListener?.("abort", abort);
+  }
+}
+function legacyCorsHealth() {
+  const ready = typeof fetch === "function" &&
+    typeof TextDecoder === "function" &&
+    typeof ReadableStream === "function";
+  return {
+    returnValue: ready,
+    status: ready ? "success" : "unsupported",
+    detail: ready ? "Legacy browser HTTPS/CORS transport" : "Bounded CORS APIs unavailable",
+    protocolVersion: PLUGIN_PROTOCOL_VERSION,
+    serviceVersion: 1,
+    runtimeVersion: "browser-cors",
+    quickjsVersion: "asmjs-0.32.0",
+    workerSupport: typeof Worker === "function",
+    maxConcurrency: 1,
+    memoryTier: "legacy",
+    jsPluginCapability: ready,
+    networkBoundary: ready
+  };
+}
 function runLifecycleWatchdogTick(generation) {
   if (generation !== lifecycleMonitorGeneration || lifecycleMonitorProbePromise) {
     return;
@@ -313,6 +430,7 @@ export const PluginServiceClient = {
     return Boolean(lifecycleMonitorTimer);
   },
   async health({ force = false } = {}) {
+    if (isTizen5PluginPreviewEnabled()) return legacyCorsHealth();
     const now = Date.now();
     if (!areTizenPluginsSupported()) {
       cachedHealth = unsupportedTizenPluginResult();
@@ -354,12 +472,12 @@ export const PluginServiceClient = {
     if (!areTizenPluginsSupported()) {
       return unsupportedTizenPluginResult();
     }
-    ensureLifecycleMonitorRunning();
+    if (!isTizen5PluginPreviewEnabled()) ensureLifecycleMonitorRunning();
     const health = await this.health({ force });
     return assertCompatibleHealth(health);
   },
   startLifecycleMonitor() {
-    if (!Platform.isTizen() || !areTizenPluginsSupported()) {
+    if (!Platform.isTizen() || !areTizenPluginsSupported() || isTizen5PluginPreviewEnabled()) {
       return Promise.resolve({ status: "skipped" });
     }
     if (lifecycleMonitorStartPromise) {
@@ -391,7 +509,7 @@ export const PluginServiceClient = {
     return lifecycleMonitorStartPromise;
   },
   checkLifecycleNow() {
-    if (!Platform.isTizen() || !areTizenPluginsSupported()) {
+    if (!Platform.isTizen() || !areTizenPluginsSupported() || isTizen5PluginPreviewEnabled()) {
       return Promise.resolve({ status: "skipped" });
     }
     if (!lifecycleMonitorTimer) {
@@ -421,6 +539,9 @@ export const PluginServiceClient = {
     try {
       if (!areTizenPluginsSupported()) {
         throw new Error(TIZEN_PLUGIN_UNSUPPORTED_DETAIL);
+      }
+      if (isTizen5PluginPreviewEnabled()) {
+        return await legacyCorsFetch(request);
       }
       ensureLifecycleMonitorRunning();
       if (Platform.isBrowser()) {
@@ -507,12 +628,14 @@ export const PluginServiceClient = {
     }
   },
   capabilities() {
+    if (isTizen5PluginPreviewEnabled()) return Promise.resolve(legacyCorsHealth());
     if (!areTizenPluginsSupported()) return unsupportedTizenPluginResult();
     const service = serviceForPlatform();
     if (!service?.capabilities) return this.health({ force: true });
     return service.capabilities();
   },
   async diagnostics() {
+    if (isTizen5PluginPreviewEnabled()) return legacyCorsHealth();
     if (!areTizenPluginsSupported()) return unsupportedTizenPluginResult();
     const service = serviceForPlatform();
     if (!service?.diagnostics)
@@ -531,12 +654,14 @@ export const PluginServiceClient = {
     }
   },
   cancel(requestId) {
+    if (isTizen5PluginPreviewEnabled()) return Promise.resolve(false);
     if (!areTizenPluginsSupported()) return Promise.resolve(false);
     const service = serviceForPlatform();
     if (!service || !requestId) return Promise.resolve(false);
     return service.cancel({ requestId: String(requestId) });
   },
   clearCache() {
+    if (isTizen5PluginPreviewEnabled()) return Promise.resolve(false);
     if (!areTizenPluginsSupported()) return Promise.resolve(false);
     const service = serviceForPlatform();
     return service ? service.clearCache() : Promise.resolve(false);

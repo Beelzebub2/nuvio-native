@@ -509,6 +509,19 @@ async function buildPluginRuntimeAssets() {
     drop: debugBundle ? [] : ["console"],
     legalComments: "none"
   });
+  // Bundled as a classic Worker importScripts asset; loaded only for opt-in
+  // Tizen 5, never at launch or in newer TV runtime initialization.
+  await build({
+    entryPoints: [path.join(rootDir, "js", "core", "player", "pluginAsmJsRuntime.js")],
+    outfile: path.join(distDir, "assets", "libs", "quickjs-asmjs.global.js"),
+    bundle: true,
+    platform: "browser",
+    format: "iife",
+    target: ["chrome" + compatibilityPolicy.chromiumVersion],
+    minify: !debugBundle,
+    drop: debugBundle ? [] : ["console"],
+    legalComments: "eof"
+  });
   await build({
     entryPoints: [path.join(rootDir, "js", "core", "player", "pluginWorker.js")],
     outfile: path.join(distDir, "assets", "runtime", "plugin-worker.js"),

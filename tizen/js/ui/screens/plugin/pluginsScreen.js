@@ -4,6 +4,7 @@ import { Router } from "../../navigation/routerState.js";
 import { Platform } from "../../../platform/index.js";
 import { I18n } from "../../../i18n/index.js";
 import { PluginManager } from "../../../core/player/pluginManager.js";
+import { setTizen5PluginPreviewEnabled } from "../../../platform/tizen/tizenCapabilities.js";
 import { ProfileManager } from "../../../core/profile/profileManager.js";
 import { StartupSyncService } from "../../../core/profile/startupSyncService.js";
 import { renderLoadingIndicator } from "../../components/loadingIndicator.js";
@@ -138,7 +139,7 @@ function runtimeNotice(model) {
       </section>
     `;
   }
-  if (runtime.supportLevel === "limited" && runtime.executable === true) {
+  if (runtime.supportLevel === "limited" && (runtime.executable === true || runtime.legacyPreviewEnabled === true)) {
     return `
       <section class="plugins-runtime-card is-warning is-limited" role="status">
         <span class="plugins-runtime-icon material-icons" aria-hidden="true">info_outline</span>
@@ -413,6 +414,18 @@ export const PluginsScreen = {
       return;
     }
     if (action === "toggle-global") {
+      if (this.model.runtime?.legacyPreviewEligible) {
+        const enabled = !this.model.pluginsEnabled;
+        if (!setTizen5PluginPreviewEnabled(enabled)) {
+          this.setStatus(t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"), "error");
+          this.render();
+          return;
+        }
+        PluginManager.setPluginsEnabled(enabled);
+        // Reset Worker self-tests and cached service health before retrying.
+        window.location.reload();
+        return;
+      }
       PluginManager.setPluginsEnabled(!this.model.pluginsEnabled);
       this.render();
       return;

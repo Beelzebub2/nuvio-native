@@ -96,3 +96,29 @@ export function validatePluginFetchRequest(
     ...(hasBinaryBody ? { bodyBase64 } : {})
   };
 }
+
+/**
+ * Legacy TV preview transport is CORS-only and never forwards requests to raw
+ * IP addresses, loopback or conventional private hostnames. DNS rebinding
+ * cannot be ruled out in a browser-only bridge; keep this experimental.
+ */
+export function validateLegacyCorsPluginUrl(value) {
+  const result = validatePluginUrl(value);
+  if (!result.ok) return result;
+  const parsed = result.parsed;
+  const hostname = String(parsed.hostname || "").toLowerCase().replace(/\.$/, "");
+  const forbiddenSuffix = /(?:^|\.)(?:local|localhost|internal|lan|home|arpa|onion|invalid|test)$/;
+  const ipLiteral = /[\[\]:]/.test(hostname) || /^(?:\d+\.){3}\d+$/.test(hostname);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username || parsed.password ||
+    (parsed.port && parsed.port !== "443") ||
+    !hostname.includes(".") ||
+    !/^[a-z0-9.-]+$/.test(hostname) ||
+    forbiddenSuffix.test(hostname) ||
+    ipLiteral
+  ) {
+    return { ok: false, reason: "Legacy plugin requests require public HTTPS hosts" };
+  }
+  return result;
+}
