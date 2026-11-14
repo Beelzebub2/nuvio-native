@@ -69,7 +69,7 @@ export function showAppUpdatePrompt(update, { documentRef = globalThis.document,
   // The public app cannot call tizen.package.install: that requires a
   // platform-level privilege. Offer a scannable official release URL so a
   // sideloaded installation can be updated by Apps2Samsung on a phone/PC.
-  if (/^https:\/\/github\.com\/Beelzebub2\/nuvio-native\/releases\/tag\/v\d+\.\d+\.\d+$/.test(update.releaseUrl || "")) {
+  if (/^https:\/\/github\.com\/Beelzebub2\/(?:nuvio-native|starlit)\/releases\/tag\/v\d+\.\d+\.\d+$/.test(update.releaseUrl || "")) {
     content.classList.add("app-update-has-qr");
     const instructions = documentRef.createElement("div");
     instructions.className = "app-update-installer-hint";

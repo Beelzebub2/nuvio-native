@@ -44,7 +44,7 @@ class RemoteControllerUiTest {
         DesktopRemote.remotePlayback.value = RemotePlayback()
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
-        DesktopRemote.remembered.value = emptyList()
+        DesktopRemote.accountChanged(null)
     }
 
     private fun ComposeUiTest.capture(name: String) {
@@ -109,6 +109,28 @@ class RemoteControllerUiTest {
         }
 
     @Test
+    fun failedPcSourceSearchOffersAnActionableRetry() = runDesktopComposeUiTest(width = 360, height = 780) {
+        val requestId = "4d6f2801-16ee-493c-bcc9-0bfa5efad34b"
+        var retries = 0
+        setContent {
+            NuvioTheme {
+                RemoteSourcePickerDialog(
+                    requestId = requestId,
+                    state = RemoteSourcePicker(requestId, "Test title", "error", message = "Network lookup failed."),
+                    connected = true,
+                    pcName = "Test PC",
+                    onDismiss = {},
+                    onOpenController = {},
+                    onRetry = { retries++ },
+                )
+            }
+        }
+        onNodeWithText("Network lookup failed.").assertIsDisplayed()
+        onNodeWithText("Retry").assertIsDisplayed().performClick()
+        runOnIdle { assertEquals(1, retries) }
+    }
+
+    @Test
     fun phoneControllerIsAFullPageWithConnectOptions() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.status.value = "Connect to a desktop on the same Wi-Fi or Ethernet network."
         DesktopRemote.desktops.value = listOf(RemoteDesktop("192.168.1.50", REMOTE_LAN_PORT, "Living room PC"))
@@ -125,6 +147,19 @@ class RemoteControllerUiTest {
         onNodeWithText("Previously paired PCs".uppercase()).performScrollTo().assertIsDisplayed()
         onNodeWithText("Can't find your PC?").performScrollTo().assertIsDisplayed()
         capture("pc-controller-find-bottom")
+    }
+
+    @Test
+    fun savedVpnUsesConnectNotWakeAndPrivateEndpointRemainsEditable() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.remembered.value = listOf(
+            RememberedRemoteDevice("VPN PC", "100.101.42.18", 0L, vpn = true),
+        )
+        show(desktopLayout = false)
+        onNodeWithTag("remote-saved-pc-100.101.42.18").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("remote-wake-pc-100.101.42.18").assertDoesNotExist()
+        onNodeWithTag("desktop-remote-enter-vpn").performScrollTo().performClick()
+        onNodeWithTag("desktop-remote-vpn-address").performScrollTo().assertIsDisplayed()
+        onNodeWithTag("desktop-remote-vpn-connect").assertIsNotEnabled()
     }
 
     @Test
@@ -235,8 +270,9 @@ class RemoteControllerUiTest {
         onNodeWithText("Now playing on your PC".uppercase()).assertIsDisplayed()
         onNodeWithText("Severance · S2 E3 · Who Is Alive?").assertIsDisplayed()
         onNodeWithContentDescription("Pause").assertIsDisplayed()
-        onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsEnabled()
+        onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsEnabled().assertIsOff()
         onNodeWithText("Fullscreen on PC").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Starlit is in a window").assertIsDisplayed()
         onNodeWithTag("remote-skip-interval").performScrollTo().assertIsEnabled()
         onNodeWithText("Skip intro").performScrollTo().assertIsDisplayed()
         capture("pc-controller-remote")
@@ -257,13 +293,75 @@ class RemoteControllerUiTest {
             DesktopRemote.remotePlayback.value = DesktopRemote.remotePlayback.value.copy(skip = false)
         }
         onNodeWithTag("remote-skip-interval").assertDoesNotExist()
-        onNodeWithText("Exit fullscreen on PC").performScrollTo().assertIsDisplayed()
+        // Fullscreen is a switch that shows what the PC window is doing.
+        onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsOn()
+        onNodeWithText("Starlit is fullscreen").assertIsDisplayed()
         onNodeWithText("Downloads").performClick()
         onNodeWithText("Open the same profile on your PC and phone to manage its downloads.").assertIsDisplayed()
         onNodeWithText("PCs").performClick()
         onNodeWithText("Disconnect").assertIsDisplayed()
         capture("pc-controller-pcs-connected")
     }
+
+    @Test
+    fun downloadsTabCountsActivePcDownloadsAndStripesTheirProgress() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(
+            downloadProfileId = com.nuvio.app.features.profiles.ProfileRepository.activeProfileId,
+            downloads = listOf(
+                RemoteDownloadStatus("a", "First film", com.nuvio.app.features.downloads.DownloadStatus.Downloading, 400, 1_000),
+                RemoteDownloadStatus("b", "Second film", com.nuvio.app.features.downloads.DownloadStatus.Paused, 200, 1_000),
+            ),
+        )
+        show(desktopLayout = false)
+        // Only the running download counts toward the tab badge.
+        onNodeWithContentDescription("1 active").assertIsDisplayed()
+        onNodeWithText("Downloads").performClick()
+        onNodeWithText("First film").assertIsDisplayed()
+        onNodeWithContentDescription("Pause on PC").assertIsDisplayed()
+        onNodeWithContentDescription("Resume on PC").assertIsDisplayed()
+        capture("pc-controller-downloads")
+    }
+
+    @Test
+    fun choiceSheetMarksTheNewPickAtOnce() = runDesktopComposeUiTest(width = 412, height = 900) {
+        DesktopRemote.connected.value = true
+        DesktopRemote.remotePlayback.value = RemotePlayback(
+            playbackId = "subtitle-session",
+            title = "Playback",
+            subtitles = listOf(RemoteChoice("en", "English", selected = true), RemoteChoice("pt", "Português")),
+        )
+        show(desktopLayout = false)
+        onNodeWithText("English").performScrollTo().performClick()
+        onNode(hasText("English") and isSelectable()).assertIsSelected()
+        val portuguese = onNode(hasText("Português") and isSelectable()).assertIsNotSelected()
+        // The sheet closes itself a moment after a pick; hold the clock to see the new mark first.
+        mainClock.autoAdvance = false
+        portuguese.performClick()
+        mainClock.advanceTimeBy(100)
+        portuguese.assertIsSelected()
+        mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun pairedWifiAndBluetoothShowAsOnePcWithoutDuplicateDiscoveryRows() =
+        runDesktopComposeUiTest(width = 412, height = 900) {
+            val id = "0123456789abcdef0123456789abcdef"
+            val lan = RememberedRemoteDevice("Workstation", "192.168.1.60", 100L, trustedId = id)
+            val bluetooth = RememberedRemoteDevice(
+                "Workstation", "02:12:34:56:78:9A", 200L, bluetooth = true, pcId = id,
+            )
+            DesktopRemote.remembered.value = listOf(bluetooth, lan)
+            DesktopRemote.desktops.value = listOf(RemoteDesktop(lan.address, REMOTE_LAN_PORT, lan.name))
+            DesktopRemote.bluetoothDesktops.value = listOf(RemoteDesktop(bluetooth.address, 0, bluetooth.name, bluetooth = true))
+            show(desktopLayout = false)
+
+            onNodeWithTag("remote-saved-pc-${bluetooth.address}").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("remote-saved-pc-${lan.address}").assertDoesNotExist()
+            onAllNodesWithText("Workstation").assertCountEquals(1)
+            onNodeWithText("Auto-reconnect on app launch").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("remote-auto-reconnect-switch").assertIsDisplayed()
+        }
 
     @Test
     fun connectedPcIsLabeledAndCannotOfferASecondConnectAction() = runDesktopComposeUiTest(width = 412, height = 900) {
@@ -358,13 +456,15 @@ class RemoteControllerUiTest {
     @Test
     fun fullscreenWorksWhenConnectedPcIsIdle() = runDesktopComposeUiTest(width = 412, height = 900) {
         DesktopRemote.connected.value = true
+        DesktopRemote.activeDesktop.value = RemoteDesktop("192.168.1.45", REMOTE_LAN_PORT, "Office PC")
         DesktopRemote.remotePlayback.value = RemotePlayback(fullscreenSupported = true, fullscreen = true)
         show(desktopLayout = false)
-        onNodeWithTag("remote-toggle-fullscreen").assertIsEnabled()
-        onNodeWithText("Exit fullscreen on PC").assertIsDisplayed()
+        onNodeWithTag("remote-toggle-fullscreen").performScrollTo().assertIsEnabled().assertIsOn()
+        onNodeWithText("Starlit is fullscreen").assertIsDisplayed()
         onNodeWithTag("remote-skip-interval").assertDoesNotExist()
         onNodeWithContentDescription("Next episode").assertDoesNotExist()
-        onNodeWithText("Nothing playing yet").assertIsDisplayed()
+        onNodeWithText("Nothing playing yet").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Waiting for playback on Office PC").performScrollTo().assertIsDisplayed()
         capture("pc-controller-idle")
         capture("pc-controller-idle-fullscreen")
     }

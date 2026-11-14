@@ -65,6 +65,7 @@ actual fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
     sourceAvailable: Boolean,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)?,
 ) {
     sanitizePlaybackResponseHeaders(sourceResponseHeaders)
     val latestOnControllerReady = rememberUpdatedState(onControllerReady)

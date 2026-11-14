@@ -12,7 +12,8 @@ assert.match(html, /id="discordShareButton"[^>]+data-command="setDiscordShareEna
 assert.match(html, /id="surroundUpmixButton"[^>]+data-command="setSurroundUpmixEnabled"[^>]+aria-pressed="false"/);
 assert.match(html, /<symbol id="icon-discord"[^>]*>[\s\S]*?fill="currentColor"/);
 assert.ok(html.indexOf('data-command="audio"') < html.indexOf('id="discordShareButton"'));
-assert.ok(css.includes(".action.toggle-action[aria-pressed=\"true\"]::after"));
+assert.ok(css.includes(".option-row.toggle-action[aria-pressed=\"true\"] .option-switch"),
+  "playback toggles show their on state as a switch in Playback options");
 const mediumWindowRule = css.match(/@media \(min-width: 761px\) and \(max-width: 959px\) \{[\s\S]*?^\}/m)?.[0];
 assert.ok(mediumWindowRule, "medium-size player rules must be present");
 assert.doesNotMatch(mediumWindowRule, /discordShareButton|\.action\.toggle-action/,
@@ -90,4 +91,36 @@ context.state.surroundUpmixEnabled = false;
 context.state.surroundUpmixStatus = 0;
 vm.runInContext("syncAutoToggleButtons()", context);
 assert.equal(context.surroundUpmixButton.attributes["data-upmix-status"], "off");
+
+// Virtual headset mode uses the same single toggle but must not claim that
+// the vendor's headphone spatializer is enabled or physically verified.
+context.state.surroundUpmixLabel = "7.1";
+context.state.surroundUpmixHeadsetMode = true;
+context.state.surroundUpmixEnabled = true;
+context.state.surroundUpmixStatus = 1;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1…");
+assert.match(context.surroundUpmixButton.attributes.title, /audio driver that accepts 7\.1 PCM/);
+context.state.surroundUpmixStatus = 2;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1 ✓");
+assert.match(context.surroundUpmixButton.attributes.title, /headset virtualization is not verified/);
+context.state.surroundUpmixEnabled = false;
+context.state.surroundUpmixStatus = 0;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "7.1");
+// The new virtual 5.1 mode must not display a physical-speaker status.
+context.state.surroundUpmixLabel = "5.1";
+context.state.surroundUpmixEnabled = true;
+context.state.surroundUpmixStatus = 2;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.equal(context.surroundUpmixButton.text.textContent, "5.1 ✓");
+assert.match(context.surroundUpmixButton.attributes.title, /5\.1 PCM sent to the audio driver/);
+context.state.surroundUpmixStatus = 1;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.match(context.surroundUpmixButton.attributes.title, /audio driver that accepts 5\.1 PCM/);
+context.state.surroundUpmixHeadsetMode = false;
+context.state.surroundUpmixStatus = 2;
+vm.runInContext("syncAutoToggleButtons()", context);
+assert.match(context.surroundUpmixButton.attributes.title, /Stereo upmixed to 5\.1 PCM/);
 console.log("Discord player button: visibility, on/off commands, and state re-sync passed.");

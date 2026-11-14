@@ -459,6 +459,7 @@
     <string name="player_local_subtitle_unsupported">Escolha um arquivo de legendas SRT, ASS, SSA ou VTT.</string>
     <string name="player_local_subtitle_unreadable">O arquivo de legendas está vazio, não existe ou não pode ser lido.</string>
     <string name="player_local_subtitle_oversized">Os arquivos de legendas devem ter no máximo 16 MiB.</string>
+    <string name="player_local_subtitle_multiple_files">Solte apenas um arquivo de legendas por vez.</string>
     <string name="player_local_subtitle_failed">Não foi possível abrir o seletor de arquivos. Tente novamente.</string>
     <string name="player_local_subtitle_player_not_ready">O player ainda não está pronto para carregar legendas.</string>
     <string name="compose_player_brightness_level">Brilho %1$s</string>
@@ -740,6 +741,13 @@
     <string name="remote_playback_play">Reproduzir</string>
     <string name="remote_playback_pause">Pausar</string>
     <string name="remote_playback_volume">Volume</string>
+    <string name="remote_pc_manage">Gerenciar PCs</string>
+    <string name="remote_pc_tab_downloads_active">%1$d ativos</string>
+    <string name="remote_playback_pc_window">Janela do PC</string>
+    <string name="remote_playback_waiting_on">Aguardando reprodução em %1$s</string>
+    <string name="remote_playback_window_fullscreen">O Starlit está em tela cheia</string>
+    <string name="remote_playback_window_windowed">O Starlit está em uma janela</string>
+    <string name="remote_playback_volume_boost">Reforço</string>
     <string name="remote_playback_mute">Silenciar ou ativar som</string>
     <string name="remote_playback_skip">Pular abertura ou créditos</string>
     <string name="remote_playback_previous">Episódio anterior</string>
@@ -753,14 +761,14 @@
     <string name="remote_playback_find_subtitles">Buscar legendas nos addons</string>
     <string name="remote_playback_sources">Fontes do episódio</string>
     <string name="remote_source_picker_title">Escolher fonte para o PC</string>
-    <string name="remote_source_picker_device">Reproduzir em %1$s</string>
+    <string name="remote_source_picker_device">Conectado a %1$s</string>
     <string name="remote_source_picker_searching">Buscando fontes no PC…</string>
     <string name="remote_source_picker_preparing">Abrindo a fonte escolhida no PC…</string>
     <string name="remote_source_picker_playing">O player do PC está pronto. Você pode controlá-lo pelo celular.</string>
     <string name="remote_source_picker_disconnected">O PC desconectou. Conecte novamente para tentar outra vez.</string>
     <string name="remote_source_picker_empty">Nenhuma fonte reproduzível encontrada no PC. Verifique os add-ons e as configurações P2P.</string>
     <string name="remote_source_picker_error">Não foi possível carregar as fontes. Tente de novo na página do conteúdo.</string>
-    <string name="remote_source_picker_timeout">O PC não respondeu. Feche esta janela e tente novamente.</string>
+    <string name="remote_source_picker_timeout">A busca de fontes no PC expirou. Verifique os complementos e a conexão e tente novamente.</string>
     <string name="remote_source_picker_controller">Abrir controle do PC</string>
     <string name="remote_source_quality_stars">Qualidade da resolução: %1$d de 5 estrelas</string>
     <string name="remote_source_quality_hint">As estrelas indicam a resolução, não avaliações de usuários nem a confiabilidade da reprodução.</string>
@@ -1128,6 +1136,10 @@
     <string name="settings_playback_surround_section">ÁUDIO SURROUND · EXPERIMENTAL</string>
     <string name="settings_playback_surround_upmix">Converter estéreo em surround 5.1</string>
     <string name="settings_playback_surround_upmix_description">Converte áudio estéreo quando a saída padrão do Windows está configurada para caixas PCM 5.1. Faixas 5.1/7.1 nativas permanecem intactas. Saídas incompatíveis usam o áudio original. Desativado por padrão.</string>
+    <string name="settings_playback_surround_headset_5_1">Estéreo para PCM 5.1 no headset (experimental)</string>
+    <string name="settings_playback_surround_headset_5_1_description">Para drivers de headset com surround virtual 5.1. Envia seis canais PCM se o Windows aceitar o formato; ative o processamento espacial no software do headset. O Starlit não aplica HRTF, e a conversão para estéreo não garante surround virtual. Desativado por padrão.</string>
+    <string name="settings_playback_surround_headset_upmix">Estéreo para PCM 7.1 no headset (experimental)</string>
+    <string name="settings_playback_surround_headset_upmix_description">Para drivers de headset que aceitam PCM 7.1, inclusive outras marcas. Ative o surround virtual no software do headset. O Starlit não aplica processamento binaural/HRTF nem verifica se o driver virtualiza o sinal. Desativado por padrão.</string>
     <string name="settings_playback_section_subtitle_rendering">RENDERIZAÇÃO DE LEGENDA</string>
     <string name="settings_playback_selected_count">%1$d selecionado(s)</string>
     <string name="settings_playback_show_loading_overlay">Overlay de Carregamento</string>
@@ -1791,6 +1803,7 @@
     <string name="watch_order_attribution">Dados das franquias: Junban (ODbL)</string>
     <string name="watch_order_view_all">Ver ordem completa</string>
     <string name="watch_order_summary">%1$d títulos</string>
+    <string name="watch_order_summary_one">1 título</string>
     <string name="watch_order_no_mapping">Ainda não há um identificador de anime confirmado para este título.</string>
     <string name="watch_order_partial">Ordem parcial · relações indisponíveis</string>
     <string name="watch_order_choose_mode">Ordem para assistir</string>
@@ -1814,4 +1827,26 @@
     <string name="settings_advanced_discord_audio_share_unavailable">Não foi possível iniciar o áudio auxiliar do Discord. Instale o VB-CABLE (CABLE Input) ou use Steam Streaming Speakers. A saída virtual precisa estar ativa e não pode ser a saída de som padrão.</string>
     <string name="settings_advanced_discord_audio_share_setup">Configurar VB-CABLE (site oficial)</string>
     <string name="settings_advanced_discord_audio_share_setup_description">Software de doação opcional da VB-Audio. Instale manualmente como administrador e reinicie o Windows. O Starlit não instala drivers nem altera os dispositivos de áudio padrão.</string>
+    <string name="remote_vpn_tile">VPN privada</string>
+    <string name="remote_vpn_tile_caption">Conectar de outra rede</string>
+    <string name="remote_vpn_connected_to">Conexão VPN com %1$s</string>
+    <string name="remote_vpn_phone_hint">Conecte ambos os dispositivos à mesma VPN privada (como o Tailscale). No PC, ative o acesso VPN no controle pelo celular e insira o endereço IPv4 VPN ou nome DNS privado do PC. O primeiro pareamento precisa de confirmação nos dois dispositivos.</string>
+    <string name="remote_vpn_address_label">Endereço VPN ou nome do PC</string>
+    <string name="remote_vpn_check">Conectar pela VPN</string>
+    <string name="remote_vpn_pc_title">Acesso remoto por VPN privada</string>
+    <string name="remote_vpn_pc_desc">Permite que um celular pareado controle o Starlit em outras redes. Desativado por padrão; selecione uma interface VPN detectada. Ambos os dispositivos precisam de uma VPN privada ativa.</string>
+    <string name="remote_vpn_pc_enabled">Acesso VPN ativado em %1$s</string>
+    <string name="remote_vpn_pc_not_found">Nenhum adaptador VPN compatível ativo. Conecte Tailscale, WireGuard, NetBird ou ZeroTier e atualize.</string>
+    <string name="remote_vpn_enable">Ativar em %1$s</string>
+    <string name="remote_vpn_disable">Desativar acesso VPN</string>
+    <string name="remote_vpn_refresh">Atualizar adaptadores VPN</string>
+    <string name="remote_vpn_pc_error">Não foi possível alterar o acesso VPN. Verifique o adaptador e a conta e tente novamente.</string>
+    <string name="remote_vpn_pc_firewall">O Firewall do Windows pode exigir uma regra TCP de entrada na porta 47789, limitada à interface e ao endereço VPN selecionados. Não abra portas no roteador nem permita acesso público geral.</string>
+    <string name="remote_vpn_firewall_ready">A regra de firewall VPN do Starlit está instalada para este endereço. A conexão também depende das rotas VPN e das políticas dos dispositivos.</string>
+    <string name="remote_vpn_firewall_checking">Verificando o Firewall do Windows ou aguardando autorização de administrador…</string>
+    <string name="remote_vpn_firewall_allow">Permitir VPN no Firewall do Windows</string>
+    <string name="remote_vpn_firewall_failed">A alteração no Firewall do Windows falhou ou foi cancelada. O acesso VPN continua sujeito à configuração do Starlit; tente novamente se necessário.</string>
+    <string name="remote_pc_auto_reconnect_title">Reconectar automaticamente ao abrir o aplicativo</string>
+    <string name="remote_pc_auto_reconnect_caption">Conecta ao último PC pareado ao abrir o Starlit. Tenta primeiro por Wi-Fi e depois por Bluetooth, se disponível.</string>
+
 </resources>

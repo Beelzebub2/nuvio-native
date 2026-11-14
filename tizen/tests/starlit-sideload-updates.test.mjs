@@ -79,6 +79,22 @@ test("release filenames and SHA-256SUMS must match exactly once", () => {
   assert.throws(() => releaseAssetUrls({
     tag: "v1.31.0", assetName: "Starlit-Tizen-1.30.0.wgt"
   }), /do not match/);
+  const renamed = releaseAssetUrls({
+    tag: "v1.31.0", assetName: "Starlit-Tizen-1.31.0.wgt",
+    releaseUrl: "https://github.com/Beelzebub2/starlit/releases/tag/v1.31.0"
+  });
+  assert.equal(renamed.wgt,
+    "https://github.com/Beelzebub2/starlit/releases/download/v1.31.0/Starlit-Tizen-1.31.0.wgt");
+  for (const releaseUrl of [
+    "http://github.com/Beelzebub2/starlit/releases/tag/v1.31.0",
+    "https://github.com/attacker/starlit/releases/tag/v1.31.0",
+    "https://github.com/Beelzebub2/starlit/releases/tag/v1.32.0",
+    "https://github.com/Beelzebub2/starlit/releases/tag/v1.31.0/extra"
+  ]) {
+    assert.throws(() => releaseAssetUrls({
+      tag: "v1.31.0", assetName: "Starlit-Tizen-1.31.0.wgt", releaseUrl
+    }), /Untrusted/);
+  }
 });
 
 test("installer result parser accepts progress output followed by final JSON", () => {

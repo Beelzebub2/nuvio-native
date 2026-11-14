@@ -124,6 +124,7 @@ actual fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
     sourceAvailable: Boolean,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)?,
 ) {
     remember { PlayerSettingsRepository.ensureLoaded() }
     val playerSettings by PlayerSettingsRepository.uiState.collectAsState()

@@ -33,6 +33,7 @@ internal enum class RemoteFirewallState {
 
 internal interface RemoteFirewallAccess {
     val state: StateFlow<RemoteFirewallState>
+    val vpnState: StateFlow<RemoteFirewallState> get() = state
 
     /** Re-checks without asking for elevation. Returns immediately; the result lands in [state]. */
     fun refresh()
@@ -42,6 +43,11 @@ internal interface RemoteFirewallAccess {
 
     /** Explicitly allows Starlit on Public wired LANs only, after an administrator prompt. */
     fun requestPublicEthernetAccess() = Unit
+    /** Dedicated, opt-in TCP-only firewall permission on the approved VPN address. */
+    fun requestPrivateVpnAccess(address: String) = Unit
+    /** Only removes the firewall rule owned by Starlit. App access is disabled first. */
+    fun removePrivateVpnAccess() = Unit
+    fun refreshPrivateVpnAccess(address: String?) = Unit
 
     /** Opens the OS page where the user can mark the current network as Private. */
     fun openNetworkSettings()

@@ -1,7 +1,7 @@
 {
   "name": "starlit-tizen-torrent-runtime",
   "version": "1.0.0",
-  "description": "Memory-only loopback torrent HTTP service for legacy Node runtimes",
+  "description": "Bounded RAM torrent service with optional removable USB cache for legacy Node runtimes",
   "scripts": {
     "test": "node test-all.cjs",
     "build": "node build.cjs"

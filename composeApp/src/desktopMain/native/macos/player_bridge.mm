@@ -112,6 +112,7 @@ static constexpr double kMaxVolumePercent = 200.0;
 - (long long)durationMs;
 - (long long)positionMs;
 - (long long)bufferedPositionMs;
+- (long long)videoDimensions;
 - (BOOL)isLoading;
 - (BOOL)isEnded;
 - (NSString *)audioTracksJson;
@@ -2164,6 +2165,13 @@ static void nuvioMpvWakeup(void *ctx) {
     return (long long)llround(fmax(bufferedPosition, 0.0) * 1000.0);
 }
 
+- (long long)videoDimensions {
+    auto width = [self int64Property:"video-params/w" fallback:0];
+    auto height = [self int64Property:"video-params/h" fallback:0];
+    if (width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+    return (long long)(((uint64_t)width << 32) | (uint64_t)height);
+}
+
 - (BOOL)isLoading {
     return _cachedLoading.load();
 }
@@ -2273,8 +2281,8 @@ static void nuvioMpvWakeup(void *ctx) {
                                 stripSdh:(BOOL)stripSdh {
     if (!_mpv) return;
     double size = MAX(18.0, MIN(96.0, fontSize));
-    double scale = useLibass ? size / 54.0 : 1.0;
-    int64_t position = MAX(0, MIN(150, subPos));
+    double scale = 1.0;
+    int64_t position = useLibass ? 100 : MAX(0, MIN(150, subPos));
     double outline = MAX(0.0, MIN(8.0, outlineSize));
     NSString *resolvedTextColor = textColor ?: @"#FFFFFFFF";
     NSString *resolvedBackgroundColor = backgroundColor ?: @"#00000000";
@@ -2293,7 +2301,7 @@ static void nuvioMpvWakeup(void *ctx) {
     BOOL stripSdhChanged = !_hasAppliedSubtitleStyle || _appliedSubtitleStripSdh != stripSdh;
 
     if (modeChanged) {
-        [self setStringProperty:"sub-ass-override" value:useLibass ? @"scale" : @"force"];
+        [self setStringProperty:"sub-ass-override" value:useLibass ? @"no" : @"force"];
     }
     if (modeChanged || (!useLibass && boldChanged)) {
         const char *styleOverridesCommand[] = {
@@ -3242,6 +3250,15 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_bufferedPositionMs
     if (handle == 0) return 0;
     MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
     return [player bufferedPositionMs];
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_videoDimensions(
+    JNIEnv * /* env */, jobject /* bridge */, jlong handle
+) {
+    if (handle == 0) return 0;
+    MpvWebPlayer *player = (__bridge MpvWebPlayer *)(void *)(intptr_t)handle;
+    return [player videoDimensions];
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

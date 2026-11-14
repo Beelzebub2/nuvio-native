@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioTypeScale
 import com.nuvio.app.core.ui.tabular
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -275,6 +277,11 @@ private fun DetailsColumn(
         }
     }
 
+    // Keep the VPN opt-in and revoke controls reachable even when the remote
+    // listener is unavailable; otherwise recovery would require LAN access.
+    if (isDesktop && DesktopRemote.transport.vpnHostSupported) {
+        RemoteVpnSettingsCard(firewall)
+    }
     if (!hostReady) return
     val showHelp = !connected
     var helpOpen by remember { mutableStateOf(false) }
@@ -336,6 +343,88 @@ private fun DetailsColumn(
                 RemoteFirewallCard(firewall)
             }
         }
+    }
+}
+
+/** Private VPN access requires an active adapter and an explicit desktop opt-in. */
+@Composable
+private fun RemoteVpnSettingsCard(firewall: RemoteFirewallAccess) {
+    val transport = DesktopRemote.transport
+    var addresses by remember { mutableStateOf(transport.vpnInterfaces()) }
+    var approved by remember { mutableStateOf(transport.approvedVpnAddress()) }
+    var error by remember { mutableStateOf(false) }
+    val firewallState by firewall.vpnState.collectAsState()
+    val tokens = MaterialTheme.nuvio
+
+    LaunchedEffect(approved) { firewall.refreshPrivateVpnAccess(approved) }
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            NuvioIconChip(Icons.Rounded.VpnKey, tone = NuvioIconChipTone.Accent)
+            Text(stringResource(Res.string.remote_vpn_pc_title),
+                style = MaterialTheme.typography.titleMedium, color = tokens.colors.textPrimary)
+        }
+        Text(stringResource(Res.string.remote_vpn_pc_desc),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
+        if (approved != null) {
+            Text(stringResource(Res.string.remote_vpn_pc_enabled, approved.orEmpty()),
+                style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textPrimary)
+            DialogButton(
+                text = stringResource(Res.string.remote_vpn_disable),
+                modifier = Modifier.testTag("remote-vpn-disable"),
+                style = DialogButtonStyle.Destructive,
+                onClick = {
+                    error = !transport.approveVpnAddress(null)
+                    approved = transport.approvedVpnAddress()
+                    if (!error) firewall.removePrivateVpnAccess()
+                },
+            )
+        } else {
+            if (addresses.isEmpty()) {
+                Text(stringResource(Res.string.remote_vpn_pc_not_found),
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
+            }
+            addresses.forEach { address ->
+                DialogButton(
+                    text = stringResource(Res.string.remote_vpn_enable, address),
+                    modifier = Modifier.testTag("remote-vpn-enable"),
+                    style = DialogButtonStyle.Primary,
+                    onClick = {
+                        error = !transport.approveVpnAddress(address)
+                        approved = transport.approvedVpnAddress()
+                    },
+                )
+            }
+        }
+        if (approved != null) {
+            when (firewallState) {
+                RemoteFirewallState.Allowed -> Text(stringResource(Res.string.remote_vpn_firewall_ready),
+                    style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
+                RemoteFirewallState.Requesting, RemoteFirewallState.Checking ->
+                    Text(stringResource(Res.string.remote_vpn_firewall_checking),
+                        style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
+                else -> DialogButton(
+                    text = stringResource(Res.string.remote_vpn_firewall_allow),
+                    modifier = Modifier.testTag("remote-vpn-firewall-allow"),
+                    style = DialogButtonStyle.Primary,
+                    onClick = { approved?.let(firewall::requestPrivateVpnAccess) },
+                )
+            }
+        }
+        DialogButton(
+            text = stringResource(Res.string.remote_vpn_refresh),
+            onClick = {
+                addresses = transport.vpnInterfaces()
+                approved = transport.approvedVpnAddress()
+                error = false
+            },
+        )
+        if (error) Text(stringResource(Res.string.remote_vpn_pc_error),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
+        if (firewallState == RemoteFirewallState.Failed) Text(
+            stringResource(Res.string.remote_vpn_firewall_failed),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textPrimary)
+        Text(stringResource(Res.string.remote_vpn_pc_firewall),
+            style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary)
     }
 }
 

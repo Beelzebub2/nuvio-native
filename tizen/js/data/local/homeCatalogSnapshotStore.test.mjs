@@ -129,12 +129,22 @@ test("only successful catalog rows are written, with bounded items and no loadin
   assert.equal(compact[0].loadingItems, null);
   assert.equal(compact[0].result.data.items.length, 60);
   assert.equal(compact[0].result.data.items[0].poster, "https://image.tmdb.org/t/p/w500/0.jpg");
+  const typed = compactHomeCatalogRows([{
+    ...row("series:trending"),
+    type: "series",
+    supportsSkip: true,
+    skipStep: 60,
+    result: { status: "success", data: { items: [{ id: "tt1" }] } }
+  }])[0];
+  assert.equal(typed.type, "series", "cold snapshot must not default a series row to movies");
+  assert.equal(typed.skipStep, 60);
+  assert.equal(typed.supportsSkip, true);
 });
 test("snapshot freshness rejects another version, missing rows and expired records", () => {
   const now = 1_000_000_000;
-  const fresh = { version: 1, savedAt: now - 1000, rows: [row("a")] };
+  const fresh = { version: 2, savedAt: now - 1000, rows: [row("a")] };
   assert.equal(isHomeCatalogSnapshotFresh(fresh, now), true);
-  assert.equal(isHomeCatalogSnapshotFresh({ ...fresh, version: 2 }, now), false);
+  assert.equal(isHomeCatalogSnapshotFresh({ ...fresh, version: 1 }, now), false);
   assert.equal(isHomeCatalogSnapshotFresh({ ...fresh, rows: null }, now), false);
   assert.equal(
     isHomeCatalogSnapshotFresh({ ...fresh, savedAt: now - 13 * 60 * 60 * 1000 }, now),

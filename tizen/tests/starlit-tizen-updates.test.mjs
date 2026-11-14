@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   TIZEN_RELEASES_URL,
+  TIZEN_RENAMED_RELEASES_URL,
   getLatestAppUpdate,
   getLatestAppUpdateWithRetry,
   parseLatestRelease,
@@ -50,6 +51,40 @@ test("Tizen update discovery ignores the latest native-only release", async () =
   assert.equal(result.assetName, "Starlit-Tizen-1.24.0.wgt");
   assert.equal(result.releaseUrl,
     "https://github.com/Beelzebub2/nuvio-native/releases/tag/v1.24.0");
+});
+
+test("GitHub redirects and missing old repository retry only the known renamed repository", async () => {
+  for (const first of [{ status: 301 }, { status: 404 }, { status: 0, type: "opaqueredirect" }]) {
+    const seen = [];
+    const update = await getLatestAppUpdate({
+      currentVersion: "1.23.0",
+      fetchImpl: async (url, options) => {
+        seen.push([url, options?.redirect]);
+        if (url === TIZEN_RELEASES_URL) return { ok: false, ...first };
+        assert.equal(url, TIZEN_RENAMED_RELEASES_URL);
+        return { ok: true, status: 200, json: async () => [release("1.24.0")] };
+      }
+    });
+    assert.deepEqual(seen, [
+      [TIZEN_RELEASES_URL, "manual"],
+      [TIZEN_RENAMED_RELEASES_URL, "manual"]
+    ]);
+    assert.equal(update.releaseUrl, "https://github.com/Beelzebub2/starlit/releases/tag/v1.24.0");
+  }
+});
+
+test("permission and rate-limit failures never fall back to another release source", async () => {
+  for (const status of [401, 403, 429, 500]) {
+    let calls = 0;
+    await assert.rejects(getLatestAppUpdate({
+      currentVersion: "1.23.0",
+      fetchImpl: async () => {
+        calls++;
+        return { ok: false, status };
+      }
+    }), new RegExp(`HTTP ${status}`));
+    assert.equal(calls, 1);
+  }
 });
 
 test("Tizen updates cannot be announced for mismatched, draft, prerelease or incomplete assets", () => {

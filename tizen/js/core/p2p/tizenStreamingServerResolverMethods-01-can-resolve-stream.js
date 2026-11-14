@@ -1,10 +1,12 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./tizenStreamingServerResolver.js";
+import { TizenUsbTorrentCache } from "../../platform/tizen/tizenUsbTorrentCache.js";
 export function createTizenStreamingServerResolverMethods01() {
   const {
     Platform,
     TizenEngineFsService,
     TizenCapabilities,
+    trustedEngineFsControlHeaders,
     TIZEN_STREAMING_KIND,
     removeRequestsByInfoHash,
     logTizenP2pDebug,
@@ -94,7 +96,8 @@ export function createTizenStreamingServerResolverMethods01() {
             const response = await withTimeout(
               fetch(`${candidateBaseUrl}/${encodeURIComponent(normalizedHash)}/remove`, {
                 method: "POST",
-                cache: "no-cache"
+                cache: "no-cache",
+                headers: trustedEngineFsControlHeaders(candidateBaseUrl)
               }),
               timeoutMs,
               "Tizen EngineFS remove request timed out"
@@ -142,6 +145,11 @@ export function createTizenStreamingServerResolverMethods01() {
             status: "error",
             detail: localService.detail || "Tizen local EngineFS service did not start"
           };
+        }
+        // Never delay playback if removable storage is missing or unavailable.
+        // The first opted-in session probes the USB, subsequent sessions reuse it.
+        if (TizenUsbTorrentCache.isEnabled()) {
+          await TizenUsbTorrentCache.configure(baseUrl);
         }
         const magnetUri = getMagnetUri(stream);
         const trackerSources = getTrackerSources(stream, magnetUri);

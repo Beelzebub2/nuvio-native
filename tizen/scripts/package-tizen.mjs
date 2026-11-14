@@ -9,6 +9,7 @@ import { compatibilityPolicy } from "./compatibilityPolicy.mjs";
 import { writeRuntimeEnvScriptFile } from "./envProperties.mjs";
 import { TIZEN_MEDIA_KEY_NAMES } from "../js/platform/tizen/tizenRemoteKeys.js";
 import { pruneCssFileForPlatform } from "./pruneCssForPlatform.mjs";
+import { releaseRepoForBuild } from "./release-repository.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
@@ -21,7 +22,7 @@ const requireConfiguredRuntimeEnv = /^(1|true|yes|on)$/i.test(
 const appName = "Starlit TV";
 const defaultTizenPackageId = "StarlitTV1";
 const defaultTizenAppId = "StarlitTV1.StarlitTV";
-const defaultWidgetUri = "https://github.com/Beelzebub2/nuvio-native";
+const defaultWidgetUri = `https://github.com/${releaseRepoForBuild()}`;
 const tizenEngineFsServiceRelativePath = "services/tizen/enginefs-service.js";
 const tizenEngineFsRuntimeDirRelativePath = "services/tizen/runtime";
 const tizenPluginServiceRelativePath = "services/tizen/plugin-service.js";
@@ -115,6 +116,9 @@ ${serviceFeature}  <icon src="icon.png"/>
   <name>${appName}</name>
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
+  <tizen:privilege name="http://tizen.org/privilege/externalstorage"/>
 ${applicationLaunchPrivilege}  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <!-- Seller Office distributes automatic updates to opted-in TV models.

@@ -221,6 +221,7 @@ data class PlayerControlsState(
     val skipPromptLabel: String = "Skip",
     val skipPromptStartMs: Long = 0L,
     val skipPromptEndMs: Long = 0L,
+    val skipSegments: List<PlayerControlSkipSegment> = emptyList(),
     val skipPromptDismissed: Boolean = false,
     val nextEpisodeVisible: Boolean = false,
     val nextEpisodeHeaderLabel: String = "Next episode",
@@ -242,6 +243,9 @@ data class PlayerControlsState(
     val showExternalPlayer: Boolean = false,
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
+    val bufferedPositionMs: Long = 0L,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
     val sourceIsLoading: Boolean = false,
     val sourceFilters: List<PlayerControlFilterItem> = emptyList(),
     val sourceItems: List<PlayerControlSourceItem> = emptyList(),
@@ -281,6 +285,12 @@ data class PlayerControlsState(
     val submitIntroSuccessToken: Long = 0L,
     val notificationMessage: String = "",
     val notificationToken: Long = 0L,
+)
+
+data class PlayerControlSkipSegment(
+    val type: String,
+    val startMs: Long,
+    val endMs: Long,
 )
 
 data class PlayerControlFilterItem(
@@ -445,4 +455,5 @@ expect fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
     sourceAvailable: Boolean = true,
+    onLocalSubtitleDrop: ((LocalSubtitleFileResult) -> Unit)? = null,
 )

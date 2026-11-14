@@ -700,9 +700,10 @@ struct DefaultSurroundOutput {
     std::wstring endpointId;
 };
 
-// Inspect the configured Windows shared-mode speaker layout. A sink that merely
-// accepts six channels is not sufficient: the actual speaker mask must match.
-DefaultSurroundOutput defaultSurroundOutput() {
+// Inspect Windows' default shared-mode layout. For physical speakers the mix
+// mask must match; explicitly selected headset modes can use an APO-provided
+// multichannel stream format but cannot establish audible HRTF processing.
+DefaultSurroundOutput defaultSurroundOutput(starlit_surround::Mode mode) {
     DefaultSurroundOutput output;
     const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) return output;
@@ -743,8 +744,45 @@ DefaultSurroundOutput defaultSurroundOutput() {
         // PCM and IEEE-float are the only formats supported by this DSP path.
         if (extended->SubFormat.Data1 == WAVE_FORMAT_PCM ||
             extended->SubFormat.Data1 == WAVE_FORMAT_IEEE_FLOAT) {
-            output.layout = starlit_surround::configuredLayout(
-                format->nChannels, extended->dwChannelMask);
+            if (mode == starlit_surround::Mode::speakersFivePointOne) {
+                output.layout = starlit_surround::configuredLayout(
+                    format->nChannels, extended->dwChannelMask);
+            } else if (mode == starlit_surround::Mode::virtualHeadsetSevenPointOne ||
+                       mode == starlit_surround::Mode::virtualHeadsetFivePointOne) {
+                const auto acceptsExactFloatPcm = [&](WORD channels, DWORD mask) {
+                    WAVEFORMATEXTENSIBLE stream{};
+                    stream.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+                    stream.Format.nChannels = channels;
+                    stream.Format.nSamplesPerSec = format->nSamplesPerSec;
+                    stream.Format.wBitsPerSample = 32;
+                    stream.Format.nBlockAlign = channels * sizeof(float);
+                    stream.Format.nAvgBytesPerSec =
+                        stream.Format.nSamplesPerSec * stream.Format.nBlockAlign;
+                    stream.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+                    stream.Samples.wValidBitsPerSample = 32;
+                    stream.dwChannelMask = mask;
+                    stream.SubFormat = {
+                        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
+                    }; // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+                    WAVEFORMATEX *closest = nullptr;
+                    const HRESULT supported = audioClient->IsFormatSupported(
+                        AUDCLNT_SHAREMODE_SHARED,
+                        reinterpret_cast<const WAVEFORMATEX *>(&stream),
+                        &closest);
+                    if (closest) CoTaskMemFree(closest);
+                    return supported == S_OK; // S_FALSE closest match is not sufficient.
+                };
+                const bool wantsFivePointOne =
+                    mode == starlit_surround::Mode::virtualHeadsetFivePointOne;
+                output.layout = starlit_surround::configuredVirtualHeadsetLayout(
+                    mode, format->nChannels, extended->dwChannelMask,
+                    wantsFivePointOne &&
+                        acceptsExactFloatPcm(6, starlit_surround::kFivePointOneSideMask),
+                    wantsFivePointOne &&
+                        acceptsExactFloatPcm(6, starlit_surround::kFivePointOneBackMask),
+                    !wantsFivePointOne &&
+                        acceptsExactFloatPcm(8, starlit_surround::kSevenPointOneMask));
+            }
         }
     }
     CoTaskMemFree(format);
@@ -1306,13 +1344,20 @@ public:
         mpvApi().setProperty(mpv, "pause", MPV_FORMAT_FLAG, &flag);
     }
 
-    bool setSurroundUpmixEnabled(bool enabled) {
+    bool setSurroundUpmixMode(int mode) {
         if (shuttingDown.load() || stopping.load()) return false;
-        surroundRequested.store(enabled);
-        postUiTask([self = shared_from_this()]() {
-            if (!self->shuttingDown.load()) self->syncSurroundUpmix();
+        if (mode < 0 || mode > 3) return false;
+        const bool changed = surroundRequested.exchange(mode) != mode;
+        postUiTask([self = shared_from_this(), changed]() {
+            if (self->shuttingDown.load()) return;
+            if (changed) self->surroundRejectedKey.clear(); // UI thread owns this state.
+            self->syncSurroundUpmix();
         });
         return true; // An opt-in, not a claim that surround output is active.
+    }
+
+    bool setSurroundUpmixEnabled(bool enabled) {
+        return setSurroundUpmixMode(enabled ? 1 : 0);
     }
 
     // Compare the actual frame path, without changing the saved playback preference
@@ -1415,6 +1460,13 @@ public:
         return (long long)std::llround(std::max(buffered, 0.0) * 1000.0);
     }
 
+    long long videoDimensions() {
+        auto width = int64Property("video-params/w", 0);
+        auto height = int64Property("video-params/h", 0);
+        if (width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+        return (width << 32) | height;
+    }
+
     bool isLoading() {
         bool paused = isPaused();
         bool eofReached = isEnded();
@@ -1510,8 +1562,9 @@ public:
         bool stripSdh
     ) {
         double size = std::max(18.0, std::min(96.0, fontSize));
-        int64_t position = std::max(0, std::min(150, subPos));
-        double scale = useLibass ? size / 54.0 : 1.0;
+        int64_t position = useLibass ? 100 : std::max(0, std::min(150, subPos));
+        // Original ASS/SSA rendering must not inherit the custom font-size scale.
+        double scale = 1.0;
         double outline = std::max(0.0, std::min(8.0, outlineSize));
         std::string resolvedTextColor = textColor.empty() ? "#FFFFFFFF" : textColor;
         std::string resolvedBackgroundColor = backgroundColor.empty() ? "#00000000" : backgroundColor;
@@ -1530,7 +1583,7 @@ public:
         bool stripSdhChanged = !hasAppliedSubtitleStyle || appliedSubtitleStripSdh != stripSdh;
 
         if (modeChanged) {
-            setStringProperty("sub-ass-override", useLibass ? "scale" : "force");
+            setStringProperty("sub-ass-override", useLibass ? "no" : "force");
         }
         if (modeChanged || (!useLibass && boldChanged)) {
             std::lock_guard<std::mutex> lock(mpvMutex);
@@ -1620,7 +1673,7 @@ private:
     std::atomic_bool stopping = false;
     std::atomic_bool shuttingDown = false;
     std::atomic_bool hwdecLogged = false;  // one-shot log for hwdec-current
-    std::atomic_bool surroundRequested = false;
+    std::atomic<int> surroundRequested{0};
     std::atomic<int> surroundReportedStatus{0};
     std::atomic_bool surroundFilterInstalled = false;
     starlit_surround::Layout surroundFilterLayout = starlit_surround::Layout::unsupported;
@@ -1687,14 +1740,17 @@ private:
     void syncSurroundUpmix() {
         // Called on the native player UI thread, which owns the COM apartment.
         // Do not probe device routing if the user has not opted in.
-        if (!surroundRequested.load() && !surroundFilterInstalled.load()) {
+        if (surroundRequested.load() == 0 && !surroundFilterInstalled.load()) {
             if (surroundReportedStatus.exchange(0) != 0) {
                 sendPlayerEvent("surroundUpmixStatus", 0.0);
             }
             return;
         }
-        const auto output = surroundRequested.load() ? defaultSurroundOutput() : DefaultSurroundOutput{};
-        int nextStatus = surroundRequested.load() ? 1 : 0;
+        const int requestedMode = surroundRequested.load();
+        const auto output = requestedMode != 0
+            ? defaultSurroundOutput(static_cast<starlit_surround::Mode>(requestedMode))
+            : DefaultSurroundOutput{};
+        int nextStatus = requestedMode != 0 ? 1 : 0;
         {
             std::lock_guard<std::mutex> lock(mpvMutex);
             if (!mpv) return;
@@ -1709,7 +1765,7 @@ private:
             const std::string audioDevice = getString("audio-device");
             const std::string outputFormat = getString("audio-out-params/format");
             const auto layout = output.layout;
-            const bool supported = surroundRequested.load() &&
+            const bool supported = requestedMode != 0 &&
                 layout != starlit_surround::Layout::unsupported &&
                 starlit_surround::acceptsStereoInput(decodedLayout) &&
                 (audioDevice == "auto" || audioDevice == "wasapi/default") &&
@@ -1719,7 +1775,7 @@ private:
             if (supported && key == surroundRejectedKey && !surroundFilterInstalled) {
                 nextStatus = -1; // Keep the rejection visible until the route/request changes.
             }
-            if (!surroundRequested.load()) surroundRejectedKey.clear();
+            if (requestedMode == 0) surroundRejectedKey.clear();
             if (surroundFilterInstalled &&
                 (!supported || layout != surroundFilterLayout ||
                  getString("af").find(starlit_surround::kFilterLabel) == std::string::npos)) {
@@ -3364,6 +3420,14 @@ Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setSurroundUpmixEn
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setSurroundUpmixMode(
+    JNIEnv *, jobject, jlong handle, jint mode
+) {
+    auto player = playerFromHandle(handle);
+    return player && player->setSurroundUpmixMode(mode) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_setRtxCompareOriginal(
     JNIEnv *, jobject, jlong handle, jboolean original
 ) {
@@ -3417,6 +3481,12 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_bufferedPositionMs(JNIEnv *, jobject, jlong handle) {
     auto player = playerFromHandle(handle);
     return player ? player->bufferedPositionMs() : 0;
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_nuvio_app_features_player_desktop_NativePlayerBridge_videoDimensions(JNIEnv *, jobject, jlong handle) {
+    auto player = playerFromHandle(handle);
+    return player ? player->videoDimensions() : 0;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

@@ -111,6 +111,7 @@ internal fun DesktopRemoteDialogs(
             connected = remoteConnected,
             pcName = activeDesktop?.name.orEmpty(),
             onDismiss = { DesktopRemote.dismissPhoneSourcePicker() },
+            onRetry = { DesktopRemote.retryPhoneSourceRequest() },
             onOpenController = {
                 DesktopRemote.dismissPhoneSourcePicker()
                 DesktopRemote.open()

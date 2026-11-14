@@ -1,6 +1,7 @@
 import { connectLocalControl } from "./starlitControlBridge.js";
 import { Platform } from "../index.js";
 import { TizenCapabilities } from "./tizenCapabilities.js";
+import { getWrtServiceClass, startWithWrtServiceClass } from "./tizenWrtService.js";
 const LOCAL_BASE_URLS = ["http://127.0.0.1:2711", "http://localhost:2711"];
 const START_TIMEOUT_MS = 12000;
 const PROBE_TIMEOUT_MS = 2500;
@@ -18,6 +19,7 @@ const STARTUP_DIAGNOSTIC_EVENTS = new Set([
   "application-control start call",
   "application launch call",
   "wrt startService call",
+  "wrt Service.start call",
   "startService acknowledged",
   "startService failed",
   "health wait success",
@@ -190,13 +192,19 @@ async function startWithApplication(serviceId) {
   return callbackCall(application.launch.bind(application), [serviceId]);
 }
 async function startWithWrtService(serviceId) {
-  const service = globalThis.__NUVIO_TIZEN_WRT_SERVICE__;
-  if (!service || typeof service.startService !== "function") {
-    diagnostic("wrt service API unavailable", { serviceId });
-    throw new Error("Tizen wrt:service startService API unavailable");
+  const bridge = globalThis.__NUVIO_TIZEN_WRT_SERVICE__;
+  const service = typeof bridge?.startService === "function" ? bridge : bridge?.default;
+  if (typeof service?.startService === "function") {
+    diagnostic("wrt startService call", { serviceId });
+    return service.startService.call(service, serviceId);
   }
-  diagnostic("wrt startService call", { serviceId });
-  return service.startService.call(service, serviceId);
+  const Service = getWrtServiceClass(bridge);
+  if (Service) {
+    diagnostic("wrt Service.start call", { serviceId });
+    return startWithWrtServiceClass(Service, serviceId);
+  }
+  diagnostic("wrt service API unavailable", { serviceId });
+  throw new Error("Tizen wrt:service startup API unavailable");
 }
 function getStartAttempts(serviceId, webServiceSupported) {
   const wrtAttempt = {

@@ -1,49 +1,34 @@
 package com.nuvio.app.features.remote
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Help
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Bluetooth
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.ClosedCaption
-import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material.icons.rounded.DesktopWindows
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.Forward10
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.material.icons.rounded.FullscreenExit
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PersonOff
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material.icons.rounded.Replay10
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.Storage
-import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material.icons.rounded.VideoLibrary
-import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material.icons.rounded.WifiFind
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,6 +41,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,7 +50,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
-import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogHint
 import com.nuvio.app.core.ui.Menu
 import com.nuvio.app.core.ui.MenuItem
@@ -80,10 +65,7 @@ import com.nuvio.app.core.ui.NuvioLabeledField
 import com.nuvio.app.core.ui.NuvioPillButton
 import com.nuvio.app.core.ui.NuvioPillButtonStyle
 import com.nuvio.app.core.ui.NuvioPrimaryButton
-import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioSectionLabel
-import com.nuvio.app.core.ui.NuvioSegment
-import com.nuvio.app.core.ui.NuvioSegmentedControl
 import com.nuvio.app.core.ui.NuvioSlider
 import com.nuvio.app.core.ui.NuvioSquareIconButton
 import com.nuvio.app.core.ui.NuvioSquareIconButtonStyle
@@ -94,6 +76,7 @@ import com.nuvio.app.core.ui.NuvioTag
 import com.nuvio.app.core.ui.NuvioTagStyle
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.core.ui.skeleton
 import com.nuvio.app.core.ui.nuvioTypeScale
 import com.nuvio.app.core.ui.tabular
 import com.nuvio.app.features.downloads.DownloadStatus
@@ -144,31 +127,48 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NuvioSquareIconButton(
-                icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                icon = RemoteIcons.Back,
                 contentDescription = stringResource(Res.string.action_close),
                 onClick = onClose,
-                size = 36.dp,
+                size = 44.dp,
                 style = NuvioSquareIconButtonStyle.Surface,
+                iconSize = 22.dp,
             )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 if (DesktopRemote.transport.supported) {
                     val pcName = activeDesktop?.name?.takeIf { it.isNotBlank() }
-                    NuvioStatusEyebrow(
-                        text = when {
-                            connected && pcName != null -> stringResource(Res.string.remote_pc_connected_to, pcName)
-                            connected -> stringResource(Res.string.remote_pc_status_connected)
-                            connecting -> stringResource(Res.string.remote_pc_status_connecting)
-                            scanning -> stringResource(Res.string.remote_pc_status_searching)
-                            else -> stringResource(Res.string.remote_pc_status_idle)
-                        },
-                        tone = when {
-                            connected -> NuvioStatusTone.Success
-                            connecting || scanning -> NuvioStatusTone.Accent
-                            else -> NuvioStatusTone.Muted
-                        },
-                        busy = !connected && (scanning || connecting),
-                        modifier = Modifier.testTag("remote-status"),
-                    )
+                    val statusText = when {
+                        connected && pcName != null -> stringResource(Res.string.remote_pc_connected_to, pcName)
+                        connected -> stringResource(Res.string.remote_pc_status_connected)
+                        connecting -> stringResource(Res.string.remote_pc_status_connecting)
+                        scanning -> stringResource(Res.string.remote_pc_status_searching)
+                        else -> stringResource(Res.string.remote_pc_status_idle)
+                    }
+                    if (connected) {
+                        // A live dot: the connection is up and the PC answers.
+                        Row(
+                            Modifier.testTag("remote-status"),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RemoteLiveDot(tokens.colors.success)
+                            Text(
+                                statusText,
+                                style = MaterialTheme.nuvioTypeScale.bodySm,
+                                fontWeight = FontWeight.SemiBold,
+                                color = tokens.colors.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        NuvioStatusEyebrow(
+                            text = statusText,
+                            tone = if (connecting || scanning) NuvioStatusTone.Accent else NuvioStatusTone.Muted,
+                            busy = scanning || connecting,
+                            modifier = Modifier.testTag("remote-status"),
+                        )
+                    }
                 }
                 Text(
                     stringResource(Res.string.remote_pc_controller_title),
@@ -178,19 +178,43 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (connected) {
+                NuvioSquareIconButton(
+                    icon = when {
+                        activeDesktop?.vpn == true -> Icons.Rounded.VpnKey
+                        activeDesktop?.bluetooth == true -> RemoteIcons.Bluetooth
+                        else -> RemoteIcons.Wifi
+                    },
+                    contentDescription = stringResource(Res.string.remote_pc_manage),
+                    onClick = { tab = PcControllerTab.Pcs },
+                    size = 44.dp,
+                    style = NuvioSquareIconButtonStyle.Surface,
+                    iconSize = 22.dp,
+                    tint = tokens.colors.success,
+                )
+            }
         }
-        NuvioSegmentedControl(
-            segments = listOf(
-                NuvioSegment(PcControllerTab.Remote, stringResource(Res.string.remote_pc_tab_remote)),
-                NuvioSegment(PcControllerTab.Downloads, stringResource(Res.string.remote_pc_tab_downloads)),
-                NuvioSegment(PcControllerTab.Pcs, stringResource(Res.string.remote_pc_tab_pcs)),
+        val playback by DesktopRemote.remotePlayback.collectAsState()
+        val activeDownloads = if (connected && playback.downloadProfileId == ProfileRepository.activeProfileId) {
+            playback.downloads.count { it.state == DownloadStatus.Downloading }
+        } else 0
+        RemoteControllerTabs(
+            tabs = listOf(
+                RemoteTabItem(PcControllerTab.Remote, stringResource(Res.string.remote_pc_tab_remote), RemoteIcons.Remote),
+                RemoteTabItem(
+                    PcControllerTab.Downloads,
+                    stringResource(Res.string.remote_pc_tab_downloads),
+                    RemoteIcons.Download,
+                    badge = activeDownloads.takeIf { it > 0 }?.toString(),
+                    badgeDescription = stringResource(Res.string.remote_pc_tab_downloads_active, activeDownloads),
+                ),
+                RemoteTabItem(PcControllerTab.Pcs, stringResource(Res.string.remote_pc_tab_pcs), RemoteIcons.Pc),
             ),
             selected = shownTab,
             onSelect = { if (connected) tab = it else offlineTab = it },
-            fillWidth = true,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = tokens.spacing.screenHorizontal, end = tokens.spacing.screenHorizontal, top = 16.dp),
+                .padding(start = tokens.spacing.screenHorizontal, end = tokens.spacing.screenHorizontal, top = 18.dp),
         )
         val scroll = when (shownTab) {
             PcControllerTab.Remote -> remoteScroll
@@ -205,11 +229,19 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                 .padding(horizontal = tokens.spacing.screenHorizontal, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            when {
-                shownTab == PcControllerTab.Pcs -> FindPcPage(onDisconnect = disconnect)
-                !connected -> NotConnectedNotice(onFindPc = { offlineTab = PcControllerTab.Pcs })
-                shownTab == PcControllerTab.Remote -> RemotePlaybackPage()
-                else -> RemoteDownloadsPage()
+            // Each page rises in when its tab opens; scroll positions stay with their tab.
+            key(shownTab) {
+                Column(
+                    Modifier.remoteRiseIn(distance = 8.dp, durationMillis = NuvioTokens.Motion.normalMillis),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    when {
+                        shownTab == PcControllerTab.Pcs -> FindPcPage(onDisconnect = disconnect)
+                        !connected -> NotConnectedNotice(onFindPc = { offlineTab = PcControllerTab.Pcs })
+                        shownTab == PcControllerTab.Remote -> RemotePlaybackPage()
+                        else -> RemoteDownloadsPage()
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -221,7 +253,7 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
 private fun NotConnectedNotice(onFindPc: () -> Unit) {
     NuvioSurfaceCard(outlined = true) {
         NuvioEmptyBlock(
-            icon = Icons.Rounded.DesktopWindows,
+            icon = RemoteIcons.Pc,
             title = stringResource(Res.string.remote_pc_status_idle),
             message = stringResource(Res.string.remote_pc_hero_hint),
             tone = NuvioIconChipTone.Neutral,
@@ -245,6 +277,15 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     val desktops by DesktopRemote.desktops.collectAsState()
     val bluetoothDesktops by DesktopRemote.bluetoothDesktops.collectAsState()
     val savedPcs by DesktopRemote.remembered.collectAsState()
+    val autoReconnect by DesktopRemote.autoReconnect.collectAsState()
+    val groupedPcs = groupRememberedRemotePcs(savedPcs)
+    val reachableLan = desktops.mapTo(mutableSetOf()) { it.address }
+    val visibleLan = desktops.filterNot { found ->
+        savedPcs.any { !it.bluetooth && !it.vpn && it.address == found.address }
+    }
+    val visibleBluetooth = bluetoothDesktops.filterNot { found ->
+        savedPcs.any { it.bluetooth && it.address.equals(found.address, ignoreCase = true) }
+    }
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
     val tokens = MaterialTheme.nuvio
     val supported = DesktopRemote.transport.supported
@@ -257,13 +298,17 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
 
     // Status hero: what is happening right now, and the one main action.
     NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            NuvioIconChip(
-                icon = Icons.Rounded.DesktopWindows,
-                size = 48.dp,
-                tone = if (connected) NuvioIconChipTone.Success else NuvioIconChipTone.Accent,
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            RemoteSearchRadar(
+                searching = supported && busy,
+                connected = connected,
+                modifier = Modifier.padding(bottom = 10.dp),
             )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(
                         when {
@@ -274,17 +319,25 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                     ),
                     style = MaterialTheme.typography.titleLarge,
                     color = tokens.colors.textPrimary,
+                    textAlign = TextAlign.Center,
                 )
                 // The header already names the connected PC, and a concurrent search must not
                 // replace that identity, so the hero only repeats the PC's name.
                 val detail = when {
                     !supported -> stringResource(Res.string.remote_pc_unsupported)
-                    connected -> activeDesktop?.name.orEmpty()
+                    connected -> if (activeDesktop?.vpn == true) {
+                        stringResource(Res.string.remote_vpn_connected_to, activeDesktop?.name.orEmpty())
+                    } else activeDesktop?.name.orEmpty()
                     busy && status.isNotBlank() -> status
                     else -> stringResource(Res.string.remote_pc_hero_hint)
                 }
                 if (detail.isNotBlank()) {
-                    Text(detail, style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted)
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colors.textMuted,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
@@ -313,34 +366,65 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
                     modifier = Modifier.testTag("desktop-remote-search-local-network"),
                     enabled = !busy,
                     loading = scanning,
-                    icon = Icons.Rounded.WifiFind,
+                    icon = RemoteIcons.Search,
                     onClick = search,
                 )
                 if (!busy && status.isNotBlank()) {
-                    Text(status, style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textSecondary)
+                    Text(
+                        status,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.nuvioTypeScale.bodySm,
+                        color = tokens.colors.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
     }
     if (!supported) return
 
-    if (desktops.isNotEmpty()) {
+    NuvioGroup {
+        NuvioGroupRow(
+            title = stringResource(Res.string.remote_pc_auto_reconnect_title),
+            description = stringResource(Res.string.remote_pc_auto_reconnect_caption),
+            modifier = Modifier.testTag("remote-auto-reconnect"),
+            onClick = { DesktopRemote.setAutoReconnect(!autoReconnect) },
+            leading = { NuvioIconChip(RemoteIcons.Wifi, tone = NuvioIconChipTone.Neutral) },
+            trailing = {
+                Switch(
+                    checked = autoReconnect,
+                    onCheckedChange = DesktopRemote::setAutoReconnect,
+                    modifier = Modifier.testTag("remote-auto-reconnect-switch"),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = tokens.colors.onAccent,
+                        checkedTrackColor = tokens.colors.accent,
+                        uncheckedThumbColor = tokens.colors.textMuted,
+                        uncheckedTrackColor = tokens.colors.borderDefault,
+                    ),
+                )
+            },
+        )
+    }
+
+    // While a search runs, a shimmering row says more PCs may still appear.
+    if (visibleLan.isNotEmpty() || scanning) {
         FoundPcGroup(
             title = stringResource(Res.string.remote_pc_found_devices),
-            devices = desktops,
-            icon = Icons.Rounded.Computer,
+            devices = visibleLan,
+            icon = RemoteIcons.Pc,
             connected = connected,
             connecting = connecting,
             activeDesktop = activeDesktop,
+            searching = scanning,
             detail = { it.address },
         )
     }
-    if (bluetoothDesktops.isNotEmpty()) {
+    if (visibleBluetooth.isNotEmpty()) {
         val bluetoothLabel = stringResource(Res.string.remote_bluetooth_device, "%s")
         FoundPcGroup(
             title = stringResource(Res.string.remote_bluetooth_found_devices),
-            devices = bluetoothDesktops,
-            icon = Icons.Rounded.Bluetooth,
+            devices = visibleBluetooth,
+            icon = RemoteIcons.Bluetooth,
             connected = connected,
             connecting = connecting,
             activeDesktop = activeDesktop,
@@ -352,21 +436,26 @@ private fun FindPcPage(onDisconnect: () -> Unit) {
     // the connected PC's identity in the status hero.
     ConnectOptions(busy = busy, scanStatus = status.takeIf { connected && scanning })
 
-    if (savedPcs.isNotEmpty()) {
+    if (groupedPcs.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             NuvioSectionLabel(stringResource(Res.string.remote_pc_saved_devices).uppercase())
             NuvioGroup {
-                savedPcs.forEachIndexed { index, saved ->
-                    // Pairing updates move a saved PC to the top. Preserve its own menu
-                    // and Wake-on-LAN editor instead of moving that UI onto another row.
-                    key(saved.bluetooth, saved.address) {
+                groupedPcs.forEachIndexed { index, pc ->
+                    // Only a verified identity combines transports; keep each PC's editor state
+                    // attached to its identity when the recent-connection order changes.
+                    key(pc.key) {
                         if (index > 0) NuvioGroupDivider()
                         SavedPcRow(
-                            saved = saved,
+                            pc = pc,
                             enabled = !busy,
-                            active = isActiveRemoteDesktop(connected, activeDesktop, saved.address, saved.bluetooth),
-                            // A LAN PC that answered the last search is awake: offer Connect, not Wake.
-                            reachable = saved.bluetooth || desktops.any { !it.bluetooth && it.address == saved.address },
+                            active = pc.devices.any { device ->
+                                isActiveRemoteDesktop(
+                                    connected, activeDesktop, device.address, device.bluetooth, device.vpn,
+                                )
+                            },
+                            reachable = pc.bluetooth != null || pc.vpn != null ||
+                                pc.lan?.address?.let(reachableLan::contains) == true,
+                            reachableLanAddresses = reachableLan,
                             onDisconnect = onDisconnect,
                         )
                     }
@@ -390,25 +479,28 @@ private fun FoundPcGroup(
     connected: Boolean,
     connecting: Boolean,
     activeDesktop: RemoteDesktop?,
+    searching: Boolean = false,
     detail: (RemoteDesktop) -> String,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         NuvioSectionLabel(title.uppercase())
         NuvioGroup {
             devices.forEachIndexed { index, desktop ->
-                key(desktop.bluetooth, desktop.address) {
+                key(desktop.bluetooth, desktop.vpn, desktop.address) {
                     if (index > 0) NuvioGroupDivider()
-                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth)
+                    val active = isActiveRemoteDesktop(connected, activeDesktop, desktop.address, desktop.bluetooth, desktop.vpn)
                     val connect = { DesktopRemote.transport.connect(desktop) }
                     NuvioGroupRow(
                         title = desktop.name,
                         description = detail(desktop),
+                        // Each PC rises in as the search finds it, a beat after the one before.
+                        modifier = Modifier.remoteRiseIn(delayMillis = (index * 120).coerceAtMost(480)),
                         onClick = if (active) null else connect,
                         enabled = !connecting,
                         titleMaxLines = 1,
                         descriptionMaxLines = 1,
                         verticalPadding = 12.dp,
-                        leading = { NuvioIconChip(icon) },
+                        leading = { NuvioIconChip(if (desktop.vpn) Icons.Rounded.VpnKey else icon) },
                         trailing = {
                             if (active) {
                                 NuvioTag(stringResource(Res.string.remote_pc_status_connected), style = NuvioTagStyle.Success)
@@ -424,6 +516,29 @@ private fun FoundPcGroup(
                     )
                 }
             }
+            if (searching) {
+                if (devices.isNotEmpty()) NuvioGroupDivider()
+                SearchingPlaceholderRow()
+            }
+        }
+    }
+}
+
+/** A shimmering stand-in row while the search may still find more PCs. */
+@Composable
+private fun SearchingPlaceholderRow() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {}
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(36.dp).skeleton(RoundedCornerShape(12.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Box(Modifier.fillMaxWidth(0.55f).height(11.dp).skeleton(RoundedCornerShape(6.dp)))
+            Box(Modifier.fillMaxWidth(0.35f).height(9.dp).skeleton(RoundedCornerShape(5.dp)))
         }
     }
 }
@@ -433,6 +548,8 @@ private fun FoundPcGroup(
 private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
     var manualIp by rememberSaveable { mutableStateOf("") }
     var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var vpnEndpoint by rememberSaveable { mutableStateOf("") }
+    var vpnOpen by rememberSaveable { mutableStateOf(false) }
     var qrError by remember { mutableStateOf(false) }
     val tokens = MaterialTheme.nuvio
     val qrScanner = rememberRemoteQrScanner { payload ->
@@ -455,7 +572,7 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                     modifier = Modifier.testTag("desktop-remote-scan-qr"),
                     onClick = { qrError = false; qrScanner() },
                     enabled = !busy,
-                    leading = { NuvioIconChip(Icons.Rounded.QrCodeScanner) },
+                    leading = { NuvioIconChip(RemoteIcons.Qr) },
                     trailing = { RowChevron() },
                 )
                 NuvioGroupDivider()
@@ -467,7 +584,7 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                     modifier = Modifier.testTag("desktop-remote-search-bluetooth"),
                     onClick = bluetoothSearch,
                     enabled = !busy,
-                    leading = { NuvioIconChip(Icons.Rounded.Bluetooth) },
+                    leading = { NuvioIconChip(RemoteIcons.Bluetooth) },
                     trailing = { RowChevron() },
                 )
                 NuvioGroupDivider()
@@ -479,10 +596,27 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                 description = stringResource(Res.string.remote_pc_tile_address_caption),
                 modifier = Modifier.testTag("desktop-remote-enter-address"),
                 onClick = { manualOpen = !manualOpen },
-                leading = { NuvioIconChip(Icons.Rounded.Keyboard) },
+                leading = { NuvioIconChip(RemoteIcons.Address) },
                 trailing = {
                     Icon(
                         if (manualOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = tokens.colors.textMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+            )
+            NuvioGroupDivider()
+            NuvioGroupRow(
+                title = stringResource(Res.string.remote_vpn_tile),
+                description = stringResource(Res.string.remote_vpn_tile_caption),
+                modifier = Modifier.testTag("desktop-remote-enter-vpn"),
+                onClick = { vpnOpen = !vpnOpen },
+                enabled = !busy,
+                leading = { NuvioIconChip(Icons.Rounded.VpnKey) },
+                trailing = {
+                    Icon(
+                        if (vpnOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = null,
                         tint = tokens.colors.textMuted,
                         modifier = Modifier.size(20.dp),
@@ -518,13 +652,39 @@ private fun ConnectOptions(busy: Boolean, scanStatus: String?) {
                 }
             }
         }
+        AnimatedVisibility(visible = vpnOpen) {
+            NuvioGroup {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NuvioLabeledField(
+                        label = stringResource(Res.string.remote_vpn_address_label),
+                        helper = stringResource(Res.string.remote_vpn_phone_hint),
+                    ) {
+                        NuvioInputField(
+                            value = vpnEndpoint,
+                            onValueChange = { vpnEndpoint = it.take(253) },
+                            placeholder = "100.101.42.18",
+                            minHeight = 48.dp,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                            modifier = Modifier.testTag("desktop-remote-vpn-address"),
+                        )
+                    }
+                    DialogButton(
+                        text = stringResource(Res.string.remote_vpn_check),
+                        onClick = { DesktopRemote.transport.discoverVpn(vpnEndpoint.trim(), connect = true) },
+                        modifier = Modifier.fillMaxWidth().testTag("desktop-remote-vpn-connect"),
+                        style = DialogButtonStyle.Primary,
+                        enabled = !busy && normalizePrivateVpnAddress(vpnEndpoint) != null,
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun RowChevron() {
     Icon(
-        Icons.Rounded.ChevronRight,
+        RemoteIcons.Chevron,
         contentDescription = null,
         tint = MaterialTheme.nuvio.colors.textMuted,
         modifier = Modifier.size(20.dp),
@@ -533,23 +693,34 @@ private fun RowChevron() {
 
 @Composable
 private fun SavedPcRow(
-    saved: RememberedRemoteDevice,
+    pc: RememberedRemotePc,
     enabled: Boolean,
     active: Boolean,
     reachable: Boolean,
+    reachableLanAddresses: Set<String>,
     onDisconnect: () -> Unit,
 ) {
+    val saved = pc.primary
+    val lan = pc.lan
+    val bluetooth = pc.bluetooth
+    val vpn = pc.vpn
     var menuOpen by remember { mutableStateOf(false) }
     var editingWake by remember { mutableStateOf(false) }
-    var macDraft by remember(saved.wakeMac) { mutableStateOf(saved.wakeMac.orEmpty()) }
+    var macDraft by remember(lan?.wakeMac) { mutableStateOf(lan?.wakeMac.orEmpty()) }
     var macError by remember { mutableStateOf(false) }
-    val connect = { connectRememberedRemoteDevice(DesktopRemote.transport, saved) }
+    val connect = { connectRememberedRemotePc(DesktopRemote.transport, pc, reachableLanAddresses) }
+    val wifiDescription = stringResource(Res.string.remote_pc_saved_wifi)
+    val bluetoothDescription = stringResource(Res.string.remote_pc_saved_bluetooth)
+    val vpnDescription = stringResource(Res.string.remote_vpn_tile)
+    val description = listOfNotNull(
+        wifiDescription.takeIf { lan != null },
+        bluetoothDescription.takeIf { bluetooth != null },
+        vpn?.let { "$vpnDescription · ${it.address}" },
+    ).joinToString(" · ")
     Column {
         NuvioGroupRow(
-            title = saved.name,
-            description = stringResource(
-                if (saved.bluetooth) Res.string.remote_pc_saved_bluetooth else Res.string.remote_pc_saved_wifi,
-            ),
+            title = pc.name,
+            description = description,
             modifier = Modifier.testTag("remote-saved-pc-${saved.address}"),
             onClick = if (active) null else connect,
             enabled = enabled,
@@ -559,37 +730,42 @@ private fun SavedPcRow(
             spacing = 12.dp,
             leading = {
                 NuvioIconChip(
-                    icon = if (saved.bluetooth) Icons.Rounded.Bluetooth else Icons.Rounded.Wifi,
+                    icon = when {
+                        lan != null -> RemoteIcons.Wifi
+                        vpn != null -> Icons.Rounded.VpnKey
+                        else -> RemoteIcons.Bluetooth
+                    },
                     tone = NuvioIconChipTone.Neutral,
                 )
             },
             trailing = {
                 when {
                     active -> NuvioTag(stringResource(Res.string.remote_pc_status_connected), style = NuvioTagStyle.Success)
-                    reachable -> NuvioPillButton(
+                    reachable || lan == null -> NuvioPillButton(
                         text = stringResource(Res.string.remote_pc_connect),
                         onClick = connect,
                         style = NuvioPillButtonStyle.Primary,
                         enabled = enabled,
                     )
-                    // A LAN PC that did not answer may be asleep: wake it, or set its MAC first.
                     else -> NuvioPillButton(
                         text = stringResource(Res.string.remote_pc_wake),
                         onClick = {
-                            val mac = saved.wakeMac
-                            if (mac != null) DesktopRemote.transport.wake(saved.address, mac)
-                            else {
-                                editingWake = true
-                                macError = false
+                            lan?.let { savedLan ->
+                                val mac = savedLan.wakeMac
+                                if (mac != null) DesktopRemote.transport.wake(savedLan.address, mac)
+                                else {
+                                    editingWake = true
+                                    macError = false
+                                }
                             }
                         },
-                        modifier = Modifier.testTag("remote-wake-pc-${saved.address}"),
+                        modifier = Modifier.testTag("remote-wake-pc-${lan?.address}"),
                     )
                 }
                 Box {
                     NuvioSquareIconButton(
                         icon = Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(Res.string.remote_pc_more_options, saved.name),
+                        contentDescription = stringResource(Res.string.remote_pc_more_options, pc.name),
                         onClick = { menuOpen = true },
                         size = 36.dp,
                         style = NuvioSquareIconButtonStyle.Ghost,
@@ -601,7 +777,7 @@ private fun SavedPcRow(
                             enabled = enabled,
                             onClick = { menuOpen = false; if (active) onDisconnect() else connect() },
                         )
-                        if (!saved.bluetooth) {
+                        if (lan != null) {
                             MenuItem(
                                 text = stringResource(Res.string.remote_pc_set_wake_mac),
                                 selected = editingWake,
@@ -610,13 +786,13 @@ private fun SavedPcRow(
                         }
                         MenuItem(
                             text = stringResource(Res.string.remote_pc_forget),
-                            onClick = { menuOpen = false; DesktopRemote.forget(saved.address) },
+                            onClick = { menuOpen = false; DesktopRemote.forgetPc(pc) },
                         )
                     }
                 }
             },
         )
-        AnimatedVisibility(visible = editingWake) {
+        AnimatedVisibility(visible = editingWake && lan != null) {
             Column(
                 Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -637,7 +813,7 @@ private fun SavedPcRow(
                 NuvioPillButton(
                     text = stringResource(Res.string.remote_pc_save_mac),
                     onClick = {
-                        if (DesktopRemote.saveWakeAddress(saved.address, macDraft)) editingWake = false
+                        if (lan != null && DesktopRemote.saveWakeAddress(lan.address, macDraft)) editingWake = false
                         else macError = true
                     },
                     style = NuvioPillButtonStyle.Primary,
@@ -714,26 +890,89 @@ private fun TroubleshootingCard(expandByDefault: Boolean) {
 @Composable
 private fun RemotePlaybackPage() {
     val playback by DesktopRemote.remotePlayback.collectAsState()
-    val idle = playback.playbackId.isEmpty()
-    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (idle) {
-            NuvioEmptyBlock(
-                icon = Icons.Rounded.Tv,
-                title = stringResource(Res.string.remote_playback_idle_title),
-                message = stringResource(Res.string.remote_playback_idle_body),
-                tone = NuvioIconChipTone.Neutral,
-                modifier = Modifier.padding(vertical = 12.dp),
-            )
-        } else {
-            NuvioSectionLabel(stringResource(Res.string.remote_playback_now_playing).uppercase())
-            NowPlayingSummary(playback)
-            SeekBar(playback)
-            TransportRow(playback)
-            VolumeRow(playback)
+    val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
+    if (playback.playbackId.isEmpty()) {
+        RemoteIdleCard(pcName = activeDesktop?.name?.takeIf { it.isNotBlank() })
+        // Fullscreen works while idle too, so the PC window keeps its one control here.
+        if (playback.fullscreenSupported) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                NuvioSectionLabel(stringResource(Res.string.remote_playback_pc_window).uppercase())
+                RemoteFullscreenToggle(playback)
+            }
         }
-        RemoteWindowActions(playback, playing = !idle)
+        return
     }
-    if (!idle) PlaybackOptions(playback)
+    NuvioSurfaceCard(outlined = true, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        NowPlayingSummary(playback)
+        SeekBar(playback)
+        // Skip only appears while an intro or credits interval applies.
+        AnimatedVisibility(
+            visible = playback.skip,
+            enter = expandVertically(tween(NuvioTokens.Motion.normalMillis, easing = NuvioTokens.Motion.standard)) +
+                fadeIn(tween(NuvioTokens.Motion.normalMillis)),
+            exit = shrinkVertically(tween(NuvioTokens.Motion.fastMillis)) + fadeOut(tween(NuvioTokens.Motion.fastMillis)),
+        ) {
+            RemoteSkipPill(
+                label = stringResource(if (playback.skipIntro) Res.string.remote_playback_skip_intro else Res.string.remote_playback_skip),
+                onClick = { DesktopRemote.command("skipInterval") },
+                modifier = Modifier.testTag("remote-skip-interval"),
+            )
+        }
+        TransportRow(playback)
+        VolumeRow(playback)
+    }
+    PlaybackOptions(playback)
+}
+
+/** Connected but idle: the PC breathes softly while the controller waits for a video. */
+@Composable
+private fun RemoteIdleCard(pcName: String?) {
+    val tokens = MaterialTheme.nuvio
+    NuvioSurfaceCard(outlined = true) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            RemoteIdleIllustration(Modifier.remoteRiseIn())
+            Text(
+                stringResource(Res.string.remote_playback_idle_title),
+                Modifier.padding(top = 24.dp).remoteRiseIn(delayMillis = 80),
+                style = MaterialTheme.typography.titleLarge,
+                color = tokens.colors.textPrimary,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                stringResource(Res.string.remote_playback_idle_body),
+                Modifier.padding(top = 6.dp).widthIn(max = 280.dp).remoteRiseIn(delayMillis = 160),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+            if (pcName != null) {
+                Row(
+                    Modifier
+                        .padding(top = 20.dp)
+                        .remoteRiseIn(delayMillis = 240)
+                        .clip(CircleShape)
+                        .background(tokens.colors.success.copy(alpha = 0.08f))
+                        .border(tokens.borders.thin, tokens.colors.success.copy(alpha = 0.22f), CircleShape)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RemoteLiveDot(tokens.colors.success)
+                    Text(
+                        stringResource(Res.string.remote_playback_waiting_on, pcName),
+                        style = MaterialTheme.nuvioTypeScale.labelSm,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tokens.colors.success,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** Poster, title and episode line. Older PCs send one combined title and no artwork. */
@@ -741,17 +980,17 @@ private fun RemotePlaybackPage() {
 private fun NowPlayingSummary(playback: RemotePlayback) {
     val tokens = MaterialTheme.nuvio
     val split = playback.mediaTitle.isNotBlank()
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         val posterShape = tokens.shapes.compactCard
         Box(
             Modifier
-                .size(width = 56.dp, height = 84.dp)
+                .size(width = 76.dp, height = 114.dp)
                 .clip(posterShape)
                 .background(tokens.colors.surfaceCard)
                 .border(tokens.borders.thin, tokens.colors.borderSubtle, posterShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Movie, contentDescription = null, tint = tokens.colors.textMuted, modifier = Modifier.size(24.dp))
+            Icon(RemoteIcons.Poster, contentDescription = null, tint = tokens.colors.textMuted, modifier = Modifier.size(26.dp))
             if (playback.poster.isNotBlank()) {
                 NuvioAsyncImage(
                     model = playback.poster,
@@ -761,7 +1000,19 @@ private fun NowPlayingSummary(playback: RemotePlayback) {
                 )
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RemoteNowPlayingBars(playing = playback.playing, color = tokens.colors.accent)
+                Text(
+                    stringResource(Res.string.remote_playback_now_playing).uppercase(),
+                    style = MaterialTheme.nuvioTypeScale.labelXs,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = NuvioTokens.LetterSpacing.label,
+                    color = tokens.colors.accent,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 if (split) playback.mediaTitle else playback.title,
                 style = MaterialTheme.typography.titleLarge,
@@ -781,35 +1032,6 @@ private fun NowPlayingSummary(playback: RemotePlayback) {
             if (playback.message.isNotBlank()) {
                 Text(playback.message, style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
             }
-        }
-    }
-}
-
-/** Desktop-window actions. Fullscreen works while idle too; Skip only shows while it applies. */
-@Composable
-private fun RemoteWindowActions(playback: RemotePlayback, playing: Boolean) {
-    val showSkip = playing && playback.skip
-    if (!playback.fullscreenSupported && !showSkip) return
-    SideBySideOrStacked {
-        if (playback.fullscreenSupported) {
-            RemoteWideButton(
-                icon = if (playback.fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                label = stringResource(
-                    if (playback.fullscreen) Res.string.remote_playback_fullscreen_exit
-                    else Res.string.remote_playback_fullscreen_enter,
-                ),
-                modifier = Modifier.testTag("remote-toggle-fullscreen"),
-                onClick = { DesktopRemote.command("setFullscreen", if (playback.fullscreen) 0.0 else 1.0) },
-            )
-        }
-        if (showSkip) {
-            RemoteWideButton(
-                icon = Icons.Rounded.FastForward,
-                label = stringResource(if (playback.skipIntro) Res.string.remote_playback_skip_intro else Res.string.remote_playback_skip),
-                emphasized = true,
-                modifier = Modifier.testTag("remote-skip-interval"),
-                onClick = { DesktopRemote.command("skipInterval") },
-            )
         }
     }
 }
@@ -843,36 +1065,6 @@ private fun SideBySideOrStacked(modifier: Modifier = Modifier, content: @Composa
     }
 }
 
-/** A 44 dp button with an icon: white 8 %, or accent-soft with an accent outline when [emphasized]. */
-@Composable
-private fun RemoteWideButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    emphasized: Boolean = false,
-) {
-    val tokens = MaterialTheme.nuvio
-    val shape = tokens.shapes.button
-    Row(
-        modifier
-            .height(44.dp)
-            .clip(shape)
-            .background(
-                if (emphasized) tokens.colors.accent.copy(alpha = tokens.opacity.pressed)
-                else tokens.colors.textPrimary.copy(alpha = tokens.opacity.hover),
-            )
-            .then(if (emphasized) Modifier.border(tokens.borders.thin, tokens.colors.borderSelected, shape) else Modifier)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = tokens.colors.textPrimary, modifier = Modifier.size(18.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = tokens.colors.textPrimary, maxLines = 1)
-    }
-}
-
 @Composable
 private fun SeekBar(playback: RemotePlayback) {
     val tokens = MaterialTheme.nuvio
@@ -887,61 +1079,69 @@ private fun SeekBar(playback: RemotePlayback) {
             modifier = Modifier.fillMaxWidth(),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            val timeStyle = MaterialTheme.nuvioTypeScale.labelSm.tabular.copy(fontWeight = FontWeight.Normal)
-            Text(remoteTime(seek?.let { (it * duration).toLong() } ?: playback.position), style = timeStyle, color = tokens.colors.textMuted)
-            Text(remoteTime(playback.duration), style = timeStyle, color = tokens.colors.textMuted)
+            val timeStyle = MaterialTheme.nuvioTypeScale.labelSm.tabular.copy(fontWeight = FontWeight.Medium)
+            val position = seek?.let { (it * duration).toLong() } ?: playback.position
+            Text(remoteTime(position), style = timeStyle, color = tokens.colors.textMuted)
+            // Time left reads better than the total while watching from the couch.
+            val remaining = if (playback.duration > 0) "−" + remoteTime((playback.duration - position).coerceAtLeast(0)) else remoteTime(0)
+            Text(remaining, style = timeStyle, color = tokens.colors.textMuted)
         }
     }
 }
 
+/** Previous, back 10 s, play/pause, forward 10 s and next: evenly spaced, the main key largest. */
 @Composable
 private fun TransportRow(playback: RemotePlayback) {
     val tokens = MaterialTheme.nuvio
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        NuvioSquareIconButton(
-            icon = Icons.Rounded.SkipPrevious,
-            contentDescription = stringResource(Res.string.remote_playback_previous),
-            onClick = { DesktopRemote.command("previous") },
-            size = 44.dp,
-            style = NuvioSquareIconButtonStyle.Ghost,
-            iconSize = 24.dp,
-            shape = tokens.shapes.button,
-        )
-        NuvioSquareIconButton(
-            icon = Icons.Rounded.Replay10,
-            contentDescription = stringResource(Res.string.remote_playback_rewind),
-            onClick = { DesktopRemote.command("seekBy", -10_000.0) },
-            size = 52.dp,
-            iconSize = 26.dp,
-            shape = tokens.shapes.button,
-        )
-        NuvioSquareIconButton(
-            icon = if (playback.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription = stringResource(if (playback.playing) Res.string.remote_playback_pause else Res.string.remote_playback_play),
-            onClick = { DesktopRemote.command(if (playback.playing) "pause" else "play") },
-            size = 64.dp,
-            style = NuvioSquareIconButtonStyle.Accent,
-            iconSize = 32.dp,
-            shape = CircleShape,
-        )
-        NuvioSquareIconButton(
-            icon = Icons.Rounded.Forward10,
-            contentDescription = stringResource(Res.string.remote_playback_forward),
-            onClick = { DesktopRemote.command("seekBy", 10_000.0) },
-            size = 52.dp,
-            iconSize = 26.dp,
-            shape = tokens.shapes.button,
-        )
-        NuvioSquareIconButton(
-            icon = Icons.Rounded.SkipNext,
-            contentDescription = stringResource(Res.string.remote_playback_next),
-            onClick = { DesktopRemote.command("next") },
-            size = 44.dp,
-            style = NuvioSquareIconButtonStyle.Ghost,
-            enabled = playback.nextEpisodeAvailable,
-            iconSize = 24.dp,
-            shape = tokens.shapes.button,
-        )
+    val soft = tokens.colors.textPrimary.copy(alpha = 0.07f)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // The row needs about 296 dp at full size; narrow phones get proportionally smaller keys.
+        val scale = (maxWidth / 296.dp).coerceIn(0.8f, 1f)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RemoteRoundButton(
+                contentDescription = stringResource(Res.string.remote_playback_previous),
+                onClick = { DesktopRemote.command("previous") },
+                size = 48.dp * scale,
+            ) {
+                Icon(RemoteIcons.Previous, contentDescription = null, tint = tokens.colors.textSecondary, modifier = Modifier.size(26.dp * scale))
+            }
+            RemoteRoundButton(
+                contentDescription = stringResource(Res.string.remote_playback_rewind),
+                onClick = { DesktopRemote.command("seekBy", -10_000.0) },
+                size = 60.dp * scale,
+                container = soft,
+                pressRotation = -45f,
+            ) {
+                RemoteSeekTenIcon(forward = false, tint = tokens.colors.textPrimary, size = 30.dp * scale)
+            }
+            RemotePlayPauseButton(
+                playing = playback.playing,
+                contentDescription = stringResource(if (playback.playing) Res.string.remote_playback_pause else Res.string.remote_playback_play),
+                onClick = { DesktopRemote.command(if (playback.playing) "pause" else "play") },
+                size = 76.dp * scale,
+            )
+            RemoteRoundButton(
+                contentDescription = stringResource(Res.string.remote_playback_forward),
+                onClick = { DesktopRemote.command("seekBy", 10_000.0) },
+                size = 60.dp * scale,
+                container = soft,
+                pressRotation = 45f,
+            ) {
+                RemoteSeekTenIcon(forward = true, tint = tokens.colors.textPrimary, size = 30.dp * scale)
+            }
+            RemoteRoundButton(
+                contentDescription = stringResource(Res.string.remote_playback_next),
+                onClick = { DesktopRemote.command("next") },
+                size = 48.dp * scale,
+                enabled = playback.nextEpisodeAvailable,
+            ) {
+                Icon(RemoteIcons.Next, contentDescription = null, tint = tokens.colors.textSecondary, modifier = Modifier.size(26.dp * scale))
+            }
+        }
     }
 }
 
@@ -953,7 +1153,7 @@ private fun VolumeRow(playback: RemotePlayback) {
     var draggedVolume by remember(playback.playbackId) { mutableStateOf<Float?>(null) }
     var awaitingVolume by remember(playback.playbackId) { mutableStateOf<Float?>(null) }
 
-    // Keep the thumb at the requested level until the PC has actually acknowledged it.
+    // Keep the fill at the requested level until the PC has actually acknowledged it.
     // Otherwise the previous 300-ms snapshot makes it jump backwards on finger release.
     LaunchedEffect(pcVolume, awaitingVolume) {
         val requested = awaitingVolume ?: return@LaunchedEffect
@@ -977,22 +1177,26 @@ private fun VolumeRow(playback: RemotePlayback) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        NuvioSquareIconButton(
-            icon = if (shownVolume <= 0f) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+        RemoteRoundButton(
             contentDescription = stringResource(Res.string.remote_playback_mute),
             onClick = {
                 draggedVolume = null
                 awaitingVolume = null
                 DesktopRemote.command("mute")
             },
-            size = 32.dp,
-            style = NuvioSquareIconButtonStyle.Ghost,
-        )
-        NuvioSlider(
-            value = shownVolume.coerceIn(0f, maxVolume),
-            valueRange = 0f..maxVolume,
+            size = 52.dp,
+            container = tokens.colors.textPrimary.copy(alpha = 0.06f),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            RemoteSpeakerIcon(level = shownVolume, tint = tokens.colors.textPrimary)
+        }
+        RemoteVolumePill(
+            value = shownVolume,
+            max = maxVolume,
+            label = stringResource(Res.string.remote_playback_volume),
+            boostLabel = stringResource(Res.string.remote_playback_volume_boost),
             onValueChange = { draggedVolume = it.coerceIn(0f, maxVolume) },
             onValueChangeFinished = {
                 draggedVolume?.let { requested ->
@@ -1002,13 +1206,7 @@ private fun VolumeRow(playback: RemotePlayback) {
                 draggedVolume = null
             },
             modifier = Modifier.weight(1f).testTag("remote-volume-slider"),
-        )
-        Text(
-            "${(shownVolume * 100).roundToInt()}%",
-            style = MaterialTheme.nuvioTypeScale.bodySm.tabular,
-            color = tokens.colors.textMuted,
-            modifier = Modifier.widthIn(min = 40.dp).testTag("remote-volume-value"),
-            textAlign = TextAlign.End,
+            valueModifier = Modifier.testTag("remote-volume-value"),
         )
     }
 }
@@ -1023,44 +1221,45 @@ private fun PlaybackOptions(playback: RemotePlayback) {
     val sourcesTitle = stringResource(Res.string.remote_playback_sources)
     val findSubtitles = stringResource(Res.string.remote_playback_find_subtitles)
     val fetchSubtitles = { DesktopRemote.command("fetchSubtitles") }
-    val rows = buildList<@Composable () -> Unit> {
-        if (playback.episodes.isNotEmpty()) add {
-            PlaybackOptionRow(Icons.Rounded.VideoLibrary, episodesTitle, playback.episodes.firstOrNull { it.selected }?.label) {
-                openList = "episode"
-            }
-        }
-        // An older PC sends no subtitle list; the row then looks for add-on subtitles directly.
-        add {
+    val tiles = buildList<@Composable (Modifier) -> Unit> {
+        // An older PC sends no subtitle list; the tile then looks for add-on subtitles directly.
+        add { modifier ->
             if (playback.subtitles.isNotEmpty()) {
-                PlaybackOptionRow(Icons.Rounded.ClosedCaption, subtitlesTitle, playback.subtitles.firstOrNull { it.selected }?.label) {
-                    openList = "subtitle"
-                }
+                RemoteOptionTile(RemoteIcons.Subtitles, subtitlesTitle, playback.subtitles.firstOrNull { it.selected }?.label,
+                    onClick = { openList = "subtitle" }, modifier = modifier)
             } else {
-                PlaybackOptionRow(Icons.Rounded.ClosedCaption, subtitlesTitle, findSubtitles, onClick = fetchSubtitles)
+                RemoteOptionTile(RemoteIcons.Subtitles, subtitlesTitle, findSubtitles, onClick = fetchSubtitles, modifier = modifier)
             }
         }
-        if (playback.audioTracks.isNotEmpty()) add {
-            PlaybackOptionRow(
-                Icons.Rounded.GraphicEq,
+        if (playback.audioTracks.isNotEmpty()) add { modifier ->
+            RemoteOptionTile(
+                RemoteIcons.Audio,
                 audioTracksTitle,
                 playback.audioTracks.firstOrNull { it.selected }?.label,
-                Modifier.testTag("remote-audio-tracks"),
-            ) { openList = "audioTrack" }
+                onClick = { openList = "audioTrack" },
+                modifier = modifier.testTag("remote-audio-tracks"),
+            )
         }
-        if (playback.sources.isNotEmpty()) add {
-            PlaybackOptionRow(Icons.Rounded.Storage, sourcesTitle, playback.sources.firstOrNull { it.selected }?.label) {
-                openList = "source"
-            }
+        if (playback.episodes.isNotEmpty()) add { modifier ->
+            RemoteOptionTile(RemoteIcons.Episodes, episodesTitle, playback.episodes.firstOrNull { it.selected }?.label,
+                onClick = { openList = "episode" }, modifier = modifier)
+        }
+        if (playback.sources.isNotEmpty()) add { modifier ->
+            RemoteOptionTile(RemoteIcons.Source, sourcesTitle, playback.sources.firstOrNull { it.selected }?.label,
+                onClick = { openList = "source" }, modifier = modifier)
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         NuvioSectionLabel(stringResource(Res.string.remote_playback_options).uppercase())
-        NuvioGroup {
-            rows.forEachIndexed { index, row ->
-                if (index > 0) NuvioGroupDivider()
-                row()
+        tiles.chunked(2).forEach { row ->
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.forEach { tile -> tile(Modifier.weight(1f).fillMaxHeight()) }
             }
         }
+        if (playback.fullscreenSupported) RemoteFullscreenToggle(playback)
     }
     when (openList) {
         "episode" -> RemoteChoiceList(episodesTitle, playback.episodes, "episode") { openList = null }
@@ -1076,24 +1275,66 @@ private fun PlaybackOptions(playback: RemotePlayback) {
     }
 }
 
+/** Fullscreen on the PC as a switch, so the row says what the PC window is doing right now. */
 @Composable
-private fun PlaybackOptionRow(
-    icon: ImageVector,
-    title: String,
-    value: String?,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    NuvioGroupRow(
-        title = title,
-        description = value,
-        modifier = modifier,
-        onClick = onClick,
-        titleMaxLines = 1,
-        descriptionMaxLines = 1,
-        leading = { NuvioIconChip(icon) },
-        trailing = { RowChevron() },
+private fun RemoteFullscreenToggle(playback: RemotePlayback) {
+    val tokens = MaterialTheme.nuvio
+    val shape = RoundedCornerShape(18.dp)
+    val fullscreen = playback.fullscreen
+    val interaction = remember { MutableInteractionSource() }
+    val border by animateColorAsState(
+        targetValue = if (fullscreen) tokens.colors.accent.copy(alpha = 0.5f) else tokens.colors.borderSubtle,
+        animationSpec = tween(NuvioTokens.Motion.normalMillis),
+        label = "remote_fullscreen_border",
     )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .testTag("remote-toggle-fullscreen")
+            .remotePressScale(interaction, pressedScale = 0.98f)
+            .clip(shape)
+            .background(tokens.colors.surface)
+            .border(tokens.borders.thin, border, shape)
+            .toggleable(
+                value = fullscreen,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Switch,
+                onValueChange = { DesktopRemote.command("setFullscreen", if (it) 1.0 else 0.0) },
+            )
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RemoteIconBox(RemoteIcons.Fullscreen)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                stringResource(Res.string.remote_playback_fullscreen_enter),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = tokens.colors.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                stringResource(if (fullscreen) Res.string.remote_playback_window_fullscreen else Res.string.remote_playback_window_windowed),
+                style = MaterialTheme.nuvioTypeScale.bodySm,
+                color = tokens.colors.textMuted,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Switch(
+            checked = fullscreen,
+            onCheckedChange = null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = tokens.colors.onAccent,
+                checkedTrackColor = tokens.colors.accent,
+                uncheckedThumbColor = tokens.colors.textMuted,
+                uncheckedTrackColor = tokens.colors.borderDefault,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -1106,7 +1347,7 @@ private fun RemoteDownloadsPage() {
         return
     }
     if (playback.downloads.isEmpty()) {
-        RemoteEmptyCard(Icons.Rounded.Download, stringResource(Res.string.remote_downloads_title),
+        RemoteEmptyCard(RemoteIcons.Download, stringResource(Res.string.remote_downloads_title),
             stringResource(Res.string.remote_downloads_empty))
         return
     }
@@ -1121,7 +1362,7 @@ private fun RemoteDownloadsPage() {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(task.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                            Text(task.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
                                 color = tokens.colors.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             val size = task.totalBytes?.let {
                                 "${formatDownloadBytes(task.downloadedBytes)} / ${formatDownloadBytes(it)}"
@@ -1129,26 +1370,38 @@ private fun RemoteDownloadsPage() {
                             Text("${task.state} · $size", style = MaterialTheme.nuvioTypeScale.bodySm.tabular,
                                 color = tokens.colors.textMuted)
                         }
+                        val soft = tokens.colors.textPrimary.copy(alpha = 0.07f)
                         when (task.state) {
-                            DownloadStatus.Downloading -> NuvioSquareIconButton(
-                                icon = Icons.Rounded.Pause,
+                            DownloadStatus.Downloading -> RemoteRoundButton(
                                 contentDescription = stringResource(Res.string.remote_downloads_pause),
                                 onClick = { DesktopRemote.downloadCommand("downloadPause", task.id) },
-                            )
-                            DownloadStatus.Paused -> NuvioSquareIconButton(
-                                icon = Icons.Rounded.PlayArrow,
+                                size = 44.dp,
+                                container = soft,
+                            ) {
+                                Icon(RemoteIcons.Pause, contentDescription = null, tint = tokens.colors.textPrimary, modifier = Modifier.size(18.dp))
+                            }
+                            DownloadStatus.Paused -> RemoteRoundButton(
                                 contentDescription = stringResource(Res.string.remote_downloads_resume),
                                 onClick = { DesktopRemote.downloadCommand("downloadResume", task.id) },
-                            )
+                                size = 44.dp,
+                                container = soft,
+                            ) {
+                                Icon(
+                                    RemoteIcons.Play,
+                                    contentDescription = null,
+                                    tint = tokens.colors.textPrimary,
+                                    modifier = Modifier.size(18.dp).offset(x = 1.dp),
+                                )
+                            }
                             else -> Unit
                         }
                     }
                     if (task.totalBytes != null && task.totalBytes > 0L) {
-                        NuvioProgressBar(
-                            progress = (task.downloadedBytes.toFloat() / task.totalBytes).coerceIn(0f, 1f),
+                        RemoteDownloadProgress(
+                            progress = task.downloadedBytes.toFloat() / task.totalBytes,
+                            active = task.state == DownloadStatus.Downloading,
+                            color = if (task.state == DownloadStatus.Paused) tokens.colors.textMuted else tokens.colors.accent,
                             modifier = Modifier.padding(end = 4.dp),
-                            trackColor = tokens.colors.textPrimary.copy(alpha = tokens.opacity.hover),
-                            fillColor = if (task.state == DownloadStatus.Paused) tokens.colors.textMuted else tokens.colors.accent,
                         )
                     }
                 }

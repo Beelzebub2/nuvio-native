@@ -63,6 +63,8 @@ internal object NativePlayerBridge {
     external fun setPaused(handle: Long, paused: Boolean)
     /** Windows only. A successful request does not imply surround is active. */
     external fun setSurroundUpmixEnabled(handle: Long, enabled: Boolean): Boolean
+    /** Windows only. 0=off, 1=physical 5.1, 2=driver-based headset 7.1, 3=headset 5.1. */
+    external fun setSurroundUpmixMode(handle: Long, mode: Int): Boolean
     /** Windows only: control the stereo companion and optional visible mirror window. */
     external fun setDiscordShareEnabled(handle: Long, enabled: Boolean, showWindow: Boolean): Boolean
     /** Windows only: switch the current video filter for a temporary RTX A/B preview. */
@@ -77,6 +79,8 @@ internal object NativePlayerBridge {
     external fun durationMs(handle: Long): Long
     external fun positionMs(handle: Long): Long
     external fun bufferedPositionMs(handle: Long): Long
+    /** Packed video-params/w and video-params/h; zero if unknown. */
+    external fun videoDimensions(handle: Long): Long
     external fun isLoading(handle: Long): Boolean
     external fun isEnded(handle: Long): Boolean
     external fun isPaused(handle: Long): Boolean

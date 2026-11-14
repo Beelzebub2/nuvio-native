@@ -162,7 +162,8 @@ internal fun remoteDeepScanInterfaces(interfaces: List<RemoteLanInterface>): Lis
 
 private fun localInterfaces(): List<RemoteLanInterface> = prioritizedRemoteLanInterfaces(
     Collections.list(NetworkInterface.getNetworkInterfaces()).filter {
-        it.isUp && !it.isLoopback && !it.isVirtual
+        it.isUp && !it.isLoopback && !it.isVirtual && !it.isPointToPoint &&
+            !isRemoteVpnInterface(it.name.orEmpty(), it.displayName.orEmpty())
     }.flatMap { nic ->
         nic.interfaceAddresses.mapNotNull { item ->
             val address = item.address as? Inet4Address ?: return@mapNotNull null
@@ -181,6 +182,16 @@ private fun localInterfaces(): List<RemoteLanInterface> = prioritizedRemoteLanIn
 
 internal fun isRemoteLanPeer(address: InetAddress): Boolean = address is Inet4Address && address.isSiteLocalAddress &&
     localInterfaces().any { sameRemoteSubnet(address.address, it.address.address, it.networkPrefixLength) }
+
+/** A routed VPN peer must not inherit LAN access from an overlapping physical /8 or /16. */
+internal fun isRemoteLanInbound(
+    destination: InetAddress,
+    peer: InetAddress,
+    lanInterfaces: List<RemoteLanInterface> = localInterfaces(),
+): Boolean = peer is Inet4Address && peer.isSiteLocalAddress && lanInterfaces.any { lan ->
+    destination == lan.address &&
+        sameRemoteSubnet(peer.address, lan.address.address, lan.networkPrefixLength)
+}
 
 // Some Android Wi-Fi interfaces report no directed broadcast address. A single
 // limited-broadcast fallback keeps discovery usable without broadening the peer
@@ -225,13 +236,23 @@ internal class LanDesktopRemote(
     private val openDiscoverySocket: (Int) -> DatagramSocket = ::bindRemoteDiscoverySocket,
     private val connectionLifetime: RemoteConnectionLifetime = NoopRemoteConnectionLifetime,
     private val bluetoothResultsTtlMs: Long = BLUETOOTH_RESULTS_TTL_MS,
+    private val vpnHostAccess: RemoteVpnHostAccess? = null,
 ) : DesktopRemoteTransport {
     override val supported = true
     override val bluetoothSupported get() = bluetoothClient?.supported == true
+    override val vpnHostSupported get() = vpnHostAccess != null
     override val retainWhenUiDetached get() = connectionLifetime.retainWhenUiDetached
     override fun localAddresses(): List<String> =
         runCatching { localInterfaces().mapNotNull { it.address.hostAddress }.distinct() }
             .getOrDefault(emptyList())
+    override fun vpnInterfaces(): List<String> = vpnHostAccess?.interfaces()?.map { it.address }.orEmpty()
+    override fun approvedVpnAddress(): String? = vpnHostAccess?.approvedAddress()
+    override fun approveVpnAddress(address: String?): Boolean {
+        if (!host || vpnHostAccess?.approveAddress(address) != true) return false
+        // Revocation must terminate an established VPN control session immediately.
+        if (activeHostVpnSession && address != activeHostVpnAddress) disconnect()
+        return true
+    }
     @Volatile private var scope: CoroutineScope? = null
     private var account: RemoteAccount? = null
     private var host = false
@@ -248,11 +269,15 @@ internal class LanDesktopRemote(
     // One search (network or Bluetooth) owns the progress state at a time.
     private val searchEpoch = AtomicLong()
     @Volatile private var searchJob: Job? = null
+    private var startupReconnectJob: Job? = null
+    private var startupReconnectTarget: String? = null
     private val lastWakeNanos = AtomicLong(0L)
     private val lastHandoffAtNanos = AtomicLong(0L)
     private val sourceRequestStartedAtNanos = AtomicLong(0L)
     private var bluetoothListener: ServerSocket? = null
     private var lastHostAttemptNanos = 0L
+    @Volatile private var activeHostVpnSession = false
+    @Volatile private var activeHostVpnAddress: String? = null
 
     override fun start(account: RemoteAccount, host: Boolean) {
         // The Compose host can be reconstructed while the Android foreground
@@ -262,6 +287,7 @@ internal class LanDesktopRemote(
         stop()
         this.account = account
         this.host = host
+        vpnHostAccess?.accountChanged(if (host) account else null)
         val currentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = currentScope
         if (host) currentScope.launch {
@@ -275,6 +301,7 @@ internal class LanDesktopRemote(
     }
 
     override fun stop() {
+        cancelStartupReconnect()
         DesktopRemote.hostReady.value = false
         DesktopRemote.hostFailure.value = false
         DesktopRemote.discoveryReady.value = false
@@ -282,6 +309,7 @@ internal class LanDesktopRemote(
         scope?.cancel()
         scope = null
         account = null
+        vpnHostAccess?.accountChanged(null)
         searchEpoch.incrementAndGet()
         searchJob = null
         disconnect()
@@ -302,6 +330,8 @@ internal class LanDesktopRemote(
 
     override fun disconnect() {
         sessionEpoch.incrementAndGet()
+        activeHostVpnSession = false
+        activeHostVpnAddress = null
         runCatching { connectionLifetime.disconnected() }
         selectedDesktop = null
         DesktopRemote.pendingHandoff.value = null
@@ -335,6 +365,57 @@ internal class LanDesktopRemote(
         DesktopRemote.bluetoothDesktops.value = emptyList()
     }
 
+    override fun cancelStartupReconnect() {
+        startupReconnectJob?.cancel()
+        startupReconnectJob = null
+        startupReconnectTarget = null
+    }
+
+    /** Try the latest approved PC's LAN endpoint, then its Bluetooth link if LAN fails. */
+    override fun reconnectRemembered(devices: List<RememberedRemoteDevice>) {
+        val currentScope = scope ?: return
+        val expected = account ?: return
+        if (host || DesktopRemote.connected.value || DesktopRemote.connecting.value ||
+            DesktopRemote.scanning.value || DesktopRemote.pairing.value != null) return
+        val pc = groupRememberedRemotePcs(devices).firstOrNull() ?: return
+        val lan = pc.lan
+        val fallback = pc.bluetooth?.takeIf { bluetoothSupported } ?: pc.vpn
+        cancelStartupReconnect()
+        if (lan == null) {
+            fallback?.let { connectRememberedRemoteDevice(this, it) }
+            return
+        }
+        startupReconnectTarget = lan.address
+        discover(lan.address, connect = true)
+        // Searches and connection handshakes are asynchronous. A timeout or failed
+        // LAN probe must not replace an active pairing or a user's later selection.
+        startupReconnectJob = currentScope.launch {
+            try {
+                withTimeoutOrNull(15_000L) {
+                    while (DesktopRemote.scanning.value || DesktopRemote.connecting.value) {
+                        if (DesktopRemote.connected.value || DesktopRemote.pairing.value != null) break
+                        delay(200)
+                    }
+                }
+                withContext(uiDispatcher) {
+                    if (scope === currentScope && account == expected &&
+                        startupReconnectTarget == lan.address &&
+                        !DesktopRemote.connected.value && DesktopRemote.pairing.value == null &&
+                        !DesktopRemote.scanning.value && !DesktopRemote.connecting.value) {
+                        fallback?.let {
+                            startupReconnectTarget = it.address
+                            connectRememberedRemoteDevice(this@LanDesktopRemote, it)
+                        }
+                    }
+                }
+            } finally {
+                if (startupReconnectTarget == lan.address ||
+                    startupReconnectTarget == fallback?.address) startupReconnectTarget = null
+                startupReconnectJob = null
+            }
+        }
+    }
+
     override fun confirmPairing() { confirmation?.complete(Unit) }
 
     override fun forgetBluetoothTrust(account: RemoteAccount, address: String): Boolean {
@@ -356,6 +437,7 @@ internal class LanDesktopRemote(
     }
 
     override fun discoverBluetooth() {
+        cancelStartupReconnect()
         if (host) return
         val currentScope = scope
         val activeClient = bluetoothClient
@@ -471,6 +553,9 @@ internal class LanDesktopRemote(
     }
 
     override fun discover(localIp: String?, deepScan: Boolean, connect: Boolean) {
+        if (startupReconnectTarget != null && (!connect || localIp != startupReconnectTarget)) {
+            cancelStartupReconnect()
+        }
         if (host) return
         // Manual search must explain why it cannot start (rather than silently
         // doing nothing when the phone has not signed into an account).
@@ -580,6 +665,19 @@ internal class LanDesktopRemote(
                         this@LanDesktopRemote.connect(target)
                         return@withContext
                     }
+                    // Prefer LAN while at home; a previously approved VPN address
+                    // is tried only after the physical-network search came up empty.
+                    // This never discovers random tailnet peers or grants pairing.
+                    if (deepScan && targetAddress == null && DesktopRemote.desktops.value.isEmpty() &&
+                        !DesktopRemote.connected.value) {
+                        val savedVpn = DesktopRemote.remembered.value.firstOrNull { it.vpn && !it.bluetooth }
+                        if (savedVpn != null) {
+                            scanSocket = null
+                            DesktopRemote.scanning.value = false
+                            this@LanDesktopRemote.discoverVpn(savedVpn.address, connect = true)
+                            return@withContext
+                        }
+                    }
                     DesktopRemote.status.value = if (DesktopRemote.desktops.value.isEmpty()) {
                         if (targetAddress == null)
                             "No desktops found. Open Phone remote on the PC and try its QR code or current IP address. Use the same account and local network; guest Wi-Fi, a VPN, or a firewall may prevent access."
@@ -602,7 +700,69 @@ internal class LanDesktopRemote(
         }
     }
 
-    private suspend fun probeRemoteTargets(addresses: List<Inet4Address>, current: () -> Boolean, expected: RemoteAccount) {
+    /** Private VPN discovery is a direct, bounded TCP probe of one explicit endpoint. */
+    override fun discoverVpn(endpoint: String, connect: Boolean) {
+        if (startupReconnectTarget != null && (!connect || endpoint != startupReconnectTarget)) {
+            cancelStartupReconnect()
+        }
+        if (host) return
+        val currentScope = scope
+        val expected = account
+        if (currentScope == null || expected == null) {
+            DesktopRemote.status.value = "Sign in to the same Starlit account on both devices first."
+            return
+        }
+        val targetHost = normalizedRemoteVpnHost(endpoint)
+        if (targetHost == null) {
+            DesktopRemote.status.value = "Enter a private VPN IPv4 address or a valid private DNS hostname."
+            return
+        }
+        if (DesktopRemote.scanning.value || DesktopRemote.connecting.value) cancelSearch()
+        val epoch = searchEpoch.incrementAndGet()
+        fun current() = scope === currentScope && searchEpoch.get() == epoch
+        DesktopRemote.scanning.value = true
+        DesktopRemote.desktops.value = emptyList()
+        DesktopRemote.status.value = "Checking the private VPN connection to $targetHost…"
+        searchJob = currentScope.launch {
+            try {
+                val addresses = withContext(Dispatchers.IO) {
+                    InetAddress.getAllByName(targetHost).filterIsInstance<Inet4Address>()
+                        .filter(::isPrivateRemoteVpnAddress).distinctBy { it.hostAddress }.take(4)
+                }
+                if (addresses.isEmpty()) {
+                    withContext(uiDispatcher) {
+                        if (current()) DesktopRemote.status.value =
+                            "This address does not resolve to a supported private VPN IPv4 endpoint."
+                    }
+                    return@launch
+                }
+                probeRemoteTargets(addresses, ::current, expected, vpnHost = targetHost)
+                withContext(uiDispatcher) {
+                    if (!current()) return@withContext
+                    val peer = DesktopRemote.desktops.value.firstOrNull { it.vpn && it.vpnHost == targetHost }
+                    if (connect && peer != null) this@LanDesktopRemote.connect(peer)
+                    else DesktopRemote.status.value = if (peer != null)
+                        "Private PC found. Select it to pair." else
+                        "Could not reach Starlit over VPN. Check the VPN, PC listener, and Windows firewall."
+                }
+            } catch (error: CancellationException) { throw error
+            } catch (_: Exception) {
+                withContext(uiDispatcher) {
+                    if (current()) DesktopRemote.status.value =
+                        "Could not resolve or reach this VPN address. Check its spelling and VPN connection."
+                }
+            } finally {
+                withContext(NonCancellable + uiDispatcher) {
+                    if (current()) DesktopRemote.scanning.value = false
+                }
+            }
+        }
+    }
+
+    private suspend fun probeRemoteTargets(
+        addresses: List<Inet4Address>, current: () -> Boolean, expected: RemoteAccount,
+        vpnHost: String? = null,
+    ) {
         // A bounded number of short TCP probes avoids flooding the network
         // or spawning hundreds of simultaneously blocked sockets.
         val probeDispatcher = Dispatchers.IO.limitedParallelism(16)
@@ -624,8 +784,13 @@ internal class LanDesktopRemote(
                         check(current())
                         val addressText = address.hostAddress.orEmpty()
                         if (DesktopRemote.desktops.value.none { it.address == addressText }) {
-                            val knownName = DesktopRemote.remembered.value.firstOrNull { it.address == addressText }?.name
-                            DesktopRemote.desktops.value += RemoteDesktop(addressText, listenPort, knownName ?: "Starlit PC")
+                            val knownName = DesktopRemote.remembered.value.firstOrNull {
+                                it.address == (vpnHost ?: addressText) && it.vpn == (vpnHost != null)
+                            }?.name
+                            DesktopRemote.desktops.value += RemoteDesktop(
+                                addressText, listenPort, knownName ?: "Starlit PC",
+                                vpn = vpnHost != null, vpnHost = vpnHost,
+                            )
                         }
                     }
                 }
@@ -708,8 +873,9 @@ internal class LanDesktopRemote(
                     val socket = try { activeListener.accept() } catch (_: SocketTimeoutException) { continue }
                     var registered = false
                     try {
-                        val lanPeer = isRemoteLanPeer(socket.inetAddress)
-                        if (!lanPeer) continue
+                        val lanPeer = isRemoteLanInbound(socket.localAddress, socket.inetAddress)
+                        val vpnPeer = !lanPeer && vpnHostAccess?.permits(socket) == true
+                        if (!lanPeer && !vpnPeer) continue
                         // New clients send a short authenticated discovery
                         // probe. Older clients remain server-first: an idle
                         // socket becomes a normal encrypted pairing session.
@@ -729,7 +895,7 @@ internal class LanDesktopRemote(
                             }
                             continue
                         }
-                        registered = registerHostSocket(socket, expected, ownerScope)
+                        registered = registerHostSocket(socket, expected, ownerScope, vpn = vpnPeer)
                     } finally {
                         if (!registered) runCatching { socket.close() }
                     }
@@ -762,7 +928,8 @@ internal class LanDesktopRemote(
     }
 
     private suspend fun registerHostSocket(
-        socket: Socket, expected: RemoteAccount, ownerScope: CoroutineScope, bluetooth: Boolean = false,
+        socket: Socket, expected: RemoteAccount, ownerScope: CoroutineScope,
+        bluetooth: Boolean = false, vpn: Boolean = false,
     ): Boolean {
         var registered = false
         withContext(uiDispatcher) {
@@ -771,6 +938,8 @@ internal class LanDesktopRemote(
             if (scope === ownerScope && sockets.isEmpty() &&
                 (lastHostAttemptNanos == 0L || now - lastHostAttemptNanos >= 20_000_000_000L)) {
                 lastHostAttemptNanos = now
+                activeHostVpnSession = vpn
+                activeHostVpnAddress = if (vpn) socket.localAddress.hostAddress else null
                 sockets.add(socket)
                 registered = true
                 val epoch = sessionEpoch.incrementAndGet()
@@ -781,12 +950,15 @@ internal class LanDesktopRemote(
     }
 
     override fun connect(desktop: RemoteDesktop) {
+        if (startupReconnectTarget != null && desktop.address != startupReconnectTarget) {
+            cancelStartupReconnect()
+        }
         val currentScope = scope ?: return
         val expected = account ?: return
         // Scanning or tapping the current PC again must not tear down a live secure session.
         if (isActiveRemoteDesktop(
                 DesktopRemote.connected.value, DesktopRemote.activeDesktop.value,
-                desktop.address, desktop.bluetooth,
+                desktop.address, desktop.bluetooth, desktop.vpn,
             )) return
         // Android must stop searching before it connects, and a finished search must not hide this attempt.
         cancelSearch()
@@ -802,7 +974,11 @@ internal class LanDesktopRemote(
             var ownedSocket: Socket? = null
             try {
                 val address = requireNotNull(strictRemoteIpv4(desktop.address))
-                require(isRemoteLanPeer(address)) { "Desktop must be on the same local network." }
+                if (desktop.vpn) require(isPrivateRemoteVpnAddress(address)) {
+                    "VPN address must be private or in the 100.64.0.0/10 range."
+                } else require(isRemoteLanPeer(address)) {
+                    "Desktop must be on the same local network."
+                }
                 val socket = Socket().also { ownedSocket = it }
                 withContext(uiDispatcher) {
                     check(scope === currentScope && sessionEpoch.get() == epoch)
@@ -817,7 +993,9 @@ internal class LanDesktopRemote(
                         DesktopRemote.connecting.value = false
                         runCatching { connectionLifetime.disconnected() }
                         DesktopRemote.status.value =
-                            remoteConnectionFailureMessage(error, desktop.address, desktop.port)
+                            if (desktop.vpn)
+                                "VPN connection failed. Check that both devices are connected to the VPN, and Starlit is allowed through the PC firewall."
+                            else remoteConnectionFailureMessage(error, desktop.address, desktop.port)
                     }
                 }
             } finally {
@@ -1025,6 +1203,9 @@ internal class LanDesktopRemote(
             }
         }
         configureTimeout(15_000)
+        val authenticatedDesktopId = if (peerToken != null)
+            remoteHostIdentityId(expected, lanTrustStore).orEmpty() else ""
+        var recordedRemoteIdentity = false
         var lastVerification = System.nanoTime()
         val peerAuthorization = peerToken?.let { RemotePeerAuthorization(it) { token -> verifyAccount(expected, token) } }
         while (currentCoroutineContext().isActive && sessionEpoch.get() == epoch) {
@@ -1150,6 +1331,7 @@ internal class LanDesktopRemote(
                         else emptyList(),
                         capabilities = if (DesktopRemote.onAcceptedHandoff != null) listOf(REMOTE_SOURCE_CAPABILITY) else emptyList(),
                         sourcePicker = DesktopRemote.sourcePicker.value,
+                        desktopId = authenticatedDesktopId,
                     )
                 }
                 channel.send(snapshot.toRemoteWireJson())
@@ -1160,7 +1342,22 @@ internal class LanDesktopRemote(
                 )
                 channel.send(wireJson.encodeToString(RemoteRequest(command, currentToken)))
                 val snapshot = wireJson.decodeFromString<RemotePlayback>(channel.receive())
-                publish(epoch) { DesktopRemote.remotePlayback.value = snapshot }
+                publish(epoch) {
+                    DesktopRemote.remotePlayback.value = snapshot
+                    // The PC identity is a grouping hint, not a substitute for
+                    // per-transport cryptographic pairing and same-account checks.
+                    val id = snapshot.desktopId.takeIf { it.matches(Regex("[0-9a-f]{32}")) &&
+                        (lanDesktopId == null || it == lanDesktopId) }
+                    if (!recordedRemoteIdentity && id != null) {
+                        selectedDesktop?.let {
+                            DesktopRemote.pairedWith(
+                                expected, it, System.currentTimeMillis(),
+                                trustedId = lanDesktopId, pcId = id,
+                            )
+                            recordedRemoteIdentity = true
+                        }
+                    }
+                }
                 delay(300)
             }
         }

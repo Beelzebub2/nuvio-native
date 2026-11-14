@@ -48,7 +48,7 @@
         : existing.SUPPORTERS_API_BASE_URL,
     SUPPORT_URL:
       typeof existing.SUPPORT_URL === "undefined"
-        ? "https://github.com/Beelzebub2/nuvio-native/issues"
+        ? "https://github.com/Beelzebub2/starlit/issues"
         : existing.SUPPORT_URL,
     SPONSOR_NAMES:
       typeof existing.SPONSOR_NAMES === "undefined" || !String(existing.SPONSOR_NAMES).trim()

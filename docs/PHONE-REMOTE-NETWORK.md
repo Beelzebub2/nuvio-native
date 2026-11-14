@@ -6,6 +6,57 @@ bound to `0.0.0.0`. TCP **47789** carries the encrypted remote session. UDP
 require a UDP reply. LAN connections are restricted to private IPv4 peers on an
 actual local interface's subnet.
 
+## Private VPN remote access (Windows PC and Android phone)
+
+The optional **Private VPN** connection mode works with an existing user-managed
+VPN such as Tailscale, WireGuard, NetBird or ZeroTier. Starlit does **not** install,
+authenticate to, start or host a VPN service. The PC and phone must already have
+IP connectivity on the same private overlay. VPN access is **off by default**
+and does not change the original LAN or Bluetooth pairing rules.
+
+1. Install and connect the preferred private VPN on both devices, and configure
+   its access policies to permit the phone to reach the PC on TCP **47789**.
+   UDP **47788** is for physical LAN discovery only and is not needed on VPN.
+2. Sign in to the same Starlit account and server on the PC and phone.
+   On Windows, open **Phone remote**. Under **Private VPN remote access**,
+   select the currently active VPN adapter's IPv4 address and choose **Enable**.
+   For Windows Firewall, choose **Allow VPN through Windows Firewall** and
+   approve the UAC prompt for the installed Starlit launcher. The rule is limited
+   to Starlit.exe, TCP 47789, the selected local VPN IPv4 and private peer ranges.
+   No blanket Public Wi-Fi/Internet access or router port forwarding is added.
+3. On Android, open **PC controller > PCs > Private VPN**. Enter the PC's selected
+   VPN IPv4 (Tailscale commonly uses `100.64.0.0/10`) or its full private DNS
+   hostname (for example, a MagicDNS `.ts.net` name). Starlit resolves DNS and
+   probes only that explicit private IPv4 endpoint. It does not scan VPN networks.
+4. Verify the pairing code on both devices for the first connection. The
+   existing cryptographic trust/authorization is still required on every
+   subsequent connection: a VPN hostname, IP, firewall rule or shared tailnet
+   never grants Starlit remote access by itself.
+5. To revoke, choose **Disable VPN access** on the PC. This immediately rejects
+   new VPN sockets and disconnects any current VPN control session. Starlit
+   separately requests administrator confirmation to remove only its dedicated
+   VPN firewall rule. If removal is denied, access remains disabled in-app but
+   the old Windows rule may still exist until removal succeeds.
+
+The desktop accepts VPN sessions only if the incoming socket targets the
+explicitly approved IPv4 address of a currently active recognized VPN adapter.
+Tailscale CGNAT addresses are **not** automatically considered secure and
+`100.64.0.0/10` alone does not enable the listener. Private IPv4 is a routing
+constraint; encrypted device pairing, same-account verification, command
+authorization and explicit first-pair confirmation remain the security boundary.
+VPN host settings are scoped to the current account/server.
+
+**Limits:** The first pairing requires physical access to the PC for approval.
+Only IPv4 is supported in this phase; routed IPv6/ULA and seamless migration
+of a running session are separate enhancements. On opening PC controller,
+Starlit searches the LAN first, then tries the latest remembered VPN endpoint
+when the LAN search finds no PC. Android typically allows only one system
+VPN at a time. VPN connectivity does not wake a sleeping/offline PC or enable
+PC-to-phone video streaming. Windows policies, routing, VPN access controls or
+endpoint security software can still block the connection even with a rule
+installed. For a timeout, verify that the PC is powered on, Starlit's Phone
+remote listener is active and both peers can reach TCP 47789 over VPN.
+
 Binding a web server to `0.0.0.0` does not bypass a firewall or make an isolated
 Wi-Fi client reachable. A web server that already works may have permission for
 its executable, port and network profile that another application does not.

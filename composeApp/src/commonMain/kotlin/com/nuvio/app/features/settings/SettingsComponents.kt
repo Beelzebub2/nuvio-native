@@ -220,13 +220,14 @@ internal fun SettingsSidebarItem(
 internal fun SettingsSection(
     title: String,
     isTablet: Boolean,
+    searchKey: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     Column {
         Row(
-            modifier = Modifier.fillMaxWidth().settingsSearchTarget(title),
+            modifier = Modifier.fillMaxWidth().settingsSearchTarget(title, searchKey),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {

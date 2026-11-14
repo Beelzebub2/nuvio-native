@@ -1,5 +1,6 @@
 import { Router } from "./routerState.js";
 import { focusWithoutScroll } from "./focusWithoutScroll.js";
+import { isStaleDirectionalRepeat } from "./remoteInputBudget.js";
 import { Platform } from "../../platform/index.js";
 // Hold detection must use when the key was pressed/released, not when a busy main thread got to the
 // event: a late keyup would otherwise turn a short OK press into a long press (Android uses key events too).
@@ -152,6 +153,11 @@ export const FocusEngine = {
       return;
     }
     const currentScreen = Router.getCurrentScreen();
+    if (isStaleDirectionalRepeat(event, normalizedEvent.keyCode)) {
+      normalizedEvent.preventDefault();
+      normalizedEvent.stopImmediatePropagation();
+      return;
+    }
     if (currentScreen?.onKeyDown) {
       Promise.resolve(currentScreen.onKeyDown(normalizedEvent)).catch((error) => {
         console.warn("Screen keydown handler failed", error);

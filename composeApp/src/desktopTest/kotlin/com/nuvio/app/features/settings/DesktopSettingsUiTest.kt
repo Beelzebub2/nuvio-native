@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -164,6 +165,73 @@ class DesktopSettingsUiTest {
             }
             waitUntil(timeoutMillis = 8_000) {
                 runCatching { onNodeWithText("More like this").assertIsDisplayed() }.isSuccess
+            }
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun searchResultScrollsToTrackingProviderCard() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            showSettings()
+            onNode(hasContentDescription("Search settings...")).performTextInput("Trakt")
+            waitForIdle()
+            onNode(hasText("Sync your watchlist", substring = true) and hasClickAction()).performClick()
+            waitUntil(timeoutMillis = 8_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+            }
+            sidebar("Tracking").assertIsSelected()
+            onNodeWithTag("settings-search-focused").assertIsDisplayed()
+        }
+
+    @Test
+    fun searchHighlightsOtherTrackingProviderCards() {
+        listOf(
+            "simkl-authentication" to "Simkl",
+            "mdblist-authentication" to "MDBList",
+        ).forEach { (key, title) ->
+            runDesktopComposeUiTest(width = 1100, height = 760) {
+                SettingsSearchFocus.request(SettingsPage.TraktAuthentication, key, title)
+                setContent {
+                    NuvioTheme {
+                        SettingsScreen(initialPageName = SettingsPage.TraktAuthentication.name)
+                    }
+                }
+                waitUntil(timeoutMillis = 8_000) {
+                    onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
+                }
+                onNodeWithTag("settings-search-focused").assertIsDisplayed()
+            }
+        }
+    }
+
+    @Test
+    fun dynamicSectionTitleStillMatchesTheStableSearchKey() =
+        runDesktopComposeUiTest(width = 700, height = 760) {
+            SettingsSearchFocus.request(SettingsPage.Homescreen, "home-catalogs", "Catalogs")
+            setContent {
+                NuvioTheme {
+                    SettingsSearchPageScope(SettingsPage.Homescreen) {
+                        SearchableSettingsNuvioScreen(SettingsPage.Homescreen) {
+                            item {
+                                SettingsSection(
+                                    title = "Catalogs and Collections",
+                                    isTablet = true,
+                                    searchKey = "home-catalogs",
+                                ) {
+                                    SettingsNavigationRow(
+                                        title = "Configure catalogs",
+                                        description = null,
+                                        isTablet = true,
+                                        onClick = {},
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodes(hasTestTag("settings-search-focused")).fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag("settings-search-focused").assertIsDisplayed()
         }

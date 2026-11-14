@@ -27,6 +27,7 @@ const BLOCKED_ROUTES = new Set([
   "authSignIn",
   "serverConnection"
 ]);
+const TIZEN_SCREEN_SAVER_BLOCK_IDLE_MS = 10000;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 let lastImageFailure = "";
 function logImageFailure(url, reason) {
@@ -209,7 +210,10 @@ export const AmbientMode = {
       if (this.showing) this.dismiss();
       return;
     }
-    this.setTizenScreenSaverBlocked(true);
+    // Samsung's first AppCommon call is synchronous on older TVs and can
+    // interrupt Home's initial render. Arm it after the UI has been idle.
+    if (now() - this.lastInteraction >= TIZEN_SCREEN_SAVER_BLOCK_IDLE_MS)
+      this.setTizenScreenSaverBlocked(true);
     if (!this.showing && now() - this.lastInteraction >= settings.timeoutMinutes * 60000)
       this.show();
   },

@@ -1,10 +1,14 @@
 package com.nuvio.app.features.remote
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -57,6 +62,7 @@ import com.nuvio.app.core.ui.NuvioStatusEyebrow
 import com.nuvio.app.core.ui.NuvioStatusTone
 import com.nuvio.app.core.ui.NuvioTag
 import com.nuvio.app.core.ui.NuvioTagStyle
+import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.dismissNuvioBottomSheet
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioHighlightedRowColor
@@ -218,9 +224,11 @@ internal fun RemoteHandoffDialog(title: String, onAccept: () -> Unit, onReject: 
 }
 
 /**
- * A list picker for episodes, subtitles, audio tracks or sources, opened from a playback option.
- * [actionLabel] adds an inline action under the list, such as looking for add-on subtitles.
+ * A sheet picker for episodes, subtitles, audio tracks or sources, opened from a playback tile.
+ * The chosen row's mark pops in and draws its check before the sheet slides away.
+ * [actionLabel] adds an action under the list, such as looking for add-on subtitles.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RemoteChoiceList(
     title: String,
@@ -230,37 +238,111 @@ internal fun RemoteChoiceList(
     onAction: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    DialogSurface(onDismissRequest = onDismiss, title = title) {
+    val tokens = MaterialTheme.nuvio
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // Show the new choice at once; the PC confirms it with its next playback update.
+    var picked by remember(items) { mutableStateOf(items.firstOrNull { it.selected }?.id) }
+    val close: () -> Unit = { scope.launch { dismissNuvioBottomSheet(sheetState, onDismiss) } }
+    NuvioModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            items.forEach { item ->
-                DialogOption(
-                    text = item.label,
-                    selected = item.selected,
-                    onClick = {
-                        DesktopRemote.command(command, id = item.id)
-                        onDismiss()
-                    },
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = tokens.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                NuvioSquareIconButton(
+                    icon = Icons.Rounded.Close,
+                    contentDescription = stringResource(Res.string.action_close),
+                    onClick = close,
+                    size = 36.dp,
+                    iconSize = 18.dp,
                 )
             }
-        }
-        if (actionLabel != null && onAction != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.nuvio.colors.accent,
-                    modifier = Modifier.size(18.dp))
-                NuvioActionLabel(
-                    text = actionLabel,
-                    onClick = onAction,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(vertical = 6.dp),
-                )
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items.forEach { item ->
+                    RemoteChoiceRow(
+                        label = item.label,
+                        selected = item.id == picked,
+                        onClick = {
+                            picked = item.id
+                            DesktopRemote.command(command, id = item.id)
+                            scope.launch {
+                                // Let the check mark finish drawing before the sheet leaves.
+                                delay(320)
+                                dismissNuvioBottomSheet(sheetState, onDismiss)
+                            }
+                        },
+                    )
+                }
+            }
+            if (actionLabel != null && onAction != null) {
+                val shape = RoundedCornerShape(16.dp)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(shape)
+                        .background(tokens.colors.textPrimary.copy(alpha = 0.04f))
+                        .border(tokens.borders.thin, tokens.colors.borderSubtle, shape)
+                        .clickable(role = Role.Button, onClick = onAction),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(RemoteIcons.Search, contentDescription = null, tint = tokens.colors.textPrimary, modifier = Modifier.size(18.dp))
+                    Text(actionLabel, style = MaterialTheme.typography.labelLarge, color = tokens.colors.textPrimary, maxLines = 1)
+                }
             }
         }
-        DialogButtons {
-            DialogButton(text = stringResource(Res.string.action_close), onClick = onDismiss)
-        }
+    }
+}
+
+@Composable
+private fun RemoteChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val tokens = MaterialTheme.nuvio
+    val shape = RoundedCornerShape(14.dp)
+    val background by animateColorAsState(
+        targetValue = if (selected) tokens.colors.accent.copy(alpha = 0.08f) else Color.Transparent,
+        animationSpec = tween(NuvioTokens.Motion.normalMillis),
+        label = "remote_choice_background",
+    )
+    val border by animateColorAsState(
+        targetValue = if (selected) tokens.colors.accent.copy(alpha = 0.35f) else Color.Transparent,
+        animationSpec = tween(NuvioTokens.Motion.normalMillis),
+        label = "remote_choice_border",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(shape)
+            .background(background)
+            .border(tokens.borders.thin, border, shape)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RemoteChoiceMark(selected)
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = tokens.colors.textPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -274,6 +356,7 @@ internal fun RemoteSourcePickerDialog(
     pcName: String,
     onDismiss: () -> Unit,
     onOpenController: () -> Unit,
+    onRetry: (() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     val matches = requestId.isNotEmpty() && requestId == state.requestId
@@ -283,12 +366,11 @@ internal fun RemoteSourcePickerDialog(
     val filteredSources = remember(state.sources, sourceFilters) {
         filterRemoteSourceChoices(state.sources, sourceFilters)
     }
-    LaunchedEffect(requestId, matches, connected) {
-        if (matches) {
-            noResponse = false
-        } else if (connected && requestId.isNotEmpty()) {
-            delay(20_000L)
-            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.requestId != requestId
+    LaunchedEffect(requestId, matches, state.phase, state.sources.size, connected) {
+        noResponse = false
+        if (connected && state.isAwaitingSources(requestId)) {
+            delay(if (matches) REMOTE_SOURCE_RESULTS_TIMEOUT_MS else REMOTE_SOURCE_ACK_TIMEOUT_MS)
+            noResponse = DesktopRemote.remotePlayback.value.sourcePicker.isAwaitingSources(requestId)
         }
     }
     val searching = connected && !noResponse && (!matches || state.phase == "searching")
@@ -334,7 +416,7 @@ internal fun RemoteSourcePickerDialog(
             when {
                 !connected -> SourcePickerStatus(Icons.Rounded.LinkOff, NuvioIconChipTone.Danger,
                     stringResource(Res.string.remote_source_picker_disconnected))
-                noResponse && !matches -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
+                noResponse -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
                     stringResource(Res.string.remote_source_picker_timeout))
                 playing -> SourcePickerStatus(Icons.Rounded.CheckCircle, NuvioIconChipTone.Success,
                     stringResource(Res.string.remote_source_picker_playing))
@@ -344,6 +426,9 @@ internal fun RemoteSourcePickerDialog(
                     stringResource(Res.string.remote_source_picker_empty))
                 matches && state.phase == "error" -> SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Danger,
                     state.message.ifBlank { stringResource(Res.string.remote_source_picker_error) })
+                matches && state.phase == "ready" && state.sources.isEmpty() ->
+                    SourcePickerStatus(Icons.Rounded.ErrorOutline, NuvioIconChipTone.Warning,
+                        state.message.ifBlank { stringResource(Res.string.remote_source_picker_empty) })
                 searching && !showSources -> SourcePickerStatus(Icons.Rounded.Search, NuvioIconChipTone.Accent,
                     stringResource(Res.string.remote_source_picker_searching), busy = true)
                 searching -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -352,7 +437,9 @@ internal fun RemoteSourcePickerDialog(
                         style = MaterialTheme.nuvioTypeScale.bodySm, color = tokens.colors.textMuted)
                 }
             }
-            if (connected && matches && state.message.isNotBlank() && state.phase !in setOf("playing", "error")) {
+            if (connected && matches && state.message.isNotBlank() &&
+                state.phase !in setOf("playing", "error") &&
+                !(state.phase == "ready" && state.sources.isEmpty())) {
                 DialogHint(state.message)
             }
             if (showSources) {
@@ -404,6 +491,16 @@ internal fun RemoteSourcePickerDialog(
                         }
                     }
                 }
+            }
+            if (connected && onRetry != null &&
+                (noResponse || (matches && (state.phase in setOf("empty", "error") ||
+                    (state.phase == "ready" && state.sources.isEmpty()))))) {
+                DialogButton(
+                    text = stringResource(Res.string.action_retry),
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = DialogButtonStyle.Primary,
+                )
             }
             DialogButton(
                 text = stringResource(Res.string.remote_source_picker_controller),

@@ -1870,6 +1870,16 @@ JNIEXPORT jlong JNICALL NP(bufferedPositionMs)(JNIEnv *, jobject, jlong handle) 
     return static_cast<jlong>(buffered * 1000.0);
 }
 
+JNIEXPORT jlong JNICALL NP(videoDimensions)(JNIEnv *, jobject, jlong handle) {
+    Player *p = asPlayer(handle);
+    if (!p || !p->mpv) return 0;
+    int64_t width = 0, height = 0;
+    if (mpv_get_property(p->mpv, "video-params/w", MPV_FORMAT_INT64, &width) < 0 ||
+        mpv_get_property(p->mpv, "video-params/h", MPV_FORMAT_INT64, &height) < 0 ||
+        width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX) return 0;
+    return static_cast<jlong>((static_cast<uint64_t>(width) << 32) | static_cast<uint64_t>(height));
+}
+
 JNIEXPORT jboolean JNICALL NP(isLoading)(JNIEnv *, jobject, jlong handle) {
     Player *p = asPlayer(handle);
     if (!p) return JNI_TRUE;
@@ -1996,17 +2006,17 @@ JNIEXPORT void JNICALL NP(applySubtitleStyle)(
     Player *p = asPlayer(handle);
     if (!p) return;
     const bool preserveAssStyles = useLibass == JNI_TRUE;
-    // Keep the track's own ASS styling when libass rendering is on, and let the
-    // settings below take over when it is off (matching the Windows bridge).
+    // Keep the track's own ASS styling (including placement and scale) when
+    // libass is on; custom text styling remains explicitly opt-in.
     mpv_set_property_string(p->mpv, "sub-ass-override",
-                            preserveAssStyles ? "scale" : "force");
+                            preserveAssStyles ? "no" : "force");
     const double clampedSize = std::max(18.0, std::min(96.0, static_cast<double>(fontSize)));
-    const double subtitleScale = preserveAssStyles ? clampedSize / 54.0 : 1.0;
+    const double subtitleScale = 1.0;
     std::string scale = std::to_string(subtitleScale);
     mpv_set_property_string(p->mpv, "sub-scale", scale.c_str());
     std::string size = std::to_string(clampedSize);
     mpv_set_property_string(p->mpv, "sub-font-size", size.c_str());
-    std::string pos = std::to_string(subPos);
+    std::string pos = std::to_string(preserveAssStyles ? 100 : subPos);
     mpv_set_property_string(p->mpv, "sub-pos", pos.c_str());
     if (!preserveAssStyles) {
         std::string background = jstringToUtf8(env, backgroundColor);

@@ -50,6 +50,14 @@ internal data class RemoteSourcePicker(
     val message: String = "",
 )
 
+internal const val REMOTE_SOURCE_ACK_TIMEOUT_MS = 20_000L
+internal const val REMOTE_SOURCE_RESULTS_TIMEOUT_MS = 45_000L
+
+/** A PC acknowledgment is not a result; an empty in-progress search must still finish or expire. */
+internal fun RemoteSourcePicker.isAwaitingSources(requestId: String): Boolean =
+    requestId.isNotBlank() && (this.requestId != requestId ||
+        (phase == "searching" && sources.isEmpty()))
+
 internal const val REMOTE_SOURCE_CAPABILITY = "source-picker-v2"
 /** Desktop player volume is normalized to 0..2 (0..200%). Old PCs advertise 1. */
 internal const val REMOTE_MAX_VOLUME_LEVEL = 2f
@@ -82,6 +90,8 @@ internal data class RemotePlayback(
     val mediaTitle: String = "",
     val episodeLine: String = "",
     val poster: String = "",
+    /** Stable desktop lookup hint, transmitted only inside the authenticated encrypted session. */
+    val desktopId: String = "",
 )
 
 internal fun RemotePlayback.effectiveVolumeMax(): Float =
@@ -103,6 +113,9 @@ internal data class RemoteDesktop(
     val port: Int,
     val name: String,
     val bluetooth: Boolean = false,
+    val vpn: Boolean = false,
+    /** DNS is a reconnect hint, never a trusted peer identity. */
+    val vpnHost: String? = null,
 )
 
 /** A connected LAN endpoint and a Bluetooth endpoint are distinct, even if their PC names match. */
@@ -111,8 +124,10 @@ internal fun isActiveRemoteDesktop(
     active: RemoteDesktop?,
     address: String,
     bluetooth: Boolean,
+    vpn: Boolean = false,
 ): Boolean = connected && active != null && active.bluetooth == bluetooth &&
-    active.address.equals(address, ignoreCase = bluetooth)
+    active.vpn == vpn &&
+    (active.address.equals(address, ignoreCase = bluetooth) || (vpn && active.vpnHost == address))
 
 internal data class RemotePairing(val code: String, val peer: String)
 internal data class RemoteAccount(val userId: String, val server: String, val publishableKey: String)
@@ -126,6 +141,7 @@ internal interface RemoteFullscreenActions {
 internal interface DesktopRemoteTransport {
     val supported: Boolean
     val bluetoothSupported: Boolean get() = false
+    val vpnHostSupported: Boolean get() = false
     val retainWhenUiDetached: Boolean get() = false
     fun start(account: RemoteAccount, host: Boolean)
     fun stop()
@@ -134,7 +150,15 @@ internal interface DesktopRemoteTransport {
      * With [connect], a PC found at [localIp] is connected to straight away (a scanned QR code).
      */
     fun discover(localIp: String? = null, deepScan: Boolean = false, connect: Boolean = false)
+    /** Explicit, user-entered private-network endpoint; never scans whole VPN address ranges. */
+    fun discoverVpn(endpoint: String, connect: Boolean = false) {}
+    fun vpnInterfaces(): List<String> = emptyList()
+    fun approvedVpnAddress(): String? = null
+    fun approveVpnAddress(address: String?): Boolean = false
     fun discoverBluetooth() {}
+    /** One opt-in attempt per phone app launch, with LAN preferred and Bluetooth fallback. */
+    fun reconnectRemembered(devices: List<RememberedRemoteDevice>) {}
+    fun cancelStartupReconnect() {}
     fun localAddresses(): List<String> = emptyList()
     fun wake(address: String, mac: String) {}
     fun connect(desktop: RemoteDesktop)
@@ -168,11 +192,14 @@ internal object DesktopRemote {
     val status = MutableStateFlow("Connect to a desktop on the same Wi-Fi or Ethernet network.")
     val remotePlayback = MutableStateFlow(RemotePlayback())
     val remembered = MutableStateFlow<List<RememberedRemoteDevice>>(emptyList())
+    val autoReconnect = MutableStateFlow(false)
+    private var startupReconnectAccount: RemoteAccount? = null
     val visible = MutableStateFlow(false)
     val pendingHandoff = MutableStateFlow<RemotePlaybackHandoff?>(null)
     val sourcePicker = MutableStateFlow(RemoteSourcePicker())
     val sourcePickerVisible = MutableStateFlow(false)
     val pendingPhoneSourceRequestId = MutableStateFlow("")
+    private var latestPhoneSourceHandoff: RemotePlaybackHandoff? = null
     val sourceRequestId = MutableStateFlow("")
     var sourceRequestPreviousPlaybackId = ""
     /** Installed only while a desktop stream picker belongs to the active remote request. */
@@ -188,17 +215,36 @@ internal object DesktopRemote {
 
     /** Changing the account/server replaces remembered devices, never merges trust domains. */
     fun accountChanged(account: RemoteAccount?) {
+        if (activeAccount != account) startupReconnectAccount = null
         activeAccount = account
         remembered.value = account?.let(RememberedRemoteDeviceStore::read).orEmpty()
+        autoReconnect.value = account?.let(RememberedRemoteDeviceStore::autoReconnectEnabled) ?: false
+    }
+
+    fun setAutoReconnect(enabled: Boolean) {
+        val account = activeAccount ?: return
+        RememberedRemoteDeviceStore.setAutoReconnectEnabled(account, enabled)
+        autoReconnect.value = enabled
+        if (!enabled) transport.cancelStartupReconnect()
+    }
+
+    /** Invoked after the transport starts, once for each signed-in account in this app process. */
+    fun reconnectOnAppLaunch(account: RemoteAccount) {
+        if (isDesktop || activeAccount != account || startupReconnectAccount == account ||
+            !autoReconnect.value || remembered.value.isEmpty() || connected.value) return
+        startupReconnectAccount = account
+        transport.reconnectRemembered(remembered.value)
     }
 
     /** Called only after encrypted, account-verified pairing or a previously approved secure resume. */
     fun pairedWith(
         account: RemoteAccount, desktop: RemoteDesktop, nowEpochMs: Long, trustedId: String? = null,
+        pcId: String? = null,
     ) {
         if (activeAccount?.userId != account.userId || activeAccount?.server != account.server) return
         val list = rememberRemoteDevice(
-            remembered.value, desktop.name, desktop.address, nowEpochMs, desktop.bluetooth, trustedId,
+            remembered.value, desktop.name, desktop.vpnHost ?: desktop.address,
+            nowEpochMs, desktop.bluetooth, trustedId, desktop.vpn, pcId,
         )
         RememberedRemoteDeviceStore.write(account, list)
         remembered.value = list
@@ -206,9 +252,12 @@ internal object DesktopRemote {
 
     fun forget(address: String) {
         val current = activeAccount ?: return
+        val lanIds = remembered.value.filter { it.address == address && !it.bluetooth }
+            .mapNotNull { it.trustedId }.distinct()
         val isCurrentPc = remembered.value.any { device ->
-            device.address == address && isActiveRemoteDesktop(
-                connected.value, activeDesktop.value, device.address, device.bluetooth,
+            (device.address == address || device.trustedId != null && device.trustedId in lanIds) &&
+                isActiveRemoteDesktop(
+                connected.value, activeDesktop.value, device.address, device.bluetooth, device.vpn,
             )
         }
         if (remembered.value.any { it.address == address && it.bluetooth }) {
@@ -218,19 +267,48 @@ internal object DesktopRemote {
             }
         }
         // Forget must also erase the encrypted LAN credential, never just the visible row.
-        val lanIds = remembered.value.filter { it.address == address && !it.bluetooth }
-            .mapNotNull { it.trustedId }.distinct()
         if (lanIds.any { !transport.forgetLanTrust(current, it) }) {
             status.value = "Could not forget this Wi-Fi PC securely. Please try again."
             return
         }
-        val next = remembered.value.filterNot { it.address == address }
+        val next = remembered.value.filterNot { it.address == address || (it.trustedId != null && it.trustedId in lanIds) }
         RememberedRemoteDeviceStore.write(current, next)
         remembered.value = next
         // Forgetting a trusted PC must also revoke its *active* remote session.
         if (isCurrentPc) {
             transport.disconnect()
-            status.value = "Disconnected. Search the local network to pair again."
+            status.value = "Disconnected. Pair this PC again before using remote control."
+        }
+    }
+
+    /** Remove every approved transport for one verified PC; never revoke another PC by name. */
+    fun forgetPc(pc: RememberedRemotePc) {
+        val current = activeAccount ?: return
+        val targets = remembered.value.filter { it in pc.devices }
+        if (targets.isEmpty()) return
+        val ids = targets.filterNot { it.bluetooth }.mapNotNull { it.trustedId }.distinct()
+        for (device in targets.filter { it.bluetooth }) {
+            if (!transport.forgetBluetoothTrust(current, device.address)) {
+                status.value = "Could not forget the Bluetooth PC securely. Please try again."
+                return
+            }
+        }
+        for (id in ids) {
+            if (!transport.forgetLanTrust(current, id)) {
+                status.value = "Could not forget this Wi-Fi PC securely. Please try again."
+                return
+            }
+        }
+        val isCurrent = targets.any {
+            isActiveRemoteDesktop(connected.value, activeDesktop.value, it.address, it.bluetooth, it.vpn)
+        }
+        val next = remembered.value.filterNot { it in targets ||
+            (!it.bluetooth && it.trustedId != null && it.trustedId in ids) }
+        RememberedRemoteDeviceStore.write(current, next)
+        remembered.value = next
+        if (isCurrent) {
+            transport.disconnect()
+            status.value = "Disconnected. Pair this PC again before using remote control."
         }
     }
 
@@ -252,12 +330,7 @@ internal object DesktopRemote {
     fun open() {
         visible.value = true
         if (!isDesktop && transport.supported && !connected.value && !scanning.value && !connecting.value) {
-            val lastBluetooth = preferredBluetoothReconnect(remembered.value, transport.bluetoothSupported)
-            if (lastBluetooth != null) {
-                transport.connect(RemoteDesktop(lastBluetooth.address, 0, lastBluetooth.name, bluetooth = true))
-            } else {
-                transport.discover(deepScan = true)
-            }
+            transport.discover(deepScan = true)
         }
     }
 
@@ -274,6 +347,7 @@ internal object DesktopRemote {
             return false
         }
         val requestId = newRemotePlaybackId()
+        latestPhoneSourceHandoff = safe
         pendingPhoneSourceRequestId.value = requestId
         sourcePickerVisible.value = true
         transport.send(RemoteCommand(
@@ -284,6 +358,11 @@ internal object DesktopRemote {
             requestId = requestId,
         ))
         return true
+    }
+
+    fun retryPhoneSourceRequest(): Boolean {
+        val handoff = latestPhoneSourceHandoff ?: return false
+        return requestHandoff(handoff)
     }
 
     /** Enter the source-picker flow only after the encrypted, account-verified session has authorized the command. */
@@ -329,6 +408,7 @@ internal object DesktopRemote {
         }
         sourcePickerVisible.value = false
         pendingPhoneSourceRequestId.value = ""
+        latestPhoneSourceHandoff = null
     }
 
     fun acceptPendingHandoff() {
@@ -375,6 +455,7 @@ internal fun DesktopRemoteHost() {
             DesktopRemote.accountChanged(remoteAccount)
             DesktopRemote.handoffAccount = remoteAccount
             DesktopRemote.transport.start(remoteAccount, isDesktop)
+            if (!isDesktop) DesktopRemote.reconnectOnAppLaunch(remoteAccount)
         } else {
             DesktopRemote.accountChanged(null)
             DesktopRemote.handoffAccount = null

@@ -484,7 +484,8 @@ export class LibraryController {
         selectedGenre: this.state.selectedGenre,
         selectedYear: this.state.selectedYear,
         selectedWatchedFilter: this.state.selectedWatchedFilter,
-        selectedSortKey: this.state.selectedSortKey
+        selectedSortKey: this.state.selectedSortKey,
+        posterFocusIndex: this.posterFocusIndex()
       };
     }
     this.disposed = true;
@@ -495,6 +496,10 @@ export class LibraryController {
       clearTimeout(this.messageTimer);
       this.messageTimer = null;
     }
+  }
+  posterFocusIndex() {
+    const key = this.state.lastFocusedPosterKey;
+    return this.state.visibleItems.findIndex((item) => `${item.type}:${item.id}` === key);
   }
   getState() {
     return {
@@ -669,6 +674,11 @@ export class LibraryController {
           : sourceMode !== LibrarySourceMode.LOCAL
             ? LibrarySortOptionKey.DEFAULT
             : LibrarySortOptionKey.ADDED_DESC;
+    const previousFocusIndex = this.state.visibleItems.length
+      ? this.posterFocusIndex()
+      : persistedFilterSelections?.profileKey === activeProfileKey()
+        ? persistedFilterSelections.posterFocusIndex
+        : -1;
     const manageSelectedListKey =
       this.state.manageSelectedListKey &&
       listTabs.some(
@@ -705,6 +715,13 @@ export class LibraryController {
       pickerFocusIndex: 0
     };
     this.state.visibleItems = sortForState(this.state.allItems, this.state);
+    // A removed card gives its grid position to the following item, including
+    // when Library is remounted after returning from Detail.
+    if (previousFocusIndex >= 0 && this.posterFocusIndex() < 0 && this.state.visibleItems.length) {
+      const item =
+        this.state.visibleItems[Math.min(previousFocusIndex, this.state.visibleItems.length - 1)];
+      this.setFocusedPosterKey(`${item.type}:${item.id}`);
+    }
     this.onChange(this.getState());
     void this.loadMdbListSortOrder();
     void watchedTitleStateRepository

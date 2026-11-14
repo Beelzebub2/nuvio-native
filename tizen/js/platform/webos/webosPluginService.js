@@ -1,5 +1,5 @@
 import { WebOsLunaService } from "./webosLunaService.js";
-export const WEBOS_PLUGIN_SERVICE_ID = "space.nuvio.webos.plugin.service";
+export const WEBOS_PLUGIN_SERVICE_ID = "app.starlit.webos.plugin.service";
 const RECOVERY_RETRY_DELAY_MS = 100;
 function assertAvailable() {
   if (

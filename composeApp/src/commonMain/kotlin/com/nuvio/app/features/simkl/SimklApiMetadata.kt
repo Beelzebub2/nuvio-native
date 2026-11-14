@@ -40,6 +40,7 @@ internal fun simklRequestHeaders(
 ): Map<String, String> = buildMap {
     put("User-Agent", "${SimklConfig.APP_NAME}/$simklAppVersion")
     put("Accept", "application/json")
+    put("simkl-api-key", SimklConfig.CLIENT_ID)
     accessToken?.trim()?.takeIf(String::isNotBlank)?.let { token ->
         put("Authorization", "Bearer $token")
     }

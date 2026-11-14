@@ -1,6 +1,7 @@
 import { Platform } from "../../platform/index.js";
 import { TizenEngineFsService } from "../../platform/tizen/tizenEngineFsService.js";
 import { TizenCapabilities } from "../../platform/tizen/tizenCapabilities.js";
+import { trustedEngineFsControlHeaders } from "../../platform/tizen/starlitControlBridge.js";
 import {
   TorrentSettingsStore,
   getTorrentProfilePeerLimits
@@ -10,6 +11,7 @@ export {
   Platform,
   TizenEngineFsService,
   TizenCapabilities,
+  trustedEngineFsControlHeaders,
   TIZEN_STREAMING_KIND,
   CREATE_TIMEOUT_MS,
   removeRequestsByInfoHash,
@@ -210,19 +212,32 @@ function withTimeout(promise, timeoutMs, message) {
   });
 }
 function buildPeerSearchSources(infoHash, trackerSources = []) {
+  // The packaged TV engine accepts at most nine sources, including DHT.
+  // Unbounded add-on tracker lists previously made create fail with HTTP 400.
+  const MAX_SOURCES = 9;
   const sources = [`dht:${infoHash}`];
   trackerSources.forEach((source) => {
     const normalized = String(source || "").trim();
-    if (!normalized) {
+    if (!normalized || sources.length >= MAX_SOURCES || normalized.startsWith("dht:")) {
       return;
     }
-    sources.push(
+    const entry =
       normalized.startsWith("tracker:") || normalized.startsWith("dht:")
         ? normalized
-        : `tracker:${normalized}`
-    );
+        : `tracker:${normalized}`;
+    const address = entry.replace(/^tracker:/, "");
+    // Select valid tracker URLs rather than using a malformed early entry
+    // that would make the entire create request fail inside the TV service.
+    if (address.length > 2048) return;
+    try {
+      const url = new URL(address);
+      if (!["http:", "https:", "udp:"].includes(url.protocol) || !url.hostname || url.username || url.password) return;
+    } catch (_) {
+      return;
+    }
+    if (!sources.includes(entry)) sources.push(entry);
   });
-  return sources.filter((source, index, all) => all.indexOf(source) === index);
+  return sources;
 }
 function buildPlaybackUrl(baseUrl, infoHash, fileIdx, sources = []) {
   const root = String(baseUrl || "").replace(/\/+$/, "");
@@ -309,14 +324,19 @@ async function createTorrent(
   const response = await withTimeout(
     fetch(`${baseUrl}/${encodeURIComponent(infoHash)}/create`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: trustedEngineFsControlHeaders(baseUrl, { "content-type": "application/json" }),
       body: JSON.stringify(body)
     }),
     CREATE_TIMEOUT_MS,
     "Tizen streaming server create request timed out"
   );
   if (!response.ok) {
-    throw new Error(`Tizen streaming server create failed with HTTP ${response.status}`);
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = String(body?.error || "").slice(0, 160);
+    } catch (_) {}
+    throw new Error(`Tizen streaming server create failed with HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
   }
   return response.json();
 }

@@ -40,3 +40,7 @@ scheduled auto-updates; developer-sideloaded WGTs use Apps2Samsung/TV-Store
 or the optional checksum-verifying PC updater described in
 [installation and updates](docs/INSTALL.md). A sideloaded app cannot
 silently self-install without the Tizen platform privilege.
+
+## LG webOS developer build
+
+Starlit also targets LG webOS 5+ with an isolated `app.starlit.webos` IPK. See the [LG build and installation guide](docs/WEBOS.md) and [Starlit TV Installer](../tv-installer/README.md). The webOS package remains **NOT DEVICE-VERIFIED** and will not be published as a stable release without physical-TV acceptance.

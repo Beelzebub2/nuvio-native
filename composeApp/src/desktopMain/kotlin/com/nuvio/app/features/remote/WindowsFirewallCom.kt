@@ -79,6 +79,10 @@ internal object WindowsFirewallCom {
         listOf(FIREWALL_PUBLIC_ETHERNET_TCP_RULE, FIREWALL_PUBLIC_ETHERNET_UDP_RULE)
             .filterNot(previouslyOwned::contains)
 
+    /** The remote ranges are private routes only; the exact local VPN address is also required. */
+    internal const val PRIVATE_VPN_REMOTE_RANGES =
+        "100.64.0.0/10,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
     const val NET_FW_RULE_DIR_IN = 1
     const val NET_FW_ACTION_BLOCK = 0
     const val NET_FW_ACTION_ALLOW = 1
@@ -175,6 +179,133 @@ internal object WindowsFirewallCom {
                 }
             }
         }
+    }
+
+    private fun vpnOwnership(rules: ComObject, program: String): Map<String, List<Boolean>> {
+        val ownership = mutableMapOf<String, MutableList<Boolean>>()
+        forEachRule(rules) { rule, _ ->
+            val name = runCatching { rule.getString(RULE_NAME, "Name") }.getOrNull()
+            if (name != FIREWALL_PRIVATE_VPN_TCP_RULE) return@forEachRule
+            val ours = runCatching {
+                rule.getInt(RULE_DIRECTION, "Direction") == NET_FW_RULE_DIR_IN &&
+                    rule.getInt(RULE_ACTION, "Action") == NET_FW_ACTION_ALLOW &&
+                    rule.getString(RULE_GROUPING, "Grouping") == FIREWALL_GROUP &&
+                    rule.getString(RULE_APPLICATION, "ApplicationName")
+                        ?.equals(program, ignoreCase = true) == true &&
+                    rule.getInt(RULE_PROTOCOL, "Protocol") == NET_FW_IP_PROTOCOL_TCP &&
+                    rule.getString(RULE_LOCAL_PORTS, "LocalPorts") == FIREWALL_SESSION_PORT.toString()
+            }.getOrDefault(false)
+            ownership.getOrPut(name) { mutableListOf() } += ours
+        }
+        return ownership
+    }
+
+    /** Runs only after a named UAC task and verifies a currently active VPN adapter. */
+    fun allowPrivateVpnRemote(program: String, localVpnAddress: String) {
+        requireDedicatedPublicEthernetLauncher(program)
+        require(strictRemoteIpv4(localVpnAddress)?.let(::isPrivateRemoteVpnAddress) == true)
+        require(WindowsRemoteVpnAccess.interfaces().any { it.address == localVpnAddress }) {
+            "Refusing to create a firewall exception for a non-VPN interface"
+        }
+        WindowsCom.withApartment {
+            WindowsCom.create(CLSID_NET_FW_POLICY2, IID_NET_FW_POLICY2).use { policy ->
+                policy.getObject(POLICY_RULES, "Rules").use { rules ->
+                    requireOwnedRuleNames(vpnOwnership(rules, program))
+                    withPrivateVpnRule(program, localVpnAddress) { rule ->
+                        checkHresult("Rules.Add", rules.call(RULES_ADD, rule.pointer))
+                    }
+                }
+            }
+        }
+    }
+
+    /** Only removes an unambiguously owned rule after VPN access is disabled in-app. */
+    fun removePrivateVpnRemote(program: String) {
+        requireDedicatedPublicEthernetLauncher(program)
+        WindowsCom.withApartment {
+            WindowsCom.create(CLSID_NET_FW_POLICY2, IID_NET_FW_POLICY2).use { policy ->
+                policy.getObject(POLICY_RULES, "Rules").use { rules ->
+                    val ownership = vpnOwnership(rules, program)
+                    requireOwnedRuleNames(ownership)
+                    if (ownership.containsKey(FIREWALL_PRIVATE_VPN_TCP_RULE)) {
+                        WindowsCom.withBstr(FIREWALL_PRIVATE_VPN_TCP_RULE) {
+                            checkHresult("Rules.Remove", rules.call(RULES_REMOVE, it))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Read-only check for the rule's exact executable/port/local address and remote ranges. */
+    fun privateVpnRuleConfigured(program: String, localVpnAddress: String): Boolean =
+        runCatching {
+            WindowsCom.withApartment {
+                WindowsCom.create(CLSID_NET_FW_POLICY2, IID_NET_FW_POLICY2).use { policy ->
+                    policy.getObject(POLICY_RULES, "Rules").use { rules ->
+                        var count = 0
+                        var valid = false
+                        forEachRule(rules) { rule, _ ->
+                            if (runCatching { rule.getString(RULE_NAME, "Name") }.getOrNull() !=
+                                FIREWALL_PRIVATE_VPN_TCP_RULE) return@forEachRule
+                            count++
+                            valid = runCatching {
+                                rule.getBoolean(RULE_ENABLED, "Enabled") &&
+                                    rule.getString(RULE_GROUPING, "Grouping") == FIREWALL_GROUP &&
+                                    rule.getString(RULE_APPLICATION, "ApplicationName")
+                                        ?.equals(program, ignoreCase = true) == true &&
+                                    rule.getInt(RULE_DIRECTION, "Direction") == NET_FW_RULE_DIR_IN &&
+                                    rule.getInt(RULE_ACTION, "Action") == NET_FW_ACTION_ALLOW &&
+                                    rule.getInt(RULE_PROTOCOL, "Protocol") == NET_FW_IP_PROTOCOL_TCP &&
+                                    rule.getString(RULE_LOCAL_PORTS, "LocalPorts") == FIREWALL_SESSION_PORT.toString() &&
+                                    vpnFirewallLocalAddressMatches(
+                                        rule.getString(RULE_LOCAL_ADDRESSES, "LocalAddresses"), localVpnAddress,
+                                    ) &&
+                                    vpnFirewallRemoteAddressesMatch(
+                                        rule.getString(RULE_REMOTE_ADDRESSES, "RemoteAddresses"),
+                                    )
+                            }.getOrDefault(false)
+                        }
+                        count == 1 && valid
+                    }
+                }
+            }
+        }.getOrDefault(false)
+
+    /** Testable COM rule builder; never shares the LAN/public-Ethernet exception. */
+    internal fun <T> withPrivateVpnRule(
+        program: String, localVpnAddress: String, block: (ComObject) -> T,
+    ): T = WindowsCom.create(CLSID_NET_FW_RULE, IID_NET_FW_RULE).use { rule ->
+        rule.putString(RULE_NAME + 1, "Name", FIREWALL_PRIVATE_VPN_TCP_RULE)
+        rule.putString(RULE_DESCRIPTION + 1, "Description", "Allows encrypted phone control over an approved private VPN adapter.")
+        rule.putString(RULE_APPLICATION + 1, "ApplicationName", program)
+        rule.putInt(RULE_PROTOCOL + 1, "Protocol", NET_FW_IP_PROTOCOL_TCP)
+        rule.putString(RULE_LOCAL_PORTS + 1, "LocalPorts", FIREWALL_SESSION_PORT.toString())
+        rule.putString(RULE_LOCAL_ADDRESSES + 1, "LocalAddresses", localVpnAddress)
+        rule.putString(RULE_REMOTE_ADDRESSES + 1, "RemoteAddresses", PRIVATE_VPN_REMOTE_RANGES)
+        rule.putInt(RULE_DIRECTION + 1, "Direction", NET_FW_RULE_DIR_IN)
+        rule.putString(RULE_GROUPING + 1, "Grouping", FIREWALL_GROUP)
+        rule.putInt(RULE_PROFILES + 1, "Profiles", NET_FW_PROFILE2_ALL)
+        rule.putInt(RULE_ACTION + 1, "Action", NET_FW_ACTION_ALLOW)
+        rule.putBoolean(RULE_ENABLED + 1, "Enabled", true)
+        block(rule)
+    }
+
+    /** INetFwRule canonicalizes an individual address into a /32 mask on readback. */
+    internal fun vpnFirewallLocalAddressMatches(actual: String?, approved: String): Boolean =
+        actual == approved || actual == "$approved/255.255.255.255" || actual == "$approved/32"
+
+    /** COM sorts CIDRs and expands prefixes into dotted masks; reject broader rule scopes. */
+    internal fun vpnFirewallRemoteAddressesMatch(actual: String?): Boolean {
+        val ranges = actual?.split(',')?.map(String::trim)?.toSet() ?: return false
+        val intended = PRIVATE_VPN_REMOTE_RANGES.split(',').toSet()
+        val windowsCanonical = setOf(
+            "10.0.0.0/255.0.0.0",
+            "100.64.0.0/255.192.0.0",
+            "172.16.0.0/255.240.0.0",
+            "192.168.0.0/255.255.0.0",
+        )
+        return ranges == intended || ranges == windowsCanonical
     }
 
     /** Builds a rule exactly as [allowPhoneRemote] would, without adding it to the firewall. */

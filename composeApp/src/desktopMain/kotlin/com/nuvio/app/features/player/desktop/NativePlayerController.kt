@@ -68,7 +68,7 @@ internal class NativePlayerController(
     private val onCreateWaitCompleted: () -> Unit = {},
     private val nativeSetRtxCompareOriginal: (Long, Boolean) -> Boolean = NativePlayerBridge::setRtxCompareOriginal,
     private val nativeSetDiscordShareEnabled: (Long, Boolean, Boolean) -> Boolean = NativePlayerBridge::setDiscordShareEnabled,
-    private val nativeSetSurroundUpmixEnabled: (Long, Boolean) -> Boolean = NativePlayerBridge::setSurroundUpmixEnabled,
+    private val nativeSetSurroundUpmixMode: (Long, Int) -> Boolean = NativePlayerBridge::setSurroundUpmixMode,
 ) : PlayerEngineController {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
@@ -104,19 +104,20 @@ internal class NativePlayerController(
     private var discordShareShowWindow: Boolean = false
 
     @Volatile
-    private var surroundUpmixEnabled: Boolean = false
+    private var surroundUpmixMode: Int = 0
     @Volatile
     private var surroundUpmixStatus: Int = 0
 
-    fun setSurroundUpmixEnabled(enabled: Boolean) {
+    fun setSurroundUpmixMode(mode: Int) {
         if (DesktopHostOs.current != DesktopHostOs.WINDOWS) return
-        surroundUpmixEnabled = enabled
+        val selectedMode = mode.coerceIn(0, 3)
+        surroundUpmixMode = selectedMode
         val current = synchronized(lifecycleLock) { handle }
         if (current != 0L) {
-            val accepted = runCatching { nativeSetSurroundUpmixEnabled(current, enabled) }
+            val accepted = runCatching { nativeSetSurroundUpmixMode(current, selectedMode) }
                 .onFailure { log.w(it) { "Surround upmix request failed" } }
                 .getOrDefault(false)
-            if (!accepted && enabled) surroundUpmixStatus = -1
+            if (!accepted && selectedMode != 0) surroundUpmixStatus = -1
         }
         val refreshControls = {
             lastSentControlsStructureKey = null
@@ -408,9 +409,9 @@ internal class NativePlayerController(
                         if (!accepted) DiscordShareModeSettings.markUnavailable()
                     }
                     surroundUpmixStatus = 0
-                    if (surroundUpmixEnabled && DesktopHostOs.current == DesktopHostOs.WINDOWS) {
+                    if (surroundUpmixMode != 0 && DesktopHostOs.current == DesktopHostOs.WINDOWS) {
                         val accepted = runCatching {
-                            nativeSetSurroundUpmixEnabled(created, true)
+                            nativeSetSurroundUpmixMode(created, surroundUpmixMode)
                         }.onFailure { log.w(it) { "Surround upmix startup failed" } }
                             .getOrDefault(false)
                         if (!accepted) surroundUpmixStatus = -1
@@ -539,6 +540,11 @@ internal class NativePlayerController(
         val showDiscordShare = DiscordShareModeSettings.isSupported
         val isDiscordShareEnabled = showDiscordShare && DiscordShareModeSettings.enabled.value
         val showSurroundUpmix = DesktopHostOs.current == DesktopHostOs.WINDOWS
+        val surroundUpmixEnabled = surroundUpmixMode != 0
+        val displayedSurroundMode =
+            if (surroundUpmixMode == 0) SurroundUpmixSettings.preferredMode else surroundUpmixMode
+        val surroundUpmixLabel = if (displayedSurroundMode == 2) "7.1" else "5.1"
+        val surroundUpmixHeadsetMode = displayedSurroundMode == 2 || displayedSurroundMode == 3
         val structureKey = NativeControlsStructureKey(
             state = stateWithVolume.nativeControlsStructureKey(),
             isFullscreen = isFullscreen,
@@ -548,6 +554,8 @@ internal class NativePlayerController(
             rtxComparisonFailed = rtxComparisonFailed,
             discordShareEnabled = isDiscordShareEnabled,
             surroundUpmixEnabled = surroundUpmixEnabled,
+            surroundUpmixLabel = surroundUpmixLabel,
+            surroundUpmixHeadsetMode = surroundUpmixHeadsetMode,
             surroundUpmixStatus = surroundUpmixStatus,
         )
         if (structureKey == lastSentControlsStructureKey) return
@@ -569,6 +577,8 @@ internal class NativePlayerController(
                 discordShareEnabled = isDiscordShareEnabled,
                 showSurroundUpmix = showSurroundUpmix,
                 surroundUpmixEnabled = surroundUpmixEnabled,
+                surroundUpmixLabel = surroundUpmixLabel,
+                surroundUpmixHeadsetMode = surroundUpmixHeadsetMode,
                 surroundUpmixStatus = surroundUpmixStatus,
             ),
         )
@@ -646,8 +656,8 @@ internal class NativePlayerController(
             "setSurroundUpmixEnabled" -> {
                 if (DesktopHostOs.current == DesktopHostOs.WINDOWS) {
                     val enabled = value >= 0.5
-                    SurroundUpmixSettings.setEnabled(enabled)
-                    setSurroundUpmixEnabled(enabled)
+                    SurroundUpmixSettings.setPlayerEnabled(enabled)
+                    setSurroundUpmixMode(SurroundUpmixSettings.activeMode)
                 }
             }
             "surroundUpmixStatus" -> {
@@ -863,6 +873,8 @@ internal class NativePlayerController(
         return runCatching {
             val isLoading = NativePlayerBridge.isLoading(current)
             val isEnded = NativePlayerBridge.isEnded(current)
+            // Older bundled native bridges do not expose dimensions yet.
+            val packedDimensions = runCatching { NativePlayerBridge.videoDimensions(current) }.getOrDefault(0L)
             PlayerPlaybackSnapshot(
                 isLoading = isLoading,
                 isPlaying = !NativePlayerBridge.isPaused(current) && !isLoading && !isEnded,
@@ -870,6 +882,8 @@ internal class NativePlayerController(
                 durationMs = NativePlayerBridge.durationMs(current),
                 positionMs = NativePlayerBridge.positionMs(current),
                 bufferedPositionMs = NativePlayerBridge.bufferedPositionMs(current),
+                videoWidth = (packedDimensions ushr 32).toInt().coerceAtLeast(0),
+                videoHeight = packedDimensions.toInt().coerceAtLeast(0),
                 playbackSpeed = NativePlayerBridge.speed(current),
             )
         }.getOrDefault(PlayerPlaybackSnapshot(isLoading = true))
@@ -1464,19 +1478,23 @@ private data class NativeControlsStructureKey(
     val rtxComparisonFailed: Boolean,
     val discordShareEnabled: Boolean,
     val surroundUpmixEnabled: Boolean,
+    val surroundUpmixLabel: String,
+    val surroundUpmixHeadsetMode: Boolean,
     val surroundUpmixStatus: Int,
 )
 
-private fun PlayerControlsState.toControlsJson(
-    isFullscreen: Boolean,
-    rtxComparisonAvailable: Boolean,
-    rtxShowingOriginal: Boolean,
-    rtxComparisonFailed: Boolean,
-    showDiscordShare: Boolean,
-    discordShareEnabled: Boolean,
-    showSurroundUpmix: Boolean,
-    surroundUpmixEnabled: Boolean,
-    surroundUpmixStatus: Int,
+internal fun PlayerControlsState.toControlsJson(
+    isFullscreen: Boolean = false,
+    rtxComparisonAvailable: Boolean = false,
+    rtxShowingOriginal: Boolean = false,
+    rtxComparisonFailed: Boolean = false,
+    showDiscordShare: Boolean = false,
+    discordShareEnabled: Boolean = false,
+    showSurroundUpmix: Boolean = false,
+    surroundUpmixEnabled: Boolean = false,
+    surroundUpmixLabel: String = "",
+    surroundUpmixHeadsetMode: Boolean = false,
+    surroundUpmixStatus: Int = 0,
 ): String =
     buildString {
         append('{')
@@ -1517,6 +1535,8 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("rtxShowingOriginal", rtxShowingOriginal)
         append(',')
         appendJsonField("rtxComparisonFailed", rtxComparisonFailed)
+        append(',')
+        appendJsonField("rtxSuperResolutionActive", rtxComparisonAvailable && !rtxShowingOriginal && !rtxComparisonFailed)
         append(',')
         appendJsonField("volumeLevel", volumeLevel)
         append(',')
@@ -1765,6 +1785,22 @@ private fun PlayerControlsState.toControlsJson(
         append(',')
         appendJsonField("skipPromptEndMs", skipPromptEndMs)
         append(',')
+        appendJsonField("bufferedPositionMs", bufferedPositionMs.coerceAtLeast(0L))
+        append(',')
+        appendJsonField("videoWidth", videoWidth.coerceAtLeast(0))
+        append(',')
+        appendJsonField("videoHeight", videoHeight.coerceAtLeast(0))
+        append(',')
+        appendJsonArrayField("skipSegments", skipSegments) { segment ->
+            append('{')
+            appendJsonField("type", segment.type)
+            append(',')
+            appendJsonField("startMs", segment.startMs)
+            append(',')
+            appendJsonField("endMs", segment.endMs)
+            append('}')
+        }
+        append(',')
         appendJsonField("skipPromptDismissed", skipPromptDismissed)
         append(',')
         appendJsonField("nextEpisodeVisible", nextEpisodeVisible)
@@ -1800,6 +1836,10 @@ private fun PlayerControlsState.toControlsJson(
         appendJsonField("showSurroundUpmix", showSurroundUpmix)
         append(',')
         appendJsonField("surroundUpmixEnabled", surroundUpmixEnabled)
+        append(',')
+        appendJsonField("surroundUpmixLabel", surroundUpmixLabel)
+        append(',')
+        appendJsonField("surroundUpmixHeadsetMode", surroundUpmixHeadsetMode)
         append(',')
         appendJsonField("surroundUpmixStatus", surroundUpmixStatus)
         append(',')
@@ -1907,6 +1947,9 @@ private fun PlayerControlsState.nativeControlsStructureKey(): PlayerControlsStat
         isLoading = false,
         durationMs = 0L,
         positionMs = 0L,
+        // Every key change re-sends the whole controls JSON (and re-renders open panels),
+        // so the buffered range only needs coarse steps; 10 s is a few pixels on the seek bar.
+        bufferedPositionMs = (bufferedPositionMs / 10_000L) * 10_000L,
     )
 
 private fun StringBuilder.appendJsonField(name: String, value: String) {

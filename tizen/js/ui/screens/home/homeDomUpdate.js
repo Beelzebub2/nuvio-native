@@ -9,9 +9,12 @@ export function hasMountedHomeDom(container) {
   return Boolean(shell && shell === container.querySelector(".home-shell"));
 }
 function children(node) {
-  return Array.from(node.childNodes).filter(
-    (child) => child.nodeType !== 3 || child.textContent.trim()
-  );
+  // Avoid allocating and filtering childNodes for every mounted poster.
+  const result = [];
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    if (child.nodeType !== 3 || child.textContent.trim()) result.push(child);
+  }
+  return result;
 }
 function key(node) {
   if (node.nodeType !== 1) return `node:${node.nodeType}`;
@@ -45,7 +48,8 @@ function snapshot(source) {
 function remember(node, source) {
   sourceByNode.set(node, snapshot(source));
   const liveChildren = children(node);
-  children(source).forEach((child, index) => remember(liveChildren[index], child));
+  const sourceChildren = source === node ? liveChildren : children(source);
+  sourceChildren.forEach((child, index) => remember(liveChildren[index], child));
 }
 export function registerHomeDomNodes(nodes) {
   nodes.forEach((node) => remember(node, node));

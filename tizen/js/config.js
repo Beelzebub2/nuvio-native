@@ -30,7 +30,7 @@ export const UNIQUE_CONTRIBUTIONS_BASE_URL = String(
 export const SUPPORTERS_API_BASE_URL = String(
   runtimeEnv.SUPPORTERS_API_BASE_URL || ""
 ).trim();
-export const SUPPORT_URL = String(runtimeEnv.SUPPORT_URL || "https://github.com/Beelzebub2/nuvio-native/issues").trim();
+export const SUPPORT_URL = String(runtimeEnv.SUPPORT_URL || "https://github.com/Beelzebub2/starlit/issues").trim();
 export const SPONSOR_NAMES = String(runtimeEnv.SPONSOR_NAMES || "").trim() || "";
 export const TMDB_API_KEY = String(runtimeEnv.TMDB_API_KEY || "").trim();
 export const TRAKT_CLIENT_ID = String(runtimeEnv.TRAKT_CLIENT_ID || "").trim();
