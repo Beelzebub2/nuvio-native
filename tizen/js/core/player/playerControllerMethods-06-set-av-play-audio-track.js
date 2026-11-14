@@ -8,7 +8,7 @@ export function createPlayerControllerMethods06() {
     normalizeAvPlaySubtitleRenderMode
   } = internals;
   return {
-    setAvPlayAudioTrack(trackIndex) {
+    setAvPlayAudioTrack(trackIndex, { automatic = false } = {}) {
       if (!this.isUsingAvPlay()) {
         return false;
       }
@@ -23,6 +23,9 @@ export function createPlayerControllerMethods06() {
       const avplay = this.getAvPlay();
       if (!avplay || typeof avplay.setSelectTrack !== "function") {
         return false;
+      }
+      if (!automatic) {
+        this.avplayAudioSelectionExplicit = true;
       }
       const selectionToken = this.playRequestToken;
       this.desiredAvPlayAudioTrackIndex = targetIndex;
