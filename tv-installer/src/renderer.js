@@ -149,7 +149,7 @@ function useDiscoveredTv(tv) {
   const platform = tv.platform;
   const previousIp = state[platform].ip;
   if (platform === "webos" && previousIp !== tv.ip) {
-    state.webos.name = "starlit-lg-" + tv.ip.split(".").pop();
+    state.webos.name = tv.savedDeviceName || ("starlit-lg-" + tv.ip.split(".").pop());
   }
   state[platform].ip = tv.ip;
   connectedPlatform = "";
