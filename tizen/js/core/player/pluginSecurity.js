@@ -108,7 +108,7 @@ export function validateLegacyCorsPluginUrl(value) {
   const parsed = result.parsed;
   const hostname = String(parsed.hostname || "").toLowerCase().replace(/\.$/, "");
   const forbiddenSuffix = /(?:^|\.)(?:local|localhost|internal|lan|home|arpa|onion|invalid|test)$/;
-  const ipLiteral = /[\[\]:]/.test(hostname) || /^(?:\d+\.){3}\d+$/.test(hostname);
+  const ipLiteral = hostname.includes(":") || hostname.includes("[") || hostname.includes("]") || /^(?:\d+\.){3}\d+$/.test(hostname);
   if (
     parsed.protocol !== "https:" ||
     parsed.username || parsed.password ||
