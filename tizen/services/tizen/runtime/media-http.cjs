@@ -15830,6 +15830,7 @@ var torrentStream = require('torrent-stream'), createCache = require('./bounded-
 var networkPolicy = require('./network-policy.cjs'), net = require('net');
 var MAX_CACHE = 48 * 1024 * 1024, MAX_PIECE = 32 * 1024 * 1024;
 var MAX_FILES = 1024, MAX_PIECES = 65536, MAX_TORRENT_BYTES = 1024 * 1024 * 1024 * 1024;
+var MAX_MEDIA_STREAMS = 4;
 var PROBE = new Buffer('starlit-range-probe-v1');
 function validateTorrent(t) {
   if (!t || !Array.isArray(t.files) || !Array.isArray(t.pieces) || !t.files.length || !t.pieces.length) {
@@ -15858,12 +15859,15 @@ function start(options, callback) {
   var port = options.port === undefined ? 2710 : options.port;
   var active = null, server, sockets = [], stopping = false, generation = 0;
   function json(res, status, data) { if (res.finished) return; var body = JSON.stringify(data); res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' }); res.end(body); }
-  function cancelStream(entry) { if (entry && entry.stream) { var s = entry.stream; entry.stream = null; s.destroy(); } }
+  function cancelStreams(entry) {
+    if (!entry || !entry.streams) return;
+    entry.streams.slice().forEach(function (stream) { stream.destroy(); });
+  }
   function remove(cb) {
     generation++;
     var old = active; active = null;
     if (!old) return process.nextTick(cb || function () {});
-    cancelStream(old); clearTimeout(old.timer);
+    cancelStreams(old); clearTimeout(old.timer);
     if (old.pending) { old.pending.forEach(function (res) { json(res, 409, { error: 'Torrent removed' }); }); old.pending = []; }
     old.engine.destroy(cb || function () {});
   }
@@ -15896,7 +15900,7 @@ function start(options, callback) {
           trackers.push(tracker);
         });
       } catch (err) { return json(res, 400, { error: err.message }); }
-      var entry = { hash: hash, tickets: Object.create(null), pending: [res], ready: false, stream: null, timer: null, engine: null, cache: null };
+      var entry = { hash: hash, tickets: Object.create(null), pending: [res], ready: false, streams: [], timer: null, engine: null, cache: null };
       var cache = createCache(Math.min(options.cacheBytes || MAX_CACHE, MAX_CACHE), function (index) { if (entry.engine && entry.engine.invalidate) entry.engine.invalidate(index); });
       entry.cache = cache; active = entry;
       try {
@@ -15936,13 +15940,20 @@ function start(options, callback) {
   function media(req, res, entry, index) {
     var file = entry.engine.files[index];
     if (!file || !file.length) return json(res, 404, { error: 'File unavailable' });
+    // Native players may ask for the header and a distant index at once.
+    // Keep both byte ranges alive, but cap simultaneous requests to protect
+    // the memory-only engine on low-RAM TVs.
+    if (req.method === 'GET' && entry.streams.length >= MAX_MEDIA_STREAMS) return json(res, 429, { error: 'Too many concurrent playback ranges' });
     var extension = /\.([^.]*)$/.exec(file.name), mime = { mp4: 'video/mp4', m4v: 'video/mp4', mkv: 'video/x-matroska', ts: 'video/mp2t', webm: 'video/webm', mov: 'video/quicktime', avi: 'video/x-msvideo' };
     var r = headers(res, req, file.length, mime[extension && extension[1].toLowerCase()] || 'application/octet-stream');
     if (!r) return;
     if (req.method === 'HEAD') return res.end();
-    cancelStream(entry);
     var engine = entry.engine, position = file.offset + r.start, end = file.offset + r.end, waiting = false, selected = -1, dead = false;
-    var stream = new Readable(); entry.stream = stream;
+    var stream = new Readable(); entry.streams.push(stream);
+    function detach() {
+      var index = entry.streams.indexOf(stream);
+      if (index >= 0) entry.streams.splice(index, 1);
+    }
     function deselect() { if (selected >= 0) { engine.deselect(selected, selected, true, notify); selected = -1; } }
     function notify() {
       if (dead || !waiting || selected < 0 || !engine.bitfield.get(selected)) return;
@@ -15964,13 +15975,14 @@ function start(options, callback) {
     };
     stream.destroy = function () {
       if (dead) return; dead = true; deselect();
-      if (entry.stream === stream) entry.stream = null;
+      detach();
       stream.unpipe(res); stream.emit('close'); if (!res.finished) res.destroy();
-      // Discard partial pieces when seeking; late wire callbacks use the old piece identity.
-      if (engine.releasePending) engine.releasePending();
+      // Cancel incomplete pieces only after the last range closes. A seek or
+      // canceled header request must not invalidate another live AVPlay range.
+      if (!entry.streams.length && engine.releasePending) engine.releasePending();
     };
     stream.on('error', function () { stream.destroy(); });
-    res.on('close', stream.destroy); stream.on('end', function () { dead = true; deselect(); if (entry.stream === stream) entry.stream = null; });
+    res.on('close', stream.destroy); stream.on('end', function () { dead = true; deselect(); detach(); });
     stream.pipe(res);
   }
   server = http.createServer(function (req, res) {
@@ -16002,7 +16014,7 @@ function start(options, callback) {
       req.on('end', function () { if (failed) return; try { create(m[1], JSON.parse(Buffer.concat(chunks).toString()), res); } catch (err) { json(res, 400, { error: 'Invalid create request' }); } }); return;
     }
     if (!active || active.hash !== m[1] || !active.ready) return json(res, 404, { error: 'Torrent unavailable' });
-    if (m[2] === 'stats' && req.method === 'GET') { if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' }); return json(res, 200, { infoHash: active.hash, peers: active.engine.swarm.wires.length, downloaded: active.engine.swarm.downloaded, downloadSpeed: active.engine.swarm.downloadSpeed(), cache: active.cache.stats }); }
+    if (m[2] === 'stats' && req.method === 'GET') { if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' }); return json(res, 200, { infoHash: active.hash, peers: active.engine.swarm.wires.length, downloaded: active.engine.swarm.downloaded, downloadSpeed: active.engine.swarm.downloadSpeed(), activeRanges: active.streams.length, cache: active.cache.stats }); }
     if (/^\d+$/.test(m[2]) && (req.method === 'GET' || req.method === 'HEAD')) { var suppliedTicket = url.parse(req.url, true).query.ticket; if (!suppliedTicket || suppliedTicket !== active.tickets[Number(m[2])]) return json(res, 403, { error: 'Playback ticket required' }); return media(req, res, active, Number(m[2])); }
     json(res, 405, { error: 'Method unavailable' });
   });
