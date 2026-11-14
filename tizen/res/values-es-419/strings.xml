@@ -3393,4 +3393,20 @@
     <string name="stream_test_label_parallel16">Conexión paralela (fragmentos de 16 MB)</string>
     <string name="stream_test_error_connection">La conexión falló. Es posible que el enlace de la última transmisión reproducida haya expirado o no esté disponible. Reproduce el video nuevamente e inténtalo otra vez.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Administrar desde el celular</string>
+    <string name="tv_phone_scan_instruction">Escanea el código QR para administrar complementos y plugins.</string>
+    <string name="tv_phone_pairing_code">Código: {{code}}</string>
+    <string name="tv_phone_preparing">Conectando…</string>
+    <string name="tv_phone_waiting">Esperando el celular</string>
+    <string name="tv_phone_approval_required">Aprueba el celular en este televisor.</string>
+    <string name="tv_phone_verify_title">¿Aprobar celular?</string>
+    <string name="tv_phone_verify_code">Verifica este código en tu celular:</string>
+    <string name="tv_phone_approve">Aprobar</string>
+    <string name="tv_phone_connected">Celular conectado</string>
+    <string name="tv_phone_connected_hint">Administra complementos y plugins desde tu celular.</string>
+    <string name="tv_phone_change_applied">Cambio aplicado.</string>
+    <string name="tv_phone_action_failed">No se pudo aplicar el cambio.</string>
+    <string name="tv_phone_unavailable">Conexión no disponible</string>
+    <string name="tv_phone_disconnect">Desconectar</string>
+    <string name="tv_phone_connection_error">Revisa la conexión e inténtalo de nuevo.</string>
 </resources>

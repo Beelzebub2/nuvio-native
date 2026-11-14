@@ -232,6 +232,11 @@ export const PluginsScreen = {
                       <h2>${escapeHtml(t("plugin_add_repository", {}, "Add repository"))}</h2>
                     </div>
                   </div>
+                  ${button({
+                    focusKey: "phone:open",
+                    action: "phone:open",
+                    label: t("tv_phone_manage_title", {}, "Manage with phone")
+                  })}
                   <div class="plugins-add-row">
                     <input class="plugins-repository-input plugins-focusable focusable"
                            data-focus-key="add:input"
@@ -442,6 +447,10 @@ export const PluginsScreen = {
     }
     if (action === "add-repository") {
       await this.addRepository();
+      return;
+    }
+    if (action === "phone:open") {
+      await Router.navigate("tvPhoneSetup");
       return;
     }
     // Scraper IDs intentionally use `repositoryId:manifestId`, so preserve

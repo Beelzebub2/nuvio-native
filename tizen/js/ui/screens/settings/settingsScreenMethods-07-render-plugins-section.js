@@ -53,6 +53,9 @@ export function createSettingsScreenMethods07() {
       this.actionMap.set("contentDiscovery:addons", async () => {
         await Router.navigate("plugin");
       });
+      this.actionMap.set("contentDiscovery:phone", async () => {
+        await Router.navigate("tvPhoneSetup");
+      });
       if (arePluginsSupported()) {
         this.actionMap.set("contentDiscovery:plugins", async () => {
           await Router.navigate("plugins");
@@ -68,6 +71,12 @@ export function createSettingsScreenMethods07() {
                 title: t("addon_title", {}, "Addons"),
                 subtitle: t("settings.contentDiscovery.addonsSubtitle", {}, "Manage add-ons, catalog order, and collections"),
                 leadingIcon: "grid_view"
+              })}
+              ${this.renderActionRow({
+                focusKey: "contentDiscovery:phone",
+                title: t("tv_phone_manage_title", {}, "Manage with phone"),
+                subtitle: t("tv_phone_scan_instruction", {}, "Scan the QR code with your phone to manage add-ons and plugins."),
+                leadingIcon: "qr_code"
               })}
               ${
                 ExperienceModeStore.isEssential() || !arePluginsSupported()

@@ -3390,4 +3390,20 @@
     <string name="stream_test_label_parallel16">Connexion parallèle (blocs de 16 Mo)</string>
     <string name="stream_test_error_connection">Échec de la connexion. Le lien du dernier flux lu a peut-être expiré ou est injoignable. Veuillez relancer la lecture de la vidéo, puis réessayer.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Gérer avec le téléphone</string>
+    <string name="tv_phone_scan_instruction">Scannez le code QR pour gérer les modules et les plugins.</string>
+    <string name="tv_phone_pairing_code">Code : {{code}}</string>
+    <string name="tv_phone_preparing">Connexion…</string>
+    <string name="tv_phone_waiting">En attente du téléphone</string>
+    <string name="tv_phone_approval_required">Autorisez le téléphone sur ce téléviseur.</string>
+    <string name="tv_phone_verify_title">Autoriser le téléphone ?</string>
+    <string name="tv_phone_verify_code">Vérifiez ce code sur votre téléphone :</string>
+    <string name="tv_phone_approve">Autoriser</string>
+    <string name="tv_phone_connected">Téléphone connecté</string>
+    <string name="tv_phone_connected_hint">Gérez les modules et les plugins sur votre téléphone.</string>
+    <string name="tv_phone_change_applied">Modification appliquée.</string>
+    <string name="tv_phone_action_failed">Impossible d'appliquer la modification.</string>
+    <string name="tv_phone_unavailable">Connexion indisponible</string>
+    <string name="tv_phone_disconnect">Déconnecter</string>
+    <string name="tv_phone_connection_error">Vérifiez la connexion et réessayez.</string>
 </resources>

@@ -3454,4 +3454,20 @@
     <string name="player_chapter_intro">Intro</string>
     <string name="player_chapter_recap">Recap</string>
     <string name="player_chapter_credits">Credits</string>
+    <string name="tv_phone_manage_title">Manage with phone</string>
+    <string name="tv_phone_scan_instruction">Scan the QR code to manage add-ons and plugins.</string>
+    <string name="tv_phone_pairing_code">Code: {{code}}</string>
+    <string name="tv_phone_preparing">Connecting…</string>
+    <string name="tv_phone_waiting">Waiting for phone</string>
+    <string name="tv_phone_approval_required">Approve the phone on this TV.</string>
+    <string name="tv_phone_verify_title">Approve phone?</string>
+    <string name="tv_phone_verify_code">Match this code on your phone:</string>
+    <string name="tv_phone_approve">Approve</string>
+    <string name="tv_phone_connected">Phone connected</string>
+    <string name="tv_phone_connected_hint">Manage add-ons and plugins on your phone.</string>
+    <string name="tv_phone_change_applied">Change applied.</string>
+    <string name="tv_phone_action_failed">Could not apply change.</string>
+    <string name="tv_phone_unavailable">Connection unavailable</string>
+    <string name="tv_phone_disconnect">Disconnect</string>
+    <string name="tv_phone_connection_error">Check the connection and try again.</string>
 </resources>

@@ -3402,4 +3402,20 @@ Utilizas esta función bajo tu entera responsabilidad. P2P se puede desactivar e
     <string name="stream_test_label_parallel16">Conexión en paralelo (fragmentos de 16 MB)</string>
     <string name="stream_test_error_connection">Error de conexión. Es posible que el enlace de la última transmisión reproducida haya caducado o no sea accesible. Reproduce el vídeo de nuevo e inténtalo otra vez.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Gestionar desde el móvil</string>
+    <string name="tv_phone_scan_instruction">Escanea el código QR para gestionar complementos y plugins.</string>
+    <string name="tv_phone_pairing_code">Código: {{code}}</string>
+    <string name="tv_phone_preparing">Conectando…</string>
+    <string name="tv_phone_waiting">Esperando al móvil</string>
+    <string name="tv_phone_approval_required">Aprueba el móvil en este televisor.</string>
+    <string name="tv_phone_verify_title">¿Aprobar móvil?</string>
+    <string name="tv_phone_verify_code">Comprueba este código en tu móvil:</string>
+    <string name="tv_phone_approve">Aprobar</string>
+    <string name="tv_phone_connected">Móvil conectado</string>
+    <string name="tv_phone_connected_hint">Gestiona complementos y plugins desde tu móvil.</string>
+    <string name="tv_phone_change_applied">Cambio aplicado.</string>
+    <string name="tv_phone_action_failed">No se pudo aplicar el cambio.</string>
+    <string name="tv_phone_unavailable">Conexión no disponible</string>
+    <string name="tv_phone_disconnect">Desconectar</string>
+    <string name="tv_phone_connection_error">Comprueba la conexión e inténtalo de nuevo.</string>
 </resources>

@@ -1,0 +1,227 @@
+import { Router } from "../../navigation/routerState.js";
+import { ScreenUtils } from "../../navigation/screen.js";
+import { I18n } from "../../../i18n/index.js";
+import { QrCodeGenerator } from "../../../core/qr/qrCodeGenerator.js";
+import { ProfileManager } from "../../../core/profile/profileManager.js";
+import { PluginManager } from "../../../core/player/pluginManager.js";
+import { createTvSetupRelayClient, TV_SETUP_URL } from "../../../core/phoneSetup/tvSetupRelayClient.js";
+import { createTvSetupExecutor } from "../../../core/phoneSetup/tvSetupActions.js";
+
+const tr = (key, fallback, params = {}) => I18n.t(key, params, { fallback });
+const escape = (value) => String(value ?? "").replace(/[&<>"']/g,
+  char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[char]);
+const connectionError = () => tr("tv_phone_connection_error", "Could not connect. Check your TV's internet connection and try again.");
+
+export const TvPhoneSetupScreen = {
+  async mount() {
+    this.container = document.getElementById("tvPhoneSetup");
+    this.profile = String(ProfileManager.getActiveProfileId());
+    this.executor = createTvSetupExecutor(this.profile);
+    this.client = createTvSetupRelayClient();
+    this.generation = (this.generation || 0) + 1;
+    this.phase = "starting";
+    this.qr = null;
+    this.verification = "";
+    this.lastAction = "";
+    this.error = "";
+    this.pendingAck = null;
+    this.networkFailures = 0;
+    this.polling = false;
+    this.lastCommandId = 0;
+    ScreenUtils.show(this.container);
+    this.onClickBound = (event) => {
+      const action = event.target?.closest?.("[data-phone-action]")?.dataset.phoneAction;
+      if (action === "approve") void this.approve();
+      else if (action === "retry") void this.restart();
+      else if (action === "back") void Router.back();
+    };
+    this.container.addEventListener("click", this.onClickBound);
+    this.render();
+    await this.start(this.generation);
+  },
+  active(generation) {
+    return this.generation === generation && Router.getCurrent() === "tvPhoneSetup" &&
+      String(ProfileManager.getActiveProfileId()) === this.profile;
+  },
+  async start(generation) {
+    try {
+      this.qr = await this.client.start("Starlit TV", this.profile);
+      if (!this.active(generation)) return;
+      this.phase = "waiting";
+      this.render();
+      // Runtime self-test happens after the QR becomes visible, never during
+      // the first render or while navigating.
+      void PluginManager.getRuntimeStatus({ probe: true }).catch(() => {});
+      this.timer = setTimeout(() => this.poll(generation), 1600);
+    } catch (_) {
+      if (!this.active(generation)) return;
+      this.phase = "error";
+      this.error = connectionError();
+      this.render();
+    }
+  },
+  async restart() {
+    this.generation++;
+    clearTimeout(this.timer);
+    try { await this.client.stop(); } catch (_) { this.client.forget(); }
+    this.client = createTvSetupRelayClient();
+    this.executor = createTvSetupExecutor(this.profile);
+    this.phase = "starting";
+    this.qr = null;
+    this.verification = "";
+    this.lastCommandId = 0;
+    this.lastAction = "";
+    this.pendingAck = null;
+    this.networkFailures = 0;
+    const generation = this.generation;
+    this.render();
+    await this.start(generation);
+  },
+  async approve() {
+    if (this.phase !== "approve") return;
+    const generation = this.generation;
+    this.phase = "approving";
+    this.render();
+    try {
+      await this.client.approve(true);
+      if (!this.active(generation)) return;
+      this.phase = "connected";
+      await this.client.state(this.executor.state());
+      this.render();
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.poll(generation), 1100);
+    } catch (_) {
+      if (!this.active(generation)) return;
+      this.phase = "error";
+      this.error = connectionError();
+      this.render();
+    }
+  },
+  async poll(generation) {
+    if (!this.active(generation) || this.polling) return;
+    this.polling = true;
+    try {
+      const remote = await this.client.inspect();
+      if (!this.active(generation)) return;
+      if (this.phase === "waiting" && remote.claimed && remote.verification) {
+        this.verification = remote.verification;
+        this.phase = "approve";
+        this.render();
+      }
+      if (this.phase === "connected") {
+        // If the TV applied an install but the acknowledgement was lost to a
+        // transient network problem, retry only its ACK. Never rerun the
+        // installation or erase the result during a reconnect.
+        if (this.pendingAck) {
+          await this.client.ack(this.pendingAck.id, this.pendingAck.result);
+          this.pendingAck = null;
+        }
+        const command = remote.commands?.[0];
+        if (command && command.id !== this.lastCommandId) {
+          this.lastCommandId = command.id;
+          let response;
+          try {
+            response = await this.executor.execute(command);
+            this.lastAction = tr("tv_phone_change_applied", "Change applied from your phone.");
+          } catch (_) {
+            // Never return raw third-party fetch errors, which can embed private
+            // repository addresses or credentials, to the relay.
+            response = null;
+            this.lastAction = tr("tv_phone_action_failed", "Could not apply this change.");
+          }
+          this.pendingAck = {
+            id: command.id,
+            result: {
+              ok: Boolean(response),
+              message: response ? this.lastAction : tr("tv_phone_action_failed", "Could not apply this change."),
+              detail: response?.detail || null
+            }
+          };
+          await this.client.ack(this.pendingAck.id, this.pendingAck.result);
+          this.pendingAck = null;
+          if (!this.active(generation)) return;
+          this.render();
+        }
+        await this.client.state(this.executor.state());
+      }
+      this.networkFailures = 0;
+    } catch (error) {
+      if (this.active(generation)) {
+        this.networkFailures++;
+        if (this.networkFailures >= 5 || /expir|revoke|unauthoriz/i.test(String(error?.message || ""))) {
+          this.phase = "error";
+          this.error = connectionError();
+        } else {
+          this.lastAction = connectionError();
+        }
+        this.render();
+      }
+    } finally {
+      this.polling = false;
+      if (this.active(generation) && !["error", "approving"].includes(this.phase))
+        this.timer = setTimeout(() => this.poll(generation), 1800);
+    }
+  },
+  render() {
+    if (!this.container) return;
+    const qrVisible = Boolean(this.qr) && ["waiting", "approve", "approving"].includes(this.phase);
+    const selectedAction = this.container.querySelector(".focusable.focused")?.dataset.phoneAction || "back";
+    const title = tr("tv_phone_manage_title", "Manage with phone");
+    this.container.innerHTML = `
+      <main class="tv-phone-screen">
+        <header class="tv-phone-heading">
+          <span class="tv-phone-eyebrow">STARLIT TV</span>
+          <h1>${escape(title)}</h1>
+          <p>${escape(tr("tv_phone_scan_instruction", "Scan the QR code with your phone to manage add-ons and plugins."))}</p>
+        </header>
+        <div class="tv-phone-layout">
+          <section class="tv-phone-qr-card">
+            ${qrVisible ? '<canvas id="tv-phone-qr" role="img"></canvas>' : this.phase === "connected" ? '<div class="tv-phone-paired" aria-hidden="true">✓</div>' : '<div class="tv-phone-qr-wait"></div>'}
+            ${qrVisible ? "<p>starlit.rrmtools.uk/tv/connect</p>" : ""}
+            ${qrVisible ? `<div class="tv-phone-code">${escape(tr("tv_phone_pairing_code", "Code: {{code}}", { code: this.qr.code }))}</div>` : ""}
+            ${this.phase === "connected" ? `<p>${escape(tr("tv_phone_connected", "Phone connected"))}</p>` : ""}
+          </section>
+          <section class="tv-phone-status-card">
+            ${this.phase === "starting" ? `<h2>${escape(tr("tv_phone_preparing", "Preparing a secure connection…"))}</h2>` : ""}
+            ${this.phase === "waiting" ? `<h2>${escape(tr("tv_phone_waiting", "Waiting for your phone"))}</h2><p>${escape(tr("tv_phone_approval_required", "Approve on the TV before the phone can make changes."))}</p>` : ""}
+            ${this.phase === "approve" || this.phase === "approving" ? `<h2>${escape(tr("tv_phone_verify_title", "Approve this phone?"))}</h2><p>${escape(tr("tv_phone_verify_code", "Only approve if your phone shows the same code:"))}</p><strong class="tv-phone-verify">${escape(this.verification)}</strong><button class="focusable tv-phone-primary" data-phone-action="approve" ${this.phase === "approving" ? "disabled" : ""}>${escape(tr("tv_phone_approve", "Approve connection"))}</button>` : ""}
+            ${this.phase === "connected" ? `<h2>${escape(tr("tv_phone_connected", "Phone connected"))}</h2><p>${escape(tr("tv_phone_connected_hint", "Manage extensions on your phone. Keep this TV screen open."))}</p>${this.lastAction ? `<p class="tv-phone-last">${escape(this.lastAction)}</p>` : ""}` : ""}
+            ${this.phase === "error" ? `<h2>${escape(tr("tv_phone_unavailable", "Connection unavailable"))}</h2><p>${escape(this.error)}</p><button class="focusable" data-phone-action="retry">${escape(tr("action_retry", "Try again"))}</button>` : ""}
+            <button class="focusable tv-phone-back" data-phone-action="back">${escape(tr("tv_phone_disconnect", "Disconnect and go back"))}</button>
+          </section>
+        </div>
+      </main>`;
+    if (qrVisible) {
+      const canvas = this.container.querySelector("#tv-phone-qr");
+      canvas.setAttribute("aria-label", title);
+      Promise.resolve(QrCodeGenerator.generate(canvas, this.qr.qrUrl, 408)).catch(() => {});
+    }
+    const items = [...this.container.querySelectorAll(".focusable:not([disabled])")];
+    items.forEach((item, index) => { item.dataset.index = String(index); });
+    const focused = items.find(x => x.dataset.phoneAction === selectedAction) || items[0];
+    focused?.classList.add("focused");
+    focused?.focus();
+  },
+  onKeyDown(event) {
+    const key = event?.key || "";
+    const code = Number(event?.keyCode || event?.which || 0);
+    if ([37, 38, 39, 40].includes(code) || ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) {
+      event.preventDefault();
+      ScreenUtils.moveFocus(this.container,
+        code === 37 || code === 38 || key === "ArrowLeft" || key === "ArrowUp" ? -1 : 1);
+    }
+    if (code === 13 || key === "Enter") {
+      event.preventDefault();
+      if (!event.repeat) this.container.querySelector(".focusable.focused")?.click();
+    }
+  },
+  cleanup() {
+    this.generation++;
+    clearTimeout(this.timer);
+    const client = this.client;
+    this.client = null;
+    void client?.stop().catch(() => client.forget());
+    this.container?.removeEventListener("click", this.onClickBound);
+    if (this.container) ScreenUtils.hide(this.container);
+  }
+};

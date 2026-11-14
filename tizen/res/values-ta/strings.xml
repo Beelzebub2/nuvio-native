@@ -3387,4 +3387,20 @@
     <string name="stream_test_label_parallel16">Parallel Connect (16 MB Chunks)</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">தொலைபேசியில் நிர்வகி</string>
+    <string name="tv_phone_scan_instruction">நீட்சிகளையும் செருகுநிரல்களையும் நிர்வகிக்க QR குறியீட்டை ஸ்கேன் செய்க.</string>
+    <string name="tv_phone_pairing_code">குறியீடு: {{code}}</string>
+    <string name="tv_phone_preparing">இணைக்கிறது…</string>
+    <string name="tv_phone_waiting">தொலைபேசிக்காகக் காத்திருக்கிறது</string>
+    <string name="tv_phone_approval_required">இந்த டிவியில் தொலைபேசியை அனுமதிக்கவும்.</string>
+    <string name="tv_phone_verify_title">தொலைபேசியை அனுமதிக்கவா?</string>
+    <string name="tv_phone_verify_code">இந்தக் குறியீட்டைத் தொலைபேசியில் சரிபார்க்கவும்:</string>
+    <string name="tv_phone_approve">அனுமதி</string>
+    <string name="tv_phone_connected">தொலைபேசி இணைக்கப்பட்டது</string>
+    <string name="tv_phone_connected_hint">தொலைபேசியில் நீட்சிகளையும் செருகுநிரல்களையும் நிர்வகிக்கவும்.</string>
+    <string name="tv_phone_change_applied">மாற்றம் செயல்படுத்தப்பட்டது.</string>
+    <string name="tv_phone_action_failed">மாற்றத்தைச் செயல்படுத்த முடியவில்லை.</string>
+    <string name="tv_phone_unavailable">இணைப்பு கிடைக்கவில்லை</string>
+    <string name="tv_phone_disconnect">இணைப்பைத் துண்டி</string>
+    <string name="tv_phone_connection_error">இணைப்பைச் சரிபார்த்து மீண்டும் முயலவும்.</string>
 </resources>

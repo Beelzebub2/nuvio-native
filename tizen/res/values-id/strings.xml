@@ -3387,4 +3387,20 @@
     <string name="stream_test_label_parallel16">Parallel Connect (16 MB Chunks)</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Kelola lewat ponsel</string>
+    <string name="tv_phone_scan_instruction">Pindai kode QR untuk mengelola add-on dan plugin.</string>
+    <string name="tv_phone_pairing_code">Kode: {{code}}</string>
+    <string name="tv_phone_preparing">Menghubungkan…</string>
+    <string name="tv_phone_waiting">Menunggu ponsel</string>
+    <string name="tv_phone_approval_required">Setujui ponsel di TV ini.</string>
+    <string name="tv_phone_verify_title">Setujui ponsel?</string>
+    <string name="tv_phone_verify_code">Cocokkan kode ini di ponsel:</string>
+    <string name="tv_phone_approve">Setujui</string>
+    <string name="tv_phone_connected">Ponsel terhubung</string>
+    <string name="tv_phone_connected_hint">Kelola add-on dan plugin dari ponsel.</string>
+    <string name="tv_phone_change_applied">Perubahan diterapkan.</string>
+    <string name="tv_phone_action_failed">Perubahan gagal diterapkan.</string>
+    <string name="tv_phone_unavailable">Koneksi tidak tersedia</string>
+    <string name="tv_phone_disconnect">Putuskan sambungan</string>
+    <string name="tv_phone_connection_error">Periksa koneksi lalu coba lagi.</string>
 </resources>
