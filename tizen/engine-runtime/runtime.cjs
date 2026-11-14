@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Starlit contributors. SPDX-License-Identifier: MIT
 var http = require('http'), url = require('url'), crypto = require('crypto'), Readable = require('stream').Readable;
 var torrentStream = require('torrent-stream'), createCache = require('./bounded-store.cjs');
+var usbCache = require('./usb-cache.cjs');
 var networkPolicy = require('./network-policy.cjs'), net = require('net');
 var MAX_CACHE = 48 * 1024 * 1024, MAX_PIECE = 32 * 1024 * 1024;
 var MAX_FILES = 1024, MAX_PIECES = 65536, MAX_TORRENT_BYTES = 1024 * 1024 * 1024 * 1024;
@@ -33,6 +34,7 @@ function start(options, callback) {
   if (!/^[a-f0-9]{64}$/.test(options.controlToken || '')) throw new Error('Trusted bridge control token required');
   var port = options.port === undefined ? 2710 : options.port;
   var active = null, server, sockets = [], stopping = false, generation = 0;
+  var usbProfile = null, usbProbing = false;
   function json(res, status, data) { if (res.finished) return; var body = JSON.stringify(data); res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' }); res.end(body); }
   function cancelStreams(entry) {
     if (!entry || !entry.streams) return;
@@ -52,7 +54,7 @@ function start(options, callback) {
     files.forEach(function (f, i) { if (/\.(mkv|mp4|webm|avi|m4v|ts|mov)$/i.test(f.name) && (!/\.(mkv|mp4|webm|avi|m4v|ts|mov)$/i.test(files[guessed].name) || f.length > files[guessed].length)) guessed = i; });
     var selected = typeof requestedIndex === 'number' && files[requestedIndex] ? requestedIndex : guessed;
     if (!entry.tickets[selected]) entry.tickets[selected] = crypto.randomBytes(32).toString('hex');
-    return { infoHash: entry.hash, files: files, guessedFileIdx: guessed, fileIdx: selected, filename: files[selected].name, playbackTicket: entry.tickets[selected], ticketFileIdx: selected, memoryOnly: true };
+    return { infoHash: entry.hash, files: files, guessedFileIdx: guessed, fileIdx: selected, filename: files[selected].name, playbackTicket: entry.tickets[selected], ticketFileIdx: selected, memoryOnly: entry.cache.stats.mode !== 'usb' };
   }
   function create(hash, body, res) {
     if (!body.torrent || body.torrent.infoHash !== hash) return json(res, 400, { error: 'Info hash mismatch' });
@@ -76,7 +78,9 @@ function start(options, callback) {
         });
       } catch (err) { return json(res, 400, { error: err.message }); }
       var entry = { hash: hash, tickets: Object.create(null), pending: [res], ready: false, streams: [], timer: null, engine: null, cache: null };
-      var cache = createCache(Math.min(options.cacheBytes || MAX_CACHE, MAX_CACHE), function (index) { if (entry.engine && entry.engine.invalidate) entry.engine.invalidate(index); });
+      var invalidate = function (index) { if (entry.engine && entry.engine.invalidate) entry.engine.invalidate(index); };
+      var cache = usbProfile ? usbCache.create(usbProfile, invalidate, function () { usbProfile = null; }) :
+        createCache(Math.min(options.cacheBytes || MAX_CACHE, MAX_CACHE), invalidate);
       entry.cache = cache; active = entry;
       try {
         entry.engine = torrentStream('magnet:?xt=urn:btih:' + hash, { storage: cache.factory, memoryOnly: true, validateTorrent: validateTorrent, verify: false, connections: 12, uploads: false, trackers: trackers, dht: options.dht !== false, tracker: trackers.length > 0, validPeer: function (address) { var host = address.split(':')[0]; return options.allowPrivatePeers === true || (net.isIP(host) === 4 && !networkPolicy.blockedAddress(host)); } });
@@ -171,8 +175,51 @@ function start(options, callback) {
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     var pathname = url.parse(req.url).pathname;
     if (options.proxyHandler && options.proxyHandler(req, res)) return;
-    if (pathname === '/settings' && req.method === 'GET') return json(res, 200, { values: { cacheSize: MAX_CACHE }, version: 'starlit-torrent-1', memoryOnly: true, capabilities: { torrent: true, httpRange: true, offline: false }, limits: { files: MAX_FILES, pieces: MAX_PIECES, maxPieceBytes: MAX_PIECE, maxMetadataBytes: 2 * 1024 * 1024, cacheBytes: MAX_CACHE } });
+    if (pathname === '/settings' && req.method === 'GET') return json(res, 200, { values: { cacheSize: usbProfile ? usbProfile.cacheBytes : MAX_CACHE }, version: 'starlit-torrent-1', memoryOnly: !usbProfile, capabilities: { torrent: true, httpRange: true, usbCache: true, offline: false }, limits: { files: MAX_FILES, pieces: MAX_PIECES, maxPieceBytes: MAX_PIECE, maxMetadataBytes: 2 * 1024 * 1024, cacheBytes: MAX_CACHE } });
     if (pathname === '/range-probe' && (req.method === 'GET' || req.method === 'HEAD')) { var probe = headers(res, req, PROBE.length, 'application/octet-stream'); if (probe) res.end(req.method === 'HEAD' ? undefined : PROBE.slice(probe.start, probe.end + 1)); return; }
+    if (pathname === '/cache/status' && req.method === 'GET') {
+      if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
+      return json(res, 200, { configured: Boolean(usbProfile), profile: usbProfile ? usbProfile.profile : 'memory',
+        cacheBytes: usbProfile ? usbProfile.cacheBytes : MAX_CACHE,
+        writeMBps: usbProfile ? usbProfile.writeMBps : 0, readMBps: usbProfile ? usbProfile.readMBps : 0,
+        active: active && active.cache ? active.cache.stats : null });
+    }
+    if (pathname === '/cache/disable' && req.method === 'POST') {
+      if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
+      usbProfile = null;
+      if (active && active.cache && active.cache.disable) active.cache.disable('USB cache disabled or disconnected');
+      return json(res, 200, { configured: false, activeMode: active && active.cache ? active.cache.stats.mode : 'memory' });
+    }
+    if (pathname === '/cache/probe' && req.method === 'POST') {
+      if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
+      if (usbProbing || active) return json(res, 409, { error: 'Cache probe requires an idle torrent service' });
+      var probeChunks = [], probeSize = 0, oversized = false;
+      req.on('data', function (chunk) {
+        probeSize += chunk.length;
+        if (probeSize > 2048) { oversized = true; probeChunks = []; return json(res, 413, { error: 'Cache request too large' }); }
+        if (!oversized) probeChunks.push(chunk);
+      });
+      req.on('end', function () {
+        if (oversized) return;
+        var body;
+        try { body = JSON.parse(Buffer.concat(probeChunks).toString('utf8')); }
+        catch (_) { return json(res, 400, { error: 'Invalid cache probe' }); }
+        if (!body || typeof body.root !== 'string' || body.root.length > 700 ||
+            typeof body.freeBytes !== 'number' || typeof body.totalBytes !== 'number') return json(res, 400, { error: 'Invalid storage details' });
+        usbProbing = true;
+        usbCache.probe(body.root, body.freeBytes, body.totalBytes, function (error, result) {
+          usbProbing = false;
+          if (stopping || res.finished) return;
+          if (error) return json(res, 500, { error: 'Cache probe failed' });
+          usbProfile = result.mode === 'usb' ? result : null;
+          return json(res, 200, { mode: result.mode, reason: result.reason || null,
+            cacheBytes: result.cacheBytes || 0, ramBytes: result.ramBytes || MAX_CACHE,
+            reserveBytes: result.reserveBytes || 0, writeMBps: result.writeMBps || 0,
+            readMBps: result.readMBps || 0, profile: result.profile || 'memory' });
+        });
+      });
+      return;
+    }
     if ((pathname === '/removeAll' || /\/[a-f0-9]{40}\/remove$/.test(pathname)) && req.method === 'POST') {
       if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
       var hash = pathname.split('/')[1];
