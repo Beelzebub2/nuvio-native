@@ -520,7 +520,26 @@ async function buildPluginRuntimeAssets() {
     target: ["chrome" + compatibilityPolicy.chromiumVersion],
     minify: !debugBundle,
     drop: debugBundle ? [] : ["console"],
-    legalComments: "eof"
+    legalComments: "eof",
+    plugins: [{
+      name: "quickjs-asmjs-worker-browser",
+      setup(bundle) {
+        bundle.onLoad({
+          filter: /@jitl[\\/]quickjs-asmjs-mjs-release-sync[\\/]dist[\\/]index\\.mjs$/
+        }, async ({ path: sourcePath }) => {
+          let contents = await readFile(sourcePath, "utf8");
+          // The asm.js variant is universal ESM. Its unreachable Node path
+          // contains top-level await import("module"), incompatible with
+          // classic Chrome 63 workers. Never modify installed dependencies.
+          const nodeImport = 'await import("module")';
+          if (!contents.includes(nodeImport))
+            throw new Error("Unexpected QuickJS asm.js package format");
+          contents = contents.replace(nodeImport, '({createRequire: function(){throw new Error("Node loader unavailable in TV Worker");}})');
+          contents = contents.replaceAll("import.meta.url", '""');
+          return { contents, loader: "js" };
+        });
+      }
+    }]
   });
   await build({
     entryPoints: [path.join(rootDir, "js", "core", "player", "pluginWorker.js")],
