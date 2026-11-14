@@ -3,125 +3,178 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Starlit TV Installer</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="renderer.js"></script>
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <img src="starlit-mark.svg" alt="" class="brand-mark" width="44" height="44">
-      <div><strong>Starlit</strong><span>TV Installer</span></div>
-    </div>
-    <span class="platform-badge">Samsung Tizen &amp; LG webOS</span>
+<body data-platform="webos">
+  <header class="appbar">
+    <img src="starlit-mark.svg" alt="" class="appbar-mark" width="22" height="22">
+    <span class="appbar-title">Starlit TV Installer</span>
+    <span class="appbar-pill">Developer preview</span>
   </header>
-  <main class="shell">
-    <aside class="setup">
-      <div class="intro">
-        <h1>Bring Starlit<br>to your TV.</h1>
-        <p>Connect your Samsung or LG television on your local network and install Starlit in a few steps.</p>
-      </div>
-      <fieldset class="platform-switch">
-        <legend>Choose your television</legend>
-        <label class="platform-option selected" id="platform-lg">
-          <input type="radio" name="platform" value="webos" checked>
-          <strong>LG</strong><span>webOS</span>
-        </label>
-        <label class="platform-option" id="platform-samsung">
-          <input type="radio" name="platform" value="tizen">
-          <strong>Samsung</strong><span>Tizen</span>
-        </label>
-      </fieldset>
-      <div class="guide">
-        <h2 id="guide-title">Before you connect your LG TV</h2>
-        <ol id="lg-steps">
-          <li>Open the <strong>Developer Mode</strong> app on your LG TV.</li>
-          <li>Enable <strong>Dev Mode Status</strong> and <strong>Key Server</strong>.</li>
-          <li>Have the one-time passphrase ready. You can find the TV below or enter its IP manually.</li>
-        </ol>
-        <ol id="samsung-steps" hidden>
-          <li>On the TV's Apps screen, enter <strong>12345</strong> to open Developer Mode.</li>
-          <li>Turn it on and set <strong>Host PC IP</strong> to your computer's LAN address.</li>
-          <li><strong>Restart the TV</strong>, then select it from the scan or enter its IP manually.</li>
-        </ol>
-        <p class="host-ip-note" id="host-ip-note" hidden>Computer LAN addresses: <strong id="host-ips">Checking...</strong></p>
-      </div>
-      <form id="tv-form" class="form-stack">
-        <section class="discovery" aria-labelledby="discovery-heading">
-          <div class="discovery-head">
-            <div>
-              <h3 id="discovery-heading">Find your TV automatically</h3>
-              <p>Search nearby Samsung and LG TVs on the same network. Select one to fill in its address.</p>
+
+  <div class="shell">
+    <main class="flow" id="flow">
+      <ol class="steps">
+        <li class="step is-done" id="step-tv">
+          <span class="step-marker" aria-hidden="true"><span class="step-number">1</span><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>
+          <fieldset class="step-body platform-switch">
+            <legend class="step-title">Choose your TV</legend>
+            <div class="tiles">
+              <label class="tile selected" id="platform-lg">
+                <input type="radio" name="platform" value="webos" checked>
+                <span class="tile-copy"><strong>LG</strong><small>webOS 5 or newer</small></span>
+                <span class="tile-radio" aria-hidden="true"></span>
+              </label>
+              <label class="tile" id="platform-samsung">
+                <input type="radio" name="platform" value="tizen">
+                <span class="tile-copy"><strong>Samsung</strong><small>Tizen 4 or newer</small></span>
+                <span class="tile-radio" aria-hidden="true"></span>
+              </label>
             </div>
-            <button id="btn-discover" type="button" class="secondary primary-outline">Find TVs</button>
+          </fieldset>
+        </li>
+
+        <li class="step" id="step-prepare">
+          <span class="step-marker" aria-hidden="true"><span class="step-number">2</span></span>
+          <div class="step-body">
+            <h2 class="step-title" id="guide-title">Turn on Developer Mode</h2>
+            <ol class="checklist" id="lg-steps">
+              <li>Open the <strong>Developer Mode</strong> app on your LG TV. Install it from the LG Content Store if it is missing.</li>
+              <li>Turn on <strong>Dev Mode Status</strong> and <strong>Key Server</strong>.</li>
+              <li>Keep the app open. You can find the TV below or enter its <strong>IP</strong> and <strong>passphrase</strong> manually.</li>
+            </ol>
+            <ol class="checklist" id="samsung-steps" hidden>
+              <li>On the TV, open <strong>Apps</strong> and enter <strong>12345</strong> with the remote.</li>
+              <li>Turn <strong>Developer mode</strong> on and set <strong>Host PC IP</strong> to this computer's address.</li>
+              <li><strong>Restart the TV</strong>, then select it in the scan or enter its IP address below.</li>
+            </ol>
+            <div class="host-ip" id="host-ip-note" hidden>
+              <span class="host-ip-label">This computer's address. If several are listed, use the one on the same network as the TV.</span>
+              <span class="host-ip-values" id="host-ips">Checking…</span>
+            </div>
           </div>
-          <p id="discovery-status" class="discovery-status" role="status" aria-live="polite">Or enter your TV's address manually below.</p>
-          <div id="discovery-results" class="discovery-results" role="list" hidden></div>
-        </section>
-        <div class="field">
-          <label for="tv-ip">Television IP address (or choose one above)</label>
-          <input id="tv-ip" name="ip" inputmode="decimal" spellcheck="false" autocomplete="off" placeholder="192.168.1.100" required>
+        </li>
+
+        <li class="step" id="step-connect">
+          <span class="step-marker" aria-hidden="true"><span class="step-number">3</span><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>
+          <div class="step-body">
+            <h2 class="step-title" id="connect-title">Pair with your TV</h2>
+            <section class="discovery" aria-labelledby="discovery-heading">
+              <div class="discovery-head">
+                <div>
+                  <h3 id="discovery-heading">Find your TV automatically</h3>
+                  <p>Search for Samsung and LG TVs on your local network. Select one to fill in its address.</p>
+                </div>
+                <button id="btn-discover" type="button" class="button small secondary">Find TVs</button>
+              </div>
+              <p id="discovery-status" class="discovery-status" role="status" aria-live="polite">Or enter your TV's address manually below.</p>
+              <div id="discovery-results" class="discovery-results" role="list" hidden></div>
+            </section>
+            <form id="tv-form" class="fields" novalidate>
+              <div class="field field-ip">
+                <label for="tv-ip">TV IP address</label>
+                <input id="tv-ip" name="ip" inputmode="decimal" spellcheck="false" autocomplete="off" placeholder="192.168.1.100" aria-describedby="tv-ip-error" required>
+                <small class="field-error" id="tv-ip-error" hidden></small>
+              </div>
+              <div class="field" id="device-name-field">
+                <label for="tv-name">Device name</label>
+                <input id="tv-name" name="deviceName" spellcheck="false" autocomplete="off" value="starlit-lg-tv" aria-describedby="tv-name-help" required>
+                <small id="tv-name-help">Keep it the same for every update.</small>
+              </div>
+              <div class="field field-wide" id="lg-passphrase-field">
+                <label for="tv-passphrase">Passphrase</label>
+                <input id="tv-passphrase" name="passphrase" type="password" autocomplete="off" placeholder="Shown in the Developer Mode app" aria-describedby="tv-passphrase-help">
+                <small id="tv-passphrase-help">Needed only to pair or renew the TV's key. It is not saved.</small>
+              </div>
+              <div class="field field-wide" id="samsung-signing-field" hidden>
+                <label for="samsung-signing">Signing certificate</label>
+                <span class="select">
+                  <select id="samsung-signing" name="signing" aria-describedby="samsung-signing-help">
+                    <option value="samsung">Samsung account certificate (recommended)</option>
+                    <option value="tizen-public">Tizen public certificate (no account)</option>
+                  </select>
+                </span>
+                <small id="samsung-signing-help">The first install may open Samsung sign-in in your browser. Use the same certificate for every update.</small>
+              </div>
+            </form>
+            <div class="step-actions">
+              <button type="button" id="btn-pair" class="button secondary">Pair with LG TV</button>
+              <span class="connection" id="connection-status"><span class="connection-dot"></span><span>Not paired yet</span></span>
+            </div>
+          </div>
+        </li>
+
+        <li class="step" id="step-install">
+          <span class="step-marker" aria-hidden="true"><span class="step-number">4</span><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>
+          <div class="step-body">
+            <h2 class="step-title" id="installer-heading">Install Starlit</h2>
+            <p class="step-copy" id="workspace-copy">Installing a newer version updates the existing Starlit app in place.</p>
+            <fieldset class="tiles sources" id="package-sources">
+              <legend class="visually-hidden">Package source</legend>
+              <label class="tile selected" id="source-local-choice">
+                <input name="source" type="radio" value="local" checked>
+                <span class="tile-copy"><strong>File on this PC</strong><small id="local-source-detail">An IPK you built or downloaded</small></span>
+                <span class="tile-radio" aria-hidden="true"></span>
+              </label>
+              <label class="tile" id="source-release-choice">
+                <input name="source" type="radio" value="release">
+                <span class="tile-copy"><strong>Latest release</strong><small>Official and checksum-verified</small></span>
+                <span class="tile-radio" aria-hidden="true"></span>
+              </label>
+            </fieldset>
+            <div class="package" id="local-panel">
+              <span class="package-icon" aria-hidden="true"></span>
+              <span class="package-name" id="selected-file">No IPK chosen</span>
+              <button id="btn-browse" class="button small secondary" type="button">Choose IPK</button>
+            </div>
+            <p class="release-help" id="release-panel" hidden>Starlit uses a release only when it includes the TV package and a matching SHA-256 checksum. If none is available, choose a file instead.</p>
+            <button type="button" class="button primary install-button" id="btn-install">Install or update Starlit</button>
+            <div class="manage">
+              <button id="btn-launch" class="button small secondary" type="button">Launch on TV</button>
+              <button id="btn-uninstall" class="button small danger" type="button">Uninstall</button>
+            </div>
+          </div>
+        </li>
+      </ol>
+      <p class="support-note" id="support-note">LG installation uses the official webOS developer tools. Uninstall always asks first.</p>
+    </main>
+
+    <aside class="stage" id="stage" data-tv="off">
+      <div class="tv" aria-hidden="true">
+        <div class="tv-frame">
+          <div class="tv-screen">
+            <div class="tv-light"><div class="tv-light-spin"></div></div>
+            <img class="tv-mark" src="starlit-mark.svg" alt="" width="72" height="72">
+            <span class="tv-badge"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>
+            <span class="tv-progress"></span>
+          </div>
+          <span class="tv-led"></span>
         </div>
-        <div class="field" id="device-name-field">
-          <label for="tv-name">Saved device name</label>
-          <input id="tv-name" name="deviceName" spellcheck="false" autocomplete="off" value="starlit-lg-tv" required>
-          <small>Keep this name for future updates.</small>
-        </div>
-        <div class="field" id="lg-passphrase-field">
-          <label for="tv-passphrase">Developer Mode passphrase</label>
-          <input id="tv-passphrase" name="passphrase" type="password" autocomplete="off" placeholder="Enter the TV's passphrase">
-          <small>Only needed when pairing or renewing the TV's SSH key.</small>
-        </div>
-        <div class="field" id="samsung-signing-field" hidden>
-          <label for="samsung-signing">Samsung certificate</label>
-          <select id="samsung-signing" name="signing">
-            <option value="samsung">Samsung account certificate (recommended)</option>
-            <option value="tizen-public">Tizen public certificate (no account)</option>
-          </select>
-          <small>First install may open Samsung sign-in in your browser. Use the same certificate for updates.</small>
-        </div>
-        <button type="button" id="btn-pair" class="secondary primary-outline">Pair with LG TV</button>
-      </form>
-      <div id="connection-status" class="connection" role="status"><span class="connection-dot"></span><span>No TV connected in this session</span></div>
-    </aside>
-    <section class="workspace" aria-labelledby="installer-heading">
-      <div class="workspace-header">
-        <span class="screen-label" id="workspace-platform">LG webOS</span>
-        <h2 id="installer-heading">Install Starlit TV</h2>
-        <p id="workspace-copy">Choose the LG package source. Updates install over the existing Starlit app; your other TV apps are unaffected.</p>
+        <div class="tv-stand"></div>
       </div>
-      <fieldset class="sources" id="package-sources">
-        <legend>Installation source</legend>
-        <label class="source-choice selected" id="source-local-choice">
-          <input name="source" type="radio" value="local" checked>
-          <span class="source-copy"><strong id="local-source-title">Local IPK file</strong><small>Best for testing a development build</small></span>
-          <span class="source-selector" aria-hidden="true"></span>
-        </label>
-        <label class="source-choice" id="source-release-choice">
-          <input name="source" type="radio" value="release">
-          <span class="source-copy"><strong>Latest stable release</strong><small>Checksum-verified official Starlit package</small></span>
-          <span class="source-selector" aria-hidden="true"></span>
-        </label>
-      </fieldset>
-      <div class="package-panel" id="local-panel">
-        <div><strong>Selected package</strong><p id="selected-file">No IPK selected</p></div>
-        <button id="btn-browse" class="secondary" type="button">Choose IPK</button>
+
+      <div class="caption">
+        <p class="caption-title" id="caption-title" role="status">No TV connected</p>
+        <p class="caption-detail" id="caption-detail">Follow the steps to pair your LG TV.</p>
       </div>
-      <p class="release-help" id="release-panel" hidden>Only accepted Starlit releases with a matching SHA-256 checksum are used. If none is available, choose a local development package instead.</p>
-      <button type="button" class="install-button" id="btn-install"><span>Install or update Starlit</span><span aria-hidden="true">↗</span></button>
-      <div class="actions">
-        <button id="btn-launch" class="secondary" type="button">Launch Starlit on TV</button>
-        <button id="btn-uninstall" class="danger" type="button">Uninstall</button>
-      </div>
+
       <section class="activity" aria-labelledby="activity-heading">
-        <div class="activity-title"><h3 id="activity-heading">Activity</h3><span id="task-state" role="status">Ready to pair</span></div>
-        <div id="log" class="log" role="log" aria-live="polite" aria-relevant="additions text">
-          <p class="entry muted">Choose LG or Samsung, then connect your TV using Developer Mode.</p>
-        </div>
+        <h2 class="activity-heading" id="activity-heading">Activity</h2>
+        <div id="log" class="log" role="log" aria-live="polite" aria-relevant="additions text" tabindex="0"></div>
       </section>
-      <p class="support-note" id="support-note">LG installation uses the official webOS developer tools. Uninstall always requires confirmation.</p>
-    </section>
-  </main>
+    </aside>
+  </div>
+
+  <dialog class="confirm" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-copy">
+    <h2 id="confirm-title">Uninstall Starlit from your LG TV?</h2>
+    <p id="confirm-copy">Starlit and its data on the TV may be deleted. Your other TV apps are not affected.</p>
+    <div class="confirm-actions">
+      <button type="button" class="button secondary" id="confirm-cancel" autofocus>Cancel</button>
+      <button type="button" class="button danger-solid" id="confirm-accept">Uninstall</button>
+    </div>
+  </dialog>
 </body>
 </html>
