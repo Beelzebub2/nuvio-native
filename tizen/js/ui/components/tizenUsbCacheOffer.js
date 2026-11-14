@@ -184,6 +184,7 @@ export function createTizenUsbCacheOfferController({
     if (documentRef.visibilityState === "hidden" || documentRef.webkitHidden === true) return;
     // The TV may miss an unmount notification while suspended. Cancel any
     // deferred offer until a fresh mounted-drive scan has completed.
+    ++scanVersion;
     clearOfferTimer();
     pendingDrive = null;
     scheduleScan(0);
