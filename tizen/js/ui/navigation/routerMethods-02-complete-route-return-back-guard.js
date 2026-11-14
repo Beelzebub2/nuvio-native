@@ -121,7 +121,8 @@ export function createRouterMethods02() {
           }
         }
       }
-      if (routeName === "plugins" && Platform.isTizen() && !TizenCapabilities.canUsePlugins()) {
+      if (routeName === "plugins" && Platform.isTizen() &&
+          !TizenCapabilities.canUsePlugins() && !TizenCapabilities.canOfferLegacyPluginPreview()) {
         return;
       }
       const navigationStart = ROUTER_PERF_DEBUG ? routerPerfNow() : 0;

@@ -28,7 +28,13 @@ export function createSettingsScreenMethods07() {
                 <div class="settings-group-heading">
                   <div>
                     <div class="settings-group-title">${escapeHtml(t("plugin_runtime_heading", {}, "TV plugin runtime"))}</div>
-                    <div class="settings-group-subtitle">${escapeHtml(runtime.executable ? t("plugin_runtime_ready", {}, "Runtime ready") : runtime.reason || t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</div>
+                    <div class="settings-group-subtitle">${escapeHtml(runtime.executable
+                      ? t("plugin_runtime_ready", {}, "Runtime ready")
+                      : runtime.legacyPreviewEnabled
+                        ? t("plugin_runtime_limited", {}, "Plugin support is limited on this TV. Some providers may be slower or unavailable.")
+                        : runtime.legacyPreviewEligible
+                          ? t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime")
+                          : runtime.reason || t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</div>
                   </div>
                   <span class="settings-row-value">${escapeHtml(t("plugin_providers_count", { count: Number(summary.scrapers?.length || 0) }, `${Number(summary.scrapers?.length || 0)} providers`))}</span>
                 </div>

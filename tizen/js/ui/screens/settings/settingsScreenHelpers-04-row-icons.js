@@ -118,7 +118,9 @@ export function t(key, params = {}, fallback = key) {
   return I18n.t(key, params, { fallback });
 }
 export function arePluginsSupported() {
-  return TizenCapabilities.canUsePlugins();
+  // Keep the management screen reachable to opt into the Tizen 5 preview;
+  // this does NOT grant access to execute providers before explicit consent.
+  return TizenCapabilities.canUsePlugins() || TizenCapabilities.canOfferLegacyPluginPreview();
 }
 export function escapeHtml(value) {
   return String(value ?? "")

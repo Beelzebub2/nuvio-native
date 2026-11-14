@@ -214,6 +214,9 @@ export const TizenCapabilities = {
   canUseP2p(runtime = globalThis) {
     return getTizenCapabilities(runtime).supportsP2p;
   },
+  canOfferLegacyPluginPreview(runtime = globalThis) {
+    return canOfferTizen5PluginPreview(runtime);
+  },
   canUsePlugins(runtime = globalThis) {
     const capabilities = getTizenCapabilities(runtime);
     return !capabilities.isTizen || capabilities.tizenPluginVersionSupported || isTizen5PluginPreviewEnabled(runtime);
