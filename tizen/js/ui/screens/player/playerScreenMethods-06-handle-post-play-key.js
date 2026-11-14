@@ -1,3 +1,4 @@
+import { parseStreamTechnicalSummary } from "../../../core/streams/streamTechnicalSummary.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
 export function createPlayerScreenMethods06() {
@@ -217,6 +218,7 @@ export function createPlayerScreenMethods06() {
     buildPlaybackContext(streamCandidate = this.getCurrentStreamCandidate()) {
       const requestHeaders = this.getCurrentStreamRequestHeaders(streamCandidate);
       const mediaSourceType = this.resolvePlaybackMediaSourceType(streamCandidate);
+      const streamResolution = streamCandidate ? parseStreamTechnicalSummary(streamCandidate).resolutionId : "";
       return {
         itemId: this.params.itemId || null,
         itemType: normalizeItemType(this.params.itemType || "movie"),
@@ -234,6 +236,7 @@ export function createPlayerScreenMethods06() {
         cloudSessionToken: this.params.cloudSessionToken || null,
         requestHeaders,
         mediaSourceType,
+        streamResolution,
         streamIdentity: streamCandidate ? buildStreamResumeIdentity(streamCandidate) || streamMergeKey(streamCandidate) || null : null
       };
     },
