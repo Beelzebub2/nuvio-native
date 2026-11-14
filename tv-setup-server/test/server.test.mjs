@@ -125,3 +125,32 @@ test("independent approved sessions do not exhaust one proxy-wide polling rate l
     method:"POST", token:tv.tvToken, body:{}
   });
 });
+
+test("only explicitly trusted Cloudflare client addresses receive independent anonymous rate buckets", async () => {
+  for (const trusted of [true, false]) {
+    const isolated = createTvSetupServer({ origin:ORIGIN, trustCloudflareIp:trusted });
+    await new Promise(resolve => isolated.listen(0, "127.0.0.1", resolve));
+    const url = "http://127.0.0.1:" + isolated.address().port + "/tv/api/start";
+    const start = (ip) => fetch(url, {
+      method:"POST", headers: {
+        "Content-Type":"application/json", "CF-Connecting-IP":ip
+      }, body:JSON.stringify({name:"TV",profile:"1"})
+    });
+    try {
+      for (let i = 0; i < 40; i++) {
+        const response = await start("198.51.100.40");
+        assert.equal(response.status,200);
+        await response.arrayBuffer();
+      }
+      const limited = await start("198.51.100.40");
+      assert.equal(limited.status,429,"one client may open at most 40 sessions per minute");
+      await limited.arrayBuffer();
+      const other = await start("198.51.100.41");
+      assert.equal(other.status,trusted ? 200 : 429,
+        "untrusted header must never bypass the peer-wide limit");
+      await other.arrayBuffer();
+    } finally {
+      await new Promise(resolve => isolated.close(resolve));
+    }
+  }
+});

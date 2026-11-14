@@ -11,6 +11,7 @@ services:
       HOST: "0.0.0.0"
       PORT: "8751"
       STARLIT_TV_RELAY_CONTAINER: "1"
+      STARLIT_TV_TRUST_CF_IP: "1"
       STARLIT_SITE_ORIGIN: "https://starlit.rrmtools.uk"
     volumes:
       - ./:/srv/app:ro

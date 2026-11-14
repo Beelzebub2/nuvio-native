@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TvSetupRelay, RelayError } from "./relay.mjs";
 
@@ -56,8 +57,14 @@ function requiredId(url) {
   return id;
 }
 
-export function createTvSetupServer({ relay = new TvSetupRelay(), origin = SITE_ORIGIN, now = Date.now } = {}) {
+export function createTvSetupServer({
+  relay = new TvSetupRelay(), origin = SITE_ORIGIN, now = Date.now,
+  // Only enable behind a private Cloudflare Tunnel; do not trust a caller-supplied
+  // IP header on a publicly exposed Node listener.
+  trustCloudflareIp = process.env.STARLIT_TV_TRUST_CF_IP === "1"
+} = {}) {
   const rates = new Map();
+  let lastRateSweep = now();
   return createServer(async (req, res) => {
     const requestUrl = new URL(req.url || "/", "http://internal.invalid");
     const path = requestUrl.pathname;
@@ -98,17 +105,25 @@ export function createTvSetupServer({ relay = new TvSetupRelay(), origin = SITE_
       // proving knowledge of the appropriate 256-bit scoped credential.
       const role = tvRoute ? "tv" : "phone";
       const authorized = id && relay.ownsCredential(id, role, tvRoute ? tv : phone);
-      const remote = req.socket.remoteAddress || "unknown";
+      const cloudflareIp = req.headers["cf-connecting-ip"];
+      const remote = trustCloudflareIp && typeof cloudflareIp === "string" &&
+        cloudflareIp.length <= 45 && isIP(cloudflareIp)
+        ? "edge-client:" + cloudflareIp
+        : "peer:" + (req.socket.remoteAddress || "unknown");
       const cap = path === "/tv/api/claim" ? 20 : path === "/tv/api/start" ? 40 :
         authorized ? 90 : 30;
       const key = authorized ? "session:" + id + ":" + role + ":" + path : remote + ":" + path;
+      const time = now();
       const current = rates.get(key);
-      const window = current && now() - current.at < MINUTE ? current : { at: now(), count: 0 };
+      const window = current && time - current.at < MINUTE ? current : { at: time, count: 0 };
       window.count++;
       rates.set(key, window);
       if (window.count > cap) throw new RelayError(429, "Too many requests");
-      if (rates.size > 10000) {
-        for (const [entry, value] of rates) if (now() - value.at > MINUTE) rates.delete(entry);
+      // Never retain a session or IP-derived limiter entry indefinitely, even
+      // when request volume stays below the high-cardinality safety threshold.
+      if (time - lastRateSweep >= MINUTE || rates.size > 10000) {
+        for (const [entry, value] of rates) if (time - value.at >= MINUTE) rates.delete(entry);
+        lastRateSweep = time;
       }
       let data = {};
       if (req.method === "POST") data = await body(req);

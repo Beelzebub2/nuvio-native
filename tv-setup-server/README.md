@@ -34,7 +34,7 @@ To serve the local phone page, set STARLIT_SITE_ORIGIN to http://127.0.0.1:8751,
 
 ## Private-container production integration
 
-Use the included compose.private.yml on the existing private Caddy bridge network, setting STARLIT_CADDY_NETWORK in a server-only environment file. Verify the service with docker compose config and its health check. It has no published host ports, runs as an unprivileged user, drops Linux capabilities and uses a read-only filesystem with CPU/memory/process limits. The listener binds the isolated container network, not a public interface.
+Use the included compose.private.yml on the existing private Caddy bridge network, setting STARLIT_CADDY_NETWORK in a server-only environment file. Verify the service with docker compose config and its health check. It has no published host ports, runs as an unprivileged user, drops Linux capabilities and uses a read-only filesystem with CPU/memory/process limits. The listener binds the isolated container network, not a public interface. Its optional STARLIT_TV_TRUST_CF_IP rate-limit mode must only be enabled for traffic authenticated by a private Cloudflare Tunnel; a directly internet-exposed listener must not trust caller-supplied CF-Connecting-IP headers.
 
 Alternatively run Node under an unprivileged systemd service on host loopback (HOST=127.0.0.1) only if the configured Caddy origin can reach that loopback address.
 
