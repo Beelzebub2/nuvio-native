@@ -88,6 +88,18 @@ function isTizenRuntime(runtime) {
     userAgent.includes("tizen")
   );
 }
+// ProductInfo is a privileged Samsung public API. An absent API, denied
+// privilege or emulator must remain "unknown", never be assumed Full HD.
+export function readUhdPanelSupported(runtime) {
+  const productInfo = runtime?.webapis?.productinfo;
+  if (typeof productInfo?.isUdPanelSupported !== "function") return null;
+  try {
+    const value = productInfo.isUdPanelSupported();
+    return typeof value === "boolean" ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
 function supportsP2pByVersion({ tizenMajorVersion, chromiumMajorVersion }) {
   if (tizenMajorVersion > 0) {
     return tizenMajorVersion >= TIZEN_P2P_MIN_MAJOR_VERSION;
@@ -138,6 +150,7 @@ export function getTizenCapabilities(runtime = globalThis) {
     tizenMajorVersion: tizenVersion.major,
     tizenVersionKnown: tizenVersion.known,
     chromiumMajorVersion,
+    uhdPanelSupported: isTizen ? readUhdPanelSupported(runtime) : null,
     hasIntersectionObserver: typeof runtime?.IntersectionObserver === "function",
     hasResizeObserver: typeof runtime?.ResizeObserver === "function",
     hasWebAssembly: typeof runtime?.WebAssembly === "object",
