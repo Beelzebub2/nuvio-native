@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./tizenStreamingServerResolver.js";
+import { TizenUsbTorrentCache } from "../../platform/tizen/tizenUsbTorrentCache.js";
 export function createTizenStreamingServerResolverMethods01() {
   const {
     Platform,
@@ -144,6 +145,11 @@ export function createTizenStreamingServerResolverMethods01() {
             status: "error",
             detail: localService.detail || "Tizen local EngineFS service did not start"
           };
+        }
+        // Never delay playback if removable storage is missing or unavailable.
+        // The first opted-in session probes the USB, subsequent sessions reuse it.
+        if (TizenUsbTorrentCache.isEnabled()) {
+          await TizenUsbTorrentCache.configure(baseUrl);
         }
         const magnetUri = getMagnetUri(stream);
         const trackerSources = getTrackerSources(stream, magnetUri);
