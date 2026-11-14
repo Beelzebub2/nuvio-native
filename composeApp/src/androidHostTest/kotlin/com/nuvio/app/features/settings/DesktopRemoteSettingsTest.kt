@@ -58,7 +58,7 @@ class DesktopRemoteSettingsTest {
             }
         }
 
-        compose.onNodeWithText("PC controller").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Remote control").assertIsDisplayed().performClick()
         // Keep the Robolectric UI test focused on Settings navigation and the
         // open/scan state. Espresso idleness checks can time out on the Material
         // AlertDialog animation even though the real Android button remains
