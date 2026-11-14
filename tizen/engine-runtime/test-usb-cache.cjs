@@ -135,6 +135,39 @@ probe(dir, 3 * GiB, 4 * GiB).then(function (result) {
     assert.equal(churnCache.stats.ownedFiles, 0, 'Stopping playback must release all filename records');
   });
 }).then(function () {
+  // Force an eviction unlink to remain in flight when close begins. Shutdown
+  // must wait for that unlink, not issue a competing delete and return early.
+  var originalUnlink = fs.unlink, delayed = null;
+  var retiring = usb.create({ dir: cacheDir, cacheBytes: 65536 }, function () {});
+  var retiringStore = retiring.factory(65536), piece = new Buffer(65536);
+  piece.fill(65);
+  fs.unlink = function (file, cb) {
+    if (!delayed && /p-[a-f0-9]{24}-[0-9]+\.piece$/.test(String(file))) {
+      delayed = function () { originalUnlink.call(fs, file, cb); };
+      return;
+    }
+    return originalUnlink.apply(fs, arguments);
+  };
+  return put(retiringStore, 0, piece).then(function () {
+    return put(retiringStore, 1, piece);
+  }).then(function () {
+    assert(delayed, 'Expected an evicted piece awaiting unlink');
+    var closed = false;
+    var closing = close(retiringStore).then(function () { closed = true; });
+    return new Promise(function (resolve) { setTimeout(resolve, 25); }).then(function () {
+      assert.equal(closed, false, 'Close must wait for the outstanding eviction unlink');
+      var release = delayed; delayed = null; release();
+      return closing;
+    });
+  }).then(function () {
+    assert.equal(retiring.stats.ownedFiles, 0, 'Close must reclaim in-flight eviction records');
+    fs.unlink = originalUnlink;
+  }, function (error) {
+    fs.unlink = originalUnlink;
+    if (delayed) delayed();
+    throw error;
+  });
+}).then(function () {
   var occupied = path.join(dir, 'Starlit-Torrent-Cache');
   // Simulate a USB drive being disconnected during a piece write. A failed
   // disk operation must switch the live store to its bounded RAM fallback.

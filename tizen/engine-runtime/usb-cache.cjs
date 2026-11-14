@@ -142,7 +142,7 @@ function probe(root, free, total, cb) {
 }
 function create(config, evict, onFailure) {
   var session = crypto.randomBytes(12).toString('hex'), sequence = 0;
-  var entries = Object.create(null), owned = Object.create(null), order = createRecency();
+  var entries = Object.create(null), owned = Object.create(null), erasing = Object.create(null), order = createRecency();
   var hot = Object.create(null), hotOrder = createRecency(), hotBytes = 0;
   var bytes = 0, pending = 0, closed = false, finishing = false, mode = 'usb', closeCallbacks = [];
   var stats = { mode: 'usb', bytes: 0, limit: config.cacheBytes, ramBytes: 0,
@@ -165,12 +165,22 @@ function create(config, evict, onFailure) {
     stats.ramBytes = hotBytes;
   }
   function eraseOwnedFile(file, callback) {
+    if (!owned[file]) {
+      return process.nextTick(function () { if (callback) callback(); });
+    }
+    if (erasing[file]) {
+      if (callback) erasing[file].push(callback);
+      return;
+    }
+    erasing[file] = callback ? [callback] : [];
     fs.unlink(file, function (err) {
+      var callbacks = erasing[file];
+      delete erasing[file];
       if ((!err || err.code === 'ENOENT') && owned[file]) {
         delete owned[file];
         stats.ownedFiles--;
       }
-      if (callback) callback(err);
+      callbacks.forEach(function (cb) { cb(err && err.code !== 'ENOENT' ? err : null); });
     });
   }
   function discard(index, notify) {
@@ -196,15 +206,18 @@ function create(config, evict, onFailure) {
   function finalizeClose() {
     if (!closed || pending > 0 || finishing) return;
     finishing = true;
-    var names = Object.keys(owned);
-    function next() {
+    var names = Object.keys(owned), closeError = null;
+    function next(error) {
+      if (error && !closeError) closeError = error;
       if (!names.length) {
-        return fallbackStore.close(function () {
+        return fallbackStore.close(function (fallbackError) {
           var callbacks = closeCallbacks; closeCallbacks = [];
-          callbacks.forEach(function (cb) { if (cb) cb(); });
+          callbacks.forEach(function (cb) { if (cb) cb(closeError || fallbackError || null); });
         });
       }
-      eraseOwnedFile(names.pop(), function () { next(); });
+      // A previous eviction may already be unlinking this file. Wait for that
+      // exact operation rather than racing two unlinks and losing the result.
+      eraseOwnedFile(names.pop(), next);
     }
     next();
   }

@@ -245,7 +245,22 @@ function start(options, callback) {
       req.on('end', function () { if (failed) return; try { create(m[1], JSON.parse(Buffer.concat(chunks).toString()), res); } catch (err) { json(res, 400, { error: 'Invalid create request' }); } }); return;
     }
     if (!active || active.hash !== m[1] || !active.ready) return json(res, 404, { error: 'Torrent unavailable' });
-    if (m[2] === 'stats' && req.method === 'GET') { if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' }); return json(res, 200, { infoHash: active.hash, peers: active.engine.swarm.wires.length, downloaded: active.engine.swarm.downloaded, downloadSpeed: active.engine.swarm.downloadSpeed(), activeRanges: active.streams.length, cache: active.cache.stats }); }
+    if (m[2] === 'stats' && req.method === 'GET') {
+      if (req.headers['x-starlit-token'] !== options.controlToken) return json(res, 403, { error: 'Trusted control token required' });
+      // Private, on-demand process metrics for physical-device memory QA.
+      // These describe the Node service process, not the TV's total memory or AVPlay.
+      var usage = process.memoryUsage();
+      return json(res, 200, {
+        infoHash: active.hash,
+        peers: active.engine.swarm.wires.length,
+        downloaded: active.engine.swarm.downloaded,
+        downloadSpeed: active.engine.swarm.downloadSpeed(),
+        activeRanges: active.streams.length,
+        cache: active.cache.stats,
+        memory: { rssBytes: usage.rss, heapUsedBytes: usage.heapUsed, heapTotalBytes: usage.heapTotal },
+        uptimeSeconds: process.uptime()
+      });
+    }
     if (/^\d+$/.test(m[2]) && (req.method === 'GET' || req.method === 'HEAD')) { var suppliedTicket = url.parse(req.url, true).query.ticket; if (!suppliedTicket || suppliedTicket !== active.tickets[Number(m[2])]) return json(res, 403, { error: 'Playback ticket required' }); return media(req, res, active, Number(m[2])); }
     json(res, 405, { error: 'Method unavailable' });
   });
