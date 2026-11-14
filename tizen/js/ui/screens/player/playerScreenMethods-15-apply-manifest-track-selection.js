@@ -157,22 +157,25 @@ export function createPlayerScreenMethods15() {
               <div class="player-controls-bottom">
                 <div class="player-meta${header.subtitle ? " has-episode" : ""}">
                   <div class="player-title">${escapeHtml(header.title)}</div>
-                  <div id="playerPlaybackBadges" class="player-playback-badges" hidden></div>
-                  ${header.subtitle ? `<div class="player-subtitle">${escapeHtml(header.subtitle)}</div>` : ""}
+                  <div class="player-episode-row">
+                    ${header.subtitle ? `<div class="player-subtitle">${escapeHtml(header.subtitle)}</div>` : ""}
+                    <div id="playerPlaybackBadges" class="player-playback-badges" hidden></div>
+                  </div>
                   ${header.meta ? `<div class="player-meta-secondary">${escapeHtml(header.meta)}</div>` : ""}
                 </div>
                 <div class="player-controls-bar">
-                  <div id="playerProgressShell" class="player-progress-shell has-chapter-ticks focusable${isLivePlayback ? " hidden" : ""}" role="slider" aria-label="${escapeAttribute(t("cd_seek_bar", {}, "Seek bar"))}" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="-1" data-player-pointer-action="progress">
-                    <div class="player-progress-track">
-                      <div id="playerProgressBuffered" class="player-progress-buffered"></div>
-                      <div id="playerProgressFill" class="player-progress-fill"></div>
-                      <div id="playerProgressTicks" class="player-progress-ticks" aria-hidden="true"></div>
+                  <div class="player-time-row player-scrub-row${isLivePlayback ? " hidden" : ""}">
+                    <span id="playerElapsedLabel" class="player-elapsed-label" aria-hidden="true">0:00</span>
+                    <div id="playerProgressShell" class="player-progress-shell has-chapter-ticks focusable${isLivePlayback ? " hidden" : ""}" role="slider" aria-label="${escapeAttribute(t("cd_seek_bar", {}, "Seek bar"))}" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="-1" data-player-pointer-action="progress">
+                      <div class="player-progress-track">
+                        <div id="playerProgressBuffered" class="player-progress-buffered"></div>
+                        <div id="playerProgressFill" class="player-progress-fill"></div>
+                        <div id="playerProgressTicks" class="player-progress-ticks" aria-hidden="true"></div>
+                      </div>
+                      <span id="playerProgressThumb" class="player-progress-thumb" aria-hidden="true"></span>
+                      <span id="playerChapterLabel" class="player-chapter-label" aria-hidden="true"></span>
                     </div>
-                  </div>
-                  <div class="player-time-row${isLivePlayback ? " hidden" : ""}" aria-hidden="true">
-                    <span id="playerElapsedLabel" class="player-elapsed-label">0:00</span>
-                    <span id="playerChapterLabel" class="player-chapter-label"></span>
-                    <span id="playerRemainingLabel" class="player-remaining-label"></span>
+                    <span id="playerRemainingLabel" class="player-remaining-label" aria-hidden="true"></span>
                   </div>
                   <div class="player-controls-row">
                     <div id="playerControlButtons" class="player-control-buttons"></div>
@@ -250,6 +253,7 @@ export function createPlayerScreenMethods15() {
             endsAt: uiRoot.querySelector("#playerEndsAt"),
             progressBuffered: uiRoot.querySelector("#playerProgressBuffered"),
             progressFill: uiRoot.querySelector("#playerProgressFill"),
+            progressThumb: uiRoot.querySelector("#playerProgressThumb"),
             controlButtons: uiRoot.querySelector("#playerControlButtons"),
             timeLabel: uiRoot.querySelector("#playerTimeLabel"),
             elapsedLabel: uiRoot.querySelector("#playerElapsedLabel"),

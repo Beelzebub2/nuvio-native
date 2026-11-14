@@ -7,9 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
-import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -474,23 +471,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         },
         skipPromptStartMs = ((nativeSkipInterval?.startTime ?: 0.0) * 1000).toLong().coerceAtLeast(0L),
         skipPromptEndMs = nativeSkipAction?.targetMs?.coerceAtLeast(0L) ?: 0L,
-        skipSegments = skipIntervals.mapNotNull { interval ->
-            val segmentType = when (com.nuvio.app.features.player.skip.AutoSkipSegmentType.fromSkipIntervalType(interval.type)) {
-                com.nuvio.app.features.player.skip.AutoSkipSegmentType.INTRO -> "intro"
-                com.nuvio.app.features.player.skip.AutoSkipSegmentType.RECAP -> "recap"
-                com.nuvio.app.features.player.skip.AutoSkipSegmentType.OUTRO,
-                com.nuvio.app.features.player.skip.AutoSkipSegmentType.MOVIE_CREDITS -> "outro"
-                null -> return@mapNotNull null
-            }
-            if (!interval.startTime.isFinite() || !interval.endTime.isFinite() ||
-                interval.startTime < 0 || interval.endTime <= interval.startTime
-            ) return@mapNotNull null
-            PlayerControlSkipSegment(
-                type = segmentType,
-                startMs = (interval.startTime * 1000).toLong(),
-                endMs = (interval.endTime * 1000).toLong(),
-            )
-        }.sortedBy { it.startMs },
+        skipSegments = skipIntervals.toPlayerControlSkipSegments(),
         skipPromptDismissed = skipIntervalDismissed,
         nextEpisodeVisible = nextEpisodeForControls != null && !playerControlsLocked,
         nextEpisodeHeaderLabel = stringResource(Res.string.player_next_episode),
@@ -747,7 +728,7 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
         PlayerControlToggle(
             label = autoSkipIntroLabel,
             checked = playerSettingsUiState.autoSkipIntroActive,
-            icon = Icons.Rounded.FastForward,
+            icon = PlayerControlIcons.AutoSkipIntro,
             onCheckedChange = { enabled ->
                 setAutoSkipIntroFromPlayer(enabled)
                 showToggleToast(autoSkipIntroLabel, enabled)
@@ -756,7 +737,7 @@ private fun PlayerScreenRuntime.playerControlToggles(): List<PlayerControlToggle
         PlayerControlToggle(
             label = autoNextEpisodeLabel,
             checked = playerSettingsUiState.streamAutoPlayNextEpisodeEnabled,
-            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            icon = PlayerControlIcons.AutoNextEpisode,
             onCheckedChange = { enabled ->
                 setAutoNextEpisodeFromPlayer(enabled)
                 showToggleToast(autoNextEpisodeLabel, enabled)
@@ -795,8 +776,10 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             showRemainingTime = showRemainingTime,
             onRuntimeClick = { showRemainingTime = !showRemainingTime },
             releaseInfo = metaUiState.meta?.takeIf { it.id == parentMetaId }?.releaseInfo,
-            hideDetails = !hasPlaybackStarted || (activeSkipInterval != null && !skipIntervalDismissed),
             showMetadata = hasPlaybackStarted,
+            skipSegments = skipIntervals.toPlayerControlSkipSegments(),
+            subtitlesActive = selectedSubtitleIndex >= 0 || selectedAddonSubtitleId != null,
+            onControlsFocusChanged = { controlsHoldFocus = it },
             onNextEpisodeClick = if (nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null) {
                 {
                     playNextEpisode()
@@ -1975,6 +1958,7 @@ private fun BoxScope.RenderPlaybackOverlays(
             useLegacyLayout = isDesktop || playerSettingsUiState.useLegacyPlayerLayout,
             lockedOverlayVisible = lockedOverlayVisible,
             showRemainingTime = showRemainingTime,
+            skipSegments = skipIntervals.toPlayerControlSkipSegments(),
             playbackSnapshot = playbackSnapshot,
             displayedPositionMs = displayedPositionMs,
             metrics = metrics,

@@ -209,25 +209,6 @@ export function createPlayerScreenMethods68() {
         this.showStreamInfo();
         return;
       }
-      if (action === "more") {
-        this.stickyProgressFocus = false;
-        this.moreActionsVisible = true;
-        this.controlFocusZone = "buttons";
-        this.controlFocusIndex = Math.max(
-          0,
-          this.getControlDefinitions().findIndex((entry) => entry.action === "speed" || entry.action === "aspect")
-        );
-        this.renderControlButtons();
-        return;
-      }
-      if (action === "backFromMore") {
-        this.stickyProgressFocus = false;
-        this.moreActionsVisible = false;
-        this.controlFocusZone = "buttons";
-        this.controlFocusIndex = 0;
-        this.renderControlButtons();
-        return;
-      }
       if (action === "speed") {
         this.openSpeedDialog();
         return;

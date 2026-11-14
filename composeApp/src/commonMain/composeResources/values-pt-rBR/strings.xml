@@ -1844,4 +1844,9 @@
     <string name="remote_vpn_firewall_failed">A alteração no Firewall do Windows falhou ou foi cancelada. O acesso VPN continua sujeito à configuração do Starlit; tente novamente se necessário.</string>
     <string name="remote_pc_auto_reconnect_title">Reconectar automaticamente ao abrir o aplicativo</string>
     <string name="remote_pc_auto_reconnect_caption">Conecta ao último PC pareado ao abrir o Starlit. Tenta primeiro por Wi-Fi e depois por Bluetooth, se disponível.</string>
+    <string name="player_playback_options">Opções de reprodução</string>
+    <string name="player_aspect">Proporção</string>
+    <string name="player_chapter_intro">Abertura</string>
+    <string name="player_chapter_recap">Recapitulação</string>
+    <string name="player_chapter_credits">Créditos</string>
 </resources>

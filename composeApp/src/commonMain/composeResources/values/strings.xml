@@ -3058,4 +3058,9 @@
     <string name="remote_vpn_firewall_failed">Windows Firewall update failed or was cancelled. VPN access is still controlled by Starlit's setting; retry the firewall step if needed.</string>
     <string name="remote_pc_auto_reconnect_title">Auto-reconnect on app launch</string>
     <string name="remote_pc_auto_reconnect_caption">Reconnect to your most recently paired PC when Starlit opens. Try Wi-Fi first, then Bluetooth if available.</string>
+    <string name="player_playback_options">Playback options</string>
+    <string name="player_aspect">Aspect</string>
+    <string name="player_chapter_intro">Intro</string>
+    <string name="player_chapter_recap">Recap</string>
+    <string name="player_chapter_credits">Credits</string>
 </resources>

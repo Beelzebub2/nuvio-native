@@ -137,6 +137,8 @@ internal class PlayerScreenRuntime(
 
     var controlsVisible by mutableStateOf(false)
     var controlsActivityTick by mutableStateOf(0)
+    /** A TV remote's focus is on one of the controls, so it must move when they hide. */
+    var controlsHoldFocus = false
     var showRemainingTime by mutableStateOf(false)
     var playerControlsLocked by mutableStateOf(false)
     var activeSourceUrl by mutableStateOf(sourceUrl)
