@@ -128,13 +128,16 @@ function providerTypeBadge(type) {
 }
 function runtimeNotice(model) {
   const runtime = model?.runtime || {};
+  const legacyPreview = runtime.legacyPreviewEligible === true;
   if (runtime.supportLevel === "unsupported") {
     return `
-      <section class="plugins-runtime-card is-warning is-unsupported" role="status">
-        <span class="plugins-runtime-icon material-icons" aria-hidden="true">error_outline</span>
+      <section class="plugins-runtime-card is-warning ${legacyPreview ? "is-limited" : "is-unsupported"}" role="status">
+        <span class="plugins-runtime-icon material-icons" aria-hidden="true">${legacyPreview ? "info_outline" : "error_outline"}</span>
         <div class="plugins-runtime-copy">
           <strong>${escapeHtml(t("plugin_runtime_heading", {}, "TV plugin runtime"))}</strong>
-          <span>${escapeHtml(t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</span>
+          <span>${escapeHtml(legacyPreview
+            ? t("plugin_runtime_limited", {}, "Plugin support is limited on this TV. Some providers may be slower or unavailable.")
+            : t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</span>
         </div>
       </section>
     `;
@@ -259,7 +262,9 @@ export const PluginsScreen = {
                          aria-pressed="${model.pluginsEnabled ? "true" : "false"}"
                          aria-disabled="${this.busy || model.readOnly ? "true" : "false"}">
                   <div class="plugins-setting-row">
-                    <div><strong>${escapeHtml(t("plugin_enable_plugins_title", {}, "Enable plugin providers globally"))}</strong><span>${escapeHtml(t("plugin_enable_plugins_subtitle", {}, "Use plugin providers during stream discovery"))}</span></div>
+                    <div><strong>${escapeHtml(t("plugin_enable_plugins_title", {}, "Enable plugin providers globally"))}</strong><span>${escapeHtml(model.runtime?.legacyPreviewEligible
+                      ? t("plugin_runtime_limited", {}, "Plugin support is limited on this TV. Some providers may be slower or unavailable.")
+                      : t("plugin_enable_plugins_subtitle", {}, "Use plugin providers during stream discovery"))}</span></div>
                     ${toggleIndicator({ checked: model.pluginsEnabled })}
                   </div>
                 </section>

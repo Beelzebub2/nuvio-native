@@ -563,6 +563,10 @@ async function buildPluginRuntimeAssets() {
     path.join(distDir, "assets", "libs", "quickjs-emscripten.LICENSE")
   );
   await cp(
+    path.join(rootDir, "node_modules", "@jitl", "quickjs-asmjs-mjs-release-sync", "LICENSE"),
+    path.join(distDir, "assets", "libs", "quickjs-asmjs.LICENSE")
+  );
+  await cp(
     path.join(rootDir, "node_modules", "crypto-js", "LICENSE"),
     path.join(distDir, "assets", "libs", "crypto-js.LICENSE")
   );

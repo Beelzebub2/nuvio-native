@@ -17,7 +17,7 @@ start the legacy Node PluginService or expose a general HTTP proxy. Browser
 CORS rules, lack of a DNS-rebinding guarantee, and Chrome 63's lack of native
 AbortController remain limitations; provider compatibility is not universal.
 The JavaScript VM may be slower or use more memory than WASM. The preview
-uses one concurrent provider and the limited TV runtime quotas.
+uses one concurrent provider, up to three outstanding HTTPS requests and the limited TV runtime quotas. Requests that time out still occupy a slot until the underlying browser fetch actually settles, preventing unlimited outstanding work on browsers without AbortController.
 
 **Required before declaring supported on retail hardware:** signed WGT
 install/launch on a Tizen 5.0 TV; legal fixture with getStreams/onSettings,
