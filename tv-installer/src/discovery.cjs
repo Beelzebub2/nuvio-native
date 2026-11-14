@@ -5,6 +5,7 @@ const http = require("node:http");
 const os = require("node:os");
 const { isLanIPv4 } = require("./platforms.cjs");
 const { ensureSamsungCli, runSamsungCli } = require("./samsung.cjs");
+const { devices: savedWebosDevices } = require("./installer.cjs");
 
 const SSDP_ADDRESS = "239.255.255.250";
 const SSDP_PORT = 1900;
@@ -206,6 +207,7 @@ async function discoverLg({
   interfaces = os.networkInterfaces(),
   socketFactory = dgram.createSocket,
   readDescription = requestDescription,
+  listSavedDevices = savedWebosDevices,
   durationMs = 3200
 } = {}) {
   const ips = privateInterfaceIps(interfaces);
@@ -213,6 +215,11 @@ async function discoverLg({
   const candidates = new Map();
   await Promise.all(ips.map(ip => listenOnInterface(ip, candidates, { socketFactory, durationMs })));
   const devices = [];
+  let saved = [];
+  try {
+    const entries = await listSavedDevices();
+    if (Array.isArray(entries)) saved = entries;
+  } catch { /* saved pairing is optional; discovery still works */ }
   const entries = [...candidates.values()].slice(0, MAX_CANDIDATES);
   for (let offset = 0; offset < entries.length; offset += 4) {
     const batch = await Promise.all(entries.slice(offset, offset + 4).map(async entry => {
@@ -221,13 +228,17 @@ async function discoverLg({
       // Some webOS firmwares announce their identity but block the descriptor.
       // A strong, TV-specific SSDP signature is still useful for manual selection.
       if (!description && !entry.hinted) return null;
+      const previous = saved.find(item => item && item.host === entry.ip &&
+        /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,49}$/.test(item.name));
       return {
         platform: "webos",
         ip: entry.ip,
         name: safeLabel(description?.name, "LG webOS TV"),
         model: safeLabel(description?.model),
+        savedDeviceName: previous ? previous.name : "",
         ready: false,
-        detail: "Enable Developer Mode and Key Server to pair"
+        detail: previous ? "Saved LG developer device found; verify the connection" :
+          "Enable Developer Mode and Key Server to pair"
       };
     }));
     devices.push(...batch.filter(Boolean));
