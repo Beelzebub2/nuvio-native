@@ -176,6 +176,8 @@ internal object DesktopRemote {
     val firewall by lazy { createRemoteFirewallAccess() }
     val desktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val bluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
+    /** Paired in the OS, but not necessarily nearby or authorized by Starlit. */
+    val pairedBluetoothDesktops = MutableStateFlow<List<RemoteDesktop>>(emptyList())
     val pairing = MutableStateFlow<RemotePairing?>(null)
     val connected = MutableStateFlow(false)
     /** The verified PC endpoint for the current phone-side session, not merely the last saved PC. */

@@ -13,6 +13,7 @@ private class FakeBluetoothClient : RemoteBluetoothClient {
     override val supported = true
     var searches = 0
     var stops = 0
+    var paired = emptyList<RemoteDesktop>()
     var found: ((RemoteDesktop) -> Unit)? = null
     var finished: ((String?) -> Unit)? = null
 
@@ -21,6 +22,8 @@ private class FakeBluetoothClient : RemoteBluetoothClient {
         found = onFound
         finished = onFinished
     }
+
+    override fun pairedPcs(): List<RemoteDesktop> = paired
 
     // A connection that stays in progress until the test stops the transport.
     override suspend fun connect(address: String): RemoteBluetoothConnection = awaitCancellation()
@@ -50,6 +53,7 @@ class RemoteSearchProgressTest {
         DesktopRemote.pairing.value = null
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
+        DesktopRemote.pairedBluetoothDesktops.value = emptyList()
         DesktopRemote.remembered.value = emptyList()
     }
 
@@ -104,6 +108,50 @@ class RemoteSearchProgressTest {
             assertFalse(DesktopRemote.connecting.value)
             assertEquals(pc, DesktopRemote.activeDesktop.value)
             assertEquals("Connected to Desktop-B", DesktopRemote.status.value)
+        } finally {
+            phone.stop()
+        }
+    }
+
+    @Test
+    fun osPairedPcIsListedSeparatelyWithoutAProximityClaim() = runBlocking {
+        val client = FakeBluetoothClient().apply { paired = listOf(pc) }
+        val phone = LanDesktopRemote(bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined)
+        try {
+            phone.start(account, host = false)
+            phone.discoverBluetooth()
+            assertTrue(DesktopRemote.scanning.value)
+            assertEquals(listOf(pc), DesktopRemote.pairedBluetoothDesktops.value)
+            assertTrue(DesktopRemote.bluetoothDesktops.value.isEmpty(),
+                "An OS pairing record must never be mistaken for a nearby inquiry hit")
+
+            client.finished!!(null)
+            assertFalse(DesktopRemote.scanning.value)
+            assertContains(DesktopRemote.status.value, "may be offline")
+
+            // A new search reflects the current OS bonds; stale paired hints do not persist.
+            client.paired = emptyList()
+            phone.discoverBluetooth()
+            assertTrue(DesktopRemote.pairedBluetoothDesktops.value.isEmpty())
+            client.finished!!(null)
+            assertContains(DesktopRemote.status.value, "No Bluetooth PCs found")
+        } finally {
+            phone.stop()
+        }
+    }
+
+    @Test
+    fun connectingCancelsPairedHintsWithoutPromotingThemToSavedTrust() = runBlocking {
+        val client = FakeBluetoothClient().apply { paired = listOf(pc) }
+        val phone = LanDesktopRemote(bluetoothClient = client, uiDispatcher = Dispatchers.Unconfined)
+        try {
+            phone.start(account, host = false)
+            phone.discoverBluetooth()
+            assertEquals(listOf(pc), DesktopRemote.pairedBluetoothDesktops.value)
+            phone.connect(pc)
+            assertTrue(DesktopRemote.pairedBluetoothDesktops.value.isEmpty())
+            assertTrue(DesktopRemote.remembered.value.isEmpty(),
+                "Only successful encrypted Starlit pairing can save a trusted PC")
         } finally {
             phone.stop()
         }

@@ -44,6 +44,7 @@ class RemoteControllerUiTest {
         DesktopRemote.remotePlayback.value = RemotePlayback()
         DesktopRemote.desktops.value = emptyList()
         DesktopRemote.bluetoothDesktops.value = emptyList()
+        DesktopRemote.pairedBluetoothDesktops.value = emptyList()
         DesktopRemote.accountChanged(null)
     }
 
@@ -148,6 +149,21 @@ class RemoteControllerUiTest {
         onNodeWithText("Can't find your PC?").performScrollTo().assertIsDisplayed()
         capture("pc-controller-find-bottom")
     }
+
+    @Test
+    fun osPairedBluetoothPcsDoNotAppearAsNearbyOrDoubleUp() =
+        runDesktopComposeUiTest(width = 412, height = 900) {
+            val paired = RemoteDesktop("12:34:56:78:9A:BC", 0, "Paired workstation", bluetooth = true)
+            val nearby = RemoteDesktop("AA:BB:CC:DD:EE:FF", 0, "Nearby laptop", bluetooth = true)
+            DesktopRemote.pairedBluetoothDesktops.value = listOf(paired, nearby)
+            DesktopRemote.bluetoothDesktops.value = listOf(nearby)
+            show(desktopLayout = false)
+            onNodeWithText("Nearby Bluetooth PCs".uppercase()).performScrollTo().assertIsDisplayed()
+            onNodeWithText("Paired Bluetooth PCs (may be offline)".uppercase())
+                .performScrollTo().assertIsDisplayed()
+            onNodeWithText("Paired workstation").performScrollTo().assertIsDisplayed()
+            onAllNodesWithText("Nearby laptop").assertCountEquals(1)
+        }
 
     @Test
     fun savedVpnUsesConnectNotWakeAndPrivateEndpointRemainsEditable() = runDesktopComposeUiTest(width = 412, height = 900) {

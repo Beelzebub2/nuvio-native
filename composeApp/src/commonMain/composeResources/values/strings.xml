@@ -3007,6 +3007,7 @@
     <string name="account_credentials_notice_title">Account security</string>
     <string name="remote_bluetooth_search">Find Bluetooth PCs</string>
     <string name="remote_bluetooth_found_devices">Nearby Bluetooth PCs</string>
+    <string name="remote_bluetooth_paired_devices">Paired Bluetooth PCs (may be offline)</string>
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">Bluetooth remote is available. Pair your phone with this PC in Bluetooth settings, then select Find Bluetooth PCs on the phone.</string>
     <string name="remote_bluetooth_host_unavailable">Bluetooth remote is not available on this PC. Local-network pairing still works.</string>
