@@ -305,6 +305,32 @@ export function registerPlaybackActionsPart02(model) {
     }
     TorrentSettingsStore.setHideTorrentStats(!TorrentSettingsStore.get().hideTorrentStats);
   });
+  this.actionMap.set("playback:usbCacheEnabled", () => {
+    if (TizenCapabilities.isP2pUnsupported()) return;
+    if (P2pCacheService.usbEnabled()) {
+      void P2pCacheService.setUsbEnabled(false).then(
+        () => this.refreshP2pCacheState({ render: true })
+      );
+      return;
+    }
+    this.openOptionDialog({
+      title: t("settings_usb_cache_title", {}, "Automatic USB torrent cache"),
+      message: t("settings_usb_cache_consent", {},
+        "Allow Starlit to create a temporary cache folder on connected USB storage? Starlit will measure read/write speed, reserve free space and erase its own temporary pieces when playback ends. Existing files are never changed."),
+      options: [
+        { id: "cancel", label: t("p2p_consent_cancel", {}, "Cancel") },
+        { id: "enable", label: t("p2p_consent_enable", {}, "Enable") }
+      ],
+      selectedId: "enable",
+      returnFocusKey: "playback:usbCacheEnabled",
+      onSelect: (option) => {
+        if (option.id !== "enable") return;
+        void P2pCacheService.setUsbEnabled(true).then(
+          () => this.refreshP2pCacheState({ render: true })
+        );
+      }
+    });
+  });
   this.actionMap.set("playback:torrentProfile", () => {
     if (TizenCapabilities.isP2pUnsupported()) {
       return;

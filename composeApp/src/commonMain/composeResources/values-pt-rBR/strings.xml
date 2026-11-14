@@ -741,6 +741,13 @@
     <string name="remote_playback_play">Reproduzir</string>
     <string name="remote_playback_pause">Pausar</string>
     <string name="remote_playback_volume">Volume</string>
+    <string name="remote_pc_manage">Gerenciar PCs</string>
+    <string name="remote_pc_tab_downloads_active">%1$d ativos</string>
+    <string name="remote_playback_pc_window">Janela do PC</string>
+    <string name="remote_playback_waiting_on">Aguardando reprodução em %1$s</string>
+    <string name="remote_playback_window_fullscreen">O Starlit está em tela cheia</string>
+    <string name="remote_playback_window_windowed">O Starlit está em uma janela</string>
+    <string name="remote_playback_volume_boost">Reforço</string>
     <string name="remote_playback_mute">Silenciar ou ativar som</string>
     <string name="remote_playback_skip">Pular abertura ou créditos</string>
     <string name="remote_playback_previous">Episódio anterior</string>

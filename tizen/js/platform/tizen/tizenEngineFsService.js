@@ -2,6 +2,7 @@ import { connectLocalControl } from "./starlitControlBridge.js";
 import { Platform } from "../index.js";
 import { TizenCapabilities } from "./tizenCapabilities.js";
 import { verifyTizenRangeProbe } from "./tizenRangeProbe.js";
+import { getWrtServiceClass, startWithWrtServiceClass } from "./tizenWrtService.js";
 const LOCAL_BASE_URLS = ["http://127.0.0.1:2710", "http://localhost:2710"];
 const START_TIMEOUT_MS = 12000;
 const PROBE_TIMEOUT_MS = 2500;
@@ -102,11 +103,7 @@ async function startViaWrtService(serviceId) {
     globalThis.wrt?.service ||
     globalThis.webapis?.wrt?.service ||
     globalThis.webapis?.service;
-  if (!wrtService) {
-    diagnostic("wrt service API unavailable", { serviceId });
-    throw new Error("wrt service API unavailable");
-  }
-  if (typeof wrtService.startService === "function") {
+  if (typeof wrtService?.startService === "function") {
     try {
       diagnostic("wrt startService call", { serviceId, argumentType: "string" });
       return await invokeCallbackApi(wrtService.startService.bind(wrtService), [serviceId]);
@@ -123,7 +120,12 @@ async function startViaWrtService(serviceId) {
       );
     }
   }
-  if (typeof wrtService.start === "function") {
+  const Service = getWrtServiceClass(wrtBridge);
+  if (Service) {
+    diagnostic("wrt Service.start call", { serviceId });
+    return startWithWrtServiceClass(Service, serviceId);
+  }
+  if (typeof wrtService?.start === "function") {
     diagnostic("wrt start alias call", { serviceId });
     return invokeCallbackApi(wrtService.start.bind(wrtService), [serviceId]);
   }
@@ -144,7 +146,10 @@ async function startViaTizenApplication(serviceId) {
 }
 async function requestServiceStart(serviceId) {
   const errors = [];
-  const legacyServiceFirst = TizenCapabilities.get().webServiceSupported === false;
+  // On newer sets application.launch can acknowledge a service id without
+  // starting it. Prefer the Service-class bridge when that API is available.
+  const legacyServiceFirst =
+    TizenCapabilities.get().webServiceSupported === false || Boolean(getWrtServiceClass());
   const officialAttempts = [
     {
       method: "tizen-application-control-default",

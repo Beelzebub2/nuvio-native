@@ -47,6 +47,30 @@ const image = {
 context.api.registerHomeDomNodes([image]);
 assert.equal(context.api.sourceByNode.get(image).node.ownerDocument, inertDocument);
 assert.deepEqual(imported, [image]);
+let rootWalks = 0;
+const leaf = {
+  ownerDocument: liveDocument,
+  nodeType: 3,
+  textContent: "visible",
+  nextSibling: null
+};
+const blank = {
+  ownerDocument: liveDocument,
+  nodeType: 3,
+  textContent: " ",
+  nextSibling: leaf
+};
+const root = {
+  ownerDocument: liveDocument,
+  nodeType: 1,
+  dataset: {},
+  classList: { contains: () => false },
+  get firstChild() { rootWalks++; return blank; }
+};
+context.api.registerHomeDomNodes([root]);
+assert.equal(rootWalks, 1, "snapshot registration walks each node's children once");
+assert.equal(context.api.sourceByNode.get(leaf).node.ownerDocument, inertDocument);
+assert.equal(context.api.sourceByNode.has(blank), false, "whitespace-only text is excluded");
 const shell = {};
 const container = {
   ownerDocument: liveDocument,

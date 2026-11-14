@@ -3444,4 +3444,9 @@
     <string name="sources_plays_best_body">%1$s. Sources it may not play are marked.</string>
     <string name="sources_warning_plays_as_hdr10">Plays as HDR10</string>
     <string name="sources_warning_audio_may_not_play">Audio may not play</string>
+    <string name="usb_cache_offer_title">USB storage connected</string>
+    <string name="usb_cache_offer_description">Use this USB drive for temporary torrent caching? Starlit will measure its speed before playback, keep free space available, and fall back to RAM if needed.</string>
+    <string name="usb_cache_offer_later">Not now</string>
+    <string name="usb_cache_offer_enable">Use USB cache</string>
+    <string name="usb_cache_offer_never">Don\'t ask again</string>
 </resources>

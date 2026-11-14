@@ -116,6 +116,9 @@ ${serviceFeature}  <icon src="icon.png"/>
   <name>${appName}</name>
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
+  <tizen:privilege name="http://tizen.org/privilege/externalstorage"/>
 ${applicationLaunchPrivilege}  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <!-- Seller Office distributes automatic updates to opted-in TV models.
