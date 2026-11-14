@@ -247,3 +247,26 @@ test("resume checks a deferred USB drive before showing an offer", async () => {
   assert.equal(f.dialogs.length, 0, "removed USB must not trigger a stale offer");
   f.controller.stop();
 });
+
+test("slow foreground rescan cannot display an obsolete deferred offer", async () => {
+  let scanCount = 0;
+  let finishRescan;
+  const f = fixture({
+    route: "player",
+    detectOverride: () => {
+      if (++scanCount === 1) return { drives: [drive()] };
+      return new Promise((resolve) => { finishRescan = resolve; });
+    }
+  });
+  f.controller.start();
+  await f.controller.checkNow();
+  f.setRoute("home");
+  f.listeners.get("visibilitychange")();
+  await sleep(25);
+  assert.equal(typeof finishRescan, "function");
+  assert.equal(f.dialogs.length, 0, "the old retry timer must not reopen the offer");
+  finishRescan({ drives: [] });
+  await sleep();
+  assert.equal(f.dialogs.length, 0);
+  f.controller.stop();
+});
