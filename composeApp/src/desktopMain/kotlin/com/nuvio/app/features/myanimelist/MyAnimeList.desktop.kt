@@ -46,8 +46,8 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
     playbackProfileId: Int,
     positionMs: Long,
     durationMs: Long,
-) {
-    MyAnimeListRepository.markRewatchingIfCompleted(meta, playbackProfileId, positionMs, durationMs)
+): Boolean {
+    return MyAnimeListRepository.markRewatchingIfCompleted(meta, playbackProfileId, positionMs, durationMs)
 }
 
 @Composable internal actual fun MyAnimeListSettingsCard() {
@@ -127,7 +127,7 @@ internal actual suspend fun markMyAnimeListRewatchOnPlayback(
         if (connection.busy) return@LaunchedEffect
         busy = true; error = null
         try {
-            malId = withTimeoutOrNull(8_000L) { MyAnimeListRepository.resolveId(meta) }
+            malId = withTimeoutOrNull(20_000L) { MyAnimeListRepository.resolveId(meta) }
             if (connection.connected) malId?.let { status = MyAnimeListRepository.listStatus(it) }
         } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
         finally { busy = false }

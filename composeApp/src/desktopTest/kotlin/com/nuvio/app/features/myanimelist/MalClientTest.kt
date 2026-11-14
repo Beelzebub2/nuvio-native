@@ -100,6 +100,36 @@ class MalClientTest {
         } finally { server.stop(0) }
     }
 
+    @Test fun searchIncludesAliasesYearTypeAndListStatus(): Unit = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/v2/anime") { request ->
+            assertEquals("Bearer test-token", request.requestHeaders.getFirst("Authorization"))
+            val query = URLDecoder.decode(request.requestURI.rawQuery, "UTF-8")
+            assertContains(query, "q=Fictional Story")
+            assertContains(query, "limit=30")
+            assertContains(query, "fields=alternative_titles,start_season,media_type,my_list_status")
+            val response = """{"data":[{"node":{"id":42,"title":"Fictional Story",
+                "alternative_titles":{"en":"The Fictional Story","synonyms":["Story Alias"]},
+                "start_season":{"year":2024},"media_type":"tv",
+                "my_list_status":{"status":"completed","score":9,"num_episodes_watched":12}}}]}"""
+            val bytes = response.toByteArray()
+            request.sendResponseHeaders(200, bytes.size.toLong())
+            request.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val client = MalClient(api = "http://127.0.0.1:" + server.address.port + "/v2/")
+            val entry = client.search("Fictional Story", "test-token", limit = 30).single()
+            assertEquals(42, entry.id)
+            assertEquals("The Fictional Story", entry.englishTitle)
+            assertEquals(listOf("Story Alias"), entry.alternativeTitles)
+            assertEquals(2024, entry.startYear)
+            assertEquals("tv", entry.mediaType)
+            assertEquals(MalStatus.COMPLETED, entry.listStatus?.status)
+            assertEquals(12, entry.listStatus?.watchedEpisodes)
+        } finally { server.stop(0) }
+    }
+
     @Test fun animeListParsesStatusesImagesAndPaging(): Unit = runBlocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/v2/users/@me/animelist") { request ->

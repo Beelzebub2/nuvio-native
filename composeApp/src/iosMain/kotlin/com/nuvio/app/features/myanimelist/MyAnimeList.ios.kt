@@ -9,5 +9,5 @@ import com.nuvio.app.features.details.MetaDetails
 internal actual fun myAnimeListPlaybackUpdateThresholdPercent(): Int = DefaultMalPlaybackUpdateThresholdPercent
 internal actual suspend fun markMyAnimeListRewatchOnPlayback(
     meta: MetaDetails, playbackProfileId: Int, positionMs: Long, durationMs: Long,
-) {}
+): Boolean = false
 internal actual fun clearMyAnimeListState() {}

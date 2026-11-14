@@ -123,13 +123,12 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         val key = "$profileId:$parentMetaType:$parentMetaId:$activePlaybackKey"
         if (key in malRewatchAttempted) return@LaunchedEffect
         try {
-            markMyAnimeListRewatchOnPlayback(
+            if (markMyAnimeListRewatchOnPlayback(
                 meta = meta,
                 playbackProfileId = profileId,
                 positionMs = playbackSnapshot.positionMs,
                 durationMs = playbackSnapshot.durationMs,
-            )
-            malRewatchAttempted += key
+            )) malRewatchAttempted += key
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

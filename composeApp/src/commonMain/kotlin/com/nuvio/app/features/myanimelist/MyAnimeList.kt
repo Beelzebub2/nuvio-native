@@ -14,7 +14,7 @@ internal expect suspend fun markMyAnimeListRewatchOnPlayback(
     playbackProfileId: Int,
     positionMs: Long,
     durationMs: Long,
-)
+): Boolean
 internal expect fun clearMyAnimeListState()
 
 internal fun isLikelyMyAnimeListAnime(meta: MetaDetails): Boolean =
