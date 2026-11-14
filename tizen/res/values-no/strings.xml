@@ -3395,4 +3395,20 @@ Du bruker denne funksjonen helt på eget ansvar. P2P kan deaktiveres når som he
     <string name="stream_test_label_parallel16">Parallel Connect (16 MB Chunks)</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Administrer med telefonen</string>
+    <string name="tv_phone_scan_instruction">Skann QR-koden for å administrere tillegg og programtillegg.</string>
+    <string name="tv_phone_pairing_code">Kode: {{code}}</string>
+    <string name="tv_phone_preparing">Kobler til…</string>
+    <string name="tv_phone_waiting">Venter på telefonen</string>
+    <string name="tv_phone_approval_required">Godkjenn telefonen på denne TV-en.</string>
+    <string name="tv_phone_verify_title">Godkjenne telefonen?</string>
+    <string name="tv_phone_verify_code">Kontroller denne koden på telefonen:</string>
+    <string name="tv_phone_approve">Godkjenn</string>
+    <string name="tv_phone_connected">Telefonen er tilkoblet</string>
+    <string name="tv_phone_connected_hint">Administrer tillegg og programtillegg på telefonen.</string>
+    <string name="tv_phone_change_applied">Endringen er utført.</string>
+    <string name="tv_phone_action_failed">Kunne ikke utføre endringen.</string>
+    <string name="tv_phone_unavailable">Tilkoblingen er utilgjengelig</string>
+    <string name="tv_phone_disconnect">Koble fra</string>
+    <string name="tv_phone_connection_error">Sjekk tilkoblingen og prøv igjen.</string>
 </resources>

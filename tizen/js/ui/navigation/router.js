@@ -19,6 +19,7 @@ import { EssentialAddonSetupScreen } from "../screens/onboarding/essentialAddonS
 import { LicensesAttributionsScreen } from "../screens/settings/licensesAttributionsScreen.js";
 import { PluginScreen } from "../screens/plugin/pluginScreen.js";
 import { PluginsScreen } from "../screens/plugin/pluginsScreen.js";
+import { TvPhoneSetupScreen } from "../screens/settings/tvPhoneSetupScreen.js";
 import { CatalogOrderScreen } from "../screens/plugin/catalogOrderScreen.js";
 import { StreamScreen } from "../screens/stream/streamScreen.js";
 import { CastDetailScreen } from "../screens/cast/castDetailScreen.js";
@@ -61,6 +62,7 @@ export {
   LicensesAttributionsScreen,
   PluginScreen,
   PluginsScreen,
+  TvPhoneSetupScreen,
   CatalogOrderScreen,
   StreamScreen,
   CastDetailScreen,
@@ -119,6 +121,7 @@ const WEBOS_NON_RESTORABLE_ROUTES = new Set([
   "debugConsole",
   "plugin",
   "plugins",
+  "tvPhoneSetup",
   "catalogOrder",
   "collections",
   "collectionEditor",
@@ -184,6 +187,7 @@ Object.assign(Router, {
     licensesAttributions: LicensesAttributionsScreen,
     plugin: PluginScreen,
     plugins: PluginsScreen,
+    tvPhoneSetup: TvPhoneSetupScreen,
     catalogOrder: CatalogOrderScreen,
     stream: StreamScreen,
     castDetail: CastDetailScreen,

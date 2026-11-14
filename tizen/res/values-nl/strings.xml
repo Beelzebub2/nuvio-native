@@ -3389,4 +3389,20 @@
     <string name="stream_test_label_parallel16">Parallelle verbinding (blokken van 16 MB)</string>
     <string name="stream_test_error_connection">Verbinding mislukt. De link van de laatst afgespeelde stream is mogelijk verlopen of onbereikbaar. Speel de video opnieuw af en probeer het nogmaals.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">Beheren met telefoon</string>
+    <string name="tv_phone_scan_instruction">Scan de QR-code om add-ons en plug-ins te beheren.</string>
+    <string name="tv_phone_pairing_code">Code: {{code}}</string>
+    <string name="tv_phone_preparing">Verbinden…</string>
+    <string name="tv_phone_waiting">Wachten op telefoon</string>
+    <string name="tv_phone_approval_required">Keur de telefoon goed op deze tv.</string>
+    <string name="tv_phone_verify_title">Telefoon goedkeuren?</string>
+    <string name="tv_phone_verify_code">Controleer deze code op je telefoon:</string>
+    <string name="tv_phone_approve">Goedkeuren</string>
+    <string name="tv_phone_connected">Telefoon verbonden</string>
+    <string name="tv_phone_connected_hint">Beheer add-ons en plug-ins op je telefoon.</string>
+    <string name="tv_phone_change_applied">Wijziging toegepast.</string>
+    <string name="tv_phone_action_failed">Wijziging kon niet worden toegepast.</string>
+    <string name="tv_phone_unavailable">Verbinding niet beschikbaar</string>
+    <string name="tv_phone_disconnect">Verbinding verbreken</string>
+    <string name="tv_phone_connection_error">Controleer de verbinding en probeer opnieuw.</string>
 </resources>

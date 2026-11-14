@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080911">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Connect to Starlit TV</title>
+  <link rel="icon" href="/tv/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/tv/style.css">
+  <script defer src="/tv/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="Starlit home"><img src="/tv/logo.svg" alt="" width="30" height="30"><span>Starlit</span></a>
+      <span class="app-header-caption" data-i18n="header">TV setup</span>
+    </header>
+    <main id="main">
+      <section id="connect-screen" class="connect-screen" aria-labelledby="title">
+        <div class="eyebrow" data-i18n="eyebrow">Connect a device</div>
+        <h1 id="title" data-i18n="title">Manage Starlit TV from your phone.</h1>
+        <p class="intro" data-i18n="intro">Enter the code shown on your television, or scan the QR code with your phone.</p>
+        <form id="connect-form" class="connect-form">
+          <label for="pair-code" data-i18n="codeLabel">TV pairing code</label>
+          <input id="pair-code" name="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required maxlength="64" placeholder="XXXXXXXX">
+          <button id="connect-button" type="submit" data-i18n="connect">Connect to TV</button>
+        </form>
+        <p class="footnote" data-i18n="safety">You must approve the connection on your television. This session cannot change other devices.</p>
+      </section>
+      <section id="pending-screen" hidden aria-labelledby="pending-title">
+        <div class="eyebrow" data-i18n="request">Pairing request</div>
+        <h1 id="pending-title" data-i18n="check">Verify on your television</h1>
+        <div class="verify-code" id="verify-code"></div>
+        <p class="intro" data-i18n="approve">Confirm this matching code on the TV, then choose Approve.</p>
+        <p class="device-name" id="requested-tv"></p>
+        <button class="secondary" id="cancel-request" type="button" data-i18n="cancel">Cancel</button>
+      </section>
+      <section id="manage-screen" hidden aria-labelledby="manage-title">
+        <div class="device-header"><div><div class="eyebrow" data-i18n="connected">Connected to</div><h1 id="manage-title"></h1><p class="profile-label" id="profile"></p></div><button class="secondary outline" id="disconnect" data-i18n="disconnect">Disconnect</button></div>
+        <nav class="tabs" role="tablist" aria-label="Extensions">
+          <button id="tab-addons" class="selected" role="tab" aria-selected="true" aria-controls="addon-panel" data-i18n="addons">Add-ons</button>
+          <button id="tab-plugins" role="tab" aria-selected="false" aria-controls="plugin-panel" data-i18n="plugins">Plugins</button>
+        </nav>
+        <div id="addon-panel" role="tabpanel">
+          <form id="addon-form" class="install-form">
+            <label for="addon-url" data-i18n="addonUrl">Add-on manifest URL</label>
+            <div class="input-row"><input id="addon-url" inputmode="url" type="url" placeholder="https://example.org/manifest.json" required><button data-i18n="preview">Preview</button></div>
+          </form>
+          <section id="preview-addon" class="preview" hidden aria-live="polite"></section>
+          <div class="section-heading"><h2 data-i18n="installedAddons">Installed add-ons</h2><span id="addon-count"></span></div>
+          <div id="addons-list" class="item-list"></div>
+        </div>
+        <div id="plugin-panel" role="tabpanel" hidden>
+          <p id="plugin-limitation" class="notice" hidden></p>
+          <form id="plugin-form" class="install-form">
+            <label for="plugin-url" data-i18n="pluginUrl">Plugin repository URL</label>
+            <div class="input-row"><input id="plugin-url" inputmode="url" type="url" placeholder="https://example.org/manifest.json" required><button data-i18n="preview">Preview</button></div>
+          </form>
+          <section id="preview-plugin" class="preview" hidden aria-live="polite"></section>
+          <div class="section-heading"><h2 data-i18n="installedPlugins">Repositories</h2><span id="plugin-count"></span></div>
+          <div id="plugins-list" class="item-list"></div>
+          <h2 data-i18n="providers">Providers</h2><div id="providers-list" class="item-list"></div>
+        </div>
+      </section>
+      <section id="error-screen" hidden aria-labelledby="error-title">
+        <h1 id="error-title" data-i18n="expired">Connection ended</h1>
+        <p class="intro" data-i18n="reconnect">Start pairing again from Starlit on your TV to continue.</p>
+        <button id="back-to-pair" data-i18n="again">Enter another code</button>
+      </section>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
+    <footer><span data-i18n="footer">Changes apply only to the selected TV profile.</span> <a href="/privacy/" data-i18n="privacy">Privacy</a></footer>
+  </div>
+</body>
+</html>

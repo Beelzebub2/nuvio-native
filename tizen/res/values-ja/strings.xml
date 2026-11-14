@@ -3388,4 +3388,20 @@
     <string name="stream_test_label_parallel16">Parallel Connect (16 MB Chunks)</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">スマートフォンで管理</string>
+    <string name="tv_phone_scan_instruction">QRコードを読み取ってアドオンとプラグインを管理します。</string>
+    <string name="tv_phone_pairing_code">コード: {{code}}</string>
+    <string name="tv_phone_preparing">接続中…</string>
+    <string name="tv_phone_waiting">スマートフォンを待機中</string>
+    <string name="tv_phone_approval_required">このテレビでスマートフォンを承認してください。</string>
+    <string name="tv_phone_verify_title">スマートフォンを承認しますか？</string>
+    <string name="tv_phone_verify_code">スマートフォンのコードと照合してください:</string>
+    <string name="tv_phone_approve">承認</string>
+    <string name="tv_phone_connected">スマートフォンを接続しました</string>
+    <string name="tv_phone_connected_hint">スマートフォンでアドオンとプラグインを管理します。</string>
+    <string name="tv_phone_change_applied">変更を適用しました。</string>
+    <string name="tv_phone_action_failed">変更を適用できませんでした。</string>
+    <string name="tv_phone_unavailable">接続できません</string>
+    <string name="tv_phone_disconnect">切断</string>
+    <string name="tv_phone_connection_error">接続を確認して再試行してください。</string>
 </resources>
