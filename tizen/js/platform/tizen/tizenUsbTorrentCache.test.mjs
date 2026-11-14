@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectTizenUsbStorage } from "./tizenUsbTorrentCache.js";
+import { detectTizenUsbStorage, TizenUsbTorrentCache } from "./tizenUsbTorrentCache.js";
 
 function withMock(api, run) {
   const previous = globalThis.tizen;
@@ -91,5 +91,28 @@ test("unsupported Tizen API leaves torrent playback on RAM", async () => {
   await withMock({}, async () => {
     const result = await detectTizenUsbStorage();
     assert.equal(result.drives.length, 0);
+  });
+});
+test("USB notifications are available before a cache opt-in and can be unsubscribed", async () => {
+  let storageHandler;
+  let registrations = 0;
+  const seen = [];
+  await withMock({
+    filesystem: {
+      addStorageStateChangeListener(handler) {
+        registrations++;
+        storageHandler = handler;
+        return 1;
+      }
+    }
+  }, async () => {
+    const unsubscribe = TizenUsbTorrentCache.subscribeStorageChanges((storage) => seen.push(storage.label));
+    assert.equal(registrations, 1);
+    storageHandler({ type: "INTERNAL", label: "system", state: "MOUNTED" });
+    storageHandler({ type: "EXTERNAL", label: "usb-1", state: "MOUNTED" });
+    assert.deepEqual(seen, ["usb-1"]);
+    unsubscribe();
+    storageHandler({ type: "EXTERNAL", label: "usb-2", state: "MOUNTED" });
+    assert.deepEqual(seen, ["usb-1"], "disposed UI must not keep receiving events");
   });
 });

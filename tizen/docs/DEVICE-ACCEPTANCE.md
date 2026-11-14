@@ -30,6 +30,19 @@ other Tizen generations or the final physical release acceptance.
 
 ## Additional USB torrent-cache acceptance (pending hardware verification)
 
+- With USB caching disabled, insert a writable USB drive while on Home:
+  confirm a remote-navigable, opt-in offer appears once per insertion and
+  no benchmark or torrent files are created before consent. Choose Not now
+  and verify duplicate mount notifications do not re-open the offer; eject
+  and reconnect to confirm the offer may appear again.
+- Start Starlit with a USB already connected: verify the offer appears after
+  navigation is ready, not during login/onboarding or the active video player.
+  Test Back, Not now, Use USB cache, Don't ask again, and focus restoration.
+- Choose Don't ask again and reconnect the USB; verify the prompt stays
+  suppressed while the manual Playback/P2P cache toggle remains available.
+- Eject during the offer and during a pending mount scan: the offer should
+  close or stay hidden, never enable storage on a removed device.
+
 - On Tizen 4/5/6, connect FAT32, exFAT and read-only external volumes. Verify
   that only mounted writable devices are eligible and the displayed capacity
   does not accidentally include internal storage.

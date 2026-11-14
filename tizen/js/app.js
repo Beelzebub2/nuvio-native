@@ -38,6 +38,7 @@ import { I18n } from "./i18n/index.js";
 import { getLatestAppUpdateWithRetry } from "./core/update/appUpdateService.js";
 import { shouldShowUpdate } from "./core/update/updateBannerPolicy.js";
 import { showAppUpdatePrompt } from "./ui/components/appUpdatePrompt.js";
+import { startTizenUsbCacheOffers } from "./ui/components/tizenUsbCacheOffer.js";
 import { resolveExperienceRoute } from "./core/profile/experienceModeRouting.js";
 import { PluginRuntime } from "./core/player/pluginRuntime.js";
 import { installPartyEffects } from "./ui/screens/party/partyEffects.js";
@@ -651,6 +652,11 @@ async function bootstrapApp() {
   await I18n.init();
   markBootStage("Initializing navigation");
   Router.init();
+  if (Platform.isTizen() && TizenCapabilities.canUseP2p()) {
+    // Listen even when USB caching is off so a newly plugged-in drive can
+    // offer the opt-in setting. The first inventory runs after boot settles.
+    startTizenUsbCacheOffers();
+  }
   PlayerController.init();
   installCustomPosterFallback();
   preloadMaterialIconFont();
