@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -66,8 +67,10 @@ internal fun DesktopNavigationBar(
     val colors = MaterialTheme.nuvio.colors
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
-    val scrollOffset = scrollState?.totalScrollOffset ?: 0f
-    val isScrolledAwayFromTop = scrollOffset > 35f
+    // This toolbar uses only a threshold, so ignore intermediate pixel updates.
+    val isScrolledAwayFromTop by remember(scrollState) {
+        derivedStateOf { (scrollState?.totalScrollOffset ?: 0f) > 35f }
+    }
     val spansWindow = leadingContent != null || trailingContent != null
     val labelFraction by animateFloatAsState(
         targetValue = desktopNavigationLabelFraction(navBarStyle),
