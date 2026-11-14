@@ -3458,4 +3458,9 @@
     <string name="sources_plays_best_body">%1$s. As fontes que ela pode não reproduzir estão marcadas.</string>
     <string name="sources_warning_plays_as_hdr10">Reproduz como HDR10</string>
     <string name="sources_warning_audio_may_not_play">O áudio pode não tocar</string>
+    <string name="usb_cache_offer_title">Armazenamento USB conectado</string>
+    <string name="usb_cache_offer_description">Quer usar esta unidade USB para armazenar temporariamente partes dos torrents? O Starlit mede a velocidade antes da reprodução, preserva espaço livre e usa a memória RAM se necessário.</string>
+    <string name="usb_cache_offer_later">Agora não</string>
+    <string name="usb_cache_offer_enable">Usar cache USB</string>
+    <string name="usb_cache_offer_never">Não perguntar novamente</string>
 </resources>
