@@ -16093,8 +16093,10 @@ function start(options, callback) {
         var body;
         try { body = JSON.parse(Buffer.concat(probeChunks).toString('utf8')); }
         catch (_) { return json(res, 400, { error: 'Invalid cache probe' }); }
+        var missingCapacity = body && body.freeBytes === null && body.totalBytes === null;
         if (!body || typeof body.root !== 'string' || body.root.length > 700 ||
-            typeof body.freeBytes !== 'number' || typeof body.totalBytes !== 'number') return json(res, 400, { error: 'Invalid storage details' });
+            (!missingCapacity && (typeof body.freeBytes !== 'number' ||
+              typeof body.totalBytes !== 'number'))) return json(res, 400, { error: 'Invalid storage details' });
         usbProbing = true;
         usbCache.probe(body.root, body.freeBytes, body.totalBytes, function (error, result) {
           usbProbing = false;
@@ -16221,6 +16223,41 @@ function safeRoot(root) {
       !fs.statSync(resolved).isDirectory()) throw new Error('Invalid removable root');
   return resolved;
 }
+// Tizen's Filesystem API can expose a mounted USB volume even when the
+// SystemInfo STORAGE property omits its capacity. Measure that exact mount in
+// the Node service rather than assuming internal storage is removable.
+function parseDiskSpace(output) {
+  if (typeof output !== 'string' || output.length > 8192) return null;
+  var lines = output.trim().split(/\r?\n/);
+  if (lines.length < 2) return null;
+  var fields = lines[lines.length - 1].trim().split(/\s+/);
+  if (fields.length < 6) return null;
+  // The -k option guarantees 1024-byte blocks; -P prevents wrapped records.
+  var totalBlocks = Number(fields[1]), freeBlocks = Number(fields[3]);
+  var total = totalBlocks * 1024, free = freeBlocks * 1024;
+  if (!isFinite(total) || !isFinite(free) || Math.floor(total) !== total ||
+      Math.floor(free) !== free || total <= 0 || free < 0 || free > total ||
+      total > 16 * 1024 * GiB) return null;
+  return { totalBytes: total, freeBytes: free };
+}
+function readDiskSpace(root, callback, executor) {
+  var resolved;
+  try { resolved = safeRoot(root); }
+  catch (error) { return process.nextTick(function () { callback(error); }); }
+  try {
+    // An argument vector (never a shell) and a bounded response prevent the
+    // external volume label from being interpreted as command text.
+    var exec = executor || require('child_process').execFile;
+    exec('df', ['-Pk', resolved], { timeout: 3000, maxBuffer: 8192 }, function (error, output) {
+      var measured = error ? null : parseDiskSpace(output);
+      if (!measured) return callback(new Error('USB free space unavailable'));
+      callback(null, measured);
+    });
+  } catch (error) {
+    // TVs without a runnable df utility retain bounded RAM caching.
+    process.nextTick(function () { callback(new Error('USB free space unavailable')); });
+  }
+}
 function prepare(root) {
   var realRoot = safeRoot(root), dir = path.join(realRoot, DIR_NAME), made = false;
   try { fs.mkdirSync(dir, 448); made = true; } catch (err) { if (err.code !== 'EEXIST') throw err; }
@@ -16308,6 +16345,12 @@ function benchmark(dir, cb) {
   });
 }
 function probe(root, free, total, cb) {
+  if (free == null || total == null) {
+    return readDiskSpace(root, function (error, measured) {
+      if (error) return cb(null, { mode: 'memory', reason: 'USB detected but free space cannot be measured' });
+      probe(root, measured.freeBytes, measured.totalBytes, cb);
+    });
+  }
   var dir;
   try {
     if (!policy(free, total, 100)) return process.nextTick(function () { cb(null, { mode: 'memory', reason: 'insufficient-space' }); });
@@ -16515,7 +16558,8 @@ function create(config, evict, onFailure) {
     }
   };
 }
-module.exports = { probe: probe, policy: policy, create: create };
+module.exports = { probe: probe, policy: policy, create: create,
+  parseDiskSpace: parseDiskSpace, readDiskSpace: readDiskSpace };
 
-},{"./bounded-store.cjs":1,"./recency-list.cjs":90,"crypto":undefined,"fs":undefined,"path":undefined}]},{},[91])(91)
+},{"./bounded-store.cjs":1,"./recency-list.cjs":90,"child_process":undefined,"crypto":undefined,"fs":undefined,"path":undefined}]},{},[91])(91)
 });

@@ -1,6 +1,7 @@
 'use strict';
 var assert = require('assert'), http = require('http'), fs = require('fs');
 var os = require('os'), path = require('path'), crypto = require('crypto');
+var childProcess = require('child_process');
 var runtime = require('./media-http.cjs');
 var MiB = 1024 * 1024, GiB = 1024 * MiB;
 var root = path.join(os.tmpdir(), 'starlit-usb-service-test-' + crypto.randomBytes(10).toString('hex'));
@@ -81,6 +82,30 @@ new Promise(function(resolve) {
 }).then(function(result) {
   assert.equal(result.status,200);
   assert.equal(result.json.configured,false);
+  // A real Tizen mount can be writable even when SystemInfo reports no USB
+  // capacity. The bundled HTTP service must accept the null/null sentinel and
+  // measure the native volume before probing, not reject it with HTTP 400.
+  var previous = childProcess.execFile;
+  childProcess.execFile = function(command, args, options, callback) {
+    assert.equal(command, 'df');
+    assert.deepEqual(args, ['-Pk', fs.realpathSync(root)]);
+    process.nextTick(function() {
+      callback(null, 'Filesystem 1024-blocks Used Available Capacity Mounted on\n' +
+        '/dev/sda1 4194304 1048576 3145728 25% /media/usb\n');
+    });
+  };
+  return request('/cache/probe','POST',{root:root,freeBytes:null,totalBytes:null},true)
+    .then(function (probeResult) {
+      childProcess.execFile = previous;
+      assert.equal(probeResult.status,200);
+      assert.equal(probeResult.json.mode,'usb');
+      return request('/cache/disable','POST',{},true);
+    }, function (error) {
+      childProcess.execFile = previous;
+      throw error;
+    });
+}).then(function(result) {
+  assert.equal(result.status,200);
   return request('/cache/status','GET',null,true);
 }).then(function(result) {
   assert.equal(result.json.configured,false);

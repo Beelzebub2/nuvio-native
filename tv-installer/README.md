@@ -13,6 +13,8 @@ Requires Node.js 24 and a Windows PC on the same private LAN as the TV. Run from
     npm test
     npm start
 
+`npm start` and `npm run dist:win` first copy Starlit's JetBrains Sans fonts from `composeApp` into `src/fonts` (ignored by Git), so run them from a full Starlit checkout.
+
 Switch between Samsung and LG in the same window. Each platform supports a validated local package or a checksum-verified official Starlit release asset; launching and uninstalling target only Starlit. Installing an update does not first uninstall the existing version.
 
 ## Find TVs automatically

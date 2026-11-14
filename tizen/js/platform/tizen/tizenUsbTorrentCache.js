@@ -13,15 +13,36 @@ let generation = 0;
 let state = { mode: "memory", reason: "USB cache disabled" };
 const storageChangeSubscribers = new Set();
 
-function callTizen(method, args = []) {
+function callTizen(method, args = [], timeoutMs = 3500) {
   return new Promise((resolve, reject) => {
-    try { method(...args, resolve, reject); } catch (error) { reject(error); }
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error("Tizen storage query timed out")), timeoutMs);
+    function finish(error, result) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(result);
+    }
+    try { method(...args, (result) => finish(null, result), (error) => finish(error)); }
+    catch (error) { finish(error); }
   });
 }
 function resolveDrive(label) {
   return new Promise((resolve, reject) => {
-    try { globalThis.tizen.filesystem.resolve(label, resolve, reject, "rw"); }
-    catch (error) { reject(error); }
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error("Tizen USB mount resolution timed out")), 3500);
+    function finish(error, file) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(file);
+    }
+    try {
+      globalThis.tizen.filesystem.resolve(label,
+        (file) => finish(null, file), (error) => finish(error), "rw");
+    } catch (error) { finish(error); }
   });
 }
 function nativePathFromFile(file) {
@@ -43,29 +64,36 @@ function usableUnit(unit) {
 }
 async function findDrives() {
   const api = globalThis.tizen;
-  if (!api?.filesystem?.listStorages || !api?.filesystem?.resolve ||
-      !api?.systeminfo?.getPropertyValue) {
-    return { drives: [], reason: "TV external storage API unavailable" };
+  if (!api?.filesystem?.listStorages || !api?.filesystem?.resolve) {
+    return { drives: [], reason: "TV USB filesystem API unavailable" };
   }
-  const [storages, info] = await Promise.all([
-    callTizen(api.filesystem.listStorages.bind(api.filesystem)),
-    callTizen(api.systeminfo.getPropertyValue.bind(api.systeminfo), ["STORAGE"])
-  ]);
+  let storages;
+  try { storages = await callTizen(api.filesystem.listStorages.bind(api.filesystem)); }
+  catch (error) {
+    return { drives: [], reason: "Cannot list TV storage: " + String(error?.message || error) };
+  }
   const candidates = (Array.isArray(storages) ? storages : []).filter(
     (item) => item?.type === "EXTERNAL" && item?.state === "MOUNTED" && item?.label
   );
+  if (!candidates.length) return { drives: [], reason: "No mounted USB drive reported by Tizen" };
+  // On some TV firmware versions SystemInfo omits removable disks even though
+  // Filesystem lists and resolves them. The service can measure the specific
+  // native mount safely; do not confuse a missing capacity report with no USB.
+  let info = null;
+  if (typeof api?.systeminfo?.getPropertyValue === "function") {
+    try { info = await callTizen(api.systeminfo.getPropertyValue.bind(api.systeminfo), ["STORAGE"], 2200); }
+    catch (_) { /* Missing capacity does not invalidate a mounted filesystem. */ }
+  }
   const units = (Array.isArray(info?.units) ? info.units : []).filter(
     (unit) => usableUnit(unit) &&
       (unit.isRemovable === true || unit.isRemoveable === true ||
        unit.type === "USB_HOST" || unit.type === "USB_DEVICE" || unit.type === "MMC")
   );
-  if (!candidates.length || !units.length) {
-    return { drives: [], reason: "No mounted USB with measurable free space" };
-  }
   // SystemInfo USB units have no storage labels, so use the most conservative
-  // available/total value when the TV reports multiple removable devices.
-  const freeBytes = Math.min(...units.map((unit) => Number(unit.availableCapacity)));
-  const totalBytes = Math.min(...units.map((unit) => Number(unit.capacity)));
+  // values when there is no way to associate individual units with labels.
+  // Null explicitly requests a per-mount capacity measurement from EngineFS.
+  const freeBytes = units.length ? Math.min(...units.map((unit) => Number(unit.availableCapacity))) : null;
+  const totalBytes = units.length ? Math.min(...units.map((unit) => Number(unit.capacity))) : null;
   const drives = [];
   for (const candidate of candidates) {
     try {
@@ -78,7 +106,9 @@ async function findDrives() {
       // Unwritable, unmounted or inaccessible devices cannot be selected.
     }
   }
-  return { drives, reason: drives.length ? "" : "No writable USB storage" };
+  return { drives, reason: drives.length
+    ? (units.length ? "" : "USB connected; checking free space in EngineFS")
+    : "USB mounted but not writable or accessible to Starlit" };
 }
 export async function detectTizenUsbStorage() {
   return findDrives();
@@ -168,7 +198,8 @@ export const TizenUsbTorrentCache = {
       } catch (_) {}
       configuredUrl = "";
     }
-    if (!force && lastCheckedUrl === baseUrl && Date.now() - lastCheckedAt < 10 * 60 * 1000) {
+    if (!force && lastCheckedUrl === baseUrl &&
+        Date.now() - lastCheckedAt < (configuredUrl ? 10 * 60 * 1000 : 20 * 1000)) {
       return state;
     }
     if (pending) return pending;
@@ -234,6 +265,7 @@ export const TizenUsbTorrentCache = {
   },
   async getState(baseUrl) {
     lastUrl = baseUrl;
+    if (this.isEnabled() && baseUrl) await this.configure(baseUrl);
     let server = null;
     try { server = await control(baseUrl, "/cache/status"); } catch (_) {}
     return { ...state, enabled: this.isEnabled(), configured: Boolean(server?.configured),
