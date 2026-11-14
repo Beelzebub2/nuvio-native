@@ -38,18 +38,29 @@
         <ol id="lg-steps">
           <li>Open the <strong>Developer Mode</strong> app on your LG TV.</li>
           <li>Enable <strong>Dev Mode Status</strong> and <strong>Key Server</strong>.</li>
-          <li>Find the TV's IP address and one-time passphrase.</li>
+          <li>Have the one-time passphrase ready. You can find the TV below or enter its IP manually.</li>
         </ol>
         <ol id="samsung-steps" hidden>
           <li>On the TV's Apps screen, enter <strong>12345</strong> to open Developer Mode.</li>
           <li>Turn it on and set <strong>Host PC IP</strong> to your computer's LAN address.</li>
-          <li><strong>Restart the TV</strong>, then enter its network address below.</li>
+          <li><strong>Restart the TV</strong>, then select it from the scan or enter its IP manually.</li>
         </ol>
         <p class="host-ip-note" id="host-ip-note" hidden>Computer LAN addresses: <strong id="host-ips">Checking...</strong></p>
       </div>
       <form id="tv-form" class="form-stack">
+        <section class="discovery" aria-labelledby="discovery-heading">
+          <div class="discovery-head">
+            <div>
+              <h3 id="discovery-heading">Find your TV automatically</h3>
+              <p>Search nearby Samsung and LG TVs on the same network. Select one to fill in its address.</p>
+            </div>
+            <button id="btn-discover" type="button" class="secondary primary-outline">Find TVs</button>
+          </div>
+          <p id="discovery-status" class="discovery-status" role="status" aria-live="polite">Or enter your TV's address manually below.</p>
+          <div id="discovery-results" class="discovery-results" role="list" hidden></div>
+        </section>
         <div class="field">
-          <label for="tv-ip">Television IP address</label>
+          <label for="tv-ip">Television IP address (or choose one above)</label>
           <input id="tv-ip" name="ip" inputmode="decimal" spellcheck="false" autocomplete="off" placeholder="192.168.1.100" required>
         </div>
         <div class="field" id="device-name-field">

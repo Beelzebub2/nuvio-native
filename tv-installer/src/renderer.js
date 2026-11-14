@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const api = window.starlitTV;
-const buttons = ["btn-pair", "btn-install", "btn-browse", "btn-launch", "btn-uninstall"];
+const buttons = ["btn-discover", "btn-pair", "btn-install", "btn-browse", "btn-launch", "btn-uninstall"];
 const platforms = {
   webos: {
     name: "LG webOS", extension: ".ipk", title: "Local IPK file",
@@ -41,6 +41,7 @@ function setBusy(nextBusy, label = "") {
   busy = nextBusy;
   for (const id of buttons) $(id).disabled = busy;
   $("package-sources").disabled = busy;
+  for (const button of $("discovery-results").querySelectorAll("button")) button.disabled = busy;
   for (const field of document.querySelectorAll('input[name="platform"]')) field.disabled = busy;
   $("tv-ip").disabled = busy;
   $("tv-name").disabled = busy;
@@ -142,6 +143,96 @@ async function perform(action) {
     setBusy(false, "Action failed");
   }
 }
+
+function useDiscoveredTv(tv) {
+  if (busy || !tv || !platforms[tv.platform]) return;
+  const platform = tv.platform;
+  const previousIp = state[platform].ip;
+  if (platform === "webos" && previousIp !== tv.ip) {
+    state.webos.name = tv.savedDeviceName || ("starlit-lg-" + tv.ip.split(".").pop());
+  }
+  state[platform].ip = tv.ip;
+  connectedPlatform = "";
+  const radio = document.querySelector('input[name="platform"][value="' + platform + '"]');
+  radio.checked = true;
+  switchPlatform(platform);
+  $("discovery-status").textContent = "Selected " + (tv.name || platforms[platform].name) +
+    " (" + tv.ip + "). Check Developer Mode and connect to continue.";
+  addLog("Selected " + platforms[platform].name + " at " + tv.ip + ". Developer Mode and pairing are still required.");
+  $("btn-pair").focus();
+}
+
+function showDiscoveredTvs(devices) {
+  const list = $("discovery-results");
+  list.replaceChildren();
+  if (!devices.length) {
+    list.hidden = true;
+    return;
+  }
+  for (const tv of devices) {
+    if (!tv || !platforms[tv.platform] || typeof tv.ip !== "string") continue;
+    const item = document.createElement("div");
+    item.className = "discovered-device";
+    item.setAttribute("role", "listitem");
+
+    const info = document.createElement("div");
+    info.className = "device-info";
+    const platform = document.createElement("span");
+    platform.className = "device-platform";
+    platform.textContent = platforms[tv.platform].name;
+    const name = document.createElement("strong");
+    name.textContent = tv.name || platforms[tv.platform].name;
+    const meta = document.createElement("small");
+    meta.textContent = [tv.ip, tv.model].filter(Boolean).join(" · ");
+    const detail = document.createElement("small");
+    detail.textContent = tv.detail || "Developer Mode setup required";
+    info.append(platform, name, meta, detail);
+
+    const select = document.createElement("button");
+    select.className = "secondary";
+    select.type = "button";
+    select.textContent = "Use TV";
+    select.setAttribute("aria-label", "Use " + name.textContent + " at " + tv.ip);
+    select.disabled = busy;
+    select.addEventListener("click", () => useDiscoveredTv(tv));
+    item.append(info, select);
+    list.appendChild(item);
+  }
+  list.hidden = !list.children.length;
+}
+
+async function scanForTvs() {
+  if (busy) return;
+  if (!api?.discoverTvs) {
+    $("discovery-status").textContent = "Network discovery is unavailable. Enter the IP address below.";
+    addLog("The installer cannot start TV discovery.", "error");
+    return;
+  }
+  setBusy(true, "Searching for TVs...");
+  $("discovery-status").textContent = "Scanning your private network for Samsung and LG TVs...";
+  $("discovery-results").replaceChildren();
+  $("discovery-results").hidden = true;
+  try {
+    const response = await api.discoverTvs();
+    if (!response?.ok) throw new Error(response?.error || "Discovery failed");
+    const devices = Array.isArray(response.result?.devices) ? response.result.devices : [];
+    const warnings = Array.isArray(response.result?.warnings) ? response.result.warnings : [];
+    showDiscoveredTvs(devices);
+    $("discovery-status").textContent = devices.length
+      ? "Found " + devices.length + " TV" + (devices.length === 1 ? "" : "s") +
+        ". Choose one below; installation still requires Developer Mode."
+      : "No compatible TVs found. Make sure your TV is on and connected to the same LAN, or enter its IP below.";
+    for (const warning of warnings) addLog(warning, "error");
+    addLog("TV scan finished: " + devices.length + " compatible device" +
+      (devices.length === 1 ? "" : "s") + " found.", devices.length ? "success" : "muted");
+    setBusy(false, "Ready");
+  } catch (error) {
+    $("discovery-status").textContent = "Could not complete the scan. Check network access or enter the TV IP manually.";
+    addLog("TV discovery failed: " + (error.message || String(error)), "error");
+    setBusy(false, "Scan failed");
+  }
+}
+
 for (const radio of document.querySelectorAll('input[name="source"]')) {
   radio.addEventListener("change", syncSource);
 }
@@ -158,6 +249,7 @@ $("tv-name").addEventListener("input", () => {
   connectedPlatform = "";
   resetConnectionStatus();
 });
+$("btn-discover").addEventListener("click", scanForTvs);
 $("btn-pair").addEventListener("click", () => perform("pair"));
 $("btn-install").addEventListener("click", () => perform("install"));
 $("btn-launch").addEventListener("click", () => perform("launch"));
