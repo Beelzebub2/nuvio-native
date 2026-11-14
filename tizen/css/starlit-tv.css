@@ -2495,3 +2495,318 @@ body {
   color: var(--tv-on-accent);
   box-shadow: var(--tv-focus-shadow-button);
 }
+
+/* ---- Player control bar redesign (2026-11) --------------------------------------
+   Matches the desktop and phone players: title and episode top left with the
+   playback chips, one seek row (elapsed | bar split into chapters | remaining),
+   and icon buttons with transport on the left and library | tracks and view |
+   extras on the right. The focused button names itself, like desktop tooltips. */
+
+#app .player-controls-overlay {
+  --player-control-size: 64px;
+}
+
+#app .player-controls-gradient-top {
+  height: 280px;
+  background: linear-gradient(180deg, rgba(4, 5, 7, 0.7) 0%, rgba(4, 5, 7, 0) 100%);
+}
+
+#app .player-controls-gradient-bottom {
+  height: 440px;
+  background: linear-gradient(0deg, rgba(4, 5, 7, 0.9) 0%, rgba(4, 5, 7, 0.55) 45%, rgba(4, 5, 7, 0) 100%);
+}
+
+/* Header: the title, then the episode with the playback chips beside it. */
+#app .player-title,
+#app .player-meta.has-episode .player-title {
+  color: var(--tv-text);
+  font-size: 44px;
+  line-height: 52px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+}
+
+#app .player-episode-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+#app .player-episode-row .player-subtitle {
+  min-width: 0;
+  margin-top: 0;
+  color: rgba(244, 246, 250, 0.82);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#app .player-episode-row .player-playback-badges {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+#app .player-meta-secondary {
+  margin-top: 10px;
+  color: rgba(244, 246, 250, 0.7);
+  font-style: italic;
+}
+
+/* Seek row: elapsed, the bar and remaining time on one line. */
+#app .player-time-row.player-scrub-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 28px;
+  margin-top: 0;
+  color: var(--tv-text);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#app .player-scrub-row .player-elapsed-label,
+#app .player-scrub-row .player-remaining-label {
+  flex: 0 0 auto;
+  min-width: 104px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+#app .player-scrub-row .player-remaining-label {
+  color: rgba(244, 246, 250, 0.85);
+  text-align: right;
+}
+
+#app .player-scrub-row .player-progress-shell {
+  position: relative;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  margin-top: 0;
+  padding: 16px 0;
+}
+
+#app .player-scrub-row .player-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
+
+#app .player-scrub-row .player-progress-shell.focused .player-progress-track {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: none;
+}
+
+#app .player-scrub-row .player-progress-buffered {
+  background: #ffffff;
+  border-radius: 0;
+}
+
+#app .player-scrub-row .player-progress-buffered.is-visible {
+  opacity: 0.3;
+}
+
+#app .player-scrub-row .player-progress-fill {
+  background: var(--tv-accent);
+  border-radius: 0;
+}
+
+/* Chapter, recap, intro and credits edges show as gaps in the bar. */
+#app .player-scrub-row .player-progress-tick {
+  width: 5px;
+  margin-left: -2px;
+  background: rgb(8, 9, 12);
+}
+
+#app .player-progress-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 4;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.5);
+  transform: scale(0.8);
+  pointer-events: none;
+}
+
+#app .player-progress-shell.focused .player-progress-thumb {
+  transform: scale(1);
+  box-shadow: 0 0 0 5px var(--tv-ring), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* The time and chapter at the playhead while the bar has focus. */
+#app .player-scrub-row .player-chapter-label {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  display: none;
+  flex: none;
+  max-width: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(16, 17, 21, 0.94);
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#app .player-progress-shell.focused .player-chapter-label {
+  display: block;
+}
+
+/* Control bar */
+#app .player-controls-row {
+  position: relative;
+  margin-top: 20px;
+}
+
+#app .player-controls-row .player-control-buttons {
+  flex: 1 1 auto;
+  gap: 8px;
+}
+
+#app .player-control-btn {
+  position: static;
+  border-radius: 18px;
+  background: transparent;
+  color: rgba(244, 246, 250, 0.92);
+}
+
+/* Icon, seek digits and badge are positioned within the glyph. */
+#app .player-control-glyph {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#app .player-control-btn .player-control-icon {
+  width: 32px;
+  height: 32px;
+}
+
+#app .player-control-btn[data-action="seekBack10"] .player-control-icon,
+#app .player-control-btn[data-action="seekForward10"] .player-control-icon {
+  width: 36px;
+  height: 36px;
+}
+
+#app .player-control-btn:not(.focused):not(.is-primary) .player-control-icon-mask {
+  background-color: rgba(244, 246, 250, 0.92);
+}
+
+#app .player-control-btn.is-primary {
+  margin-right: 12px;
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+#app .player-control-btn.is-primary.focused {
+  box-shadow: var(--tv-focus-shadow-button);
+}
+
+#app .player-control-btn.is-primary .player-control-icon {
+  width: 34px;
+  height: 34px;
+}
+
+#app .player-control-btn.is-right-start {
+  margin-left: auto;
+}
+
+#app .player-control-divider {
+  flex: 0 0 auto;
+  width: 2px;
+  height: 36px;
+  margin: 0 12px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Seek interval inside the replay and forward arrows. */
+#app .player-control-amount {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: rgba(244, 246, 250, 0.92);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#app .player-control-btn.focused .player-control-amount {
+  color: var(--tv-on-accent);
+}
+
+#app .player-control-badge {
+  position: absolute;
+  top: -12px;
+  right: -20px;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--tv-accent);
+  color: var(--tv-on-accent);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+#app .player-control-btn.focused .player-control-badge {
+  background: var(--tv-on-accent);
+  color: var(--tv-accent);
+}
+
+/* The name of the focused button, like the desktop tooltips. A tooltip above the
+   button would cover the seek row (play has focus whenever the bar appears), so on
+   TV it sits in the open middle of the control row instead. */
+#app .player-control-tip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  display: none;
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: rgba(16, 17, 21, 0.86);
+  color: #ffffff;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#app .player-control-btn.focused .player-control-tip {
+  display: block;
+}

@@ -1,5 +1,6 @@
 import { syncPlayerPlaybackBadges } from "./playerPlaybackBadges.js";
 import { syncHtmlSubtitleClearance } from "./subtitleOverlayClearance.js";
+import { TIMELINE_SEGMENT_LABELS, buildTimelineBoundaries, timelineSegmentCategoryAt } from "./playerTimelineSegments.js";
 import { MediaServerScrobbleService } from "../../../data/mediaserver/mediaServerScrobbleService.js";
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
@@ -168,7 +169,10 @@ export function createPlayerScreenMethods32() {
         this.renderSeekOverlay();
       }
     },
-    /** Elapsed, chapter and remaining under the bar, plus chapter ticks. */
+    /**
+     * Elapsed and remaining either side of the bar, the chapter or recap/intro/credits
+     * name in the bubble above the playhead, and the gaps that split the bar into chapters.
+     */
     renderTimeRow(position, duration) {
       const uiRefs = this.uiRefs || {};
       const uiState = this.lastUiTickState || (this.lastUiTickState = {});
@@ -193,19 +197,23 @@ export function createPlayerScreenMethods32() {
           chapterText = title && title !== number ? `${number} \u00B7 ${title}` : number;
         }
       }
-      if (uiRefs.chapterLabel && uiState.chapterText !== chapterText) {
-        uiRefs.chapterLabel.textContent = chapterText;
-        uiState.chapterText = chapterText;
+      if (!chapterText) {
+        const segmentLabel = TIMELINE_SEGMENT_LABELS[timelineSegmentCategoryAt(this.skipIntervals, position)];
+        if (segmentLabel) chapterText = t(segmentLabel.key, {}, segmentLabel.fallback);
       }
-      const ticksKey = chapters.length > 1 && duration > 0 ? `${duration}:${chapters.map((chapter) => chapter.startMs).join(",")}` : "";
+      // Like the desktop hover time: the playhead time, then the chapter it is in.
+      const bubbleText = chapterText ? `${elapsedText} · ${chapterText}` : elapsedText;
+      if (uiRefs.chapterLabel && uiState.chapterText !== bubbleText) {
+        uiRefs.chapterLabel.textContent = bubbleText;
+        uiState.chapterText = bubbleText;
+      }
+      const boundaries = buildTimelineBoundaries(chapters, this.skipIntervals, duration);
+      const ticksKey = boundaries.length ? `${duration}:${boundaries.join(",")}` : "";
       if (uiRefs.progressTicks && uiState.ticksKey !== ticksKey) {
         uiState.ticksKey = ticksKey;
-        uiRefs.progressTicks.innerHTML = ticksKey
-          ? chapters
-              .filter((chapter) => chapter.startMs > 0 && chapter.startMs / 1000 < duration)
-              .map((chapter) => `<span class="player-progress-tick" style="left:${Math.round((chapter.startMs / 1000 / duration) * 10000) / 100}%"></span>`)
-              .join("")
-          : "";
+        uiRefs.progressTicks.innerHTML = boundaries
+          .map((seconds) => `<span class="player-progress-tick" style="left:${Math.round((seconds / duration) * 10000) / 100}%"></span>`)
+          .join("");
       }
     },
     renderProgressPosition() {
@@ -226,6 +234,11 @@ export function createPlayerScreenMethods32() {
         const nextWidth = `${Math.round(progress * 10000) / 100}%`;
         if (uiState.progressWidth !== nextWidth) {
           progressFill.style.width = nextWidth;
+          if (uiRefs.progressThumb) uiRefs.progressThumb.style.left = nextWidth;
+          if (uiRefs.chapterLabel) {
+            // Keep the bubble on screen near the ends of the bar.
+            uiRefs.chapterLabel.style.left = `${Math.round(clamp(progress, 0.04, 0.96) * 10000) / 100}%`;
+          }
           uiState.progressWidth = nextWidth;
         }
       }

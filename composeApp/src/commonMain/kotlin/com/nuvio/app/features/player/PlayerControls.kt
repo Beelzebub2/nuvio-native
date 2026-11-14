@@ -95,8 +95,10 @@ internal fun PlayerControlsShell(
     showRemainingTime: Boolean = false,
     onRuntimeClick: () -> Unit = {},
     releaseInfo: String? = null,
-    hideDetails: Boolean = false,
     showMetadata: Boolean = true,
+    skipSegments: List<PlayerControlSkipSegment> = emptyList(),
+    subtitlesActive: Boolean = false,
+    onControlsFocusChanged: (Boolean) -> Unit = {},
     onNextEpisodeClick: (() -> Unit)? = null,
     onInteraction: () -> Unit = {},
     showPlaybackControls: Boolean = true,
@@ -127,50 +129,107 @@ internal fun PlayerControlsShell(
     horizontalSafePadding: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    var timelineHeight by remember { mutableStateOf(0.dp) }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val centerControlHeight = metrics.playIconSize + maxOf(metrics.playButtonPadding, metrics.sideButtonPadding) * 2
-        val centerBottomPadding = if (useLegacyLayout) metrics.centerLift else maxOf(
-            metrics.centerLift,
-            timelineHeight * 2 + centerControlHeight + 16.dp - maxHeight,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.7f),
-                            Color.Transparent,
+        if (useLegacyLayout) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .align(Alignment.TopCenter)
+                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent))),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))),
+            )
+        } else {
+            // The desktop scrims, scaled down so a landscape phone keeps most of the picture clear.
+            val scrim = Color(0xFF040507)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(minOf(190.dp, maxHeight * 0.4f))
+                    .align(Alignment.TopCenter)
+                    .background(Brush.verticalGradient(listOf(scrim.copy(alpha = 0.7f), Color.Transparent))),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(minOf(300.dp, maxHeight * 0.6f))
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.55f to scrim.copy(alpha = 0.55f),
+                            1f to scrim.copy(alpha = 0.9f),
                         ),
                     ),
-                ),
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (useLegacyLayout) 220.dp else 260.dp)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = if (useLegacyLayout) 0.7f else 0.8f),
-                        ),
-                    ),
-                ),
-        )
+            )
+        }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = horizontalSafePadding),
         ) {
-            if (useLegacyLayout) {
+            if (!useLegacyLayout) {
+                val episodeLine = when {
+                    seasonNumber != null && episodeNumber != null && !episodeTitle.isNullOrBlank() ->
+                        stringResource(Res.string.compose_player_episode_title_format, seasonNumber, episodeNumber, episodeTitle)
+                    seasonNumber != null && episodeNumber != null ->
+                        stringResource(Res.string.compose_player_episode_code_full, seasonNumber, episodeNumber)
+                    else -> releaseInfo
+                }
+                PlayerModernControlsLayer(
+                    title = title,
+                    episodeLine = episodeLine,
+                    sourceLine = listOf(streamTitle.replace("\n", " · "), providerName)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                        .takeIf { it.isNotBlank() },
+                    playbackSnapshot = playbackSnapshot,
+                    displayedPositionMs = displayedPositionMs,
+                    metrics = metrics,
+                    resizeMode = resizeMode,
+                    isLocked = isLocked,
+                    showControls = showPlaybackControls,
+                    showMetadata = showMetadata,
+                    showRemainingTime = showRemainingTime,
+                    skipSegments = skipSegments,
+                    subtitlesActive = subtitlesActive,
+                    shortSeekSeconds = shortSeekSeconds,
+                    toggles = controlToggles,
+                    parentalWarnings = parentalWarnings,
+                    showParentalGuide = showParentalGuide,
+                    onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
+                    onInteraction = onInteraction,
+                    onRuntimeClick = onRuntimeClick,
+                    onLockToggle = onLockToggle,
+                    onBack = onBack,
+                    onTogglePlayback = onTogglePlayback,
+                    onSeekBack = onSeekBack,
+                    onSeekForward = onSeekForward,
+                    onNextEpisodeClick = onNextEpisodeClick,
+                    onSubtitleClick = onSubtitleClick,
+                    onAudioClick = onAudioClick,
+                    onSourcesClick = onSourcesClick,
+                    onEpisodesClick = onEpisodesClick,
+                    onSpeedClick = onSpeedClick,
+                    onResizeModeClick = onResizeModeClick,
+                    onVideoSettingsClick = onVideoSettingsClick,
+                    onOpenInExternalPlayer = onOpenInExternalPlayer,
+                    onSubmitIntroClick = onSubmitIntroClick,
+                    onHandoffClick = onHandoffClick,
+                    onDiagnosticsClick = onDiagnosticsClick,
+                    onCastInfoClick = onCastInfoClick,
+                    onScrubChange = onScrubChange,
+                    onScrubFinished = onScrubFinished,
+                    onControlsFocusChanged = onControlsFocusChanged,
+                )
+            } else {
                 PlayerHeader(
                     title = title,
                     streamTitle = streamTitle,
@@ -200,128 +259,36 @@ internal fun PlayerControlsShell(
                             top = metrics.verticalPadding / 4,
                         ),
                 )
-            } else {
                 if (showPlaybackControls) {
-                    PlayerToolbar(
-                        isLocked = isLocked,
-                        onLockToggle = onLockToggle,
-                        onBack = onBack,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
-                            .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding / 4),
-                    )
-                }
-                ParentalGuideOverlay(
-                    warnings = parentalWarnings,
-                    isVisible = showParentalGuide,
-                    onAnimationComplete = onParentalGuideAnimationComplete,
-                    contentPadding = PaddingValues(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding),
-                    modifier = Modifier.align(Alignment.TopStart),
-                )
-            }
-
-            if (showPlaybackControls) {
-                CompositionLocalProvider(
-                    LocalLayoutDirection provides if (useLegacyLayout) LocalLayoutDirection.current else LayoutDirection.Ltr,
-                ) {
                     CenterControls(
                         snapshot = playbackSnapshot,
                         metrics = metrics,
                         seekSeconds = shortSeekSeconds,
-                        onSeekBack = {
-                            if (!useLegacyLayout) onInteraction()
-                            onSeekBack()
-                        },
-                        onSeekForward = {
-                            if (!useLegacyLayout) onInteraction()
-                            onSeekForward()
-                        },
-                        onTogglePlayback = {
-                            if (!useLegacyLayout) onInteraction()
-                            onTogglePlayback()
-                        },
+                        onSeekBack = onSeekBack,
+                        onSeekForward = onSeekForward,
+                        onTogglePlayback = onTogglePlayback,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(bottom = centerBottomPadding),
+                            .padding(bottom = metrics.centerLift),
                     )
-                }
-            }
-
-            if (showPlaybackControls && useLegacyLayout) {
-                ProgressControls(
-                    playbackSnapshot = playbackSnapshot,
-                    displayedPositionMs = displayedPositionMs,
-                    metrics = metrics,
-                    resizeMode = resizeMode,
-                    onScrubChange = onScrubChange,
-                    onScrubFinished = onScrubFinished,
-                    onResizeModeClick = onResizeModeClick,
-                    onSpeedClick = onSpeedClick,
-                    onSubtitleClick = onSubtitleClick,
-                    onAudioClick = onAudioClick,
-                    onSourcesClick = onSourcesClick,
-                    onEpisodesClick = onEpisodesClick,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = metrics.horizontalPadding)
-                        .padding(bottom = metrics.sliderBottomOffset),
-                )
-            }
-            if (showPlaybackControls && !useLegacyLayout) {
-                Column(
-                    modifier = Modifier
-                        .onSizeChanged { size -> timelineHeight = with(density) { size.height.toDp() } }
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .windowInsetsPadding(playerTimelineBottomInsets(metrics))
-                        .padding(horizontal = metrics.horizontalPadding),
-                ) {
-                    if (!hideDetails) {
-                        PlayerTimelineDetails(
-                            title = title,
-                            seasonNumber = seasonNumber,
-                            episodeNumber = episodeNumber,
-                            episodeTitle = episodeTitle,
-                            releaseInfo = releaseInfo,
-                            streamTitle = streamTitle,
-                            providerName = providerName,
-                            isPlaying = playbackSnapshot.isPlaying,
-                            metrics = metrics,
-                        )
-                    }
-                    PlayerTimeline(
-                        snapshot = playbackSnapshot,
-                        displayedPositionMs = displayedPositionMs,
-                        onScrubChange = onScrubChange,
-                        onScrubFinished = {
-                            onInteraction()
-                            onScrubFinished(it)
-                        },
-                    )
-                    PlayerControlActions(
+                    ProgressControls(
                         playbackSnapshot = playbackSnapshot,
                         displayedPositionMs = displayedPositionMs,
-                        showRemainingTime = showRemainingTime,
-                        onRuntimeClick = onRuntimeClick,
                         metrics = metrics,
                         resizeMode = resizeMode,
+                        onScrubChange = onScrubChange,
+                        onScrubFinished = onScrubFinished,
+                        onResizeModeClick = onResizeModeClick,
+                        onSpeedClick = onSpeedClick,
                         onSubtitleClick = onSubtitleClick,
                         onAudioClick = onAudioClick,
                         onSourcesClick = onSourcesClick,
                         onEpisodesClick = onEpisodesClick,
-                        onNextEpisodeClick = onNextEpisodeClick,
-                        onSpeedClick = onSpeedClick,
-                        onResizeModeClick = onResizeModeClick,
-                        onVideoSettingsClick = onVideoSettingsClick,
-                        onOpenInExternalPlayer = onOpenInExternalPlayer,
-                        onSubmitIntroClick = onSubmitIntroClick,
-                        onHandoffClick = onHandoffClick,
-                        onDiagnosticsClick = onDiagnosticsClick,
-                        onCastInfoClick = onCastInfoClick,
-                        onInteraction = onInteraction,
-                        toggles = controlToggles,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = metrics.horizontalPadding)
+                            .padding(bottom = metrics.sliderBottomOffset),
                     )
                 }
             }
@@ -774,6 +741,7 @@ internal fun LockedPlayerOverlay(
     onUnlock: () -> Unit,
     useLegacyLayout: Boolean = false,
     showRemainingTime: Boolean = false,
+    skipSegments: List<PlayerControlSkipSegment> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val durationMs = playbackSnapshot.durationMs.coerceAtLeast(1L)
@@ -818,7 +786,7 @@ internal fun LockedPlayerOverlay(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Lock,
+                    imageVector = if (useLegacyLayout) Icons.Rounded.Lock else PlayerControlIcons.Lock,
                     contentDescription = stringResource(Res.string.compose_player_unlock_controls),
                     tint = Color.White,
                     modifier = Modifier.size(34.dp),
@@ -837,7 +805,13 @@ internal fun LockedPlayerOverlay(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(horizontal = horizontalSafePadding + metrics.horizontalPadding)
-                .padding(bottom = metrics.sliderBottomOffset),
+                .then(
+                    if (useLegacyLayout) {
+                        Modifier.padding(bottom = metrics.sliderBottomOffset)
+                    } else {
+                        Modifier.windowInsetsPadding(playerTimelineBottomInsets(metrics)).padding(bottom = 8.dp)
+                    },
+                ),
         ) {
             if (useLegacyLayout) {
                 Slider(
@@ -864,18 +838,11 @@ internal fun LockedPlayerOverlay(
                     TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
                 }
             } else {
-                PlayerTimeline(
-                    snapshot = playbackSnapshot,
+                PlayerLockedScrubRow(
+                    playbackSnapshot = playbackSnapshot,
                     displayedPositionMs = displayedPositionMs,
-                    onScrubChange = {},
-                    onScrubFinished = {},
-                    enabled = false,
-                )
-                Text(
-                    text = formatPlaybackRuntime(displayedPositionMs, playbackSnapshot.durationMs, showRemainingTime),
-                    style = MaterialTheme.nuvioTypeScale.bodyMd.copy(fontSize = (metrics.timeSize.value + 2).sp),
-                    color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.align(Alignment.End),
+                    showRemainingTime = showRemainingTime,
+                    skipSegments = skipSegments,
                 )
             }
         }
