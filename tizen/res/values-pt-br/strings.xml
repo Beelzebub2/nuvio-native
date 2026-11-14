@@ -3468,4 +3468,20 @@
     <string name="player_chapter_intro">Abertura</string>
     <string name="player_chapter_recap">Recapitulação</string>
     <string name="player_chapter_credits">Créditos</string>
+    <string name="tv_phone_manage_title">Gerenciar pelo celular</string>
+    <string name="tv_phone_scan_instruction">Escaneie o código QR para gerenciar add-ons e plugins.</string>
+    <string name="tv_phone_pairing_code">Código: {{code}}</string>
+    <string name="tv_phone_preparing">Conectando…</string>
+    <string name="tv_phone_waiting">Aguardando o celular</string>
+    <string name="tv_phone_approval_required">Aprove o celular nesta TV.</string>
+    <string name="tv_phone_verify_title">Aprovar celular?</string>
+    <string name="tv_phone_verify_code">Confira este código no celular:</string>
+    <string name="tv_phone_approve">Aprovar</string>
+    <string name="tv_phone_connected">Celular conectado</string>
+    <string name="tv_phone_connected_hint">Gerencie add-ons e plugins no celular.</string>
+    <string name="tv_phone_change_applied">Alteração aplicada.</string>
+    <string name="tv_phone_action_failed">Não foi possível aplicar a alteração.</string>
+    <string name="tv_phone_unavailable">Conexão indisponível</string>
+    <string name="tv_phone_disconnect">Desconectar</string>
+    <string name="tv_phone_connection_error">Verifique a conexão e tente novamente.</string>
 </resources>

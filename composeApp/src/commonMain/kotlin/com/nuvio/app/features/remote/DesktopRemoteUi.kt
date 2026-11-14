@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -45,6 +46,11 @@ internal fun DesktopRemoteDialogs(
     val remotePlayback by DesktopRemote.remotePlayback.collectAsState()
     val remoteConnected by DesktopRemote.connected.collectAsState()
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
+    val tvPickerOpen by StarlitTvPlayback.pickerVisible.collectAsState()
+    val tvPicker by StarlitTvPlayback.picker.collectAsState()
+    val tvConnected by StarlitTvPlayback.connected.collectAsState()
+    val tvName by StarlitTvPlayback.name.collectAsState()
+    val targetChoice by StarlitRemoteHandoff.pendingDeviceChoice.collectAsState()
     var confirmed by remember(pairing) { mutableStateOf(false) }
     val confirm = {
         confirmed = true
@@ -104,6 +110,24 @@ internal fun DesktopRemoteDialogs(
                 onReject = { DesktopRemote.pendingHandoff.value = null },
             )
         }
+    } else if (tvPickerOpen) {
+        RemoteSourcePickerDialog(
+            requestId = tvPicker.requestId,
+            state = tvPicker,
+            connected = tvConnected,
+            pcName = tvName,
+            onDismiss = { StarlitTvPlayback.transport.cancelSourcePicker() },
+            onRetry = { StarlitTvPlayback.transport.retrySourcePicker() },
+            onSelectSource = { StarlitTvPlayback.transport.select(it) },
+            isAwaitingSources = {
+                StarlitTvPlayback.picker.value.isAwaitingSources(tvPicker.requestId)
+            },
+            onOpenController = {
+                StarlitTvPlayback.pickerVisible.value = false
+                StarlitTvPlayback.openTvTabOnController.value = true
+                DesktopRemote.open()
+            },
+        )
     } else if (sourcePickerOpen) {
         RemoteSourcePickerDialog(
             requestId = requestedSourceId,
@@ -115,6 +139,22 @@ internal fun DesktopRemoteDialogs(
             onOpenController = {
                 DesktopRemote.dismissPhoneSourcePicker()
                 DesktopRemote.open()
+            },
+        )
+    }
+    if (!desktopLayout && targetChoice != null) {
+        AlertDialog(
+            onDismissRequest = { StarlitRemoteHandoff.pendingDeviceChoice.value = null },
+            title = { Text(stringResource(Res.string.remote_handoff_choose_target)) },
+            confirmButton = {
+                TextButton(onClick = { StarlitRemoteHandoff.selectDevice(true) }) {
+                    Text(tvName.ifBlank { stringResource(Res.string.remote_tv_tab) })
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { StarlitRemoteHandoff.selectDevice(false) }) {
+                    Text(activeDesktop?.name?.ifBlank { "PC" } ?: "PC")
+                }
             },
         )
     }

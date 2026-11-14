@@ -3081,4 +3081,10 @@
     <string name="updates_whats_new">புதியது என்ன</string>
     <string name="updates_download_size">%1$s பதிவிறக்கவும்</string>
     <string name="source_filter_result_count">%2$d மூலங்களில் %1$d</string>
+    <string name="remote_tv_starlit_code">டிவி இணைப்புக் குறியீடு</string>
+    <string name="remote_tv_starlit_hint">டிவியில் தொலைபேசி மூலம் நிர்வகி என்பதைத் திறக்கவும். குறியீட்டை இங்கே உள்ளிட்டு டிவியில் ஒப்புதல் அளிக்கவும்.</string>
+    <string name="remote_tv_starlit_approve">டிவியில் பொருந்தும் குறியீட்டை ஒப்புதல் அளிக்கவும்:</string>
+    <string name="remote_tv_starlit_failed">இணைப்பு தோல்வியடைந்தது. குறியீட்டைச் சரிபார்த்து மீண்டும் முயலவும்.</string>
+    <string name="remote_handoff_choose_target">சாதனத்தைத் தேர்வு செய்</string>
+    <string name="remote_handoff_to_device">சாதனத்தில் இயக்கு</string>
 </resources>

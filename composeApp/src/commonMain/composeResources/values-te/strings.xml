@@ -3078,4 +3078,10 @@
     <string name="updates_whats_new">కొత్తవి ఏమిటి</string>
     <string name="updates_download_size">%1$s డౌన్‌లోడ్</string>
     <string name="source_filter_result_count">%2$d మూలాలలో %1$d</string>
+    <string name="remote_tv_starlit_code">టీవీ జత చేసే కోడ్</string>
+    <string name="remote_tv_starlit_hint">టీవీలో ఫోన్‌తో నిర్వహించు తెరవండి. ఇక్కడ కోడ్ నమోదు చేసి టీవీలో ఆమోదించండి.</string>
+    <string name="remote_tv_starlit_approve">టీవీలో సరిపోలే కోడ్‌ను ఆమోదించండి:</string>
+    <string name="remote_tv_starlit_failed">కనెక్షన్ విఫలమైంది. కోడ్ తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.</string>
+    <string name="remote_handoff_choose_target">పరికరాన్ని ఎంచుకోండి</string>
+    <string name="remote_handoff_to_device">పరికరంలో ప్లే చేయండి</string>
 </resources>

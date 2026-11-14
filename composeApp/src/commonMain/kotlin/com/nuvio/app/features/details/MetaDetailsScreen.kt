@@ -82,6 +82,8 @@ import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.remote.DesktopRemote
+import com.nuvio.app.features.remote.StarlitRemoteHandoff
+import com.nuvio.app.features.remote.StarlitTvPlayback
 import com.nuvio.app.features.remote.RemotePlaybackHandoff
 import com.nuvio.app.features.remote.isAllowed
 import com.nuvio.app.core.build.TrailerPlaybackMode
@@ -225,6 +227,7 @@ fun MetaDetailsScreen(
 ) {
     val playbackAvailability = rememberPlaybackAvailability()
     val pcRemoteConnected by DesktopRemote.connected.collectAsStateWithLifecycle()
+    val tvRemoteConnected by StarlitTvPlayback.connected.collectAsStateWithLifecycle()
     val pcHandoffSent = stringResource(Res.string.remote_handoff_sent)
     val pcHandoffUnavailable = stringResource(Res.string.remote_handoff_unavailable)
     val shuffleProfile by remember {
@@ -1553,7 +1556,8 @@ fun MetaDetailsScreen(
                                     }
                                 }
 
-                                if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos && pcRemoteConnected &&
+                                if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos &&
+                                    (pcRemoteConnected || tvRemoteConnected) &&
                                     meta.type in setOf("movie", "series")) {
                                     item(key = "detail-play-on-pc") {
                                         val primaryHandoff = RemotePlaybackHandoff(
@@ -1577,11 +1581,11 @@ fun MetaDetailsScreen(
                                                     vertical = 6.dp,
                                                 ),
                                                 onClick = {
-                                                    val sent = DesktopRemote.requestHandoff(primaryHandoff)
-                                                    if (!sent) NuvioToastController.show(DesktopRemote.status.value)
+                                                    val sent = StarlitRemoteHandoff.request(primaryHandoff)
+                                                    if (!sent) NuvioToastController.show(pcHandoffUnavailable)
                                                 },
                                             ) {
-                                                Text(stringResource(Res.string.remote_handoff_send))
+                                                Text(stringResource(Res.string.remote_handoff_to_device))
                                             }
                                         }
                                     }
@@ -2251,11 +2255,12 @@ fun MetaDetailsScreen(
                             ),
                         )
                     }
-                    if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos && pcRemoteConnected &&
+                    if (!com.nuvio.app.isDesktop && !com.nuvio.app.isIos &&
+                        (pcRemoteConnected || tvRemoteConnected) &&
                         meta.type == "series") {
                         add(PosterZoomOverlayAction(
                             icon = Icons.Default.PlayArrow,
-                            label = stringResource(Res.string.remote_handoff_send),
+                            label = stringResource(Res.string.remote_handoff_to_device),
                             onSelected = {
                                 val streamId = selectedEpisode.id.ifBlank {
                                     buildPlaybackVideoId(
@@ -2276,8 +2281,8 @@ fun MetaDetailsScreen(
                                     resumePositionMs = progressByVideoId[streamId]
                                         ?.lastPositionMs?.coerceIn(0L, 43_200_000L) ?: 0L,
                                 )
-                                val sent = DesktopRemote.requestHandoff(request)
-                                if (!sent) NuvioToastController.show(DesktopRemote.status.value)
+                                val sent = StarlitRemoteHandoff.request(request)
+                                if (!sent) NuvioToastController.show(pcHandoffUnavailable)
                             },
                         ))
                     }

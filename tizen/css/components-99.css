@@ -1,0 +1,22 @@
+.tv-phone-screen{width:100%;min-height:100%;padding:60px 80px 84px;background:#080911;color:#f4f2fa;overflow-y:auto}
+.tv-phone-heading{max-width:1240px;margin:0 auto 40px}
+.tv-phone-eyebrow{font-size:20px;letter-spacing:.14em;font-weight:650;color:#b5aefa}
+.tv-phone-heading h1{font-size:56px;letter-spacing:-.04em;line-height:1.13;margin:14px 0}
+.tv-phone-heading p{font-size:25px;line-height:1.45;color:#b8b8cd;max-width:1000px}
+.tv-phone-layout{display:grid;grid-template-columns:minmax(370px,480px) minmax(380px,1fr);gap:48px;max-width:1240px;margin:auto;align-items:start}
+.tv-phone-qr-card,.tv-phone-status-card{border:1px solid #35354a;border-radius:18px;padding:32px;background:#11121f}
+.tv-phone-qr-card{text-align:center}
+#tv-phone-qr,.tv-phone-qr-wait{width:360px;height:360px;max-width:100%;display:block;margin:auto;background:#fff;border-radius:12px}
+.tv-phone-paired{width:220px;height:220px;margin:44px auto 36px;border:3px solid #aa9cf4;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#d5ccff;font-size:110px;font-weight:700}
+.tv-phone-qr-card p{color:#babbd0;font-size:18px;overflow-wrap:anywhere;margin-top:20px}
+.tv-phone-code{font-size:28px;font-weight:690;letter-spacing:.11em;color:#fff;font-variant-numeric:tabular-nums}
+.tv-phone-status-card{min-height:340px;display:flex;align-items:flex-start;flex-direction:column}
+.tv-phone-status-card h2{font-size:33px;line-height:1.2;margin:0 0 18px}
+.tv-phone-status-card p{font-size:24px;color:#c7c7d7;line-height:1.5;margin:0 0 24px}
+.tv-phone-status-card button{display:block;width:100%;margin:0 0 13px;border:2px solid #5c587c;background:#232338;color:#f4f2ff;border-radius:10px;padding:18px 16px;font-weight:600;font-size:25px;min-height:70px}
+.tv-phone-status-card button.focused,.tv-phone-status-card button:focus{background:#b8b1ff;color:#151329;border-color:#fff;outline:3px solid #fff;outline-offset:3px}
+.tv-phone-status-card button.tv-phone-primary{background:#b8b1ff;color:#151329}
+.tv-phone-status-card button.tv-phone-back{margin-top:auto}
+.tv-phone-verify{display:block;width:100%;text-align:center;font-size:38px;letter-spacing:.16em;font-weight:750;color:#d1caff;margin:0 0 26px}
+.tv-phone-status-card .tv-phone-last{color:#e9e5ff}
+@media(max-width:1100px){.tv-phone-screen{padding:28px 30px}.tv-phone-heading h1{font-size:42px}.tv-phone-layout{grid-template-columns:minmax(270px,1fr) minmax(310px,1.3fr);gap:22px}.tv-phone-qr-card,.tv-phone-status-card{padding:20px}#tv-phone-qr,.tv-phone-qr-wait{width:290px;height:290px}.tv-phone-status-card h2{font-size:27px}.tv-phone-status-card p{font-size:19px}}

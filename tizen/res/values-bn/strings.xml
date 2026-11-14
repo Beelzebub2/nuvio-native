@@ -3394,4 +3394,20 @@
     <string name="stream_test_label_parallel16">প্যারালাল কানেক্ট (16 MB চাংক)</string>
     <string name="stream_test_error_connection">কানেকশন ব্যর্থ হয়েছে। সর্বশেষ প্লে হওয়া স্ট্রীম লিংকের মেয়াদ শেষ হতে পারে বা পৌঁছানো যাচ্ছে না। অনুগ্রহ করে ভিডিওটি আবার প্লে করে পুনরায় ট্রাই করুন।</string>
     <string name="settings_p2p_cache_unsupported">Not available on this TV.</string>
+    <string name="tv_phone_manage_title">ফোন থেকে পরিচালনা করুন</string>
+    <string name="tv_phone_scan_instruction">অ্যাড-অন ও প্লাগইন পরিচালনা করতে QR কোড স্ক্যান করুন।</string>
+    <string name="tv_phone_pairing_code">কোড: {{code}}</string>
+    <string name="tv_phone_preparing">সংযোগ হচ্ছে…</string>
+    <string name="tv_phone_waiting">ফোনের অপেক্ষায়</string>
+    <string name="tv_phone_approval_required">এই টিভিতে ফোন অনুমোদন করুন।</string>
+    <string name="tv_phone_verify_title">ফোন অনুমোদন করবেন?</string>
+    <string name="tv_phone_verify_code">ফোনে এই কোডটি মিলিয়ে দেখুন:</string>
+    <string name="tv_phone_approve">অনুমোদন করুন</string>
+    <string name="tv_phone_connected">ফোন সংযুক্ত হয়েছে</string>
+    <string name="tv_phone_connected_hint">ফোন থেকে অ্যাড-অন ও প্লাগইন পরিচালনা করুন।</string>
+    <string name="tv_phone_change_applied">পরিবর্তন প্রয়োগ হয়েছে।</string>
+    <string name="tv_phone_action_failed">পরিবর্তন প্রয়োগ করা যায়নি।</string>
+    <string name="tv_phone_unavailable">সংযোগ উপলব্ধ নয়</string>
+    <string name="tv_phone_disconnect">সংযোগ বিচ্ছিন্ন করুন</string>
+    <string name="tv_phone_connection_error">সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
 </resources>

@@ -2400,4 +2400,10 @@
     <string name="shuffle_change_selection">Vybrať epizódy</string>
     <string name="shuffle_badge">Náhodný výber epizód zapnutý</string>
     <string name="shuffle_unwatched">Nevidené</string>
+    <string name="remote_tv_starlit_code">Kód párovania TV</string>
+    <string name="remote_tv_starlit_hint">Na televízore otvorte Spravovať telefónom. Zadajte kód a potvrďte na TV.</string>
+    <string name="remote_tv_starlit_approve">Potvrďte zhodný kód na televízore:</string>
+    <string name="remote_tv_starlit_failed">Pripojenie zlyhalo. Skontrolujte kód a skúste znova.</string>
+    <string name="remote_handoff_choose_target">Vyberte zariadenie</string>
+    <string name="remote_handoff_to_device">Prehrať na zariadení</string>
 </resources>

@@ -3466,4 +3466,20 @@
     <string name="player_chapter_intro">Introdução</string>
     <string name="player_chapter_recap">Recapitulação</string>
     <string name="player_chapter_credits">Créditos</string>
+    <string name="tv_phone_manage_title">Gerir pelo telemóvel</string>
+    <string name="tv_phone_scan_instruction">Lê o código QR para gerir add-ons e plugins.</string>
+    <string name="tv_phone_pairing_code">Código: {{code}}</string>
+    <string name="tv_phone_preparing">A ligar…</string>
+    <string name="tv_phone_waiting">À espera do telemóvel</string>
+    <string name="tv_phone_approval_required">Aprova o telemóvel nesta TV.</string>
+    <string name="tv_phone_verify_title">Aprovar telemóvel?</string>
+    <string name="tv_phone_verify_code">Confirma este código no telemóvel:</string>
+    <string name="tv_phone_approve">Aprovar</string>
+    <string name="tv_phone_connected">Telemóvel ligado</string>
+    <string name="tv_phone_connected_hint">Gere os add-ons e plugins no telemóvel.</string>
+    <string name="tv_phone_change_applied">Alteração aplicada.</string>
+    <string name="tv_phone_action_failed">Não foi possível aplicar a alteração.</string>
+    <string name="tv_phone_unavailable">Ligação indisponível</string>
+    <string name="tv_phone_disconnect">Desligar</string>
+    <string name="tv_phone_connection_error">Verifica a ligação e tenta novamente.</string>
 </resources>

@@ -2341,4 +2341,10 @@ Utilizas esta función bajo tu propia responsabilidad. P2P se puede desactivar e
     <string name="movie_status_rumored">Rumoreada</string>
     <string name="movie_status_in_production">En producción</string>
     <string name="movie_status_post_production">Posproducción</string>
+    <string name="remote_tv_starlit_code">Código de vinculación del televisor</string>
+    <string name="remote_tv_starlit_hint">En el televisor, abre Gestionar con el móvil. Introduce aquí el código y aprueba en el televisor.</string>
+    <string name="remote_tv_starlit_approve">Aprueba el código coincidente en el televisor:</string>
+    <string name="remote_tv_starlit_failed">Error de conexión. Comprueba el código e inténtalo de nuevo.</string>
+    <string name="remote_handoff_choose_target">Elige un dispositivo</string>
+    <string name="remote_handoff_to_device">Reproducir en dispositivo</string>
 </resources>
