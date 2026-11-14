@@ -89,9 +89,19 @@ export function createTvSetupServer({ relay = new TvSetupRelay(), origin = SITE_
       if (!tvRoute && req.method === "POST" &&
           req.headers.origin !== origin)
         throw new RelayError(403, "Invalid origin");
+      const id = path === "/tv/api/start" || path === "/tv/api/claim" ? null : requiredId(requestUrl);
+      const tv = req.headers["x-tv-token"];
+      const phone = req.headers["x-phone-token"];
+      // All traffic arrives from one private Caddy proxy. Authenticated sessions
+      // need independent limits; otherwise a few connected TVs lock everyone out.
+      // Never accept an arbitrary URL id as a separate bucket without first
+      // proving knowledge of the appropriate 256-bit scoped credential.
+      const role = tvRoute ? "tv" : "phone";
+      const authorized = id && relay.ownsCredential(id, role, tvRoute ? tv : phone);
       const remote = req.socket.remoteAddress || "unknown";
-      const cap = path === "/tv/api/claim" ? 20 : path === "/tv/api/start" ? 40 : 300;
-      const key = remote + ":" + path;
+      const cap = path === "/tv/api/claim" ? 20 : path === "/tv/api/start" ? 40 :
+        authorized ? 90 : 30;
+      const key = authorized ? "session:" + id + ":" + role + ":" + path : remote + ":" + path;
       const current = rates.get(key);
       const window = current && now() - current.at < MINUTE ? current : { at: now(), count: 0 };
       window.count++;
@@ -100,9 +110,6 @@ export function createTvSetupServer({ relay = new TvSetupRelay(), origin = SITE_
       if (rates.size > 10000) {
         for (const [entry, value] of rates) if (now() - value.at > MINUTE) rates.delete(entry);
       }
-      const id = path === "/tv/api/start" || path === "/tv/api/claim" ? null : requiredId(requestUrl);
-      const tv = req.headers["x-tv-token"];
-      const phone = req.headers["x-phone-token"];
       let data = {};
       if (req.method === "POST") data = await body(req);
       if (path === "/tv/api/start" && req.method === "POST") return send(200, relay.start(data));
@@ -125,9 +132,12 @@ export function createTvSetupServer({ relay = new TvSetupRelay(), origin = SITE_
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const host = process.env.HOST || DEFAULT_HOST;
-  if (!["127.0.0.1", "::1"].includes(host))
-    throw new Error("The TV setup service must only listen on loopback behind an HTTPS reverse proxy");
+  const privateContainer = process.env.STARLIT_TV_RELAY_CONTAINER === "1";
+  if (!["127.0.0.1", "::1"].includes(host) && !(privateContainer && host === "0.0.0.0"))
+    throw new Error("The TV setup service must listen on loopback or an isolated private container network");
   const port = Number(process.env.PORT || 8751);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error("Invalid TV setup service port");
   createTvSetupServer().listen(port, host, () =>
-    console.log("Starlit TV setup service ready on loopback port", port));
+    console.log("Starlit TV setup service ready on port", port));
 }

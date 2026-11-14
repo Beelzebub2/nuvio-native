@@ -1,0 +1,40 @@
+# This service must join the existing private Caddy bridge network.
+# No host port is published. Never attach it to an untrusted/public network.
+services:
+  starlit-tv-phone-relay:
+    image: node:22.23.4-alpine3.24
+    container_name: starlit-tv-phone-relay
+    working_dir: /srv/app
+    command: ["node", "server.mjs"]
+    user: "node"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8751"
+      STARLIT_TV_RELAY_CONTAINER: "1"
+      STARLIT_SITE_ORIGIN: "https://starlit.rrmtools.uk"
+    volumes:
+      - ./:/srv/app:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: "0.5"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8751/tv/healthz').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 8s
+    networks:
+      - caddy-private
+
+networks:
+  caddy-private:
+    external: true
+    name: ${STARLIT_CADDY_NETWORK:?Configure the existing private Caddy Docker network}

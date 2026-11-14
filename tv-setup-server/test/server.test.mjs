@@ -91,3 +91,37 @@ test("TV preflight is permitted; remote page writes and cookie-based requests ar
   });
   assert.equal(invalid.status, 415);
 });
+
+test("independent approved sessions do not exhaust one proxy-wide polling rate limit", async () => {
+  const clients = [];
+  for (let index = 0; index < 2; index++) {
+    const started = await request("/tv/api/start", {
+      method:"POST", body:{ name:"TV-" + index, profile:"1" }
+    });
+    assert.equal(started.status, 200);
+    const tv = started.body;
+    const claim = await request("/tv/api/claim", {
+      method:"POST", origin:ORIGIN, body:{ code:tv.code }
+    });
+    assert.equal(claim.status, 200);
+    assert.equal((await request("/tv/api/approve?id=" + tv.id, {
+      method:"POST", token:tv.tvToken, body:{accept:true}
+    })).status, 200);
+    clients.push({ tv, phone:claim.body });
+  }
+  for (let iteration = 0; iteration < 40; iteration++) {
+    for (const {tv, phone} of clients) {
+      const inspected = await request("/tv/api/phone?id=" + tv.id, {
+        phone:phone.claimToken
+      });
+      assert.equal(inspected.status, 200, "approved sessions must not share a proxy-wide limit");
+    }
+  }
+  const unauthorized = clients[0];
+  assert.equal((await request("/tv/api/phone?id=" + unauthorized.tv.id, {
+    phone:"f".repeat(64)
+  })).status, 403);
+  for (const {tv} of clients) await request("/tv/api/stop?id=" + tv.id, {
+    method:"POST", token:tv.tvToken, body:{}
+  });
+});

@@ -57,3 +57,47 @@ test("approved TV phone session survives navigation into source picker and playb
     clearTimeout(TvPhoneSetupScreen.timer);
   }
 });
+
+test("idle pairing state is not rebuilt or uploaded every poll; searching remains responsive", async () => {
+  const original = {
+    client: TvPhoneSetupScreen.client,
+    executor: TvPhoneSetupScreen.executor,
+    lastPublishedState: TvPhoneSetupScreen.lastPublishedState,
+    lastStateCheckAt: TvPhoneSetupScreen.lastStateCheckAt,
+    lastPublishedSourcePhase: TvPhoneSetupScreen.lastPublishedSourcePhase
+  };
+  let built = 0;
+  let sent = 0;
+  let phase = "idle";
+  TvPhoneSetupScreen.client = { state: async () => { sent++; } };
+  TvPhoneSetupScreen.executor = { state: () => {
+    built++;
+    return { profile:"1", sourcePicker:{ phase } };
+  } };
+  TvPhoneSetupScreen.lastPublishedState = "";
+  TvPhoneSetupScreen.lastStateCheckAt = 0;
+  TvPhoneSetupScreen.lastPublishedSourcePhase = "idle";
+  try {
+    await TvPhoneSetupScreen.publishState(true);
+    for (let i = 0; i < 8; i++) await TvPhoneSetupScreen.publishState();
+    assert.equal(built, 1);
+    assert.equal(sent, 1);
+    TvPhoneSetupScreen.lastStateCheckAt -= 10000;
+    await TvPhoneSetupScreen.publishState();
+    assert.equal(built, 2);
+    assert.equal(sent, 1, "identical state should not be uploaded again");
+    phase = "searching";
+    await TvPhoneSetupScreen.publishState(true);
+    assert.equal(sent, 2);
+    TvPhoneSetupScreen.lastStateCheckAt -= 1700;
+    phase = "ready";
+    await TvPhoneSetupScreen.publishState();
+    assert.equal(sent, 3, "live source changes must reach the phone");
+  } finally {
+    TvPhoneSetupScreen.client = original.client;
+    TvPhoneSetupScreen.executor = original.executor;
+    TvPhoneSetupScreen.lastPublishedState = original.lastPublishedState;
+    TvPhoneSetupScreen.lastStateCheckAt = original.lastStateCheckAt;
+    TvPhoneSetupScreen.lastPublishedSourcePhase = original.lastPublishedSourcePhase;
+  }
+});

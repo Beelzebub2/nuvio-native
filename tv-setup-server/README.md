@@ -32,22 +32,27 @@ The relay has no external runtime dependencies and needs Node.js 22 or newer.
 
 To serve the local phone page, set STARLIT_SITE_ORIGIN to http://127.0.0.1:8751, then run node tv-setup-server/server.mjs. The route is http://127.0.0.1:8751/tv/connect in local development. Real TVs use the pinned HTTPS origin below.
 
-## Production website integration (not deployed by this PR)
+## Private-container production integration
 
-Deploy the vetted relay source to the existing private Starlit VPS, under an unprivileged service account and process manager (systemd, with Restart=on-failure, bounded resource limits and no token logs), using:
+Use the included compose.private.yml on the existing private Caddy bridge network, setting STARLIT_CADDY_NETWORK in a server-only environment file. Verify the service with docker compose config and its health check. It has no published host ports, runs as an unprivileged user, drops Linux capabilities and uses a read-only filesystem with CPU/memory/process limits. The listener binds the isolated container network, not a public interface.
 
-- HOST=127.0.0.1
-- PORT=8751
-- STARLIT_SITE_ORIGIN=https://starlit.rrmtools.uk
-- command: node server.mjs, working directory: tv-setup-server
+Alternatively run Node under an unprivileged systemd service on host loopback (HOST=127.0.0.1) only if the configured Caddy origin can reach that loopback address.
 
-In the existing starlit.rrmtools.uk Caddy HTTPS virtual host, **before** the website static fallback:
+Inside the existing private Caddy site block, add a host-and-path-scoped handler, and exclude /tv/* from the broad website handler:
 
-    handle /tv/* {
-        reverse_proxy 127.0.0.1:8751
+    @tv_phone {
+        host starlit.rrmtools.uk
+        path /tv/*
+    }
+    handle @tv_phone {
+        reverse_proxy starlit-tv-phone-relay:8751
+    }
+    @starlit {
+        host starlit.rrmtools.uk
+        not path /tv/*
     }
 
-Keep the server loopback-only. Bypass caching for /tv/* and avoid proxy log query strings on /tv/api/*, where ephemeral session IDs are present. Preserve account-specific cache/CSP isolation, TLS/HSTS and Cloudflare protections. The management page has its own restrictive CSP.
+Validate with Caddy adapt/validate, reload without restarting unrelated services, and verify both /tv/healthz and existing homepage/account routes. Back up the original config and retain tested rollback steps. Bypass caching for /tv/* and exclude those paths from access logs (for example Caddy log_skip), where ephemeral session IDs are present. Preserve account-specific cache/CSP isolation, TLS/HSTS and Cloudflare protections. The management page has its own restrictive CSP.
 
 Deploy/test the route in staging before production. Confirm GET /tv/healthz, QR scan and manual code flows, matching code, TV authorization, add-on preview/install, enabled-state changes, revoked/expired tokens, local account guest handling and unsupported plugin behavior. Real-device acceptance must include a Samsung Tizen 5 TV (Chromium 63), at least one Tizen 6+ TV, and LG webOS. Test phone browsers on mobile data and Wi-Fi.
 

@@ -145,6 +145,13 @@ export class TvSetupRelay {
     this.codes = new Map();
   }
 
+  /** Check a request's scoped credential before giving it a private rate bucket. */
+  ownsCredential(id, role, credential) {
+    const s = this.sessions.get(id);
+    if (!s || s.revoked || (role !== "tv" && role !== "phone")) return false;
+    return equal(role === "tv" ? s.tvToken : s.claimToken, credential);
+  }
+
   gc() {
     const now = this.now();
     for (const [id, s] of this.sessions) {

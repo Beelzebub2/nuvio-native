@@ -32,6 +32,9 @@ export const TvPhoneSetupScreen = {
       this.networkFailures = 0;
       this.polling = false;
       this.lastCommandId = 0;
+      this.lastPublishedState = "";
+      this.lastStateCheckAt = 0;
+      this.lastPublishedSourcePhase = "idle";
     }
     ScreenUtils.show(this.container);
     this.onClickBound = (event) => {
@@ -91,6 +94,9 @@ export const TvPhoneSetupScreen = {
     this.lastAction = "";
     this.pendingAck = null;
     this.networkFailures = 0;
+    this.lastPublishedState = "";
+    this.lastStateCheckAt = 0;
+    this.lastPublishedSourcePhase = "idle";
     const generation = this.generation;
     this.render();
     await this.start(generation);
@@ -104,7 +110,7 @@ export const TvPhoneSetupScreen = {
       await this.client.approve(true);
       if (!this.active(generation)) return;
       this.phase = "connected";
-      await this.client.state(this.executor.state());
+      await this.publishState(true);
       this.render();
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.poll(generation), 1100);
@@ -113,6 +119,22 @@ export const TvPhoneSetupScreen = {
       this.phase = "error";
       this.error = connectionError();
       this.render();
+    }
+  },
+  async publishState(force = false) {
+    // On older TVs collecting all installed providers can be expensive.
+    // Keep source-search updates responsive but avoid rebuilding and posting
+    // the entire add-on/plugin catalog every 1.8s during idle playback.
+    const now = Date.now();
+    const interval = this.lastPublishedSourcePhase === "searching" ? 1600 : 8500;
+    if (!force && now - this.lastStateCheckAt < interval) return;
+    const state = this.executor.state();
+    const serialized = JSON.stringify(state);
+    this.lastStateCheckAt = now;
+    this.lastPublishedSourcePhase = state.sourcePicker?.phase || "idle";
+    if (force || serialized !== this.lastPublishedState) {
+      await this.client.state(state);
+      this.lastPublishedState = serialized;
     }
   },
   async poll(generation) {
@@ -140,7 +162,9 @@ export const TvPhoneSetupScreen = {
           this.pendingAck = null;
         }
         const command = remote.commands?.[0];
+        let changed = false;
         if (command && command.id !== this.lastCommandId) {
+          changed = true;
           this.lastCommandId = command.id;
           let response;
           try {
@@ -165,7 +189,7 @@ export const TvPhoneSetupScreen = {
           if (!this.active(generation)) return;
           if (this.visible()) this.render();
         }
-        await this.client.state(this.executor.state());
+        await this.publishState(changed);
       }
       this.networkFailures = 0;
     } catch (error) {
