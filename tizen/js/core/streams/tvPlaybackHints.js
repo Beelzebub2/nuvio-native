@@ -14,14 +14,18 @@ import { TizenCapabilities } from "../../platform/tizen/tizenCapabilities.js";
 //   Dolby TrueHD   not decoded by the TV (needs a receiver over eARC).
 //   DTS family     dropped from 2018 models (Tizen 4) onwards.
 const DTS_REMOVED_FROM_TIZEN_MAJOR = 4;
-const AV1_FROM_TIZEN_MAJOR = 5;
+// AV1 first appears in Samsung's 2020 model year (Tizen 5.5), not 2019 (5.0).
+const AV1_FROM_TIZEN_MAJOR = 6;
 /** Preview and test hook: set to "samsung" to render the Samsung hints anywhere. */
 function readProfileOverride() {
   const override = String(globalThis.__STARLIT_TV_PLAYBACK_PROFILE__ || "").toLowerCase();
   return override === "samsung" ? { tizenMajorVersion: 6 } : null;
 }
-export function createSamsungPlaybackProfile({ tizenMajorVersion = 0 } = {}) {
-  const major = Number(tizenMajorVersion) || 0;
+export function createSamsungPlaybackProfile({ tizenMajorVersion = 0, tizenVersion = "", uhdPanelSupported = null } = {}) {
+  const version = String(tizenVersion || "").trim();
+  const major = Number(tizenMajorVersion) || Number(version.split(".")[0]) || 0;
+  const minor = Number((version.match(/^5\.(\d+)/) || [])[1] || 0);
+  const supportsAv1 = major >= AV1_FROM_TIZEN_MAJOR || (major === 5 && minor >= 5);
   return Object.freeze({
     platform: "samsung",
     dolbyVision: false,
@@ -30,8 +34,10 @@ export function createSamsungPlaybackProfile({ tizenMajorVersion = 0 } = {}) {
     trueHd: false,
     // An unknown version is treated like a current TV: flag, never hide.
     dts: major > 0 && major < DTS_REMOVED_FROM_TIZEN_MAJOR,
-    av1: major >= AV1_FROM_TIZEN_MAJOR,
-    hevc: true
+    av1: supportsAv1,
+    hevc: true,
+    // null means the TV does not expose the ProductInfo capability, not FHD.
+    uhdPanelSupported
   });
 }
 /** The playback profile for this device, or null when nothing is known. */
@@ -43,8 +49,11 @@ export function getTvPlaybackProfile() {
   if (!Platform.isTizen()) {
     return null;
   }
+  const capabilities = TizenCapabilities.get();
   return createSamsungPlaybackProfile({
-    tizenMajorVersion: TizenCapabilities.get().tizenMajorVersion
+    tizenMajorVersion: capabilities.tizenMajorVersion,
+    tizenVersion: capabilities.tizenVersion,
+    uhdPanelSupported: capabilities.uhdPanelSupported
   });
 }
 /**
@@ -61,6 +70,20 @@ export function getPlaybackWarnings(summary, profile = getTvPlaybackProfile()) {
       id: "dolby-vision",
       labelKey: "sources_warning_plays_as_hdr10",
       label: "Plays as HDR10"
+    });
+  }
+  if (summary.videoCodecId === "av1" && !profile.av1) {
+    warnings.push({
+      id: "video",
+      labelKey: "sources_warning_video_may_not_play",
+      label: "Video may not play"
+    });
+  }
+  if (summary.resolutionId === "4k" && profile.uhdPanelSupported === false) {
+    warnings.push({
+      id: "uhd",
+      labelKey: "sources_warning_4k_not_supported",
+      label: "4K is not supported by this TV"
     });
   }
   const audio = summary.audioCodecId;

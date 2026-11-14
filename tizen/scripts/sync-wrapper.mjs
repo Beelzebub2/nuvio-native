@@ -542,6 +542,7 @@ async function updateTizenMetadata(targetDir) {
   configXml = upsertTizenRequiredVersion(configXml, compatibilityPolicy.tizenInstallMinimumVersion);
   configXml = upsertTizenFeature(configXml, "http://tizen.org/feature/web.service");
   configXml = upsertTizenPrivilege(configXml, "http://tizen.org/privilege/application.launch");
+  configXml = upsertTizenPrivilege(configXml, "http://developer.samsung.com/privilege/productinfo");
   // Remove privileges from the old application.kill shutdown fallback so
   // wrapper upgrades remain installable with a public certificate.
   configXml = removeTizenPrivilege(configXml, "http://tizen.org/privilege/application.info");

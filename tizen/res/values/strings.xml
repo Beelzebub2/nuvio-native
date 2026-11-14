@@ -3443,6 +3443,8 @@
     <string name="sources_plays_best_title">This TV plays best</string>
     <string name="sources_plays_best_body">%1$s. Sources it may not play are marked.</string>
     <string name="sources_warning_plays_as_hdr10">Plays as HDR10</string>
+    <string name="sources_warning_video_may_not_play">Video may not play</string>
+    <string name="sources_warning_4k_not_supported">4K is not supported by this TV</string>
     <string name="sources_warning_audio_may_not_play">Audio may not play</string>
     <string name="usb_cache_offer_title">USB storage connected</string>
     <string name="usb_cache_offer_description">Use this USB drive for temporary torrent caching? Starlit will measure its speed before playback, keep free space available, and fall back to RAM if needed.</string>

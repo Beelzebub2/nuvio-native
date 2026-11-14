@@ -120,6 +120,7 @@ ${serviceFeature}  <icon src="icon.png"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
   <tizen:privilege name="http://tizen.org/privilege/externalstorage"/>
 ${applicationLaunchPrivilege}  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <!-- Seller Office distributes automatic updates to opted-in TV models.
        A developer-sideloaded WGT still needs an external installer. -->

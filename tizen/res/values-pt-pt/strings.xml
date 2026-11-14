@@ -3455,6 +3455,8 @@
     <string name="sources_plays_best_title">Esta TV reproduz melhor</string>
     <string name="sources_plays_best_body">%1$s. As fontes que pode não reproduzir estão assinaladas.</string>
     <string name="sources_warning_plays_as_hdr10">Reproduz como HDR10</string>
+    <string name="sources_warning_video_may_not_play">O vídeo pode não ser reproduzido</string>
+    <string name="sources_warning_4k_not_supported">Esta TV não suporta 4K</string>
     <string name="sources_warning_audio_may_not_play">O áudio pode não tocar</string>
     <string name="usb_cache_offer_title">Armazenamento USB ligado</string>
     <string name="usb_cache_offer_description">Queres utilizar esta unidade USB para guardar temporariamente partes dos torrents? O Starlit mede a velocidade antes da reprodução, reserva espaço livre e utiliza a memória RAM se necessário.</string>
