@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Nicht jetzt</string>
     <string name="usb_cache_offer_never">Fragen Sie nicht noch einmal</string>
     <string name="usb_cache_offer_title">USB Speicher verbunden</string>
+    <string name="tv_phone_action_failed">Änderung konnte nicht übernommen werden.</string>
+    <string name="tv_phone_approval_required">Bestätige das Handy auf diesem Fernseher.</string>
+    <string name="tv_phone_approve">Bestätigen</string>
+    <string name="tv_phone_change_applied">Änderung übernommen.</string>
+    <string name="tv_phone_connected">Handy verbunden</string>
+    <string name="tv_phone_connected_hint">Verwalte Add-ons und Plugins auf deinem Handy.</string>
+    <string name="tv_phone_connection_error">Prüfe die Verbindung und versuche es erneut.</string>
+    <string name="tv_phone_disconnect">Trennen</string>
+    <string name="tv_phone_manage_title">Mit dem Handy verwalten</string>
+    <string name="tv_phone_pairing_code">Code: {{code}}</string>
+    <string name="tv_phone_preparing">Verbindung wird hergestellt…</string>
+    <string name="tv_phone_scan_instruction">QR-Code scannen, um Add-ons und Plugins zu verwalten.</string>
+    <string name="tv_phone_unavailable">Verbindung nicht verfügbar</string>
+    <string name="tv_phone_verify_code">Vergleiche diesen Code mit dem auf deinem Handy:</string>
+    <string name="tv_phone_verify_title">Handy bestätigen?</string>
+    <string name="tv_phone_waiting">Warten auf das Handy</string>
 </resources>

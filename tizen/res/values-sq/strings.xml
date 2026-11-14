@@ -3729,4 +3729,20 @@
     <string name="usb_cache_offer_later">Jo tani</string>
     <string name="usb_cache_offer_never">Mos pyet më</string>
     <string name="usb_cache_offer_title">USB hapësirë ruajtëse e lidhur</string>
+    <string name="tv_phone_action_failed">Ndryshimi nuk mund të zbatohej.</string>
+    <string name="tv_phone_approval_required">Mirato telefonin në këtë televizor.</string>
+    <string name="tv_phone_approve">Mirato</string>
+    <string name="tv_phone_change_applied">Ndryshimi u zbatua.</string>
+    <string name="tv_phone_connected">Telefoni u lidh</string>
+    <string name="tv_phone_connected_hint">Menaxho shtesat dhe plugin-et në telefon.</string>
+    <string name="tv_phone_connection_error">Kontrollo lidhjen dhe provo sërish.</string>
+    <string name="tv_phone_disconnect">Shkëput</string>
+    <string name="tv_phone_manage_title">Menaxho nga telefoni</string>
+    <string name="tv_phone_pairing_code">Kodi: {{code}}</string>
+    <string name="tv_phone_preparing">Duke u lidhur…</string>
+    <string name="tv_phone_scan_instruction">Skano kodin QR për të menaxhuar shtesat dhe plugin-et.</string>
+    <string name="tv_phone_unavailable">Lidhja nuk është e disponueshme</string>
+    <string name="tv_phone_verify_code">Krahaso këtë kod në telefon:</string>
+    <string name="tv_phone_verify_title">Të miratohet telefoni?</string>
+    <string name="tv_phone_waiting">Në pritje të telefonit</string>
 </resources>

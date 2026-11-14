@@ -151,6 +151,21 @@ class RemoteControllerUiTest {
     }
 
     @Test
+    fun tvControllerTabIsReachableWithoutAnyPairedPc() =
+        runDesktopComposeUiTest(width = 412, height = 900) {
+            DesktopRemote.connected.value = false
+            DesktopRemote.desktops.value = emptyList()
+            show(desktopLayout = false)
+            onNodeWithTag("pc-controller-screen").assertIsDisplayed()
+            onNodeWithText("TV").assertIsDisplayed().performClick()
+            // Desktop deliberately has no TV transport; the tab must still be
+            // reachable instead of silently redirecting to PC discovery.
+            onNodeWithText("TV remote control is currently available on Android phones.")
+                .assertIsDisplayed()
+            onNodeWithText("Find your Starlit PC").assertDoesNotExist()
+        }
+
+    @Test
     fun osPairedBluetoothPcsDoNotAppearAsNearbyOrDoubleUp() =
         runDesktopComposeUiTest(width = 412, height = 900) {
             val paired = RemoteDesktop("12:34:56:78:9A:BC", 0, "Paired workstation", bluetooth = true)

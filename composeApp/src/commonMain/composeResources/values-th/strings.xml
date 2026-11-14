@@ -849,8 +849,8 @@
     <string name="play_manually">เล่นด้วยตนเอง
 โลโก้</string>
     <string name="poster_logo_content_description">%1$s</string>
-    <string name="remote_pc_controller_title">คอนโทรลเลอร์พีซี</string>
-    <string name="remote_pc_controller_description">ค้นหาและควบคุมพีซี Starlit บนเครือข่ายท้องถิ่นของคุณ</string>
+    <string name="remote_pc_controller_title">การควบคุมระยะไกล</string>
+    <string name="remote_pc_controller_description">ควบคุมพีซีและ Samsung Tizen หรือ LG webOS ทีวีบนเครือข่ายเดียวกัน</string>
     <string name="remote_pc_search_local_network">ค้นหาเครือข่ายท้องถิ่น</string>
     <string name="remote_pc_no_devices_hint">ไม่มีพีซีอยู่ในรายการ? เปิดรีโมทโทรศัพท์บนพีซีแล้วลองใช้รหัส QR หรือที่อยู่ IP ปัจจุบัน ใช้บัญชีเดียวกันและเครือข่ายท้องถิ่น</string>
     <string name="remote_pc_unsupported">ปัจจุบันรองรับคอนโทรลเลอร์พีซีบน Android การค้นหายังไม่พร้อมใช้งานบนอุปกรณ์นี้</string>
@@ -3300,4 +3300,35 @@
     <string name="tv_settings_switch_profile_desc">เลือกว่าใครกำลังรับชมอยู่</string>
     <string name="tv_view_details">ดูรายละเอียด ›</string>
     <string name="remote_bluetooth_paired_devices">จับคู่ Bluetooth พีซี (อาจออฟไลน์)</string>
+    <string name="remote_handoff_choose_target">เลือกอุปกรณ์</string>
+    <string name="remote_handoff_to_device">เล่นบนอุปกรณ์</string>
+    <string name="remote_tv_starlit_approve">อนุมัติรหัสที่ตรงกันบนทีวี:</string>
+    <string name="remote_tv_starlit_code">รหัสจับคู่ทีวี</string>
+    <string name="remote_tv_starlit_failed">เชื่อมต่อไม่สำเร็จ ตรวจสอบรหัสแล้วลองอีกครั้ง</string>
+    <string name="remote_tv_starlit_hint">บนทีวี เปิดจัดการด้วยโทรศัพท์ กรอกรหัสที่นี่แล้วอนุมัติบนทีวี</string>
+    <string name="remote_tv_android_only">TV รีโมทคอนโทรลสามารถใช้งานได้บนโทรศัพท์ Android</string>
+    <string name="remote_tv_available">ทีวีที่มีจำหน่าย</string>
+    <string name="remote_tv_connected_title">TV เชื่อมต่อแล้ว</string>
+    <string name="remote_tv_controls_hint">ใช้ API ระยะไกลในตัวของโทรทัศน์ของคุณ การควบคุมทำงานใน Starlit และหน้าจอ TV อื่นๆ เมื่อรองรับ</string>
+    <string name="remote_tv_down">ลง</string>
+    <string name="remote_tv_find_title">เชื่อมต่อกับ TV</string>
+    <string name="remote_tv_forward">กรอไปข้างหน้า</string>
+    <string name="remote_tv_home">บ้าน</string>
+    <string name="remote_tv_left">ซ้าย</string>
+    <string name="remote_tv_manual_hint">หากการค้นพบถูกบล็อก ให้ป้อน IP ในเครื่องที่แสดงในการตั้งค่าเครือข่ายของ TV ของคุณ</string>
+    <string name="remote_tv_manual_title">เชื่อมต่อด้วยที่อยู่ IP</string>
+    <string name="remote_tv_mute">ปิดเสียง</string>
+    <string name="remote_tv_navigation">การนำทาง</string>
+    <string name="remote_tv_pairing_hint">เลือก Samsung Tizen หรือ LG webOS TV บนเครือข่ายเดียวกัน อนุมัติการเข้าถึงบน TV</string>
+    <string name="remote_tv_pause">หยุดชั่วคราว</string>
+    <string name="remote_tv_playback">การเล่นและเสียง</string>
+    <string name="remote_tv_private_ip">ที่อยู่ LAN ส่วนตัวเท่านั้น (เช่น 192.168.1.20)</string>
+    <string name="remote_tv_rewind">กรอกลับ</string>
+    <string name="remote_tv_right">ถูกต้อง</string>
+    <string name="remote_tv_search">ค้นหาสมาร์ททีวี</string>
+    <string name="remote_tv_tab">TV</string>
+    <string name="remote_tv_title">TV รีโมท</string>
+    <string name="remote_tv_up">ขึ้น</string>
+    <string name="remote_tv_volume_down">ลดระดับเสียง</string>
+    <string name="remote_tv_volume_up">เพิ่มระดับเสียง</string>
 </resources>

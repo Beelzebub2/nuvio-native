@@ -3455,4 +3455,20 @@
     <string name="usb_cache_offer_later">Không phải bây giờ</string>
     <string name="usb_cache_offer_never">Đừng hỏi lại</string>
     <string name="usb_cache_offer_title">USB</string>
+    <string name="tv_phone_action_failed">Không thể áp dụng thay đổi.</string>
+    <string name="tv_phone_approval_required">Phê duyệt điện thoại trên TV này.</string>
+    <string name="tv_phone_approve">Phê duyệt</string>
+    <string name="tv_phone_change_applied">Đã áp dụng thay đổi.</string>
+    <string name="tv_phone_connected">Điện thoại đã kết nối</string>
+    <string name="tv_phone_connected_hint">Quản lý tiện ích và plugin trên điện thoại.</string>
+    <string name="tv_phone_connection_error">Kiểm tra kết nối rồi thử lại.</string>
+    <string name="tv_phone_disconnect">Ngắt kết nối</string>
+    <string name="tv_phone_manage_title">Quản lý bằng điện thoại</string>
+    <string name="tv_phone_pairing_code">Mã: {{code}}</string>
+    <string name="tv_phone_preparing">Đang kết nối…</string>
+    <string name="tv_phone_scan_instruction">Quét mã QR để quản lý tiện ích và plugin.</string>
+    <string name="tv_phone_unavailable">Không có kết nối</string>
+    <string name="tv_phone_verify_code">Đối chiếu mã này trên điện thoại:</string>
+    <string name="tv_phone_verify_title">Phê duyệt điện thoại?</string>
+    <string name="tv_phone_waiting">Đang chờ điện thoại</string>
 </resources>

@@ -509,6 +509,41 @@ async function buildPluginRuntimeAssets() {
     drop: debugBundle ? [] : ["console"],
     legalComments: "none"
   });
+  // Bundled as a classic Worker importScripts asset; loaded only for opt-in
+  // Tizen 5, never at launch or in newer TV runtime initialization.
+  await build({
+    entryPoints: [path.join(rootDir, "js", "core", "player", "pluginAsmJsRuntime.js")],
+    outfile: path.join(distDir, "assets", "libs", "quickjs-asmjs.global.js"),
+    bundle: true,
+    platform: "browser",
+    format: "iife",
+    target: ["chrome" + compatibilityPolicy.chromiumVersion],
+    minify: !debugBundle,
+    drop: debugBundle ? [] : ["console"],
+    legalComments: "eof",
+    plugins: [{
+      name: "quickjs-asmjs-worker-browser",
+      setup(bundle) {
+        bundle.onLoad({
+          filter: /index[.]mjs$/
+        }, async ({ path: sourcePath }) => {
+          if (!sourcePath.replaceAll(String.fromCharCode(92), "/").includes(
+            "/@jitl/quickjs-asmjs-mjs-release-sync/dist/index.mjs"
+          )) return undefined;
+          let contents = await readFile(sourcePath, "utf8");
+          // The asm.js variant is universal ESM. Its unreachable Node path
+          // contains top-level await import("module"), incompatible with
+          // classic Chrome 63 workers. Never modify installed dependencies.
+          const nodeImport = 'await import("module")';
+          if (!contents.includes(nodeImport))
+            throw new Error("Unexpected QuickJS asm.js package format");
+          contents = contents.replace(nodeImport, '({createRequire: function(){throw new Error("Node loader unavailable in TV Worker");}})');
+          contents = contents.replaceAll("import.meta.url", '""');
+          return { contents, loader: "js" };
+        });
+      }
+    }]
+  });
   await build({
     entryPoints: [path.join(rootDir, "js", "core", "player", "pluginWorker.js")],
     outfile: path.join(distDir, "assets", "runtime", "plugin-worker.js"),
@@ -526,6 +561,10 @@ async function buildPluginRuntimeAssets() {
   await cp(
     path.join(rootDir, "node_modules", "quickjs-emscripten", "LICENSE"),
     path.join(distDir, "assets", "libs", "quickjs-emscripten.LICENSE")
+  );
+  await cp(
+    path.join(rootDir, "node_modules", "@jitl", "quickjs-asmjs-mjs-release-sync", "LICENSE"),
+    path.join(distDir, "assets", "libs", "quickjs-asmjs.LICENSE")
   );
   await cp(
     path.join(rootDir, "node_modules", "crypto-js", "LICENSE"),

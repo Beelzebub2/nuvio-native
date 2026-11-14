@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Nu acum</string>
     <string name="usb_cache_offer_never">Nu mai întreba</string>
     <string name="usb_cache_offer_title">USB stocare conectată</string>
+    <string name="tv_phone_action_failed">Modificarea nu a putut fi aplicată.</string>
+    <string name="tv_phone_approval_required">Aprobă telefonul pe acest televizor.</string>
+    <string name="tv_phone_approve">Aprobă</string>
+    <string name="tv_phone_change_applied">Modificare aplicată.</string>
+    <string name="tv_phone_connected">Telefon conectat</string>
+    <string name="tv_phone_connected_hint">Gestionează extensii și pluginuri pe telefon.</string>
+    <string name="tv_phone_connection_error">Verifică conexiunea și încearcă din nou.</string>
+    <string name="tv_phone_disconnect">Deconectare</string>
+    <string name="tv_phone_manage_title">Gestionează de pe telefon</string>
+    <string name="tv_phone_pairing_code">Cod: {{code}}</string>
+    <string name="tv_phone_preparing">Conectare…</string>
+    <string name="tv_phone_scan_instruction">Scanează codul QR pentru a gestiona extensii și pluginuri.</string>
+    <string name="tv_phone_unavailable">Conexiune indisponibilă</string>
+    <string name="tv_phone_verify_code">Compară acest cod pe telefon:</string>
+    <string name="tv_phone_verify_title">Aprobi telefonul?</string>
+    <string name="tv_phone_waiting">Se așteaptă telefonul</string>
 </resources>

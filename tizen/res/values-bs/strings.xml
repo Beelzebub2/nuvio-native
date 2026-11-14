@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Ne sada</string>
     <string name="usb_cache_offer_never">Ne pitaj ponovo</string>
     <string name="usb_cache_offer_title">USB memorija povezana</string>
+    <string name="tv_phone_action_failed">Promjena nije uspjela.</string>
+    <string name="tv_phone_approval_required">Odobri telefon na ovom televizoru.</string>
+    <string name="tv_phone_approve">Odobri</string>
+    <string name="tv_phone_change_applied">Promjena je primijenjena.</string>
+    <string name="tv_phone_connected">Telefon povezan</string>
+    <string name="tv_phone_connected_hint">Upravljaj dodacima i pluginovima na telefonu.</string>
+    <string name="tv_phone_connection_error">Provjeri vezu i pokušaj ponovo.</string>
+    <string name="tv_phone_disconnect">Prekini vezu</string>
+    <string name="tv_phone_manage_title">Upravljaj telefonom</string>
+    <string name="tv_phone_pairing_code">Kod: {{code}}</string>
+    <string name="tv_phone_preparing">Povezivanje…</string>
+    <string name="tv_phone_scan_instruction">Skeniraj QR kod za upravljanje dodacima i pluginovima.</string>
+    <string name="tv_phone_unavailable">Veza nije dostupna</string>
+    <string name="tv_phone_verify_code">Provjeri ovaj kod na telefonu:</string>
+    <string name="tv_phone_verify_title">Odobriti telefon?</string>
+    <string name="tv_phone_waiting">Čekanje telefona</string>
 </resources>

@@ -3450,4 +3450,20 @@
     <string name="usb_cache_offer_later">今ではありません</string>
     <string name="usb_cache_offer_never">もう聞かないでください</string>
     <string name="usb_cache_offer_title">USB ストレージが接続されました</string>
+    <string name="tv_phone_action_failed">変更を適用できませんでした。</string>
+    <string name="tv_phone_approval_required">このテレビでスマートフォンを承認してください。</string>
+    <string name="tv_phone_approve">承認</string>
+    <string name="tv_phone_change_applied">変更を適用しました。</string>
+    <string name="tv_phone_connected">スマートフォンを接続しました</string>
+    <string name="tv_phone_connected_hint">スマートフォンでアドオンとプラグインを管理します。</string>
+    <string name="tv_phone_connection_error">接続を確認して再試行してください。</string>
+    <string name="tv_phone_disconnect">切断</string>
+    <string name="tv_phone_manage_title">スマートフォンで管理</string>
+    <string name="tv_phone_pairing_code">コード: {{code}}</string>
+    <string name="tv_phone_preparing">接続中…</string>
+    <string name="tv_phone_scan_instruction">QRコードを読み取ってアドオンとプラグインを管理します。</string>
+    <string name="tv_phone_unavailable">接続できません</string>
+    <string name="tv_phone_verify_code">スマートフォンのコードと照合してください:</string>
+    <string name="tv_phone_verify_title">スマートフォンを承認しますか？</string>
+    <string name="tv_phone_waiting">スマートフォンを待機中</string>
 </resources>

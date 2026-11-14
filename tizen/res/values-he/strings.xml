@@ -3457,4 +3457,20 @@
     <string name="usb_cache_offer_later">לא עכשיו</string>
     <string name="usb_cache_offer_never">אל תשאל שוב</string>
     <string name="usb_cache_offer_title">אחסון USB מחובר</string>
+    <string name="tv_phone_action_failed">לא ניתן להחיל את השינוי.</string>
+    <string name="tv_phone_approval_required">אשרו את הטלפון בטלוויזיה זו.</string>
+    <string name="tv_phone_approve">אישור</string>
+    <string name="tv_phone_change_applied">השינוי הוחל.</string>
+    <string name="tv_phone_connected">הטלפון מחובר</string>
+    <string name="tv_phone_connected_hint">נהלו הרחבות ותוספים מהטלפון.</string>
+    <string name="tv_phone_connection_error">בדקו את החיבור ונסו שוב.</string>
+    <string name="tv_phone_disconnect">ניתוק</string>
+    <string name="tv_phone_manage_title">ניהול מהטלפון</string>
+    <string name="tv_phone_pairing_code">קוד: {{code}}</string>
+    <string name="tv_phone_preparing">מתחבר…</string>
+    <string name="tv_phone_scan_instruction">סרקו את קוד ה-QR לניהול הרחבות ותוספים.</string>
+    <string name="tv_phone_unavailable">החיבור אינו זמין</string>
+    <string name="tv_phone_verify_code">השוו קוד זה לקוד בטלפון:</string>
+    <string name="tv_phone_verify_title">לאשר את הטלפון?</string>
+    <string name="tv_phone_waiting">ממתין לטלפון</string>
 </resources>

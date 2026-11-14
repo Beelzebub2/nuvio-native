@@ -3456,4 +3456,20 @@
     <string name="usb_cache_offer_later">এখন না</string>
     <string name="usb_cache_offer_never">আবার জিজ্ঞাসা করবেন না</string>
     <string name="usb_cache_offer_title">USB স্টোরেজ সংযুক্ত</string>
+    <string name="tv_phone_action_failed">পরিবর্তন প্রয়োগ করা যায়নি।</string>
+    <string name="tv_phone_approval_required">এই টিভিতে ফোন অনুমোদন করুন।</string>
+    <string name="tv_phone_approve">অনুমোদন করুন</string>
+    <string name="tv_phone_change_applied">পরিবর্তন প্রয়োগ হয়েছে।</string>
+    <string name="tv_phone_connected">ফোন সংযুক্ত হয়েছে</string>
+    <string name="tv_phone_connected_hint">ফোন থেকে অ্যাড-অন ও প্লাগইন পরিচালনা করুন।</string>
+    <string name="tv_phone_connection_error">সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
+    <string name="tv_phone_disconnect">সংযোগ বিচ্ছিন্ন করুন</string>
+    <string name="tv_phone_manage_title">ফোন থেকে পরিচালনা করুন</string>
+    <string name="tv_phone_pairing_code">কোড: {{code}}</string>
+    <string name="tv_phone_preparing">সংযোগ হচ্ছে…</string>
+    <string name="tv_phone_scan_instruction">অ্যাড-অন ও প্লাগইন পরিচালনা করতে QR কোড স্ক্যান করুন।</string>
+    <string name="tv_phone_unavailable">সংযোগ উপলব্ধ নয়</string>
+    <string name="tv_phone_verify_code">ফোনে এই কোডটি মিলিয়ে দেখুন:</string>
+    <string name="tv_phone_verify_title">ফোন অনুমোদন করবেন?</string>
+    <string name="tv_phone_waiting">ফোনের অপেক্ষায়</string>
 </resources>

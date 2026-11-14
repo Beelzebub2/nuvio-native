@@ -3451,4 +3451,20 @@
     <string name="usb_cache_offer_later">Ikke nu</string>
     <string name="usb_cache_offer_never">Spørg ikke igen</string>
     <string name="usb_cache_offer_title">USB lager tilsluttet</string>
+    <string name="tv_phone_action_failed">Ændringen kunne ikke gennemføres.</string>
+    <string name="tv_phone_approval_required">Godkend telefonen på dette tv.</string>
+    <string name="tv_phone_approve">Godkend</string>
+    <string name="tv_phone_change_applied">Ændringen er gennemført.</string>
+    <string name="tv_phone_connected">Telefonen er tilsluttet</string>
+    <string name="tv_phone_connected_hint">Administrer tilføjelser og plugins på din telefon.</string>
+    <string name="tv_phone_connection_error">Kontrollér forbindelsen, og prøv igen.</string>
+    <string name="tv_phone_disconnect">Afbryd forbindelsen</string>
+    <string name="tv_phone_manage_title">Administrer med telefonen</string>
+    <string name="tv_phone_pairing_code">Kode: {{code}}</string>
+    <string name="tv_phone_preparing">Opretter forbindelse…</string>
+    <string name="tv_phone_scan_instruction">Scan QR-koden for at administrere tilføjelser og plugins.</string>
+    <string name="tv_phone_unavailable">Forbindelsen er ikke tilgængelig</string>
+    <string name="tv_phone_verify_code">Kontrollér denne kode på din telefon:</string>
+    <string name="tv_phone_verify_title">Godkend telefon?</string>
+    <string name="tv_phone_waiting">Venter på telefonen</string>
 </resources>

@@ -3448,4 +3448,20 @@
     <string name="usb_cache_offer_later">Most nem</string>
     <string name="usb_cache_offer_never">Ne kérdezz többet</string>
     <string name="usb_cache_offer_title">USB tárhely csatlakoztatva</string>
+    <string name="tv_phone_action_failed">Nem sikerült alkalmazni a módosítást.</string>
+    <string name="tv_phone_approval_required">Hagyd jóvá a telefont ezen a tévén.</string>
+    <string name="tv_phone_approve">Jóváhagyás</string>
+    <string name="tv_phone_change_applied">Módosítás alkalmazva.</string>
+    <string name="tv_phone_connected">Telefon csatlakoztatva</string>
+    <string name="tv_phone_connected_hint">Kezeld a bővítményeket és plugineket a telefonodon.</string>
+    <string name="tv_phone_connection_error">Ellenőrizd a kapcsolatot, és próbáld újra.</string>
+    <string name="tv_phone_disconnect">Leválasztás</string>
+    <string name="tv_phone_manage_title">Kezelés telefonról</string>
+    <string name="tv_phone_pairing_code">Kód: {{code}}</string>
+    <string name="tv_phone_preparing">Csatlakozás…</string>
+    <string name="tv_phone_scan_instruction">Olvasd be a QR-kódot a bővítmények és pluginek kezeléséhez.</string>
+    <string name="tv_phone_unavailable">A kapcsolat nem érhető el</string>
+    <string name="tv_phone_verify_code">Ellenőrizd ezt a kódot a telefonodon:</string>
+    <string name="tv_phone_verify_title">Jóváhagyod a telefont?</string>
+    <string name="tv_phone_waiting">Várakozás a telefonra</string>
 </resources>

@@ -5,6 +5,7 @@ import { addonRepository } from "../../../data/repository/addonRepository.js";
 import { LibrarySyncService } from "../../../core/profile/librarySyncService.js";
 import { withRequestTimeout } from "../../../core/network/requestTimeout.js";
 import { renderBrandWordmarkImage } from "../../components/brandWordmark.js";
+import { I18n } from "../../../i18n/index.js";
 function safe(value) { return String(value || "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]); }
 export function normalizeManifestUrl(value) {
   const url = new URL(String(value || "").trim().replace(/^stremio:\/\//i, "https://"));
@@ -32,12 +33,21 @@ export const PluginScreen = {
   render() {
     const urls=addonRepository.getInstalledAddonUrls();
     this.container.innerHTML=`<main class="starlit-addon-manager">${renderBrandWordmarkImage()}<h1>Your add-ons</h1><p>Add a manifest from a source you are authorized to use. Starlit includes no catalogs or stream providers.</p><div class="starlit-addon-form"><label for="starlit-manifest">Manifest URL</label><input id="starlit-manifest" class="focusable" type="url" autocomplete="off" placeholder="https://your-addon.example/manifest.json" maxlength="4096"><button class="focusable" data-action="add">Add manifest</button></div><p role="status" aria-live="polite">${safe(this.message)}</p><div class="starlit-addon-actions"><button class="focusable" data-action="refresh">Sync add-ons</button><button class="focusable" data-action="catalogs">Arrange home catalogs</button><button class="focusable" data-action="collections">Collections</button><button class="focusable" data-action="back">Back</button></div>${urls.length ? `<ul>${urls.map((url,index)=>`<li><span>${safe(new URL(url).hostname)}</span><button class="focusable" data-index="${index}" data-action="toggle">${addonRepository.isAddonEnabled(url)?"Disable":"Enable"}</button><button class="focusable" data-index="${index}" data-action="remove">Remove</button></li>`).join("")}</ul>` : "<p>No add-ons installed. Add a manifest above, or sync the add-ons from your Starlit account.</p>"}</main>`;
+    const actions = this.container.querySelector(".starlit-addon-actions");
+    if (actions) {
+      const phone = document.createElement("button");
+      phone.className = "focusable";
+      phone.dataset.action = "phone";
+      phone.textContent = I18n.t("tv_phone_manage_title", {}, { fallback: "Manage with phone" });
+      actions.prepend(phone);
+    }
     this.container.querySelectorAll("button").forEach(node=>node.addEventListener("click",()=>this.activate(node)));
     this.focusIndex=0;this.focusCurrent();
   },
   async activate(node) {
     const action=node.dataset.action,urls=addonRepository.getInstalledAddonUrls(),url=urls[Number(node.dataset.index)];
     if(action==="add") return this.addManifest();
+    if(action==="phone") return Router.navigate("tvPhoneSetup");
     if(action==="back") return Router.back();
     if(action==="refresh") return this.refreshAddons();
     if(action==="catalogs") return Router.navigate("catalogOrder");

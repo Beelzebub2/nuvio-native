@@ -3452,4 +3452,20 @@
     <string name="usb_cache_offer_later">现在不行</string>
     <string name="usb_cache_offer_never">不要再问</string>
     <string name="usb_cache_offer_title">USB 存储已连接</string>
+    <string name="tv_phone_action_failed">无法应用更改。</string>
+    <string name="tv_phone_approval_required">请在此电视上批准手机连接。</string>
+    <string name="tv_phone_approve">批准</string>
+    <string name="tv_phone_change_applied">更改已应用。</string>
+    <string name="tv_phone_connected">手机已连接</string>
+    <string name="tv_phone_connected_hint">在手机上管理附加组件和插件。</string>
+    <string name="tv_phone_connection_error">请检查连接后重试。</string>
+    <string name="tv_phone_disconnect">断开连接</string>
+    <string name="tv_phone_manage_title">用手机管理</string>
+    <string name="tv_phone_pairing_code">代码：{{code}}</string>
+    <string name="tv_phone_preparing">正在连接…</string>
+    <string name="tv_phone_scan_instruction">扫描二维码以管理附加组件和插件。</string>
+    <string name="tv_phone_unavailable">连接不可用</string>
+    <string name="tv_phone_verify_code">请核对手机上的此代码：</string>
+    <string name="tv_phone_verify_title">批准手机连接？</string>
+    <string name="tv_phone_waiting">等待手机连接</string>
 </resources>

@@ -30,7 +30,7 @@ import { preloadStreamBadgeImages } from "./ui/screens/stream/streamScreen.js";
 import { warmStreamingLibs } from "./runtime/loadStreamingLibs.js";
 import { runAfterFirstHomePaint } from "./runtime/startupScheduler.js";
 import { Platform } from "./platform/index.js";
-import { TizenCapabilities } from "./platform/tizen/tizenCapabilities.js";
+import { TizenCapabilities, isTizen5PluginPreviewEnabled } from "./platform/tizen/tizenCapabilities.js";
 import { PluginServiceClient } from "./platform/pluginServiceClient.js";
 import { getTvRuntimePerformanceProfile } from "./platform/tvRuntimePerformance.js";
 import { LocalStore } from "./core/storage/localStore.js";
@@ -588,7 +588,7 @@ function setupPluginRuntimeLifecycle() {
   document.addEventListener("nuvio:beforeExitApp", cancel);
 }
 function setupPluginServiceLifecycle() {
-  if (!Platform.isTizen() || shouldDisableTizenPluginSupport()) {
+  if (!Platform.isTizen() || shouldDisableTizenPluginSupport() || isTizen5PluginPreviewEnabled()) {
     return;
   }
   // The service only serves plugins, so its watchdog probe is skipped while
@@ -636,7 +636,9 @@ async function bootstrapApp() {
   installLocalServiceFetch();
   setupPluginServiceLifecycle();
   if (shouldDisableTizenPluginSupport()) {
-    markBootStage("PluginService disabled on Tizen below 6.0");
+    markBootStage("PluginService disabled on unsupported Tizen runtime");
+  } else if (isTizen5PluginPreviewEnabled()) {
+    markBootStage("Tizen 5 plugin preview uses HTTPS/CORS without background service");
   } else {
     // PluginService is optional and only serves installed plugins. It used to
     // be launched here, which spawned the Node process during Home render on

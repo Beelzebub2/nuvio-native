@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Inte nu</string>
     <string name="usb_cache_offer_never">Fråga inte igen</string>
     <string name="usb_cache_offer_title">USB lagring ansluten</string>
+    <string name="tv_phone_action_failed">Ändringen kunde inte tillämpas.</string>
+    <string name="tv_phone_approval_required">Godkänn mobilen på den här tv:n.</string>
+    <string name="tv_phone_approve">Godkänn</string>
+    <string name="tv_phone_change_applied">Ändringen har tillämpats.</string>
+    <string name="tv_phone_connected">Mobilen är ansluten</string>
+    <string name="tv_phone_connected_hint">Hantera tillägg och insticksprogram på mobilen.</string>
+    <string name="tv_phone_connection_error">Kontrollera anslutningen och försök igen.</string>
+    <string name="tv_phone_disconnect">Koppla från</string>
+    <string name="tv_phone_manage_title">Hantera med mobilen</string>
+    <string name="tv_phone_pairing_code">Kod: {{code}}</string>
+    <string name="tv_phone_preparing">Ansluter…</string>
+    <string name="tv_phone_scan_instruction">Skanna QR-koden för att hantera tillägg och insticksprogram.</string>
+    <string name="tv_phone_unavailable">Anslutningen är inte tillgänglig</string>
+    <string name="tv_phone_verify_code">Kontrollera denna kod på din mobil:</string>
+    <string name="tv_phone_verify_title">Godkänna mobilen?</string>
+    <string name="tv_phone_waiting">Väntar på mobilen</string>
 </resources>

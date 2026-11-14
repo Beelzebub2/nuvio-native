@@ -3455,4 +3455,20 @@
     <string name="usb_cache_offer_later">Teraz nie</string>
     <string name="usb_cache_offer_never">Už sa nepýtaj</string>
     <string name="usb_cache_offer_title">USB pripojené</string>
+    <string name="tv_phone_action_failed">Zmenu sa nepodarilo použiť.</string>
+    <string name="tv_phone_approval_required">Schváľte telefón na tomto televízore.</string>
+    <string name="tv_phone_approve">Schváliť</string>
+    <string name="tv_phone_change_applied">Zmena použitá.</string>
+    <string name="tv_phone_connected">Telefón pripojený</string>
+    <string name="tv_phone_connected_hint">Spravujte doplnky a pluginy v telefóne.</string>
+    <string name="tv_phone_connection_error">Skontrolujte pripojenie a skúste to znova.</string>
+    <string name="tv_phone_disconnect">Odpojiť</string>
+    <string name="tv_phone_manage_title">Spravovať telefónom</string>
+    <string name="tv_phone_pairing_code">Kód: {{code}}</string>
+    <string name="tv_phone_preparing">Pripájanie…</string>
+    <string name="tv_phone_scan_instruction">Naskenujte QR kód na správu doplnkov a pluginov.</string>
+    <string name="tv_phone_unavailable">Pripojenie nie je dostupné</string>
+    <string name="tv_phone_verify_code">Porovnajte tento kód s kódom v telefóne:</string>
+    <string name="tv_phone_verify_title">Schváliť telefón?</string>
+    <string name="tv_phone_waiting">Čakanie na telefón</string>
 </resources>

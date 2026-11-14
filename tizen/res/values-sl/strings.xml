@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Ne zdaj</string>
     <string name="usb_cache_offer_never">Ne sprašuj več</string>
     <string name="usb_cache_offer_title">USB shramba je povezana</string>
+    <string name="tv_phone_action_failed">Spremembe ni bilo mogoče uveljaviti.</string>
+    <string name="tv_phone_approval_required">Potrdite telefon na tem televizorju.</string>
+    <string name="tv_phone_approve">Potrdi</string>
+    <string name="tv_phone_change_applied">Sprememba uveljavljena.</string>
+    <string name="tv_phone_connected">Telefon povezan</string>
+    <string name="tv_phone_connected_hint">Upravljajte dodatke in vtičnike s telefonom.</string>
+    <string name="tv_phone_connection_error">Preverite povezavo in poskusite znova.</string>
+    <string name="tv_phone_disconnect">Prekini povezavo</string>
+    <string name="tv_phone_manage_title">Upravljanje s telefonom</string>
+    <string name="tv_phone_pairing_code">Koda: {{code}}</string>
+    <string name="tv_phone_preparing">Povezovanje…</string>
+    <string name="tv_phone_scan_instruction">Skenirajte kodo QR za upravljanje dodatkov in vtičnikov.</string>
+    <string name="tv_phone_unavailable">Povezava ni na voljo</string>
+    <string name="tv_phone_verify_code">Preverite to kodo na telefonu:</string>
+    <string name="tv_phone_verify_title">Potrdim telefon?</string>
+    <string name="tv_phone_waiting">Čakanje na telefon</string>
 </resources>

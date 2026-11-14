@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Jangan sekarang</string>
     <string name="usb_cache_offer_never">Jangan tanya lagi</string>
     <string name="usb_cache_offer_title">USB penyimpanan terhubung</string>
+    <string name="tv_phone_action_failed">Perubahan gagal diterapkan.</string>
+    <string name="tv_phone_approval_required">Setujui ponsel di TV ini.</string>
+    <string name="tv_phone_approve">Setujui</string>
+    <string name="tv_phone_change_applied">Perubahan diterapkan.</string>
+    <string name="tv_phone_connected">Ponsel terhubung</string>
+    <string name="tv_phone_connected_hint">Kelola add-on dan plugin dari ponsel.</string>
+    <string name="tv_phone_connection_error">Periksa koneksi lalu coba lagi.</string>
+    <string name="tv_phone_disconnect">Putuskan sambungan</string>
+    <string name="tv_phone_manage_title">Kelola lewat ponsel</string>
+    <string name="tv_phone_pairing_code">Kode: {{code}}</string>
+    <string name="tv_phone_preparing">Menghubungkan…</string>
+    <string name="tv_phone_scan_instruction">Pindai kode QR untuk mengelola add-on dan plugin.</string>
+    <string name="tv_phone_unavailable">Koneksi tidak tersedia</string>
+    <string name="tv_phone_verify_code">Cocokkan kode ini di ponsel:</string>
+    <string name="tv_phone_verify_title">Setujui ponsel?</string>
+    <string name="tv_phone_waiting">Menunggu ponsel</string>
 </resources>

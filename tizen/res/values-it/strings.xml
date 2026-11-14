@@ -3485,4 +3485,20 @@
     <string name="usb_cache_offer_later">Non ora</string>
     <string name="usb_cache_offer_never">Non chiedermelo più</string>
     <string name="usb_cache_offer_title">USB memoria collegata</string>
+    <string name="tv_phone_action_failed">Impossibile applicare la modifica.</string>
+    <string name="tv_phone_approval_required">Autorizza il telefono su questa TV.</string>
+    <string name="tv_phone_approve">Autorizza</string>
+    <string name="tv_phone_change_applied">Modifica applicata.</string>
+    <string name="tv_phone_connected">Telefono connesso</string>
+    <string name="tv_phone_connected_hint">Gestisci componenti aggiuntivi e plugin dal telefono.</string>
+    <string name="tv_phone_connection_error">Controlla la connessione e riprova.</string>
+    <string name="tv_phone_disconnect">Disconnetti</string>
+    <string name="tv_phone_manage_title">Gestisci dal telefono</string>
+    <string name="tv_phone_pairing_code">Codice: {{code}}</string>
+    <string name="tv_phone_preparing">Connessione…</string>
+    <string name="tv_phone_scan_instruction">Scansiona il codice QR per gestire componenti aggiuntivi e plugin.</string>
+    <string name="tv_phone_unavailable">Connessione non disponibile</string>
+    <string name="tv_phone_verify_code">Controlla questo codice sul telefono:</string>
+    <string name="tv_phone_verify_title">Autorizzare il telefono?</string>
+    <string name="tv_phone_waiting">In attesa del telefono</string>
 </resources>

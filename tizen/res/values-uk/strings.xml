@@ -3451,4 +3451,20 @@
     <string name="usb_cache_offer_later">Не зараз</string>
     <string name="usb_cache_offer_never">Більше не питай</string>
     <string name="usb_cache_offer_title">USB.</string>
+    <string name="tv_phone_action_failed">Не вдалося застосувати зміну.</string>
+    <string name="tv_phone_approval_required">Підтвердьте телефон на цьому телевізорі.</string>
+    <string name="tv_phone_approve">Підтвердити</string>
+    <string name="tv_phone_change_applied">Зміну застосовано.</string>
+    <string name="tv_phone_connected">Телефон підключено</string>
+    <string name="tv_phone_connected_hint">Керуйте додатками та плагінами з телефона.</string>
+    <string name="tv_phone_connection_error">Перевірте з’єднання та повторіть спробу.</string>
+    <string name="tv_phone_disconnect">Від’єднати</string>
+    <string name="tv_phone_manage_title">Керування з телефона</string>
+    <string name="tv_phone_pairing_code">Код: {{code}}</string>
+    <string name="tv_phone_preparing">Підключення…</string>
+    <string name="tv_phone_scan_instruction">Відскануйте QR-код для керування додатками та плагінами.</string>
+    <string name="tv_phone_unavailable">З’єднання недоступне</string>
+    <string name="tv_phone_verify_code">Звірте цей код із кодом на телефоні:</string>
+    <string name="tv_phone_verify_title">Підтвердити телефон?</string>
+    <string name="tv_phone_waiting">Очікування телефона</string>
 </resources>

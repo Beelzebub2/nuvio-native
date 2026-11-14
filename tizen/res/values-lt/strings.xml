@@ -3451,4 +3451,20 @@ Klaida: Bandomoji simuliuojama klaida — tai nėra tikras gedimas. Šaltinis gr
     <string name="usb_cache_offer_later">Ne dabar</string>
     <string name="usb_cache_offer_never">Daugiau neklausk</string>
     <string name="usb_cache_offer_title">USB saugykla prijungta</string>
+    <string name="tv_phone_action_failed">Nepavyko pritaikyti pakeitimo.</string>
+    <string name="tv_phone_approval_required">Patvirtinkite telefoną šiame televizoriuje.</string>
+    <string name="tv_phone_approve">Patvirtinti</string>
+    <string name="tv_phone_change_applied">Pakeitimas pritaikytas.</string>
+    <string name="tv_phone_connected">Telefonas prijungtas</string>
+    <string name="tv_phone_connected_hint">Tvarkykite priedus ir įskiepius telefone.</string>
+    <string name="tv_phone_connection_error">Patikrinkite ryšį ir bandykite dar kartą.</string>
+    <string name="tv_phone_disconnect">Atjungti</string>
+    <string name="tv_phone_manage_title">Tvarkyti telefonu</string>
+    <string name="tv_phone_pairing_code">Kodas: {{code}}</string>
+    <string name="tv_phone_preparing">Jungiama…</string>
+    <string name="tv_phone_scan_instruction">Nuskaitykite QR kodą, kad tvarkytumėte priedus ir įskiepius.</string>
+    <string name="tv_phone_unavailable">Ryšys nepasiekiamas</string>
+    <string name="tv_phone_verify_code">Palyginkite šį kodą su kodu telefone:</string>
+    <string name="tv_phone_verify_title">Patvirtinti telefoną?</string>
+    <string name="tv_phone_waiting">Laukiama telefono</string>
 </resources>

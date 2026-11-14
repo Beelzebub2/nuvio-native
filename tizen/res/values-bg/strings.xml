@@ -3451,4 +3451,20 @@
     <string name="usb_cache_offer_later">Не сега</string>
     <string name="usb_cache_offer_never">Не питай отново</string>
     <string name="usb_cache_offer_title">USB хранилище е свързано</string>
+    <string name="tv_phone_action_failed">Промяната не можа да се приложи.</string>
+    <string name="tv_phone_approval_required">Одобрете телефона на този телевизор.</string>
+    <string name="tv_phone_approve">Одобри</string>
+    <string name="tv_phone_change_applied">Промяната е приложена.</string>
+    <string name="tv_phone_connected">Телефонът е свързан</string>
+    <string name="tv_phone_connected_hint">Управлявайте добавки и плъгини от телефона.</string>
+    <string name="tv_phone_connection_error">Проверете връзката и опитайте отново.</string>
+    <string name="tv_phone_disconnect">Прекъсни връзката</string>
+    <string name="tv_phone_manage_title">Управление от телефона</string>
+    <string name="tv_phone_pairing_code">Код: {{code}}</string>
+    <string name="tv_phone_preparing">Свързване…</string>
+    <string name="tv_phone_scan_instruction">Сканирайте QR кода, за да управлявате добавки и плъгини.</string>
+    <string name="tv_phone_unavailable">Връзката е недостъпна</string>
+    <string name="tv_phone_verify_code">Сравнете този код с кода на телефона:</string>
+    <string name="tv_phone_verify_title">Да се одобри ли телефонът?</string>
+    <string name="tv_phone_waiting">Изчакване на телефон</string>
 </resources>

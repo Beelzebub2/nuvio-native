@@ -3457,4 +3457,20 @@
     <string name="usb_cache_offer_later">Nie teraz</string>
     <string name="usb_cache_offer_never">Nie pytaj więcej</string>
     <string name="usb_cache_offer_title">USB pamięć podłączona</string>
+    <string name="tv_phone_action_failed">Nie udało się zastosować zmiany.</string>
+    <string name="tv_phone_approval_required">Zatwierdź telefon na tym telewizorze.</string>
+    <string name="tv_phone_approve">Zatwierdź</string>
+    <string name="tv_phone_change_applied">Zmiana zastosowana.</string>
+    <string name="tv_phone_connected">Telefon połączony</string>
+    <string name="tv_phone_connected_hint">Zarządzaj dodatkami i wtyczkami na telefonie.</string>
+    <string name="tv_phone_connection_error">Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="tv_phone_disconnect">Rozłącz</string>
+    <string name="tv_phone_manage_title">Zarządzaj telefonem</string>
+    <string name="tv_phone_pairing_code">Kod: {{code}}</string>
+    <string name="tv_phone_preparing">Łączenie…</string>
+    <string name="tv_phone_scan_instruction">Zeskanuj kod QR, aby zarządzać dodatkami i wtyczkami.</string>
+    <string name="tv_phone_unavailable">Połączenie niedostępne</string>
+    <string name="tv_phone_verify_code">Sprawdź ten kod na telefonie:</string>
+    <string name="tv_phone_verify_title">Zatwierdzić telefon?</string>
+    <string name="tv_phone_waiting">Oczekiwanie na telefon</string>
 </resources>

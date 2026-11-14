@@ -3449,4 +3449,20 @@
     <string name="usb_cache_offer_later">Teď ne</string>
     <string name="usb_cache_offer_never">Už se neptejte</string>
     <string name="usb_cache_offer_title">USB úložiště připojeno</string>
+    <string name="tv_phone_action_failed">Změnu se nepodařilo provést.</string>
+    <string name="tv_phone_approval_required">Schvalte telefon na této televizi.</string>
+    <string name="tv_phone_approve">Schválit</string>
+    <string name="tv_phone_change_applied">Změna provedena.</string>
+    <string name="tv_phone_connected">Telefon připojen</string>
+    <string name="tv_phone_connected_hint">Spravujte doplňky a pluginy v telefonu.</string>
+    <string name="tv_phone_connection_error">Zkontrolujte připojení a zkuste to znovu.</string>
+    <string name="tv_phone_disconnect">Odpojit</string>
+    <string name="tv_phone_manage_title">Spravovat telefonem</string>
+    <string name="tv_phone_pairing_code">Kód: {{code}}</string>
+    <string name="tv_phone_preparing">Připojování…</string>
+    <string name="tv_phone_scan_instruction">Naskenujte QR kód pro správu doplňků a pluginů.</string>
+    <string name="tv_phone_unavailable">Připojení není dostupné</string>
+    <string name="tv_phone_verify_code">Porovnejte tento kód s kódem v telefonu:</string>
+    <string name="tv_phone_verify_title">Schválit telefon?</string>
+    <string name="tv_phone_waiting">Čekání na telefon</string>
 </resources>

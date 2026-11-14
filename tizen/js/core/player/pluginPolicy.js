@@ -1,5 +1,9 @@
 import { Platform } from "../../platform/index.js";
-import { TizenCapabilities } from "../../platform/tizen/tizenCapabilities.js";
+import {
+  TizenCapabilities,
+  canOfferTizen5PluginPreview,
+  isTizen5PluginPreviewEnabled
+} from "../../platform/tizen/tizenCapabilities.js";
 export const PLUGIN_QUOTAS = Object.freeze({
   modern: Object.freeze({
     // Keep the JS execution policy aligned with Android's PluginManager:
@@ -88,7 +92,7 @@ export function getPluginCapabilitySnapshot() {
       reason: "Plugin execution is limited to packaged TV runtimes"
     });
   }
-  if (!hasWorker || !hasWebAssembly) {
+  if (!hasWorker) {
     return snapshotFields(platform, PLUGIN_QUOTAS.limited, {
       appSupported: platform !== "browser",
       normalAddonsSupported: platform !== "browser",
@@ -101,6 +105,36 @@ export function getPluginCapabilitySnapshot() {
     const chrome = capabilities.chromiumMajorVersion || chromiumVersion();
     const appSupported = tizenVersion === 0 || tizenVersion >= 400;
     const pluginServicePackaged = globalThis.__NUVIO_TIZEN_PLUGIN_SERVICE_ENABLED__ !== false;
+    // Tizen 5 lacks WebAssembly: only a separately loaded JavaScript VM, with
+    // a browser HTTPS/CORS transport, is offered behind a device-local opt-in.
+    if (capabilities.tizenMajorVersion === 5) {
+      const eligible = canOfferTizen5PluginPreview();
+      const enabled = eligible && isTizen5PluginPreviewEnabled();
+      return {
+        ...snapshotFields(platform, PLUGIN_QUOTAS.limited, {
+          appSupported,
+          normalAddonsSupported: appSupported,
+          candidate: enabled,
+          reason: enabled
+            ? "Experimental Tizen 5 JavaScript runtime (HTTPS/CORS sources only)"
+            : "Enable experimental legacy plugins to try Tizen 5 support"
+        }),
+        legacyPreviewEligible: eligible,
+        legacyPreviewEnabled: enabled,
+        runtimeVariant: enabled ? "asmjs" : "wasm",
+        tizenVersion: capabilities.tizenVersion,
+        chromiumMajorVersion: chrome,
+        precheckPassed: enabled,
+        pluginServicePackaged: false
+      };
+    }
+    if (!hasWebAssembly) {
+      return snapshotFields(platform, PLUGIN_QUOTAS.limited, {
+        appSupported,
+        normalAddonsSupported: appSupported,
+        reason: "Worker and WebAssembly are required"
+      });
+    }
     if (!capabilities.tizenPluginVersionSupported) {
       return {
         ...snapshotFields(platform, PLUGIN_QUOTAS.limited, {
@@ -139,6 +173,13 @@ export function getPluginCapabilitySnapshot() {
       precheckPassed: true,
       pluginServicePackaged
     };
+  }
+  if (!hasWebAssembly) {
+    return snapshotFields(platform, PLUGIN_QUOTAS.limited, {
+      appSupported: platform !== "browser",
+      normalAddonsSupported: platform !== "browser",
+      reason: "Worker and WebAssembly are required"
+    });
   }
   if (platform === "webos") {
     const version = Platform.getWebOsMajorVersion();

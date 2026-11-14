@@ -861,8 +861,8 @@ Ginagamit ng</string>
     <string name="play_manually">Manu-manong maglaro
 logo ng</string>
     <string name="poster_logo_content_description">%1$s.</string>
-    <string name="remote_pc_controller_title">PC controller</string>
-    <string name="remote_pc_controller_description">Hanapin at kontrolin ang Starlit na mga PC sa iyong lokal na network.</string>
+    <string name="remote_pc_controller_title">Remote control</string>
+    <string name="remote_pc_controller_description">Kontrolin ang mga PC at Samsung Tizen o LG webOS na mga TV sa parehong network.</string>
     <string name="remote_pc_search_local_network">Maghanap sa lokal na network</string>
     <string name="remote_pc_no_devices_hint">Walang nakalistang PC? Buksan ang Phone remote sa PC at subukan ang QR code o kasalukuyang IP address nito. Gamitin ang parehong account at lokal na network.</string>
     <string name="remote_pc_unsupported">Ang PC controller ay kasalukuyang sinusuportahan sa Android. Hindi pa available ang paghahanap sa device na ito.</string>
@@ -3317,4 +3317,35 @@ Nagbalik ang</string>
     <string name="tv_settings_switch_profile_desc">Piliin kung sino ang nanonood</string>
     <string name="tv_view_details">Tingnan ang mga detalye ›</string>
     <string name="remote_bluetooth_paired_devices">Ipinares Bluetooth na mga PC (maaaring offline)</string>
+    <string name="remote_handoff_choose_target">Pumili ng device</string>
+    <string name="remote_handoff_to_device">I-play sa device</string>
+    <string name="remote_tv_starlit_approve">Aprubahan ang magkaparehong code sa TV:</string>
+    <string name="remote_tv_starlit_code">Code sa pagpares ng TV</string>
+    <string name="remote_tv_starlit_failed">Hindi kumonekta. Tingnan ang code at subukang muli.</string>
+    <string name="remote_tv_starlit_hint">Sa TV, buksan ang Pamahalaan gamit ang telepono. Ilagay ang code dito at aprubahan sa TV.</string>
+    <string name="remote_tv_android_only">TV remote control ay kasalukuyang available sa Android na mga telepono.</string>
+    <string name="remote_tv_available">Mga available na TV</string>
+    <string name="remote_tv_connected_title">TV konektado</string>
+    <string name="remote_tv_controls_hint">Gumagamit ng built-in na remote na API ng iyong telebisyon. Gumagana ang mga kontrol sa Starlit at iba pang TV na mga screen kapag sinusuportahan.</string>
+    <string name="remote_tv_down">Pababa</string>
+    <string name="remote_tv_find_title">Kumonekta sa isang TV</string>
+    <string name="remote_tv_forward">Fast forward</string>
+    <string name="remote_tv_home">Tahanan</string>
+    <string name="remote_tv_left">Kaliwa</string>
+    <string name="remote_tv_manual_hint">Kung naka-block ang pagtuklas, ilagay ang lokal na IP na ipinapakita sa mga setting ng network ng iyong TV.</string>
+    <string name="remote_tv_manual_title">Kumonekta sa pamamagitan ng IP address</string>
+    <string name="remote_tv_mute">I-mute</string>
+    <string name="remote_tv_navigation">Navigation</string>
+    <string name="remote_tv_pairing_hint">Pumili ng Samsung Tizen o LG webOS TV sa parehong network. Aprubahan ang pag-access sa TV.</string>
+    <string name="remote_tv_pause">I-pause</string>
+    <string name="remote_tv_playback">Pag-playback at tunog</string>
+    <string name="remote_tv_private_ip">Pribadong LAN address lamang (halimbawa, 192.168.1.20).</string>
+    <string name="remote_tv_rewind">I-rewind</string>
+    <string name="remote_tv_right">Tama</string>
+    <string name="remote_tv_search">Maghanap ng mga smart TV</string>
+    <string name="remote_tv_tab">TV</string>
+    <string name="remote_tv_title">TV remote</string>
+    <string name="remote_tv_up">Taas</string>
+    <string name="remote_tv_volume_down">Hinaan ang volume</string>
+    <string name="remote_tv_volume_up">Tumaas ang volume</string>
 </resources>
