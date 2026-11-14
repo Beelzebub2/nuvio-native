@@ -15,10 +15,20 @@ Requires Node.js 24 and a Windows PC on the same private LAN as the TV. Run from
 
 Switch between Samsung and LG in the same window. Each platform supports a validated local package or a checksum-verified official Starlit release asset; launching and uninstalling target only Starlit. Installing an update does not first uninstall the existing version.
 
+## Find TVs automatically
+
+Select **Find TVs** in the installer to discover Samsung Tizen and LG webOS televisions connected to your private LAN. Select a TV from the list to fill in its address and switch to the correct platform automatically. Multiple TVs are listed separately and nothing is paired, installed or removed during discovery.
+
+- **Samsung:** Uses the checksum-pinned Apps2Samsung CLI `scan --json`, including Developer Mode / Host PC IP readiness diagnostics. The verified CLI is downloaded on first Samsung use if needed; it may take longer than the LG scan.
+- **LG:** Uses local SSDP/UPnP discovery and checks TV identity against the device description. This does not require a webOS account or grant installation permissions.
+- **Fallback:** Keep the TV switched on and the PC on the same LAN. If the TV does not appear, allow local network discovery through your Windows firewall/router, check Wi-Fi client isolation, or enter its private IPv4 address manually. VPN and guest networks can interfere with discovery.
+
+Discovery is read-only. **Samsung Developer Mode with a matching Host PC IP** and **LG Developer Mode / Key Server pairing** remain necessary before sideloading Starlit. Selecting a result does not auto-pair, skip certificate validation or remove existing apps.
+
 ## Samsung Tizen (4.0 and newer)
 
 1. On the TV open Apps and enter **12345** with the remote. Enable Developer Mode, enter the computer's LAN IP as **Host PC IP** and restart the TV. The installer displays the computer's private IP addresses.
-2. Select **Samsung Tizen** in the Starlit installer, enter the TV's private IP and select **Check Samsung TV**.
+2. Select **Find TVs**, choose your Samsung television and select **Check Samsung TV**. If discovery is blocked, enter its private IP manually.
 3. Select a Starlit WGT file. The app ID must be **StarlitTV1.StarlitTV** with package ID **StarlitTV1**.
 4. Choose the signing method. **Samsung account certificate** is recommended and may open a browser for initial Samsung developer login. **Tizen public certificate** avoids the Samsung account but can be refused by some firmware.
 5. Select **Install or update Starlit**. The WGT is signed for the selected TV through Developer Mode, preserving the application identity and TV-local data when compatible. Keep the **same author certificate** for future updates.
@@ -30,7 +40,7 @@ The Starlit WGT is intentionally unsigned when built by CI; signing is per TV. I
 ## LG webOS (5.0 and newer)
 
 1. Install LG's **Developer Mode** app on the TV and enable Developer Mode and Key Server.
-2. Select **LG webOS**, enter the TV IP, saved device name and Developer Mode passphrase, then click **Pair with LG TV**.
+2. Select **Find TVs** and choose the LG television, or enter its private IP manually. Confirm the saved device name and Developer Mode passphrase, then click **Pair with LG TV**.
 3. Select a Starlit IPK and click **Install or update Starlit**. Its app ID is **app.starlit.webos**, distinct from Samsung and other TV apps.
 
 LG uses the official pinned webOS CLI. Starlit does not save the Key Server passphrase. For details see the [LG webOS guide](../tizen/docs/WEBOS.md).
