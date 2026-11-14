@@ -10,7 +10,10 @@ let scanning = false;
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100, height: 820, minWidth: 800, minHeight: 650,
-    backgroundColor: "#0b101b", autoHideMenuBar: true,
+    title: "Starlit TV Installer", backgroundColor: "#0d0d0d", autoHideMenuBar: true,
+    // The page draws the title bar; Windows keeps its own caption buttons.
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#0d0d0d", symbolColor: "#f5f7f8", height: 43 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       sandbox: true, contextIsolation: true, nodeIntegration: false
