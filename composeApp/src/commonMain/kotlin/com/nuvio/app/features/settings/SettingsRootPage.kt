@@ -132,7 +132,7 @@ internal fun LazyListScope.settingsRootContent(
                                     Res.string.remote_pc_controller_description
                                 else Res.string.remote_pc_unsupported
                             ),
-                            icon = Icons.Rounded.DesktopWindows,
+                            icon = Icons.Rounded.Devices,
                             isTablet = isTablet,
                             onClick = { DesktopRemote.open() },
                         )

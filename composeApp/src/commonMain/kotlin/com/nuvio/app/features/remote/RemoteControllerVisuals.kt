@@ -153,6 +153,7 @@ internal object RemoteIcons {
     }
     val Bluetooth by lazy { remoteIcon("RemoteBluetooth", 1.9f, IconStroke("M7 7.5l10 9-5 4.5V3l5 4.5-10 9")) }
     val Pc by lazy { remoteIcon("RemotePc", 1.9f, IconStroke(rect(2.5f, 4f, 19f, 13f, 2.5f)), IconStroke("M8.5 20.5h7M12 17v3.5")) }
+    val Tv by lazy { remoteIcon("RemoteTv", 1.9f, IconStroke(rect(2f, 4.5f, 20f, 14f, 2f)), IconStroke("M9 21h6M12 18.5V21")) }
     val Remote by lazy {
         remoteIcon(
             "RemoteHandset", 2f,

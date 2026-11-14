@@ -88,19 +88,22 @@ import kotlin.math.roundToInt
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
-private enum class PcControllerTab { Remote, Downloads, Pcs }
+private enum class PcControllerTab { Remote, Downloads, Pcs, Tv }
 
-/** The phone's full-screen PC controller: find and pair a PC, then control playback. */
+/** Phone's PC and smart-TV controller; the TV remote does not depend on a PC connection. */
 @Composable
 internal fun PcControllerScreen(onClose: () -> Unit) {
     val connected by DesktopRemote.connected.collectAsState()
     val scanning by DesktopRemote.scanning.collectAsState()
     val connecting by DesktopRemote.connecting.collectAsState()
     val activeDesktop by DesktopRemote.activeDesktop.collectAsState()
+    val activeTv by SmartTvRemote.active.collectAsState()
     var tab by rememberSaveable { mutableStateOf(PcControllerTab.Remote) }
     // Until a PC is paired, the useful page is finding one, so that is where the tabs start.
     var offlineTab by rememberSaveable { mutableStateOf(PcControllerTab.Pcs) }
-    LaunchedEffect(connected) { if (!connected) offlineTab = PcControllerTab.Pcs }
+    LaunchedEffect(connected) {
+        if (!connected) offlineTab = if (tab == PcControllerTab.Tv) PcControllerTab.Tv else PcControllerTab.Pcs
+    }
     val shownTab = if (connected) tab else offlineTab
     val disconnectedStatus = stringResource(Res.string.remote_disconnected_status)
     val disconnect = {
@@ -111,6 +114,7 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
     val remoteScroll = rememberScrollState()
     val downloadsScroll = rememberScrollState()
     val pcsScroll = rememberScrollState()
+    val tvScroll = rememberScrollState()
     val tokens = MaterialTheme.nuvio
     Column(
         Modifier
@@ -135,7 +139,13 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                 iconSize = 22.dp,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                if (DesktopRemote.transport.supported) {
+                if (shownTab == PcControllerTab.Tv) {
+                    NuvioStatusEyebrow(
+                        text = activeTv?.name ?: stringResource(Res.string.remote_tv_find_title),
+                        tone = if (activeTv != null) NuvioStatusTone.Success else NuvioStatusTone.Muted,
+                        modifier = Modifier.testTag("remote-status"),
+                    )
+                } else if (DesktopRemote.transport.supported) {
                     val pcName = activeDesktop?.name?.takeIf { it.isNotBlank() }
                     val statusText = when {
                         connected && pcName != null -> stringResource(Res.string.remote_pc_connected_to, pcName)
@@ -171,14 +181,14 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                     }
                 }
                 Text(
-                    stringResource(Res.string.remote_pc_controller_title),
+                    stringResource(if (shownTab == PcControllerTab.Tv) Res.string.remote_tv_title else Res.string.remote_pc_controller_title),
                     style = MaterialTheme.typography.headlineLarge,
                     color = tokens.colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (connected) {
+            if (connected && shownTab != PcControllerTab.Tv) {
                 NuvioSquareIconButton(
                     icon = when {
                         activeDesktop?.vpn == true -> Icons.Rounded.VpnKey
@@ -209,9 +219,16 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                     badgeDescription = stringResource(Res.string.remote_pc_tab_downloads_active, activeDownloads),
                 ),
                 RemoteTabItem(PcControllerTab.Pcs, stringResource(Res.string.remote_pc_tab_pcs), RemoteIcons.Pc),
+                RemoteTabItem(PcControllerTab.Tv, stringResource(Res.string.remote_tv_tab), RemoteIcons.Tv),
             ),
             selected = shownTab,
-            onSelect = { if (connected) tab = it else offlineTab = it },
+            onSelect = {
+                if (connected) tab = it else offlineTab = it
+                if (it == PcControllerTab.Tv) {
+                    tab = it
+                    offlineTab = it
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = tokens.spacing.screenHorizontal, end = tokens.spacing.screenHorizontal, top = 18.dp),
@@ -220,6 +237,7 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
             PcControllerTab.Remote -> remoteScroll
             PcControllerTab.Downloads -> downloadsScroll
             PcControllerTab.Pcs -> pcsScroll
+            PcControllerTab.Tv -> tvScroll
         }
         Column(
             Modifier
@@ -237,6 +255,7 @@ internal fun PcControllerScreen(onClose: () -> Unit) {
                 ) {
                     when {
                         shownTab == PcControllerTab.Pcs -> FindPcPage(onDisconnect = disconnect)
+                        shownTab == PcControllerTab.Tv -> SmartTvRemotePage()
                         !connected -> NotConnectedNotice(onFindPc = { offlineTab = PcControllerTab.Pcs })
                         shownTab == PcControllerTab.Remote -> RemotePlaybackPage()
                         else -> RemoteDownloadsPage()
