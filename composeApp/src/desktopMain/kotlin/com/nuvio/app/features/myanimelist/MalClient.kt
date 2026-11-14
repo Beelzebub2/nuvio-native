@@ -20,7 +20,15 @@ internal data class MalListStatus(
     val watchedEpisodes: Int,
     val isRewatching: Boolean = false,
 )
-internal data class MalAnime(val id: Int, val title: String)
+internal data class MalAnime(
+    val id: Int,
+    val title: String,
+    val englishTitle: String? = null,
+    val alternativeTitles: List<String> = emptyList(),
+    val startYear: Int? = null,
+    val mediaType: String? = null,
+    val listStatus: MalListStatus? = null,
+)
 internal data class MalAnimeListEntry(
     val anime: MalAnime,
     val imageUrl: String?,
@@ -193,13 +201,35 @@ internal class MalClient(
         val hasNext = (response["paging"] as? JsonObject)?.get("next")?.jsonPrimitive?.contentOrNull?.isNotBlank() == true
         return MalAnimeListPage(entries, if (hasNext && entries.isNotEmpty()) offset + limit else null)
     }
-    suspend fun search(name: String, token: String): List<MalAnime> {
-        val url = (api + "anime").toHttpUrl().newBuilder().addQueryParameter("q", name.take(64)).addQueryParameter("limit", "10").build()
-        return (request(Request.Builder().url(url).header("Authorization", "Bearer $token").build())["data"] as? JsonArray).orEmpty()
-            .mapNotNull { val node = (it as? JsonObject)?.get("node") as? JsonObject ?: return@mapNotNull null
-                val id = node["id"]?.jsonPrimitive?.intOrNull?.takeIf { value -> value > 0 } ?: return@mapNotNull null
-                MalAnime(id, node["title"]?.jsonPrimitive?.content ?: "Anime $id") }
+    suspend fun search(name: String, token: String, limit: Int = 10): List<MalAnime> {
+        require(limit in 1..30)
+        val query = name.trim().take(64)
+        if (query.length < 2) return emptyList()
+        val url = (api + "anime").toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("limit", limit.toString())
+            .addQueryParameter("fields", "alternative_titles,start_season,media_type,my_list_status")
+            .build()
+        return (request(Request.Builder().url(url).header("Authorization", "Bearer $token").build())["data"] as? JsonArray)
+            .orEmpty().mapNotNull { row ->
+                val node = (row as? JsonObject)?.get("node") as? JsonObject ?: return@mapNotNull null
+                val id = node["id"]?.jsonPrimitive?.intOrNull?.takeIf { it > 0 } ?: return@mapNotNull null
+                val titles = node["alternative_titles"] as? JsonObject
+                val season = node["start_season"] as? JsonObject
+                MalAnime(
+                    id = id,
+                    title = node["title"]?.jsonPrimitive?.contentOrNull.orEmpty().ifBlank { "Anime " + id },
+                    englishTitle = (titles?.get("en") as? JsonPrimitive)?.contentOrNull,
+                    alternativeTitles = (titles?.get("synonyms") as? JsonArray).orEmpty()
+                        .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }
+                        .take(20),
+                    startYear = (season?.get("year") as? JsonPrimitive)?.intOrNull,
+                    mediaType = (node["media_type"] as? JsonPrimitive)?.contentOrNull,
+                    listStatus = (node["my_list_status"] as? JsonObject)?.let(::parseMalListStatus),
+                )
+            }
     }
+
     private suspend fun get(path: String, token: String) = request(Request.Builder().url(api + path).header("Authorization", "Bearer $token").build())
     private suspend fun request(request: Request): JsonObject =
         call(request) as? JsonObject ?: throw IOException("Unexpected MyAnimeList response")
