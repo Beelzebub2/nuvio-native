@@ -2,9 +2,11 @@
 const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
 const { operate } = require("./installer.cjs");
+const { discoverTvs } = require("./discovery.cjs");
 const { platformInfo, localLanIps } = require("./platforms.cjs");
 
 let mainWindow;
+let scanning = false;
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100, height: 820, minWidth: 800, minHeight: 650,
@@ -23,6 +25,24 @@ app.whenReady().then(async () => {
   ipcMain.handle("tv:local-ips", event => {
     if (event.sender !== mainWindow?.webContents) throw new Error("Untrusted window");
     return localLanIps();
+  });
+  ipcMain.handle("tv:discover", async event => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, error: "Untrusted window" };
+    if (scanning) return { ok: false, error: "A TV scan is already running" };
+    scanning = true;
+    try {
+      const result = await discoverTvs({
+        samsungOptions: { toolsDir: path.join(app.getPath("userData"), "tools") },
+        onStatus: message => {
+          if (!event.sender.isDestroyed()) event.sender.send("tv:log", String(message).slice(0, 500));
+        }
+      });
+      return { ok: true, result };
+    } catch (error) {
+      return { ok: false, error: String(error.message || error).slice(0, 300) };
+    } finally {
+      scanning = false;
+    }
   });
   ipcMain.handle("tv:choose-package", async (event, platform) => {
     if (event.sender !== mainWindow?.webContents) throw new Error("Untrusted window");
