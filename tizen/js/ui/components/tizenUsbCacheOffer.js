@@ -125,10 +125,7 @@ export function createTizenUsbCacheOfferController({
         }
       ],
       onDismiss: () => {
-        if (dialog === current) {
-          dialog = null;
-          displayedLabel = "";
-        }
+        if (dialog === current) dismissDialog();
       }
     });
     current.previousFocus = previousFocus;
@@ -185,8 +182,9 @@ export function createTizenUsbCacheOfferController({
   }
   const onForeground = () => {
     if (documentRef.visibilityState === "hidden" || documentRef.webkitHidden === true) return;
-    scheduleScan(500);
-    if (pendingDrive) tryOffer();
+    // The TV may miss an unmount notification while suspended. Revalidate
+    // the drive before presenting an offer held back during playback/login.
+    scheduleScan(0);
   };
   return {
     start() {
