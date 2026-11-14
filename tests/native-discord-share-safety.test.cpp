@@ -37,4 +37,30 @@ int main() {
     assert(uniqueUnusedSteamEndpoint({active[0], {L"steam2", L"Steam Streaming Speakers"}},
                                      L"headphones", L"headphones", L"headphones").empty());
     assert(uniqueUnusedSteamEndpoint({active[1]}, L"headphones", L"headphones", L"headphones").empty());
+
+    assert(isVbCableInput(L"CABLE Input (VB-Audio Virtual Cable)"));
+    assert(isVbCableInput(L"cable input (vb-audio cable)"));
+    assert(!isVbCableInput(L"CABLE Output (VB-Audio Virtual Cable)"));
+    assert(!isVbCableInput(L"CABLE-A Input (VB-Audio Cable A)"));
+    assert(!isVbCableInput(L"CABLE Input (Not VB-Audio)"));
+    assert(!isVbCableInput(L"Speakers (VB-Audio Virtual Cable)"));
+    assert(!isVbCableInput(L"CABLE Input"));
+
+    const RenderEndpoint vb{L"vb", L"CABLE Input (VB-Audio Virtual Cable)"};
+    assert(uniqueUnusedDiscordEndpoint({active[0], vb, active[1]},
+                                       L"headphones", L"headphones", L"headphones") == L"vb");
+    assert(uniqueUnusedDiscordEndpoint(active, L"headphones", L"headphones", L"headphones") == L"steam");
+    assert(uniqueUnusedDiscordEndpoint({vb, active[1]},
+                                       L"headphones", L"headphones", L"headphones") == L"vb");
+    assert(uniqueUnusedDiscordEndpoint({vb, active[0]}, L"vb", L"headphones", L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint({vb, active[0]}, L"headphones", L"vb", L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint({vb, active[0]}, L"headphones", L"headphones", L"vb").empty());
+    assert(uniqueUnusedDiscordEndpoint({vb, active[0]}, L"", L"headphones", L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint({vb, {L"other", L"CABLE INPUT (VB-AUDIO VIRTUAL CABLE)"}, active[0]},
+                                       L"headphones", L"headphones", L"headphones").empty());
+    assert(uniqueUnusedDiscordEndpoint({{L"", vb.friendlyName}, active[0]},
+                                       L"headphones", L"headphones", L"headphones").empty());
+    // Recording endpoints must never be mistaken for output endpoints.
+    assert(uniqueUnusedDiscordEndpoint({{L"capture", L"CABLE Output (VB-Audio Virtual Cable)"}, active[0]},
+                                       L"headphones", L"headphones", L"headphones") == L"steam");
 }

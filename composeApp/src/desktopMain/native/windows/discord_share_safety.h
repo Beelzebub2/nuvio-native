@@ -29,10 +29,21 @@ struct RenderEndpoint {
     std::wstring friendlyName;
 };
 
+inline std::wstring lowercaseEndpointName(std::wstring name) {
+    for (auto &letter : name) letter = static_cast<wchar_t>(std::towlower(letter));
+    return name;
+}
+
+// Only the original VB-CABLE playback endpoint is supported. The A/B/C/D
+// variants and its CABLE Output recording endpoint must not match.
+inline bool isVbCableInput(const std::wstring &name) {
+    const auto lower = lowercaseEndpointName(name);
+    return lower == L"cable input (vb-audio virtual cable)" ||
+           lower == L"cable input (vb-audio cable)";
+}
+
 inline bool isSteamStreamingSpeakers(const std::wstring &name) {
-    std::wstring lower(name);
-    for (auto &letter : lower) letter = static_cast<wchar_t>(std::towlower(letter));
-    return lower.find(L"steam streaming speakers") != std::wstring::npos;
+    return lowercaseEndpointName(name).find(L"steam streaming speakers") != std::wstring::npos;
 }
 
 // Call with only active Windows render endpoints. Ambiguous or default devices
@@ -50,6 +61,25 @@ inline std::wstring uniqueUnusedSteamEndpoint(const std::vector<RenderEndpoint> 
         selected = endpoint.id;
     }
     return selected;
+}
+
+inline std::wstring uniqueUnusedDiscordEndpoint(const std::vector<RenderEndpoint> &active,
+                                                const std::wstring &console,
+                                                const std::wstring &multimedia,
+                                                const std::wstring &communications) {
+    if (console.empty() || multimedia.empty() || communications.empty()) return {};
+    bool foundVbCable = false;
+    std::wstring selected;
+    for (const auto &endpoint : active) {
+        if (!isVbCableInput(endpoint.friendlyName)) continue;
+        if (foundVbCable || endpoint.id.empty() || endpoint.id == console ||
+            endpoint.id == multimedia || endpoint.id == communications) return {};
+        foundVbCable = true;
+        selected = endpoint.id;
+    }
+    // Do not fall back to Steam when VB-CABLE is present but unsafe.
+    if (foundVbCable) return selected;
+    return uniqueUnusedSteamEndpoint(active, console, multimedia, communications);
 }
 
 } // namespace discord_share

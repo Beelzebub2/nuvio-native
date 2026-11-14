@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.diagnostics.DiagnosticsConsent
@@ -37,6 +38,8 @@ import nuvio.composeapp.generated.resources.settings_advanced_discord_rich_prese
 import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share
 import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_description
 import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_unavailable
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_setup
+import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_setup_description
 import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_window
 import nuvio.composeapp.generated.resources.settings_advanced_discord_audio_share_window_description
 import nuvio.composeapp.generated.resources.settings_advanced_opengl_renderer
@@ -202,6 +205,7 @@ internal fun LazyListScope.advancedSettingsContent(
                         onCheckedChange = DiscordRichPresenceRepository::setEnabled,
                     )
                     if (DiscordShareModeSettings.isSupported) {
+                        val uriHandler = LocalUriHandler.current
                         val shareEnabled by DiscordShareModeSettings.enabled.collectAsStateWithLifecycle()
                         val shareUnavailable by DiscordShareModeSettings.unavailable.collectAsStateWithLifecycle()
                         SettingsSwitchRow(
@@ -213,6 +217,12 @@ internal fun LazyListScope.advancedSettingsContent(
                             checked = shareEnabled,
                             isTablet = isTablet,
                             onCheckedChange = DiscordShareModeSettings::setEnabled,
+                        )
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.settings_advanced_discord_audio_share_setup),
+                            description = stringResource(Res.string.settings_advanced_discord_audio_share_setup_description),
+                            isTablet = isTablet,
+                            onClick = { uriHandler.openUri("https://vb-audio.com/Cable/index.htm") },
                         )
                         if (shareEnabled) {
                             val showWindow by DiscordShareModeSettings.showWindow.collectAsStateWithLifecycle()
