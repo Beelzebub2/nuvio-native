@@ -1758,6 +1758,7 @@
     <string name="remote_qr_no_network">Conecte este PC ao Wi-Fi ou Ethernet e reabra Controle pelo celular para mostrar um QR code.</string>
     <string name="remote_bluetooth_search">Buscar PCs por Bluetooth</string>
     <string name="remote_bluetooth_found_devices">PCs Bluetooth próximos</string>
+    <string name="remote_bluetooth_paired_devices">PCs Bluetooth pareados (podem estar offline)</string>
     <string name="remote_bluetooth_device">Bluetooth • %1$s</string>
     <string name="remote_bluetooth_host_ready">O controle por Bluetooth está disponível. Pareie o celular com este PC nas configurações Bluetooth e procure PCs no celular.</string>
     <string name="remote_bluetooth_host_unavailable">O controle por Bluetooth não está disponível neste PC. A conexão pela rede local continua funcionando.</string>
