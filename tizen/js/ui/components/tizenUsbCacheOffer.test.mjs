@@ -11,7 +11,7 @@ const drive = (label = "removable1") => ({
 });
 const sleep = (ms = 12) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function fixture({ mounted = [], route = "home", enabled = false, existingDialog = false, detectOverride = null } = {}) {
+function fixture({ mounted = [], route = "home", enabled = false, existingDialog = false, detectOverride = null, focusTarget = null } = {}) {
   const dialogs = [];
   const options = new Map();
   const listeners = new Map();
@@ -37,9 +37,9 @@ function fixture({ mounted = [], route = "home", enabled = false, existingDialog
     }
   }
   const documentRef = {
-    body: { contains: () => false },
+    body: { contains: (element) => element === focusTarget },
     visibilityState: "visible",
-    activeElement: null,
+    activeElement: focusTarget,
     querySelector: () => existingDialog ? {} : null,
     addEventListener(name, callback) { listeners.set(name, callback); },
     removeEventListener(name) { listeners.delete(name); }
@@ -215,5 +215,35 @@ test("late scan completion after unplug never reopens an obsolete offer", async 
   completeScan({ drives: [drive()] });
   await pending;
   assert.equal(f.dialogs.length, 0);
+  f.controller.stop();
+});
+
+test("Back dismissal returns focus to the previously selected TV control", async () => {
+  let focusRestores = 0;
+  const previousFocus = { focus() { focusRestores++; }, parentElement: null };
+  const f = fixture({ mounted: [drive()], focusTarget: previousFocus });
+  f.controller.start();
+  await f.controller.checkNow();
+  assert.equal(f.dialogs.length, 1);
+  f.dialogs[0].config.onDismiss();
+  assert.equal(f.dialogs[0].destroyed, true);
+  await sleep(270);
+  assert.equal(focusRestores, 1);
+  f.controller.stop();
+});
+
+test("resume checks a deferred USB drive before showing an offer", async () => {
+  const f = fixture({ mounted: [drive()], route: "player" });
+  f.controller.start();
+  await f.controller.checkNow();
+  assert.equal(f.dialogs.length, 0);
+  // TVs can miss the unmount event while their browser is suspended.
+  f.setVisible("hidden");
+  f.setMounted([]);
+  f.setRoute("home");
+  f.setVisible("visible");
+  f.listeners.get("visibilitychange")();
+  await sleep(25);
+  assert.equal(f.dialogs.length, 0, "removed USB must not trigger a stale offer");
   f.controller.stop();
 });
