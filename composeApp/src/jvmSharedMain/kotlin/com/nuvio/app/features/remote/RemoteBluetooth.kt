@@ -41,6 +41,8 @@ internal class RemoteBluetoothConnection(
 
 internal interface RemoteBluetoothClient {
     val supported: Boolean
+    /** OS-paired PC candidates may be offline; this never establishes proximity or trust. */
+    fun pairedPcs(): List<RemoteDesktop> = emptyList()
     /**
      * Reports nearby PCs, then calls [onFinished] once when the search ends:
      * null if it ran, or why it could not. Nothing is reported after [stop].
