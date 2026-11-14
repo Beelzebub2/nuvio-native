@@ -1203,14 +1203,18 @@ export const PluginManager = {
   },
   getSummary() {
     const state = currentState();
+    const runtime = this.getCapabilitySnapshot();
+    const legacyPreviewChoice = runtime.legacyPreviewEligible
+      ? runtime.legacyPreviewEnabled
+      : true;
     return {
       repositories: state.repositories,
       scrapers: state.scrapers,
       legacySources: state.legacySources,
       unknownRemoteRows: state.unknownRemoteRows,
-      pluginsEnabled: state.settings.pluginsEnabled !== false,
+      pluginsEnabled: state.settings.pluginsEnabled !== false && legacyPreviewChoice,
       groupStreamsByRepository: state.settings.groupStreamsByRepository === true,
-      runtime: this.getCapabilitySnapshot(),
+      runtime,
       readOnly: !canEdit(),
       effectiveProfileId: getEffectivePluginProfileId()
     };
