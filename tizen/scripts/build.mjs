@@ -525,8 +525,11 @@ async function buildPluginRuntimeAssets() {
       name: "quickjs-asmjs-worker-browser",
       setup(bundle) {
         bundle.onLoad({
-          filter: /@jitl[\\/]quickjs-asmjs-mjs-release-sync[\\/]dist[\\/]index\\.mjs$/
+          filter: /index[.]mjs$/
         }, async ({ path: sourcePath }) => {
+          if (!sourcePath.replaceAll(String.fromCharCode(92), "/").includes(
+            "/@jitl/quickjs-asmjs-mjs-release-sync/dist/index.mjs"
+          )) return undefined;
           let contents = await readFile(sourcePath, "utf8");
           // The asm.js variant is universal ESM. Its unreachable Node path
           // contains top-level await import("module"), incompatible with
