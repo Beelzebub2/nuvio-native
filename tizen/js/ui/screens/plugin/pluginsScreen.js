@@ -4,6 +4,7 @@ import { Router } from "../../navigation/routerState.js";
 import { Platform } from "../../../platform/index.js";
 import { I18n } from "../../../i18n/index.js";
 import { PluginManager } from "../../../core/player/pluginManager.js";
+import { setTizen5PluginPreviewEnabled } from "../../../platform/tizen/tizenCapabilities.js";
 import { ProfileManager } from "../../../core/profile/profileManager.js";
 import { StartupSyncService } from "../../../core/profile/startupSyncService.js";
 import { renderLoadingIndicator } from "../../components/loadingIndicator.js";
@@ -127,18 +128,21 @@ function providerTypeBadge(type) {
 }
 function runtimeNotice(model) {
   const runtime = model?.runtime || {};
+  const legacyPreview = runtime.legacyPreviewEligible === true;
   if (runtime.supportLevel === "unsupported") {
     return `
-      <section class="plugins-runtime-card is-warning is-unsupported" role="status">
-        <span class="plugins-runtime-icon material-icons" aria-hidden="true">error_outline</span>
+      <section class="plugins-runtime-card is-warning ${legacyPreview ? "is-limited" : "is-unsupported"}" role="status">
+        <span class="plugins-runtime-icon material-icons" aria-hidden="true">${legacyPreview ? "info_outline" : "error_outline"}</span>
         <div class="plugins-runtime-copy">
           <strong>${escapeHtml(t("plugin_runtime_heading", {}, "TV plugin runtime"))}</strong>
-          <span>${escapeHtml(t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</span>
+          <span>${escapeHtml(legacyPreview
+            ? t("plugin_runtime_limited", {}, "Plugin support is limited on this TV. Some providers may be slower or unavailable.")
+            : t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"))}</span>
         </div>
       </section>
     `;
   }
-  if (runtime.supportLevel === "limited" && runtime.executable === true) {
+  if (runtime.supportLevel === "limited" && (runtime.executable === true || runtime.legacyPreviewEnabled === true)) {
     return `
       <section class="plugins-runtime-card is-warning is-limited" role="status">
         <span class="plugins-runtime-icon material-icons" aria-hidden="true">info_outline</span>
@@ -258,7 +262,9 @@ export const PluginsScreen = {
                          aria-pressed="${model.pluginsEnabled ? "true" : "false"}"
                          aria-disabled="${this.busy || model.readOnly ? "true" : "false"}">
                   <div class="plugins-setting-row">
-                    <div><strong>${escapeHtml(t("plugin_enable_plugins_title", {}, "Enable plugin providers globally"))}</strong><span>${escapeHtml(t("plugin_enable_plugins_subtitle", {}, "Use plugin providers during stream discovery"))}</span></div>
+                    <div><strong>${escapeHtml(t("plugin_enable_plugins_title", {}, "Enable plugin providers globally"))}</strong><span>${escapeHtml(model.runtime?.legacyPreviewEligible
+                      ? t("plugin_runtime_limited", {}, "Plugin support is limited on this TV. Some providers may be slower or unavailable.")
+                      : t("plugin_enable_plugins_subtitle", {}, "Use plugin providers during stream discovery"))}</span></div>
                     ${toggleIndicator({ checked: model.pluginsEnabled })}
                   </div>
                 </section>
@@ -413,6 +419,18 @@ export const PluginsScreen = {
       return;
     }
     if (action === "toggle-global") {
+      if (this.model.runtime?.legacyPreviewEligible) {
+        const enabled = !this.model.pluginsEnabled;
+        if (!setTizen5PluginPreviewEnabled(enabled)) {
+          this.setStatus(t("plugin_runtime_unsupported", {}, "Execution unavailable on this TV runtime"), "error");
+          this.render();
+          return;
+        }
+        PluginManager.setPluginsEnabled(enabled);
+        // Reset Worker self-tests and cached service health before retrying.
+        window.location.reload();
+        return;
+      }
       PluginManager.setPluginsEnabled(!this.model.pluginsEnabled);
       this.render();
       return;

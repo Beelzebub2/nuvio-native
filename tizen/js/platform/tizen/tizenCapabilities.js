@@ -3,6 +3,7 @@ const TIZEN_WEB_SERVICE_CAPABILITY = "http://tizen.org/feature/web.service";
 const TIZEN_P2P_MIN_MAJOR_VERSION = 5;
 const TIZEN_P2P_MIN_CHROMIUM_VERSION = 63;
 const TIZEN_PLUGIN_MIN_MAJOR_VERSION = 6;
+const TIZEN5_PLUGIN_PREVIEW_KEY = "starlit_tizen5_js_plugins_preview_v1";
 let cachedCapabilities = null;
 function normalizedText(value) {
   return String(value ?? "").trim();
@@ -173,6 +174,30 @@ export function getTizenCapabilities(runtime = globalThis) {
   }
   return capabilities;
 }
+// An explicit device-local experiment, never inferred from EngineFS P2P or sync.
+export function canOfferTizen5PluginPreview(runtime = globalThis) {
+  const capabilities = getTizenCapabilities(runtime);
+  return capabilities.isTizen &&
+    capabilities.tizenMajorVersion === 5 &&
+    typeof runtime?.Worker === "function";
+}
+export function isTizen5PluginPreviewEnabled(runtime = globalThis) {
+  if (!canOfferTizen5PluginPreview(runtime)) return false;
+  try {
+    return runtime.localStorage?.getItem(TIZEN5_PLUGIN_PREVIEW_KEY) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+export function setTizen5PluginPreviewEnabled(enabled, runtime = globalThis) {
+  if (!canOfferTizen5PluginPreview(runtime)) return false;
+  try {
+    runtime.localStorage?.setItem(TIZEN5_PLUGIN_PREVIEW_KEY, enabled ? "true" : "false");
+    return runtime.localStorage?.getItem(TIZEN5_PLUGIN_PREVIEW_KEY) === (enabled ? "true" : "false");
+  } catch (_) {
+    return false;
+  }
+}
 export function resetTizenCapabilitiesCache() {
   cachedCapabilities = null;
 }
@@ -189,9 +214,12 @@ export const TizenCapabilities = {
   canUseP2p(runtime = globalThis) {
     return getTizenCapabilities(runtime).supportsP2p;
   },
+  canOfferLegacyPluginPreview(runtime = globalThis) {
+    return canOfferTizen5PluginPreview(runtime);
+  },
   canUsePlugins(runtime = globalThis) {
     const capabilities = getTizenCapabilities(runtime);
-    return !capabilities.isTizen || capabilities.tizenPluginVersionSupported;
+    return !capabilities.isTizen || capabilities.tizenPluginVersionSupported || isTizen5PluginPreviewEnabled(runtime);
   },
   isP2pUnsupported(runtime = globalThis) {
     const capabilities = getTizenCapabilities(runtime);

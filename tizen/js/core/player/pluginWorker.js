@@ -541,11 +541,18 @@ async function resolveGuestPromise(context, runtime, handle, timeoutMs) {
 async function execute(message) {
   // Workers do not inherit the page's core-js polyfills on older TV browsers.
   if (typeof workerScope.globalThis === "undefined") workerScope.globalThis = workerScope;
-  importScripts("../libs/quickjs-emscripten.global.js");
-  var QJS = workerScope.QJS;
-  if (!QJS || typeof QJS.getQuickJS !== "function")
-    throw new Error("QuickJS WASM asset unavailable");
   var request = message || {};
+  var legacyAsmJs = request.runtimeVariant === "asmjs";
+  if (legacyAsmJs) {
+    // Separate asset: newer TVs never pay the cost of the slower asm.js VM.
+    importScripts("../libs/quickjs-asmjs.global.js");
+    if (typeof workerScope.__STARLIT_LOAD_ASMJS_QUICKJS__ !== "function")
+      throw new Error("QuickJS JavaScript-only asset unavailable");
+  } else {
+    importScripts("../libs/quickjs-emscripten.global.js");
+    if (!workerScope.QJS || typeof workerScope.QJS.getQuickJS !== "function")
+      throw new Error("QuickJS WASM asset unavailable");
+  }
   var quota = request.quota || {};
   var execution = {
     pending: new Map(),
@@ -563,7 +570,9 @@ async function execute(message) {
   // the VM on the regular QuickJS module, as Android does, and drive promise
   // jobs explicitly in resolveGuestPromise(). This avoids Asyncify re-entry
   // and its smaller/less predictable host stack on Tizen Web Workers.
-  var quickJS = await QJS.getQuickJS();
+  var quickJS = legacyAsmJs
+    ? await workerScope.__STARLIT_LOAD_ASMJS_QUICKJS__()
+    : await workerScope.QJS.getQuickJS();
   var context = quickJS.newContext({
     // Eval is required by quickjs-emscripten's evalCode host API and remains
     // available to the guest, as it does on Android.

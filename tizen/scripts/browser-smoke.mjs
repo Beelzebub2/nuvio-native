@@ -15,6 +15,14 @@ const mime={".html":"text/html",".js":"text/javascript",".css":"text/css",".json
 const server=createServer(async(req,res)=>{try{
  const pathname=new URL(req.url,"http://local").pathname;
  if(pathname==="/fixture/poster.svg"){res.setHeader("Content-Type","image/svg+xml");res.end(poster);return;}
+ if(pathname==="/assets/runtime/plugin-worker-legacy-test.js"){
+  // Exercise the *packaged* worker and ASM.js asset, without WebAssembly, at
+  // the same relative URL depth used by TV importScripts().
+  const source=await readFile(path.join(root,"dist/assets/runtime/plugin-worker.js"),"utf8");
+  res.setHeader("Content-Type","text/javascript");
+  res.end("self.WebAssembly = undefined;\n"+source);
+  return;
+ }
  let payload;
  if(pathname==="/fixture/manifest.json")payload={id:"org.example.starlit.synthetic",version:"1.0.0",name:"Synthetic fixture",description:"Local generated test only",types:["movie"],resources:["catalog","meta","stream"],catalogs:[{id:"fixture",type:"movie",name:"Signal checks",extra:[{name:"search",isRequired:false}]}]};
  if(pathname.startsWith("/fixture/catalog/"))payload={metas:[item()]};
@@ -78,6 +86,41 @@ try{
   await page.keyboard.press("Escape");await page.waitForTimeout(250);if(await page.evaluate(()=>window.__starlitSmoke.Router.getCurrent())==="player")await page.keyboard.press("Escape");await page.waitForTimeout(500);await capture("back-from-player");assert.notEqual(await page.evaluate(()=>window.__starlitSmoke.Router.getCurrent()),"player");
   assert.deepEqual(errors,[],"Browser runtime errors");await context.close();
  }
- await writeFile(path.join(root,"test-results/browser-evidence.json"),JSON.stringify({status:"PASS",scope:"Real Chromium UI and HTML5 playback; Samsung AVPlay/firmware NOT DEVICE-VERIFIED",evidence},null,2));
+ // The regular UI smoke cannot detect a broken ASM.js Worker import or
+ // accidental reliance on WebAssembly. Run a separate legacy-variant fixture.
+ const legacyContext=await browser.newContext({viewport:{width:1920,height:1080}});
+ try{
+  const legacyPage=await legacyContext.newPage();
+  await legacyPage.goto(origin);
+  const streams=await legacyPage.evaluate(()=>new Promise((resolve,reject)=>{
+   const worker=new Worker("/assets/runtime/plugin-worker-legacy-test.js");
+   const finish=(error,value)=>{
+    clearTimeout(timer);
+    worker.terminate();
+    if(error)reject(error);else resolve(value);
+   };
+   const timer=setTimeout(()=>finish(new Error("Legacy plugin Worker timed out")),30000);
+   worker.onerror=(event)=>finish(new Error(event.message||"Legacy plugin Worker failed"));
+   worker.onmessage=(event)=>{
+    const message=event.data||{};
+    if(message.type==="error")finish(new Error(message.error||"Legacy plugin Worker failed"));
+    if(message.type==="result")finish(null,message.results);
+   };
+   worker.postMessage({
+    type:"execute",
+    runtimeVariant:"asmjs",
+    filename:"owned-legacy-fixture.js",
+    scraperId:"owned-legacy-fixture",
+    code:'module.exports.getStreams = function(){ return [{ url: "https://media.example.org/fixture.mp4", quality: "720p" }]; };',
+    settings:{},args:{tmdbId:"603",mediaType:"movie",season:null,episode:null},
+    quota:{memoryLimitBytes:32*1024*1024,maxResultsPerScraper:5,maxDocuments:2,maxDomElements:200},
+    timeoutMs:25000
+   });
+  }));
+  assert.equal(streams?.length,1,"ASM.js worker must return owned provider results");
+  assert.equal(streams[0].url,"https://media.example.org/fixture.mp4");
+  console.log("No-WebAssembly ASM.js Worker browser fixture PASS");
+ }finally{await legacyContext.close();}
+ await writeFile(path.join(root,"test-results/browser-evidence.json"),JSON.stringify({status:"PASS",scope:"Real Chromium UI/HTML5 playback and packaged no-WASM ASM.js Worker; Samsung AVPlay/firmware NOT DEVICE-VERIFIED",evidence},null,2));
  console.log(`Browser UI/playback smoke PASS: ${evidence.length} captures`);
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
