@@ -50,6 +50,13 @@ other Tizen generations or the final physical release acceptance.
   resolve an absolute native mount path shared with the packaged Node service.
   Confirm the benchmark writes and verifies temporary bytes, and the capacity
   policy reserves free space before choosing a disk-backed cache.
+- Repeat with USB caching **already enabled** when a drive is inserted or when
+  Starlit resumes after a missed mount event. A mounted, writable filesystem
+  must remain discoverable when `SystemInfo.STORAGE` omits USB capacity. In that
+  case, the EngineFS service should measure the selected mount with `df -Pk`,
+  then apply the same reserve and write-speed policy; unavailable filesystem
+  metrics, unsupported `df`, or denied access must stay in bounded RAM mode
+  and display a reason rather than claiming no USB exists.
 - Test slow drives (RAM fallback), simultaneous drives (fastest usable
   selection), FAT32 files under 4 GiB, 30-minute streaming, repeated seeks,
   and removal/disconnection during both playback and the speed probe.

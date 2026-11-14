@@ -63,7 +63,8 @@ test("multiple storages reserve using conservative capacity", async () => {
 });
 test("ignore USB with no safe capacity mapping or writable native path", async () => {
   await withMock(mock([], [{ type: "EXTERNAL", state: "MOUNTED", label: "A" }]), async () => {
-    assert.equal((await detectTizenUsbStorage()).drives.length, 0);
+    const result = await detectTizenUsbStorage();
+    assert.equal(result.drives.length, 0, "A drive without a safe native path is not eligible");
   });
   await withMock(mock(
     [{ type: "USB_HOST", capacity: 4 * GiB, availableCapacity: 3 * GiB, isRemovable: true }],
@@ -71,6 +72,33 @@ test("ignore USB with no safe capacity mapping or writable native path", async (
     { A: "virtualRoot" }
   ), async () => {
     assert.equal((await detectTizenUsbStorage()).drives.length, 0);
+  });
+});
+test("detect mounted USB even when SystemInfo has no removable unit", async () => {
+  await withMock(mock(
+    [{ type: "INTERNAL", capacity: 8 * GiB, availableCapacity: 4 * GiB }],
+    [{ type: "EXTERNAL", state: "MOUNTED", label: "removable2" }],
+    { removable2: "/opt/storage/usb0" }
+  ), async () => {
+    const result = await detectTizenUsbStorage();
+    assert.equal(result.drives.length, 1);
+    assert.equal(result.drives[0].root, "/opt/storage/usb0");
+    assert.equal(result.drives[0].freeBytes, null, "Never borrow internal capacity for USB");
+    assert.match(result.reason, /USB connected/);
+  });
+});
+test("USB enumeration is independent from unsupported or failing STORAGE property", async () => {
+  const api = mock([], [{ type: "EXTERNAL", state: "MOUNTED", label: "B" }],
+    { B: "/opt/storage/usb1" });
+  delete api.systeminfo;
+  await withMock(api, async () => {
+    const result = await detectTizenUsbStorage();
+    assert.equal(result.drives.length, 1);
+    assert.equal(result.drives[0].totalBytes, null);
+  });
+  api.systeminfo = { getPropertyValue: (_, good, bad) => bad(new Error("NotSupportedError")) };
+  await withMock(api, async () => {
+    assert.equal((await detectTizenUsbStorage()).drives.length, 1);
   });
 });
 test("physical file URI is decoded; virtual paths and unsafe file URIs are rejected", async () => {
