@@ -1477,4 +1477,6 @@
     <string name="remote_tv_starlit_failed">Koneksi gagal. Periksa kode lalu coba lagi.</string>
     <string name="remote_handoff_choose_target">Pilih perangkat</string>
     <string name="remote_handoff_to_device">Putar di perangkat</string>
+    <string name="settings_tracking_anime_id_title">Preferensi ID anime</string>
+    <string name="settings_tracking_anime_id_subtitle">Pilih ID eksternal yang digunakan sebagai pengenal utama untuk entri anime.</string>
 </resources>

@@ -1942,4 +1942,6 @@
     <string name="remote_tv_starlit_failed">接続に失敗しました。コードを確認して再試行してください。</string>
     <string name="remote_handoff_choose_target">デバイスを選択</string>
     <string name="remote_handoff_to_device">デバイスで再生</string>
+    <string name="settings_tracking_anime_id_title">アニメIDの優先設定</string>
+    <string name="settings_tracking_anime_id_subtitle">アニメ作品の主な識別子として使用する外部IDを選択します。</string>
 </resources>

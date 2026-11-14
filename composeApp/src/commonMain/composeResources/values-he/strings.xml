@@ -765,4 +765,7 @@
     <string name="remote_tv_starlit_failed">החיבור נכשל. בדוק את הקוד ונסה שוב.</string>
     <string name="remote_handoff_choose_target">בחר מכשיר</string>
     <string name="remote_handoff_to_device">נגן במכשיר</string>
+    <string name="settings_tracking_anime_id_title">העדפת מזהה לאנימה</string>
+    <string name="settings_tracking_anime_id_subtitle">בחרו איזה מזהה חיצוני ישמש כמזהה הראשי של רשומות אנימה.</string>
+    <string name="settings_trakt_comments">תגובות</string>
 </resources>

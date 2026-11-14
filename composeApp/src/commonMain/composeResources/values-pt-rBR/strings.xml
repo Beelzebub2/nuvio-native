@@ -1881,4 +1881,6 @@
     <string name="remote_tv_starlit_failed">Falha na conexão. Verifique o código e tente novamente.</string>
     <string name="remote_handoff_choose_target">Escolha um dispositivo</string>
     <string name="remote_handoff_to_device">Reproduzir no dispositivo</string>
+    <string name="settings_tracking_anime_id_title">ID preferido para animes</string>
+    <string name="settings_tracking_anime_id_subtitle">Escolha qual ID externo será usado como identificador principal das entradas de anime.</string>
 </resources>

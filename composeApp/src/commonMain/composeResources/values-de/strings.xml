@@ -1252,4 +1252,7 @@
     <string name="remote_tv_starlit_failed">Verbindung fehlgeschlagen. Prüfe den Code und versuche es erneut.</string>
     <string name="remote_handoff_choose_target">Gerät auswählen</string>
     <string name="remote_handoff_to_device">Auf Gerät abspielen</string>
+    <string name="settings_tracking_anime_id_title">Bevorzugte Anime-ID</string>
+    <string name="settings_tracking_anime_id_subtitle">Wähle aus, welche externe ID als Hauptkennung für Anime-Einträge verwendet wird.</string>
+    <string name="trakt_continue_watching_window">Zeitfenster für „Weiterschauen“</string>
 </resources>

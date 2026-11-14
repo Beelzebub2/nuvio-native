@@ -1977,4 +1977,6 @@
     <string name="remote_tv_starlit_failed">Connessione non riuscita. Controlla il codice e riprova.</string>
     <string name="remote_handoff_choose_target">Scegli un dispositivo</string>
     <string name="remote_handoff_to_device">Riproduci sul dispositivo</string>
+    <string name="settings_tracking_anime_id_title">ID anime preferito</string>
+    <string name="settings_tracking_anime_id_subtitle">Scegli quale ID esterno usare come identificatore principale per le voci anime.</string>
 </resources>
