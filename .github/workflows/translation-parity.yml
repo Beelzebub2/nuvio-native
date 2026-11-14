@@ -1,0 +1,48 @@
+﻿name: Translation parity
+
+on:
+  pull_request:
+    paths:
+      - 'composeApp/**'
+      - 'tizen/**'
+      - 'tv-setup-server/**'
+      - 'scripts/check_localizations.py'
+      - 'scripts/check_translation_parity.py'
+      - '.github/workflows/translation-parity.yml'
+  push:
+    branches: [Dev]
+    paths:
+      - 'composeApp/**'
+      - 'tizen/**'
+      - 'tv-setup-server/**'
+      - 'scripts/check_localizations.py'
+      - 'scripts/check_translation_parity.py'
+      - '.github/workflows/translation-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: translation-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Verify new locale catalogs
+        run: python3 scripts/check_localizations.py
+      - name: Verify translated feature text and formatting
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: python3 scripts/check_translation_parity.py --base-ref "$BASE_REF"
+      - name: Verify phone setup locales and session tests
+        run: npm test --prefix tv-setup-server

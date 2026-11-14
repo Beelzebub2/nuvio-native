@@ -8,6 +8,7 @@ const files = new Map([
   ["/tv/connect", ["./web/index.html", "text/html; charset=utf-8"]],
   ["/tv/connect/", ["./web/index.html", "text/html; charset=utf-8"]],
   ["/tv/app.js", ["./web/app.js", "text/javascript; charset=utf-8"]],
+  ["/tv/translations.js", ["./web/translations.js", "text/javascript; charset=utf-8"]],
   ["/tv/style.css", ["./web/style.css", "text/css; charset=utf-8"]],
   ["/tv/logo.svg", ["./web/logo.svg", "image/svg+xml"]]
 ]);

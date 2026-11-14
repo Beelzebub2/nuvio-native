@@ -163,8 +163,8 @@ internal fun TelevisionTabsDestination(
                     if (showAllSettings) {
                         Column(Modifier.fillMaxSize()) {
                             TelevisionSettingsAction(
-                                "← TV quick settings",
-                                "Return to television shortcuts",
+                                stringResource(Res.string.tv_quick_settings_back),
+                                stringResource(Res.string.tv_quick_settings_return_desc),
                                 onClick = { showAllSettings = false },
                             )
                             AppTabHost(
@@ -255,9 +255,9 @@ private fun TelevisionHome(actions: AppTabActions, loading: Boolean) {
             item(key = "home-status") {
                 TelevisionStatus(
                     text = when {
-                        state.isLoading || loading -> "Loading your catalogs…"
-                        state.errorMessage != null -> "Could not load catalogs. Check your network or add-ons in Settings."
-                        else -> "No catalogs yet. Add a source in Settings to start browsing."
+                        state.isLoading || loading -> stringResource(Res.string.tv_catalog_loading)
+                        state.errorMessage != null -> stringResource(Res.string.tv_catalog_error)
+                        else -> stringResource(Res.string.tv_catalog_empty)
                     },
                 )
             }
@@ -318,7 +318,7 @@ private fun TelevisionHero(item: MetaPreview, onOpen: () -> Unit) {
                     )
                 }
                 Text(
-                    "View details  ›",
+                    stringResource(Res.string.tv_view_details),
                     color = if (focused) colors.accent else Color.White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -389,8 +389,9 @@ private fun TelevisionPoster(item: MetaPreview, onOpen: () -> Unit) {
 @Composable
 private fun TelevisionLibrary(onOpen: ((com.nuvio.app.features.library.LibraryItem) -> Unit)?) {
     val state by LibraryRepository.uiState.collectAsStateWithLifecycle()
+    val libraryTitle = stringResource(Res.string.tv_library_all)
     val sections = state.sections.ifEmpty {
-        if (state.items.isEmpty()) emptyList() else listOf(LibrarySection("all", "My Library", state.items))
+        if (state.items.isEmpty()) emptyList() else listOf(LibrarySection("all", libraryTitle, state.items))
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -401,7 +402,7 @@ private fun TelevisionLibrary(onOpen: ((com.nuvio.app.features.library.LibraryIt
             Text(stringResource(Res.string.compose_nav_library), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.nuvio.colors.textPrimary)
         }
         if (sections.isEmpty()) {
-            item { TelevisionStatus(if (state.isLoading) "Loading your library…" else "Your library is empty. Browse Home to find something to watch.") }
+            item { TelevisionStatus(if (state.isLoading) stringResource(Res.string.tv_library_loading) else stringResource(Res.string.tv_library_empty)) }
         }
         items(sections, key = { "library-${it.type}" }) { section ->
             val metadata = section.items.map { it.toMetaPreview() }
@@ -437,14 +438,14 @@ private fun TelevisionSearch(onOpen: ((MetaPreview) -> Unit)?) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                label = { Text("Search films, series and anime") },
+                label = { Text(stringResource(Res.string.tv_search_label)) },
                 modifier = Modifier.fillMaxWidth(.92f),
             )
         }
         if (query.isBlank()) {
-            item { TelevisionStatus("Select the search field and use your TV's on-screen keyboard.") }
+            item { TelevisionStatus(stringResource(Res.string.tv_search_hint)) }
         } else if (results.sections.isEmpty()) {
-            item { TelevisionStatus(if (results.isLoading) "Searching…" else "No results. Try a different title or check your add-ons.") }
+            item { TelevisionStatus(if (results.isLoading) stringResource(Res.string.tv_search_loading) else stringResource(Res.string.tv_search_empty)) }
         }
         items(results.sections, key = { "search-${it.key}" }) { section ->
             TelevisionMediaRow(section.title, section.items, onOpen = { onOpen?.invoke(it) })
@@ -461,14 +462,14 @@ private fun TelevisionSettings(actions: AppTabActions, onAllSettings: () -> Unit
     ) {
         Text(stringResource(Res.string.compose_nav_settings), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.nuvio.colors.textPrimary)
         Spacer(Modifier.height(8.dp))
-        TelevisionSettingsAction("Account and sync", "Manage your Starlit account", actions.onAccountSettingsClick)
-        TelevisionSettingsAction("Add-ons", "Configure content catalogs and sources", actions.onAddonsSettingsClick)
-        TelevisionSettingsAction("Switch profile", "Choose who is watching", { actions.onSwitchProfile?.invoke() })
-        TelevisionSettingsAction("Details display", "Metadata and episode display options", actions.onMetaScreenSettingsClick)
-        TelevisionSettingsAction("Continue watching", "Resume playback preferences", actions.onContinueWatchingSettingsClick)
-        TelevisionSettingsAction("Downloads", "Manage downloaded media", actions.onDownloadsClick)
-        TelevisionSettingsAction("All settings", "Playback, privacy, tracking and appearance", onAllSettings)
-        TelevisionSettingsAction("Licenses and credits", "Open-source acknowledgements", actions.onLicensesAttributionsSettingsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_account), stringResource(Res.string.tv_settings_account_desc), actions.onAccountSettingsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_addons), stringResource(Res.string.tv_settings_addons_desc), actions.onAddonsSettingsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_switch_profile), stringResource(Res.string.tv_settings_switch_profile_desc), { actions.onSwitchProfile?.invoke() })
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_details), stringResource(Res.string.tv_settings_details_desc), actions.onMetaScreenSettingsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_continue_watching), stringResource(Res.string.tv_settings_continue_watching_desc), actions.onContinueWatchingSettingsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_downloads), stringResource(Res.string.tv_settings_downloads_desc), actions.onDownloadsClick)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_all), stringResource(Res.string.tv_settings_all_desc), onAllSettings)
+        TelevisionSettingsAction(stringResource(Res.string.tv_settings_licenses), stringResource(Res.string.tv_settings_licenses_desc), actions.onLicensesAttributionsSettingsClick)
     }
 }
 

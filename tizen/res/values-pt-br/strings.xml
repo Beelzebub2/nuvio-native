@@ -744,7 +744,7 @@
     <string name="autoplay_scope_all_desc">Use tanto addons quanto plugins.</string>
     <string name="autoplay_scope_addons_desc">Considere apenas fontes de addons instalados.</string>
     <string name="autoplay_scope_plugins_desc">Considere apenas fontes de plugins ativos.</string>
-    <string name="autoplay_threshold_pct_desc">Ative por %% se não houver marcação de créditos.</string>
+    <string name="autoplay_threshold_pct_desc">Ative por % se não houver marcação de créditos.</string>
     <string name="autoplay_threshold_min_desc">Ative por tempo se não houver marcação de créditos.</string>
     <string name="autoplay_regex_matches">Filtre nome, descrição ou URL. Ex: 4K|Remux</string>
     <string name="autoplay_regex_presets">Predefinições</string>
@@ -3324,7 +3324,7 @@
     <string name="library_source_servers">Servidores</string>
     <string name="library_servers_empty_title">Nenhuma biblioteca selecionada</string>
     <string name="library_servers_empty_message">Escolha quais bibliotecas exibir em Configurações, na seção Conteúdo e Descoberta e, em seguida, Servidores de mídia.</string>
-    <string name="stream_resume_from_percent">Continuar a partir de %1$d%%</string>
+    <string name="stream_resume_from_percent">Continuar a partir de %1$d%</string>
     <string name="settings_player_badges_title">Emblemas no reprodutor</string>
     <string name="settings_player_badges_description">Exibir ícones para o vídeo em reprodução e a faixa de áudio selecionada.</string>
     <string name="settings_player_badges_pack_title">Pacote de emblemas do reprodutor</string>

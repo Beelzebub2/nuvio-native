@@ -31,6 +31,10 @@ test("first-party page is CSP-restricted and requires no login", async () => {
   assert.match(html.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.match(await html.text(), /Starlit/);
   assert.equal((await fetch(base + "/tv/app.js")).status, 200);
+  const translationBundle = await fetch(base + "/tv/translations.js");
+  assert.equal(translationBundle.status, 200);
+  assert.match(translationBundle.headers.get("content-type"), /text\/javascript/);
+  assert.match(await translationBundle.text(), /STARLIT_TV_SETUP_TRANSLATIONS/);
   assert.equal((await fetch(base + "/tv/style.css")).status, 200);
   const logo = await fetch(base + "/tv/logo.svg");
   assert.equal(logo.status, 200);

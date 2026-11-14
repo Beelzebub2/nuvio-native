@@ -18,6 +18,10 @@ The TV remains authoritative for repository validation and changes, preserving p
 - Public HTTPS input only, no embedded URL credentials, unsafe hostnames or literal IP addresses; no implicit redirects. Validate DNS/redirect safeguards and plugin sandbox policies as part of your final security review.
 - Memory-only sessions for one Node process. Sessions are lost on restart. Never expose the Node port publicly.
 
+## Languages
+
+The phone setup page selects the browser's preferred language from the TV-supported locales. Its English and Portuguese (Portugal) copy lives in web/app.js, with the remaining 36 locales in the static same-origin web/translations.js bundle. The page also sets right-to-left layout for Arabic and Hebrew. Keep every copy key synchronized when adding a new setup step; the translations test verifies locale coverage and regional selection.
+
 ## Local tests
 
 At the repository root:

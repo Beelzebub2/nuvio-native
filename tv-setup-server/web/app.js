@@ -19,7 +19,8 @@ const copy = {
     confirmRemove:"Remove this item from Starlit TV?", unreviewed:"Only install extensions from publishers you trust.",
     pluginProviders:"Providers in repository", version:"Review the source and providers before installing.",
     requestPending:"Another phone is already requesting access. Start a new session on the TV.",
-    notConnected:"The TV has not connected yet.", previewReady:"Ready to install", codeEntry:"Enter the code on your TV"
+    notConnected:"The TV has not connected yet.", previewReady:"Ready to install", codeEntry:"Enter the code on your TV",
+    documentTitle:"Connect to Starlit TV", homeAria:"Starlit home", extensionsAria:"Extensions"
   },
   pt: {
     header:"Configuração da TV", eyebrow:"Ligar dispositivo", title:"Gere o Starlit TV a partir do telemóvel.",
@@ -41,13 +42,37 @@ const copy = {
     confirmRemove:"Queres remover este elemento do Starlit TV?", unreviewed:"Instala apenas extensões de editores em quem confies.",
     pluginProviders:"Fornecedores do repositório", version:"Revê a origem e os fornecedores antes de instalar.",
     requestPending:"Outro telemóvel já pediu acesso. Inicia uma nova sessão na TV.",
-    notConnected:"A TV ainda não está ligada.", previewReady:"Pronto para instalar", codeEntry:"Introduz o código da TV"
+    notConnected:"A TV ainda não está ligada.", previewReady:"Pronto para instalar", codeEntry:"Introduz o código da TV",
+    documentTitle:"Ligar à Starlit TV", homeAria:"Página inicial do Starlit", extensionsAria:"Extensões"
   }
 };
-const locale = navigator.language.toLowerCase().startsWith("pt") ? "pt" : "en";
+// Translation bundles are same-origin static assets; no remote translation service at runtime.
+Object.assign(copy, globalThis.STARLIT_TV_SETUP_TRANSLATIONS || {});
+function selectLocale(preferred = navigator.languages?.length ? navigator.languages : [navigator.language]) {
+  for (const candidate of preferred) {
+    const raw = String(candidate || "").trim().toLowerCase().replace(/_/g, "-");
+    const normalized = raw === "pt-pt" ? "pt" : raw.startsWith("zh-hant") || raw === "zh-hk" ? "zh-tw" :
+      raw.startsWith("zh-hans") || raw.startsWith("zh-") || raw === "zh" ? "zh-cn" :
+      raw === "sr" || raw.startsWith("sr-") ? "sr-latn" :
+      raw === "nb" || raw.startsWith("nb-") ? "no" :
+      raw === "iw" || raw.startsWith("iw-") ? "he" :
+      raw === "in" || raw.startsWith("in-") ? "id" : raw;
+    if (copy[normalized]) return normalized;
+    if (normalized.startsWith("pt-")) return normalized.startsWith("pt-br") ? "pt-br" : "pt";
+    if (normalized.startsWith("es-") && normalized !== "es-es") return "es-419";
+    const language = normalized.split("-", 1)[0];
+    if (copy[language]) return language;
+  }
+  return "en";
+}
+const locale = selectLocale();
 const T = copy[locale];
-document.documentElement.lang = locale === "pt" ? "pt-PT" : "en";
-document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = T[el.dataset.i18n]; });
+document.documentElement.lang = locale === "pt" ? "pt-PT" : locale;
+document.documentElement.dir = ["ar", "he"].includes(locale) ? "rtl" : "ltr";
+document.title = T.documentTitle || copy.en.documentTitle;
+document.querySelector(".brand")?.setAttribute("aria-label", T.homeAria || copy.en.homeAria);
+document.querySelector(".tabs")?.setAttribute("aria-label", T.extensionsAria || copy.en.extensionsAria);
+document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = T[el.dataset.i18n] || copy.en[el.dataset.i18n]; });
 const el = (id) => document.getElementById(id);
 const sections = ["connect", "pending", "manage", "error"];
 let session = null;
