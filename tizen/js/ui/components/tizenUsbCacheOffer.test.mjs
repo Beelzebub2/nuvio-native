@@ -270,3 +270,24 @@ test("slow foreground rescan cannot display an obsolete deferred offer", async (
   assert.equal(f.dialogs.length, 0);
   f.controller.stop();
 });
+
+test("resuming invalidates an already running stale USB inventory", async () => {
+  let resolveFirst;
+  let inventoryCount = 0;
+  const f = fixture({
+    detectOverride: () => {
+      if (++inventoryCount === 1) {
+        return new Promise((resolve) => { resolveFirst = resolve; });
+      }
+      return { drives: [] };
+    }
+  });
+  f.controller.start();
+  const oldScan = f.controller.checkNow();
+  f.listeners.get("visibilitychange")();
+  resolveFirst({ drives: [drive()] });
+  await oldScan;
+  await sleep(20);
+  assert.equal(f.dialogs.length, 0, "a pre-resume storage scan must be ignored");
+  f.controller.stop();
+});
