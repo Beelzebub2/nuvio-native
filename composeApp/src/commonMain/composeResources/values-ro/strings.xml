@@ -2212,4 +2212,6 @@
     <string name="remote_tv_up">Sus</string>
     <string name="remote_tv_volume_down">Reducerea volumului</string>
     <string name="remote_tv_volume_up">Creștere volum</string>
+    <string name="settings_tracking_anime_id_subtitle">Alege ID-ul extern folosit ca identificator principal pentru intrările anime.</string>
+    <string name="settings_tracking_anime_id_title">ID anime preferat</string>
 </resources>

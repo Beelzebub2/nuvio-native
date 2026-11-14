@@ -2233,4 +2233,6 @@
     <string name="remote_tv_up">Su</string>
     <string name="remote_tv_volume_down">Abbassa il volume</string>
     <string name="remote_tv_volume_up">Aumenta il volume</string>
+    <string name="settings_tracking_anime_id_subtitle">Scegli quale ID esterno usare come identificatore principale per le voci anime.</string>
+    <string name="settings_tracking_anime_id_title">ID anime preferito</string>
 </resources>

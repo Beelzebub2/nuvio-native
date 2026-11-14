@@ -1734,4 +1734,6 @@
     <string name="remote_tv_up">Naik</string>
     <string name="remote_tv_volume_down">Volume turun</string>
     <string name="remote_tv_volume_up">Volume naik</string>
+    <string name="settings_tracking_anime_id_subtitle">Pilih ID eksternal yang digunakan sebagai pengenal utama untuk entri anime.</string>
+    <string name="settings_tracking_anime_id_title">Preferensi ID anime</string>
 </resources>

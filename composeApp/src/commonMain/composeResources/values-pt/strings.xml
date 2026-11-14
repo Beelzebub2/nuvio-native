@@ -2462,4 +2462,6 @@
     <string name="remote_tv_up">Cima</string>
     <string name="remote_tv_volume_down">Diminuir volume</string>
     <string name="remote_tv_volume_up">Aumentar volume</string>
+    <string name="settings_tracking_anime_id_subtitle">Escolhe qual o ID externo a usar como identificador principal das entradas de anime.</string>
+    <string name="settings_tracking_anime_id_title">ID preferido para anime</string>
 </resources>

@@ -2199,4 +2199,6 @@
     <string name="remote_tv_up">アップ</string>
     <string name="remote_tv_volume_down">音量を下げる</string>
     <string name="remote_tv_volume_up">ボリュームアップ</string>
+    <string name="settings_tracking_anime_id_subtitle">アニメ作品の主な識別子として使用する外部IDを選択します。</string>
+    <string name="settings_tracking_anime_id_title">アニメIDの優先設定</string>
 </resources>

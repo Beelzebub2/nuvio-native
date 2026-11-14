@@ -1024,4 +1024,7 @@
     <string name="remote_tv_up">למעלה</string>
     <string name="remote_tv_volume_down">הורדת עוצמת הקול</string>
     <string name="remote_tv_volume_up">הגברת עוצמת הקול</string>
+    <string name="settings_tracking_anime_id_subtitle">בחרו איזה מזהה חיצוני ישמש כמזהה הראשי של רשומות אנימה.</string>
+    <string name="settings_tracking_anime_id_title">העדפת מזהה לאנימה</string>
+    <string name="settings_trakt_comments">תגובות</string>
 </resources>
