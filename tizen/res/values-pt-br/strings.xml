@@ -3463,4 +3463,7 @@
     <string name="usb_cache_offer_later">Agora não</string>
     <string name="usb_cache_offer_enable">Usar cache USB</string>
     <string name="usb_cache_offer_never">Não perguntar novamente</string>
+    <string name="player_chapter_intro">Abertura</string>
+    <string name="player_chapter_recap">Recapitulação</string>
+    <string name="player_chapter_credits">Créditos</string>
 </resources>

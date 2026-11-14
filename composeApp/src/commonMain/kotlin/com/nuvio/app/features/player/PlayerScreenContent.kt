@@ -105,6 +105,13 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
     LaunchedEffect(isTelevision) {
         if (isTelevision) tvPlayerFocus.requestFocus()
     }
+    // When the controls fade out with a button focused, hand the remote back to the player
+    // (open panels keep their own focus).
+    LaunchedEffect(isTelevision, runtime.controlsVisible) {
+        if (isTelevision && !runtime.controlsVisible && runtime.controlsHoldFocus) {
+            runCatching { tvPlayerFocus.requestFocus() }
+        }
+    }
 
     BoxWithConstraints(
         modifier = args.modifier
@@ -198,7 +205,7 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             sliderOverlayBottomPadding(metrics)
         } else {
             playerTimelineBottomInsets(metrics).asPaddingValues().calculateBottomPadding() +
-                72.dp + PlayerSliderOverlayGap
+                PlayerModernControlsHeight + PlayerSliderOverlayGap
         }
         runtime.sideGestureSystemEdgeExclusionPx = with(density) {
             PlayerSideGestureSystemEdgeExclusion.toPx()

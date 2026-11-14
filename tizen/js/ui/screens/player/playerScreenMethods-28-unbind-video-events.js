@@ -1,6 +1,23 @@
 /* eslint-disable no-unused-vars */
 import * as internals from "./playerScreenContext.js";
 import { PartyRepository } from "../../../core/party/partyRepository.js";
+// One icon family with the desktop and phone players (24 px grid, 1.8 px round strokes).
+const PLAYER_ICONS = {
+  play: "assets/icons/ic_player_v2_play.svg",
+  pause: "assets/icons/ic_player_v2_pause.svg",
+  replay: "assets/icons/ic_player_v2_replay.svg",
+  forward: "assets/icons/ic_player_v2_forward.svg",
+  skipNext: "assets/icons/ic_player_v2_skip_next.svg",
+  episodes: "assets/icons/ic_player_v2_episodes.svg",
+  source: "assets/icons/ic_player_v2_source.svg",
+  subtitles: "assets/icons/ic_player_v2_subtitles.svg",
+  audio: "assets/icons/ic_player_v2_audio.svg",
+  chapters: "assets/icons/ic_player_v2_chapters.svg",
+  speed: "assets/icons/ic_player_v2_speed.svg",
+  aspect: "assets/icons/ic_player_v2_aspect.svg",
+  party: "assets/icons/ic_player_v2_party.svg",
+  info: "assets/icons/ic_player_v2_info.svg"
+};
 export function createPlayerScreenMethods28() {
   const { PlayerController, t, clamp, escapeHtml } = internals;
   return {
@@ -18,137 +35,88 @@ export function createPlayerScreenMethods28() {
       }
       return this.paused;
     },
+    /**
+     * The control bar of the desktop and phone players: transport on the left, then
+     * library, tracks and view, and extras on the right. The TV is wide enough to show
+     * every button, so nothing folds into a More row; the focused button names itself.
+     */
     getControlDefinitions() {
       const paused = this.getPlaybackControlPaused();
       const uiState = this.getPlayerUiState();
       const nextEpisode = this.resolveNextEpisodeInfo();
-      const base = [
+      const isLive = this.isLivePlayback?.() === true;
+      const transport = [
         {
           action: "playPause",
-          label: paused ? ">" : "II",
-          icon: paused ? "assets/icons/ic_player_play.svg" : "assets/icons/ic_player_pause.svg",
+          icon: paused ? PLAYER_ICONS.play : PLAYER_ICONS.pause,
           title: paused ? t("cd_play", {}, "Play") : t("cd_pause", {}, "Pause"),
           primary: true
         }
       ];
-      if (this.isSeekBarAvailable() && this.isLivePlayback?.() !== true) {
-        base.push(
-          {
-            action: "seekBack10",
-            icon: "assets/icons/ic_player_replay_10.svg",
-            useMask: true,
-            title: t("player_seek_back_10", {}, "Back 10 seconds")
-          },
-          {
-            action: "seekForward10",
-            icon: "assets/icons/ic_player_forward_10.svg",
-            useMask: true,
-            title: t("player_seek_forward_10", {}, "Forward 10 seconds")
-          }
+      if (this.isSeekBarAvailable() && !isLive) {
+        transport.push(
+          { action: "seekBack10", icon: PLAYER_ICONS.replay, amount: "10", title: t("player_seek_back_10", {}, "Back 10 seconds") },
+          { action: "seekForward10", icon: PLAYER_ICONS.forward, amount: "10", title: t("player_seek_forward_10", {}, "Forward 10 seconds") }
         );
       }
       if (nextEpisode?.hasAired && !this.nextEpisodeLaunching) {
-        base.push({
-          action: "playNextEpisode",
-          icon: "assets/icons/ic_player_skip_next.svg",
-          useMask: true,
-          title: t("next_episode_label", {}, "Next episode")
-        });
+        transport.push({ action: "playNextEpisode", icon: PLAYER_ICONS.skipNext, title: t("next_episode_label", {}, "Next episode") });
       }
-      if (this.hasSubtitleTracksAvailable())
-        base.push({
-          action: "subtitleDialog",
-          icon: "assets/icons/ic_player_subtitles.svg",
-          useMask: true,
-          title: t("subtitle_dialog_title", {}, "Subtitles"),
-          text: t("subtitle_dialog_title", {}, "Subtitles")
-        });
-      if (this.hasAudioTracksAvailable())
-        base.push({
-          action: "audioTrack",
-          icon:
-            this.selectedAudioTrackIndex >= 0 || this.selectedManifestAudioTrackId
-              ? "assets/icons/ic_player_audio_filled.svg"
-              : "assets/icons/ic_player_audio_outline.svg",
-          useMask: true,
-          title: t("audio_dialog_title", {}, "Audio"),
-          text: t("audio_dialog_title", {}, "Audio")
-        });
-      if (Array.isArray(this.playerChapters) && this.playerChapters.length > 1 && this.isLivePlayback?.() !== true) {
-        base.push({
-          action: "chapters",
-          icon: "assets/icons/ic_player_chapters.svg",
-          useMask: true,
-          title: t("player_chapters", {}, "Chapters"),
-          text: t("player_chapters", {}, "Chapters")
-        });
-      }
-      base.push({
-        action: "source",
-        icon: "assets/icons/ic_player_source.svg",
-        useMask: true,
-        title: t("sources_title", {}, "Sources"),
-        text: t("sources_title", {}, "Sources")
-      });
+      const library = [];
       if (Array.isArray(uiState.episodesAll) && uiState.episodesAll.length) {
-        base.push({
-          action: "episodes",
-          icon: "assets/icons/ic_player_episodes.svg",
-          useMask: true,
-          title: t("episodes_panel_title", {}, "Episodes"),
-          text: t("episodes_panel_title", {}, "Episodes")
+        library.push({ action: "episodes", icon: PLAYER_ICONS.episodes, title: t("episodes_panel_title", {}, "Episodes") });
+      }
+      library.push({ action: "source", icon: PLAYER_ICONS.source, title: t("sources_title", {}, "Sources") });
+      const tracks = [];
+      if (this.hasSubtitleTracksAvailable()) {
+        tracks.push({ action: "subtitleDialog", icon: PLAYER_ICONS.subtitles, title: t("subtitle_dialog_title", {}, "Subtitles") });
+      }
+      if (this.hasAudioTracksAvailable()) {
+        tracks.push({ action: "audioTrack", icon: PLAYER_ICONS.audio, title: t("audio_dialog_title", {}, "Audio") });
+      }
+      if (Array.isArray(this.playerChapters) && this.playerChapters.length > 1 && !isLive) {
+        tracks.push({ action: "chapters", icon: PLAYER_ICONS.chapters, title: t("player_chapters", {}, "Chapters") });
+      }
+      const playbackSpeedOptions = typeof this.getPlaybackSpeedOptions === "function" ? this.getPlaybackSpeedOptions() : [];
+      if (playbackSpeedOptions.length > 1) {
+        const playbackSpeed = Number(this.getPlaybackSpeed?.() || 1);
+        const speedText = `${String(Number(playbackSpeed.toFixed(2)))}×`;
+        tracks.push({
+          action: "speed",
+          icon: PLAYER_ICONS.speed,
+          title: `${t("player_playback_speed", {}, "Playback speed")} · ${speedText}`,
+          badge: playbackSpeed === 1 ? "" : speedText
         });
       }
+      tracks.push({ action: "aspect", icon: PLAYER_ICONS.aspect, title: t("player_more_aspect_ratio", {}, "Aspect Ratio") });
+      const extras = [];
       if (this.isPartyButtonAvailable?.()) {
-        base.push({
+        extras.push({
           action: "party",
-          icon: "assets/icons/ic_player_party.svg",
-          useMask: true,
+          icon: PLAYER_ICONS.party,
           title: t("party_title", {}, "Watch party"),
           className: PartyRepository.getState().party ? "is-party-active" : ""
         });
       }
-      base.push({
-        action: "more",
-        label: this.moreActionsVisible ? "<" : ">",
-        title: t("player_more_actions_title", {}, "More Actions")
-      });
-      if (!this.moreActionsVisible) {
-        return base;
-      }
-      const playbackSpeed = this.getPlaybackSpeed();
-      const playbackSpeedOptions = this.getPlaybackSpeedOptions();
+      extras.push({ action: "streamInfo", icon: PLAYER_ICONS.info, title: t("cd_stream_info", {}, "Stream info") });
       return [
-        ...base.slice(0, Math.max(0, base.length - 1)),
-        ...(playbackSpeedOptions.length > 1
-          ? [
-              {
-                action: "speed",
-                label: `${playbackSpeed.toFixed(playbackSpeed % 1 ? 2 : 0)}x`,
-                title: t("player_playback_speed", {}, "Playback speed")
-              }
-            ]
-          : []),
-        {
-          action: "aspect",
-          icon: "assets/icons/ic_player_aspect_ratio.svg",
-          title: t("player_more_aspect_ratio", {}, "Aspect Ratio")
-        },
-        { action: "streamInfo", label: "ⓘ", title: t("cd_stream_info", {}, "Stream info") },
-        { action: "backFromMore", label: "<", title: t("player_go_back", {}, "Back") }
+        ...transport.map((control) => ({ ...control, group: "transport" })),
+        ...library.map((control) => ({ ...control, group: "library" })),
+        ...tracks.map((control) => ({ ...control, group: "tracks" })),
+        ...extras.map((control) => ({ ...control, group: "extras" }))
       ];
     },
     getControlRenderSignature(controls = this.getControlDefinitions()) {
       return JSON.stringify(
         controls.map((control) => [
           control.action || "",
-          control.label || "",
           control.icon || "",
           control.title || "",
           Boolean(control.primary),
-          Boolean(control.useMask),
           control.className || "",
-          control.text || ""
+          control.group || "",
+          control.amount || "",
+          control.badge || ""
         ])
       );
     },
@@ -177,24 +145,33 @@ export function createPlayerScreenMethods28() {
         mountedButtons.length === controls.length &&
         mountedButtons.every((button, index) => button.dataset.action === String(controls[index]?.action || ""));
       if (!controlsMatchDom || this.renderedControlSignature !== controlRenderSignature) {
-        // The first labelled button starts the track group on the right.
-        const firstTextIndex = controls.findIndex((control) => control.text);
+        // Right-hand groups are split by dividers; the first one is pushed to the right edge.
+        // The focused button's name shows in the middle of the bar (the tip), where it
+        // cannot cover the seek row the way a tooltip above the button would.
         wrap.innerHTML = controls
-          .map(
-            (control, controlIndex) => `
-            <button class="player-control-btn focusable${control.primary ? " is-primary" : ""}${control.text ? " has-track-label" : ""}${controlIndex === firstTextIndex ? " is-track-start" : ""}${control.className ? ` ${escapeHtml(control.className)}` : ""}"
-                    data-action="${control.action}"
-                    title="${escapeHtml(control.title || "")}">
-              ${
-                control.icon
-                  ? control.primary || control.useMask
-                    ? `<span class="player-control-icon player-control-icon-mask" style="-webkit-mask-image:url('${escapeHtml(control.icon)}');mask-image:url('${escapeHtml(control.icon)}');" aria-hidden="true"></span>`
-                    : `<img class="player-control-icon" src="${control.icon}" alt="" aria-hidden="true" />`
-                  : `<span class="player-control-label">${escapeHtml(control.label || "")}</span>`
-              }${control.text ? `<span class="player-control-text">${escapeHtml(control.text)}</span>` : ""}
+          .map((control, controlIndex) => {
+            const previousGroup = controlIndex > 0 ? controls[controlIndex - 1].group : "";
+            const startsGroup = control.group !== previousGroup;
+            const startsRight = startsGroup && previousGroup === "transport";
+            const divider = startsGroup && previousGroup && !startsRight ? `<span class="player-control-divider" aria-hidden="true"></span>` : "";
+            const classes = [
+              "player-control-btn",
+              "focusable",
+              control.primary ? "is-primary" : "",
+              startsRight ? "is-right-start" : "",
+              control.className || ""
+            ].filter(Boolean);
+            return `${divider}
+            <button class="${escapeHtml(classes.join(" "))}"
+                    data-action="${escapeHtml(control.action)}"
+                    aria-label="${escapeHtml(control.title || "")}">
+              <span class="player-control-glyph" aria-hidden="true"><span class="player-control-icon player-control-icon-mask" style="-webkit-mask-image:url('${escapeHtml(control.icon)}');mask-image:url('${escapeHtml(control.icon)}');"></span>${
+                control.amount ? `<b class="player-control-amount">${escapeHtml(control.amount)}</b>` : ""
+              }${control.badge ? `<b class="player-control-badge">${escapeHtml(control.badge)}</b>` : ""}</span>
+              <span class="player-control-tip" aria-hidden="true">${escapeHtml(control.title || "")}</span>
             </button>
-          `
-          )
+          `;
+          })
           .join("");
       }
       this.renderedControlSignature = controlRenderSignature;
