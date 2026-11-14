@@ -69,7 +69,17 @@ export function createHomeScreenMethods03() {
       return this.isScrollAnimationActive(this.modernCameraFollowLastHorizontalContainer, "x");
     },
     isSidebarFocusActive() {
-      return Boolean(this.container?.querySelector(".home-sidebar .focusable.focused, .modern-sidebar-panel .focusable.focused"));
+      const container = this.container;
+      if (!container) return false;
+      // The negative case is common and runs multiple times per D-pad press.
+      // Search within cached sidebar roots rather than all mounted Home rows.
+      let roots = this.sidebarFocusRoots;
+      if (!roots?.length || roots.some((root) => !container.contains(root))) {
+        roots = this.sidebarFocusRoots = Array.from(
+          container.querySelectorAll(".home-sidebar, .modern-sidebar-panel")
+        );
+      }
+      return roots.some((root) => Boolean(root.querySelector(".focusable.focused")));
     },
     getRowFocusInset() {
       if (this.layoutMode === "modern") {

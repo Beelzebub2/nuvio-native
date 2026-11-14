@@ -8,7 +8,7 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = "snapshots";
 // Bump this whenever the compact row shape changes; old records are ignored
 // and deleted on read instead of being interpreted as the new shape.
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_ROWS = 40;
 const MAX_ITEMS_PER_ROW = 60;
@@ -131,13 +131,11 @@ function compactRow(row = {}) {
   }
   const items = cloneJson(result.data.items.slice(0, MAX_ITEMS_PER_ROW));
   if (!Array.isArray(items) || !items.length) return null;
+  // Preserve catalog identity, type and pagination settings so a cold-start
+  // snapshot renders the same row as the later add-on response.
+  const { result: _result, loadingItems: _loadingItems, ...descriptor } = row;
   return {
-    addonId: row.addonId,
-    addonName: row.addonName,
-    addonBaseUrl: row.addonBaseUrl,
-    catalogId: row.catalogId,
-    catalogName: row.catalogName,
-    apiType: row.apiType,
+    ...cloneJson(descriptor),
     result: {
       status: "success",
       data: {
@@ -145,9 +143,7 @@ function compactRow(row = {}) {
         items
       }
     },
-    loadingItems: null,
-    homeCatalogKey: row.homeCatalogKey,
-    homeCatalogDisableKey: row.homeCatalogDisableKey
+    loadingItems: null
   };
 }
 /** Bound what is written to disk; Home still owns the full in-memory rows. */
