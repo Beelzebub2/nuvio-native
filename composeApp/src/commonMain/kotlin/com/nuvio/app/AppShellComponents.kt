@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -363,7 +364,11 @@ internal fun TabletFloatingTopBar(
     val hasSettingsDrawer = selectedTab == AppScreenTab.Settings && (windowWidth == null || windowWidth >= 960.dp)
     val supportsScrollFrostedHaze = selectedTab == AppScreenTab.Home || hasSettingsDrawer
     val scrollThreshold = if (selectedTab == AppScreenTab.Settings) 70f else 35f
-    val isScrolledAwayFromTop = scrollState != null && scrollState.totalScrollOffset > scrollThreshold
+    // The source scroll offset changes every pixel; the top bar only needs a
+    // threshold crossing, not a full recomposition on every scroll frame.
+    val isScrolledAwayFromTop by remember(scrollState, scrollThreshold) {
+        derivedStateOf { (scrollState?.totalScrollOffset ?: 0f) > scrollThreshold }
+    }
     val isScrolled = supportsScrollFrostedHaze && isScrolledAwayFromTop
     val isFrosted = isScrolled || isHovered || isProfileSwitcherOpen
 

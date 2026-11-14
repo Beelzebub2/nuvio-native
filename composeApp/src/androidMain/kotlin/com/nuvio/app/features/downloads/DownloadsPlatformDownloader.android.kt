@@ -23,13 +23,15 @@ import java.net.URI
 
 internal actual object DownloadsPlatformDownloader {
     actual val supportsTorrentDownloads: Boolean = true
-    private var appContext: Context? = null
-    private var downloadScheduler: AndroidDownloadScheduler? = null
+    @Volatile private var appContext: Context? = null
+    @Volatile private var downloadScheduler: AndroidDownloadScheduler? = null
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     @Volatile private var accountEpoch = 0L
 
     fun initialize(context: Context) {
-        scheduler(context)
+        // Keep the cold-start Activity path free of the transfer-store scan.
+        // The first download restore/notification/worker access opens the store instead.
+        appContext = context.applicationContext
     }
 
     @Synchronized
@@ -39,7 +41,8 @@ internal actual object DownloadsPlatformDownloader {
     }
 
     internal fun managedTransfers(): List<AndroidDownloadTransfer> =
-        downloadScheduler?.store?.transfers?.value?.values?.toList().orEmpty()
+        (downloadScheduler ?: appContext?.let(::scheduler))
+            ?.store?.transfers?.value?.values?.toList().orEmpty()
 
     actual fun pauseForAccountCleanup() {
         accountEpoch++
@@ -47,7 +50,8 @@ internal actual object DownloadsPlatformDownloader {
         scheduler.pauseAllForAccountCleanup()
     }
 
-    actual fun restoreItem(item: DownloadItem): DownloadItem = downloadScheduler?.restore(item)
+    actual fun restoreItem(item: DownloadItem): DownloadItem =
+        (downloadScheduler ?: appContext?.let(::scheduler))?.restore(item)
         ?: if (item.status == DownloadStatus.Downloading) item.copy(status = DownloadStatus.Paused) else item
 
     actual fun start(
@@ -57,7 +61,9 @@ internal actual object DownloadsPlatformDownloader {
         onFailure: (message: String) -> Unit,
         onPaused: () -> Unit,
     ): DownloadsTaskHandle {
-        val scheduler = checkNotNull(downloadScheduler) { "Downloads are not initialized" }
+        val scheduler = checkNotNull(downloadScheduler ?: appContext?.let(::scheduler)) {
+            "Downloads are not initialized"
+        }
         val epoch = accountEpoch
         var scheduled: AndroidDownloadTransfer? = null
         val observer = observerScope.launch {

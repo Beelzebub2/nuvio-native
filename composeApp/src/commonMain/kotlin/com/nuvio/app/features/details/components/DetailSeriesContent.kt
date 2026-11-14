@@ -67,7 +67,6 @@ import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
-import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioProgressBar
@@ -92,9 +91,7 @@ import com.nuvio.app.features.details.seasonSortKey
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watching.application.WatchingState
-import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.*
-import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.absoluteValue
@@ -1533,19 +1530,27 @@ private fun seriesContentSizing(maxWidthDp: Float): SeriesContentSizing =
         )
     }
 
+@Composable
 private fun Int.label(): String =
     if (this <= 0) {
-        runBlocking { getString(Res.string.episodes_specials) }
+        stringResource(Res.string.episodes_specials)
     } else {
-        runBlocking { getString(Res.string.episodes_season, this@label) }
+        stringResource(Res.string.episodes_season, this)
     }
 
-private fun MetaVideo.episodeBadge(): String =
-    when {
-        episode != null || season != null ->
-            localizedSeasonEpisodeCode(seasonNumber = season, episodeNumber = episode).orEmpty()
-        else -> runBlocking { getString(Res.string.details_episode_badge_file) }
+@Composable
+private fun MetaVideo.episodeBadge(): String {
+    val seasonNumber = season
+    val episodeNumber = episode
+    return when {
+        seasonNumber != null && episodeNumber != null ->
+            stringResource(Res.string.compose_player_episode_code_full, seasonNumber, episodeNumber)
+        episodeNumber != null ->
+            stringResource(Res.string.compose_player_episode_code_episode_only, episodeNumber)
+        seasonNumber != null -> ""
+        else -> stringResource(Res.string.details_episode_badge_file)
     }
+}
 
 private fun MetaVideo.seasonEpisodeKey(): Pair<Int, Int>? {
     val seasonNumber = season ?: return null
