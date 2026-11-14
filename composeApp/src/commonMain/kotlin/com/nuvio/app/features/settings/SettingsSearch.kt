@@ -99,6 +99,8 @@ internal fun settingsSearchEntries(
     liquidGlassNativeTabBarSupported: Boolean,
     switchProfileAvailable: Boolean,
     checkForUpdatesAvailable: Boolean,
+    traktConnected: Boolean = false,
+    simklConnected: Boolean = false,
 ): List<SettingsSearchEntry> {
     val accountCategory = stringResource(SettingsCategory.Account.labelRes)
     val generalCategory = stringResource(SettingsCategory.General.labelRes)
@@ -1077,13 +1079,23 @@ internal fun settingsSearchEntries(
         category = accountCategory,
         icon = Icons.Rounded.Link,
     )
-    listOf(
-        PlaybackSearchRow("trakt-library-source", stringResource(Res.string.trakt_library_source_title), stringResource(Res.string.trakt_library_source_subtitle)),
-        PlaybackSearchRow("trakt-watch-progress", stringResource(Res.string.trakt_watch_progress_title), stringResource(Res.string.trakt_watch_progress_subtitle)),
-        PlaybackSearchRow("trakt-continue-watching-window", stringResource(Res.string.trakt_continue_watching_window), stringResource(Res.string.trakt_continue_watching_subtitle)),
-        PlaybackSearchRow("trakt-comments", stringResource(Res.string.settings_trakt_comments), stringResource(Res.string.settings_trakt_comments_description)),
-        PlaybackSearchRow("trakt-more-like-this-source", stringResource(Res.string.trakt_more_like_this_source_title), stringResource(Res.string.trakt_more_like_this_source_subtitle)),
-    ).forEach { row ->
+    buildList {
+        add(PlaybackSearchRow("trakt-library-source", stringResource(Res.string.trakt_library_source_title), stringResource(Res.string.trakt_library_source_subtitle)))
+        add(PlaybackSearchRow("trakt-watch-progress", stringResource(Res.string.trakt_watch_progress_title), stringResource(Res.string.trakt_watch_progress_subtitle)))
+        // These rows are not composed until their providers have connected.
+        // Indexing them unconditionally leads to dead search results that can
+        // only open Tracking, never highlight an actual control.
+        if (traktConnected) {
+            add(PlaybackSearchRow("trakt-continue-watching-window", stringResource(Res.string.trakt_continue_watching_window), stringResource(Res.string.trakt_continue_watching_subtitle)))
+            add(PlaybackSearchRow("trakt-comments", stringResource(Res.string.settings_trakt_comments), stringResource(Res.string.settings_trakt_comments_description)))
+        }
+        if (traktConnected || simklConnected) {
+            add(PlaybackSearchRow("trakt-more-like-this-source", stringResource(Res.string.trakt_more_like_this_source_title), stringResource(Res.string.trakt_more_like_this_source_subtitle)))
+        }
+        if (simklConnected) {
+            add(PlaybackSearchRow("tracking-anime-id-preference", stringResource(Res.string.settings_tracking_anime_id_title), stringResource(Res.string.settings_tracking_anime_id_subtitle)))
+        }
+    }.forEach { row ->
         addRow(
             page = SettingsPage.TraktAuthentication,
             key = row.key,
@@ -1337,9 +1349,21 @@ private fun settingsSearchResults(
 
     if (terms.isEmpty()) return emptyList()
 
-    return entries.filter { entry ->
+    val matches = entries.filter { entry ->
         terms.all { term -> entry.searchableText.contains(term) }
     }
+    // Legal attributions and integration settings can share a brand name.
+    // Searching for "Trakt", "Simkl" or "MDBList" should offer the actual
+    // connect/settings card before an attribution with the same title.
+    val normalized = query.trim()
+    val providerKeys = setOf("trakt-authentication", "simkl-authentication", "mdblist-authentication")
+    return matches.sortedWith(
+        compareByDescending<SettingsSearchEntry> {
+            it.key in providerKeys && it.title.equals(normalized, ignoreCase = true)
+        }.thenByDescending {
+            it.title.equals(normalized, ignoreCase = true)
+        },
+    )
 }
 
 private fun SettingsSearchEntry.resultDescription(): String {
