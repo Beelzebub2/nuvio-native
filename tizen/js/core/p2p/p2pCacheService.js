@@ -1,5 +1,6 @@
 import { Platform } from "../../platform/index.js";
 import { TizenEngineFsService } from "../../platform/tizen/tizenEngineFsService.js";
+import { TizenUsbTorrentCache } from "../../platform/tizen/tizenUsbTorrentCache.js";
 import { requestWebOsCompanionService } from "../../platform/webos/webosCompanionService.js";
 const REQUEST_TIMEOUT_MS = 4000;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -88,7 +89,16 @@ export const P2pCacheService = {
    * disabled, so the UI keeps its cache rows disabled on that platform.
    */
   supportsCacheControls() {
-    return false;
+    return Platform.isTizen();
+  },
+  usbEnabled() {
+    return Platform.isTizen() && TizenUsbTorrentCache.isEnabled();
+  },
+  async setUsbEnabled(enabled) {
+    if (!Platform.isTizen()) return { mode: "memory", reason: "Unsupported platform" };
+    let baseUrl = "";
+    try { baseUrl = await resolveBaseUrl(); } catch (_) {}
+    return TizenUsbTorrentCache.setEnabled(Boolean(enabled), baseUrl);
   },
   async getState() {
     if (!this.supportsCacheControls()) {
@@ -99,6 +109,23 @@ export const P2pCacheService = {
       baseUrl = await resolveBaseUrl();
       if (!baseUrl) {
         return { supported: true, available: false };
+      }
+      if (Platform.isTizen()) {
+        const state = await TizenUsbTorrentCache.getState(baseUrl);
+        return {
+          supported: true, available: true, baseUrl,
+          usbEnabled: state.enabled,
+          usbConfigured: state.configured,
+          usbMode: state.active?.mode || (state.configured ? "usb" : "memory"),
+          usbProfile: state.profile,
+          usbReason: state.reason || "",
+          usbLabel: state.label || "",
+          usbWriteMBps: Number(state.writeMBps) || 0,
+          usbReadMBps: Number(state.readMBps) || 0,
+          cacheSizeBytes: Number(state.cacheBytes) || 0,
+          usedBytes: Number(state.active?.bytes) || 0,
+          activeBytes: Number(state.active?.bytes) || 0
+        };
       }
       const [settings, usage] = await Promise.all([
         requestJson(baseUrl, "/settings"),
